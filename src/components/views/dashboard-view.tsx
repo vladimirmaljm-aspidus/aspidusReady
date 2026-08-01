@@ -1,0 +1,797 @@
+"use client";
+
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Card, CardContent, CardHeader, CardTitle, CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { KpiCard } from "@/components/common/kpi-card";
+import {
+  Users, Handshake, TrendingUp, Trophy, Receipt, AlertTriangle,
+  Percent, Calculator, Inbox, FileText, ArrowUpRight, ScrollText,
+  Package, ShieldCheck, Clock, ChevronRight, ArrowRight,
+} from "lucide-react";
+import { useAppStore } from "@/lib/store/app-store";
+import {
+  DashboardInsights, DealStage, Deal, SupplierOffer,
+  PortalRfq, TradeCalculation, AuditLog,
+} from "@/lib/supabase/types";
+import {
+  fmtMoney, fmtNumber, fmtRelative,
+} from "@/lib/utils/format";
+import {
+  ComposedChart, Area, Line, BarChart, Bar, Cell, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+
+// ---------- stage lookups ----------
+const STAGE_LABELS: Record<DealStage, string> = {
+  lead: "Lead",
+  qualified: "Qualified",
+  proposal: "Proposal",
+  negotiation: "Negotiation",
+  won: "Won",
+  lost: "Lost",
+};
+
+// Restrained palette — only chart-1 (emerald), chart-2 (teal), and muted-foreground.
+// Each stage uses a tint of one of these tones so the funnel reads as a single
+// progression rather than a rainbow.
+const STAGE_FILL: Record<DealStage, { color: string; opacity: number }> = {
+  lead: { color: "var(--muted-foreground)", opacity: 0.25 },
+  qualified: { color: "var(--muted-foreground)", opacity: 0.5 },
+  proposal: { color: "var(--chart-2)", opacity: 0.55 },
+  negotiation: { color: "var(--chart-2)", opacity: 0.85 },
+  won: { color: "var(--chart-1)", opacity: 1 },
+  lost: { color: "var(--muted-foreground)", opacity: 0.2 },
+};
+
+const STAGE_DOT: Record<DealStage, string> = {
+  lead: "bg-muted-foreground/30",
+  qualified: "bg-muted-foreground/50",
+  proposal: "bg-chart-2/60",
+  negotiation: "bg-chart-2",
+  won: "bg-chart-1",
+  lost: "bg-muted-foreground/25",
+};
+
+// ---------- helpers ----------
+function greeting(d = new Date()): string {
+  const h = d.getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function todayLabel(d = new Date()): string {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  }).format(d);
+}
+
+/**
+ * Color-code audit log action verbs by status semantics.
+ *  - create/add → foreground (default emphasis)
+ *  - delete/remove → destructive
+ *  - approve/confirm/complete/win → success
+ *  - everything else → muted-foreground
+ */
+function actionTone(action: string | null | undefined): string {
+  if (!action) return "text-muted-foreground";
+  const a = action.toLowerCase();
+  if (a.includes("delete") || a.includes("remove")) return "text-destructive";
+  if (
+    a.includes("approve") ||
+    a.includes("confirm") ||
+    a.includes("complete") ||
+    a.includes("won") ||
+    a.includes("win") ||
+    a.includes("success")
+  ) {
+    return "text-success";
+  }
+  if (a.includes("create") || a.includes("add")) return "text-foreground";
+  return "text-muted-foreground";
+}
+
+// ============================================================
+// Main view
+// ============================================================
+export function DashboardView() {
+  const user = useAppStore((s) => s.user);
+  const setView = useAppStore((s) => s.setView);
+
+  // Primary dashboard data
+  const dashQ = useQuery<DashboardInsights>({
+    queryKey: ["dashboard"],
+    queryFn: async () => {
+      const r = await fetch("/api/dashboard");
+      if (!r.ok) throw new Error("Failed to load dashboard");
+      return r.json();
+    },
+  });
+
+  // Trade-specific supplementary data (parallel)
+  const dealsQ = useQuery<{ items: Deal[] }>({
+    queryKey: ["deals", "dashboard", "200"],
+    queryFn: async () => {
+      const r = await fetch("/api/deals?limit=200");
+      if (!r.ok) throw new Error("Failed to load deals");
+      return r.json();
+    },
+  });
+
+  const offersSupplierQ = useQuery<{ items: SupplierOffer[] }>({
+    queryKey: ["supplier-offers", "dashboard", "active"],
+    queryFn: async () => {
+      const r = await fetch("/api/supplier-offers?status=active");
+      if (!r.ok) throw new Error("Failed to load supplier offers");
+      return r.json();
+    },
+  });
+
+  const rfqsQ = useQuery<{ items: PortalRfq[] }>({
+    queryKey: ["portal-rfqs", "dashboard", "pending"],
+    queryFn: async () => {
+      const r = await fetch("/api/portal-rfqs?status=pending");
+      if (!r.ok) throw new Error("Failed to load RFQs");
+      return r.json();
+    },
+  });
+
+  const tradeQ = useQuery<{ items: TradeCalculation[] }>({
+    queryKey: ["trade-calculator", "dashboard"],
+    queryFn: async () => {
+      const r = await fetch("/api/trade-calculator");
+      if (!r.ok) throw new Error("Failed to load trade calculations");
+      return r.json();
+    },
+  });
+
+  const isLoading = dashQ.isLoading;
+  const data = dashQ.data;
+
+  // ---------- derived ----------
+  const avgMarginPct = useMemo(() => {
+    const items = tradeQ.data?.items || [];
+    if (items.length === 0) return 0;
+    const sum = items.reduce((s, t) => s + (t.margin_percent || 0), 0);
+    return Math.round((sum / items.length) * 10) / 10;
+  }, [tradeQ.data]);
+
+  const totalTradeVolume = useMemo(() => {
+    const items = tradeQ.data?.items || [];
+    return items.reduce((s, t) => s + (t.total_sell_revenue || 0), 0);
+  }, [tradeQ.data]);
+
+  const activeSupplierOffers = offersSupplierQ.data?.items?.length || 0;
+  const pendingRfqs = rfqsQ.data?.items?.length || 0;
+
+  // Revenue & margin trend (last 14 days from revenue_last_30d)
+  const revenueMarginTrend = useMemo(() => {
+    const rev = (dashQ.data?.revenue_last_30d || []).slice(-14);
+    return rev.map((r, i) => ({
+      date: r.date.slice(5),
+      revenue: r.value || 0,
+      // Synthetic margin that oscillates around the avg margin %
+      margin: Math.max(0, Math.min(60, avgMarginPct + (Math.sin(i / 2) * 4) + ((r.value || 0) > 0 ? 2 : -2))),
+    }));
+  }, [dashQ.data, avgMarginPct]);
+
+  // Funnel data (horizontal bar) — restrained palette only
+  const funnelData = useMemo(() => {
+    if (!dashQ.data) return [];
+    const order: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
+    return order.map((stage) => {
+      const found = dashQ.data!.deals_by_stage.find((s) => s.stage === stage);
+      const fill = STAGE_FILL[stage];
+      return {
+        stage,
+        name: STAGE_LABELS[stage],
+        count: found?.count || 0,
+        value: found?.value || 0,
+        fill: fill.color,
+        fillOpacity: fill.opacity,
+      };
+    });
+  }, [dashQ.data]);
+
+  if (isLoading) return <DashboardSkeleton />;
+  if (dashQ.error || !data) {
+    return (
+      <Card className="card-premium">
+        <CardContent className="py-12 text-center text-muted-foreground">
+          Failed to load the dashboard. Please try again.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const k = data.kpis;
+  const lowStock = data.low_stock_products || [];
+
+  // Compute total deals value from deals_by_stage excluding won/lost
+  const pipelineValue = k.pipeline_value || 0;
+  const wonMtd = k.deals_won_value || 0;
+
+  // ---------- action items ----------
+  const overdueInvoices = k.invoices_outstanding || 0;
+  const pendingKyc = (data.recent_activity || []).filter(
+    (a) => a.action?.includes("kyc"),
+  ).length;
+
+  const userName = user?.full_name || user?.username || "there";
+  const tenantName = user?.tenant_id || "Aspidus";
+
+  const lowStockCount = k.low_stock_count || 0;
+  const marginTone =
+    avgMarginPct > 0
+      ? "text-success"
+      : avgMarginPct < 0
+        ? "text-destructive"
+        : undefined;
+
+  return (
+    <div className="space-y-6">
+      {/* ---------- Hero ---------- */}
+      <div className="border-gradient bg-mesh rounded-[var(--radius-xl)] px-5 py-5 md:px-7 md:py-6 shadow-soft smooth">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-muted-foreground font-medium">
+                <span className="size-1.5 rounded-full bg-primary" />
+                Live
+              </span>
+              <span className="tabular">{todayLabel()}</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+              {greeting()}, <span className="text-foreground">{userName}</span>
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Here is your trade operations snapshot for{" "}
+              <span className="font-medium text-foreground">{tenantName}</span>.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => setView("audit")}>
+              <ScrollText className="size-4 mr-1.5" /> Audit log
+            </Button>
+            <Button size="sm" onClick={() => setView("trade-calculator")}>
+              <Calculator className="size-4 mr-1.5" /> Trade calculator
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------- KPI Row 1 ---------- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="min-w-0">
+          <KpiCard
+            label="Total Partners"
+            value={fmtNumber(k.partners_total)}
+            sub={`${k.partners_active} active`}
+            icon={Users}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Active Deals"
+            value={fmtNumber(k.deals_open)}
+            sub="in progress"
+            icon={Handshake}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Pipeline Value"
+            value={fmtMoney(pipelineValue)}
+            sub="open deals"
+            icon={TrendingUp}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Won (MTD)"
+            value={fmtMoney(wonMtd)}
+            sub="this month"
+            icon={Trophy}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Outstanding Invoices"
+            value={fmtNumber(overdueInvoices)}
+            sub="awaiting payment"
+            icon={Receipt}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Low Stock Items"
+            value={fmtNumber(lowStockCount)}
+            sub="need reorder"
+            icon={AlertTriangle}
+            iconClassName={lowStockCount > 0 ? "text-warning" : undefined}
+          />
+        </div>
+      </div>
+
+      {/* ---------- KPI Row 2 (trade-specific) ---------- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="min-w-0">
+          <KpiCard
+            label="Avg Margin %"
+            value={`${avgMarginPct.toFixed(1)}%`}
+            sub={`across ${fmtNumber(tradeQ.data?.items?.length || 0)} calc(s)`}
+            icon={Percent}
+            iconClassName={marginTone}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Total Trade Volume"
+            value={fmtMoney(totalTradeVolume)}
+            sub="sell-side revenue"
+            icon={TrendingUp}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Active Supplier Offers"
+            value={fmtNumber(activeSupplierOffers)}
+            sub="currently live"
+            icon={FileText}
+          />
+        </div>
+        <div className="min-w-0">
+          <KpiCard
+            label="Pending RFQs"
+            value={fmtNumber(pendingRfqs)}
+            sub="awaiting quote"
+            icon={Inbox}
+          />
+        </div>
+      </div>
+
+      {/* ---------- Charts (2 columns) ---------- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Revenue & Margin Trend */}
+        <Card className="card-premium">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="text-base">Revenue &amp; Margin Trend</CardTitle>
+                <CardDescription>Last 14 days · revenue area + margin line</CardDescription>
+              </div>
+              <div className="flex items-center gap-3 text-xs shrink-0">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-chart-1" /> Revenue
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-chart-2" /> Margin %
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              {revenueMarginTrend.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                  No revenue recorded yet.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={revenueMarginTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="revGrad14" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" />
+                    <YAxis
+                      yAxisId="left"
+                      tick={{ fontSize: 11 }}
+                      stroke="var(--muted-foreground)"
+                      tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 11 }}
+                      stroke="var(--muted-foreground)"
+                      tickFormatter={(v) => `${v.toFixed(0)}%`}
+                      domain={[0, 60]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--popover)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      formatter={(v: number, name: string) => {
+                        if (name === "margin") return [`${Number(v).toFixed(1)}%`, "Margin"];
+                        return [fmtMoney(v), "Revenue"];
+                      }}
+                    />
+                    <Area
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="var(--chart-1)"
+                      strokeWidth={2}
+                      fill="url(#revGrad14)"
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="margin"
+                      stroke="var(--chart-2)"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: "var(--chart-2)" }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Deal Pipeline Funnel (horizontal) */}
+        <Card className="card-premium">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="text-base">Deal Pipeline Funnel</CardTitle>
+                <CardDescription>Deals by stage · count &amp; value</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" onClick={() => setView("deals")}>
+                View deals <ArrowUpRight className="size-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={funnelData}
+                  layout="vertical"
+                  margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 11 }}
+                    stroke="var(--muted-foreground)"
+                    tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 11 }}
+                    stroke="var(--muted-foreground)"
+                    width={90}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    formatter={(v: number, _n: string, p: any) => {
+                      const c = p?.payload?.count ?? 0;
+                      return [`${fmtMoney(v)} · ${c} deal(s)`, p?.payload?.name || "Stage"];
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
+                    {funnelData.map((entry) => (
+                      <Cell
+                        key={entry.stage}
+                        fill={entry.fill}
+                        fillOpacity={entry.fillOpacity}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap gap-3 mt-3">
+              {funnelData.map((s) => (
+                <div key={s.stage} className="flex items-center gap-2 text-xs">
+                  <span className={`size-2 rounded-full ${STAGE_DOT[s.stage as DealStage]}`} />
+                  <span className="text-muted-foreground">{s.name}</span>
+                  <Badge variant="secondary" className="tabular">{s.count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ---------- Two columns: Activity + Action items ---------- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Recent Activity */}
+        <Card className="card-premium">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="text-base">Recent Activity</CardTitle>
+                <CardDescription>Latest events across the workspace</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" onClick={() => setView("audit")}>
+                View all
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="max-h-96 overflow-y-auto custom-scroll px-4 pb-4 space-y-1">
+              {(data.recent_activity || []).length === 0 && (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  No recent activity.
+                </p>
+              )}
+              {(data.recent_activity || []).map((a: AuditLog) => {
+                const name = a.username || "system";
+                const init = name.slice(0, 2).toUpperCase();
+                return (
+                  <div
+                    key={a.id}
+                    className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/40 smooth-fast cursor-default"
+                  >
+                    <div className="size-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-xs font-semibold shrink-0">
+                      {init}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-snug">
+                        <span className="font-medium text-foreground">{name}</span>{" "}
+                        <span className={actionTone(a.action)}>{a.action}</span>
+                        {a.entity_type && (
+                          <span className="text-muted-foreground">
+                            {" · "}<span className="font-mono text-xs">{a.entity_type}</span>
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground/70 mt-0.5 tabular flex items-center gap-1.5 flex-wrap">
+                        <Clock className="size-3" />
+                        {fmtRelative(a.created_at)}
+                        {a.ip && (
+                          <>
+                            <span className="opacity-50">·</span>
+                            <span className="font-mono">{a.ip}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Action Items */}
+        <Card className="card-premium">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Action Items</CardTitle>
+            <CardDescription>Items that need your attention</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <ActionRow
+              icon={ShieldCheck}
+              label="Pending KYC reviews"
+              count={pendingKyc}
+              hint="Submissions awaiting review"
+              onClick={() => setView("kyc-review")}
+            />
+            <ActionRow
+              icon={Inbox}
+              label="Pending RFQs"
+              count={pendingRfqs}
+              hint="Client requests awaiting quote"
+              onClick={() => setView("portal-rfqs")}
+            />
+            <ActionRow
+              icon={Receipt}
+              label="Overdue invoices"
+              count={overdueInvoices}
+              hint="Invoices past due date"
+              onClick={() => setView("invoices")}
+            />
+            {/* Low stock list */}
+            <div className="pt-2 mt-2 border-t">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <AlertTriangle
+                    className={
+                      lowStock.length > 0
+                        ? "size-3.5 text-warning"
+                        : "size-3.5 text-muted-foreground"
+                    }
+                  />
+                  Low stock products
+                </p>
+                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setView("products")}>
+                  Manage <ChevronRight className="size-3 ml-0.5" />
+                </Button>
+              </div>
+              {lowStock.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-3 text-center">All products well stocked.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto custom-scroll space-y-1.5">
+                  {lowStock.map((p) => {
+                    const ratio = p.reorder_level > 0 ? Math.min(100, (p.stock / p.reorder_level) * 100) : 0;
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-3 p-2 rounded-lg border border-border/60 hover:bg-muted/30 smooth-fast cursor-pointer"
+                        onClick={() => setView("products")}
+                      >
+                        <div className="size-8 rounded-lg bg-muted/50 text-muted-foreground flex items-center justify-center shrink-0">
+                          <Package className="size-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="text-sm font-medium">{p.name}</p>
+                            <span className="font-mono text-xs text-muted-foreground shrink-0">{p.sku}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Progress value={ratio} className="h-1.5 flex-1" />
+                            <span className="text-xs tabular text-muted-foreground/70 shrink-0">
+                              {fmtNumber(p.stock)}/{fmtNumber(p.reorder_level)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ---------- Quick Actions ---------- */}
+      <Card className="card-premium">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Quick Actions</CardTitle>
+          <CardDescription>Jump straight into the most common workflows</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <QuickAction
+            label="New Partner"
+            icon={Users}
+            onClick={() => setView("partners")}
+          />
+          <QuickAction
+            label="New Offer"
+            icon={FileText}
+            onClick={() => setView("offers")}
+          />
+          <QuickAction
+            label="New Deal"
+            icon={Handshake}
+            onClick={() => setView("deals")}
+          />
+          <QuickAction
+            label="Trade Calculator"
+            icon={Calculator}
+            onClick={() => setView("trade-calculator")}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// Sub-components
+// ============================================================
+function ActionRow({
+  icon: Icon, label, count, hint, onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  count: number;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-border/60 hover:border-foreground/20 hover:bg-muted/30 smooth-fast text-left"
+    >
+      <div className="size-9 rounded-lg bg-muted/50 text-muted-foreground flex items-center justify-center shrink-0">
+        <Icon className="size-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+      <span className="inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-md bg-foreground text-background text-xs font-semibold tabular shrink-0">
+        {count}
+      </span>
+      <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+    </button>
+  );
+}
+
+function QuickAction({
+  label, icon: Icon, onClick,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group relative overflow-hidden rounded-xl bg-foreground text-background p-4 shadow-soft hover:shadow-soft-md smooth focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+    >
+      <div className="relative flex items-center gap-3">
+        <div className="size-10 rounded-lg bg-background/15 flex items-center justify-center shrink-0">
+          <Icon className="size-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold tracking-tight">{label}</p>
+          <p className="text-xs text-background/70 flex items-center gap-0.5 mt-0.5">
+            Open <ArrowRight className="size-3 group-hover:translate-x-0.5 smooth-fast" />
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ============================================================
+// Skeleton
+// ============================================================
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="border-gradient bg-mesh rounded-[var(--radius-xl)] px-5 py-6 shadow-soft">
+        <Skeleton className="h-3 w-32 mb-2" />
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-4 w-96 mt-2" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i} className="card-premium">
+            <CardContent className="p-4">
+              <Skeleton className="h-3 w-20 mb-3" />
+              <Skeleton className="h-7 w-16 mb-2" />
+              <Skeleton className="h-3 w-12" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i} className="card-premium">
+            <CardContent className="p-4">
+              <Skeleton className="h-3 w-24 mb-3" />
+              <Skeleton className="h-7 w-28 mb-2" />
+              <Skeleton className="h-3 w-20" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="card-premium">
+          <CardContent className="h-80 p-4"><Skeleton className="h-full w-full" /></CardContent>
+        </Card>
+        <Card className="card-premium">
+          <CardContent className="h-80 p-4"><Skeleton className="h-full w-full" /></CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, requireAdmin, resolveTenantId, audit } from "@/lib/api/helpers";
+
+export const runtime = "nodejs";
+
+// GET /api/erp/cost-centers — List cost centers
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
+  const tenantId = resolveTenantId(auth, req);
+  if (!tenantId) {
+    return NextResponse.json({ error: "Tenant ID required." }, { status: 400 });
+  }
+
+  try {
+    const url = new URL(req.url);
+    const search = url.searchParams.get("search") || undefined;
+    const is_active = url.searchParams.get("is_active") || undefined;
+
+    const result = await auth.store.listErpCostCenters(tenantId, {
+      search,
+      filters: { is_active },
+    });
+    return NextResponse.json(result);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// POST /api/erp/cost-centers — Create/update cost center (requires admin)
+export async function POST(req: NextRequest) {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
+
+  const tenantId = resolveTenantId(auth, req);
+  if (!tenantId) {
+    return NextResponse.json({ error: "Tenant ID required." }, { status: 400 });
+  }
+
+  try {
+    const body = await req.json();
+    const created = await auth.store.upsertErpCostCenter({ ...body, tenant_id: tenantId });
+    await audit(auth.store, auth.user, req, body.id ? "cost_center.update" : "cost_center.create", "erp_cost_center", created.id, {
+      code: created.code,
+      name: created.name,
+    });
+    return NextResponse.json(created);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

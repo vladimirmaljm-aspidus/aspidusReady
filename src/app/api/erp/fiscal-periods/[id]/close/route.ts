@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, requireAdmin, audit } from "@/lib/api/helpers";
+
+export const runtime = "nodejs";
+
+// POST /api/erp/fiscal-periods/[id]/close — Close a fiscal period
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+  try {
+    const existing = await auth.store.getFiscalPeriod(id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (existing.status === "closed" || existing.status === "locked") {
+      return NextResponse.json({ error: "Period is already closed or locked." }, { status: 400 });
+    }
+
+    const body = await req.json();
+    const closedBy = body.closed_by || auth.user.id;
+
+    const closed = await auth.store.closeFiscalPeriod(id, closedBy);
+    await audit(auth.store, auth.user, req, "fiscal_period.close", "fiscal_period", id, {
+      name: closed.name,
+      closed_by: closedBy,
+    });
+    return NextResponse.json(closed);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

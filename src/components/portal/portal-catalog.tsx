@@ -1,0 +1,352 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Package,
+  Search,
+  Loader2,
+  Hash,
+  Globe2,
+  Layers,
+  Ruler,
+  MapPin,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { fmtDate } from "@/lib/utils/format";
+import type { ProductCatalogEntry } from "@/lib/supabase/types";
+
+// Category → accent color tokens (emerald / amber / teal / rose / violet)
+const CATEGORY_COLORS: Record<string, string> = {
+  SUGAR: "border-transparent bg-chart-1 text-white",
+  GRAIN: "border-transparent bg-chart-3 text-black",
+  CEMENT: "border-transparent bg-chart-4 text-white",
+  CMT: "border-transparent bg-chart-4 text-white",
+  OIL: "border-transparent bg-chart-2 text-white",
+  FOOD: "border-transparent bg-chart-1 text-white",
+  AGRI: "border-transparent bg-chart-2 text-white",
+  ENERGY: "border-transparent bg-chart-4 text-white",
+  CHEM: "border-transparent bg-chart-5 text-white",
+};
+
+function categoryClass(cat: string): string {
+  return CATEGORY_COLORS[cat] || "bg-secondary text-secondary-foreground";
+}
+
+// ISO alpha-2 → flag emoji
+function flagEmoji(code: string | null): string {
+  if (!code || code.length !== 2) return "🏳";
+  const cp = code
+    .toUpperCase()
+    .split("")
+    .map((c) => 0x1f1e6 + c.charCodeAt(0) - 65);
+  return String.fromCodePoint(...cp);
+}
+
+export function PortalCatalog() {
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  const catalogQ = useQuery<{ items: ProductCatalogEntry[]; total: number }>({
+    queryKey: ["portal-catalog"],
+    queryFn: async () => {
+      const r = await fetch("/api/portal/catalog");
+      if (!r.ok) throw new Error("Failed to load catalog");
+      return r.json();
+    },
+  });
+
+  const allItems = catalogQ.data?.items || [];
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    allItems.forEach((p) => p.category && set.add(p.category));
+    return Array.from(set).sort();
+  }, [allItems]);
+
+  const filtered = useMemo(() => {
+    let items = allItems;
+    if (categoryFilter !== "all") {
+      items = items.filter((p) => p.category === categoryFilter);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.hs_code?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q)
+      );
+    }
+    return items;
+  }, [allItems, categoryFilter, search]);
+
+  const selected = filtered.find((p) => p.id === detailId) || null;
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-5">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Product <span className="text-gradient-emerald">Catalog</span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {catalogQ.data
+              ? `${filtered.length} product${filtered.length === 1 ? "" : "s"} available`
+              : "Loading catalog…"}
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-56">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search products…"
+              className="pl-10 h-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
+            />
+          </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="h-10 w-full sm:w-44">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {catalogQ.isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyCatalog />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll pr-1">
+          {filtered.map((p) => {
+            const specs = p.specifications || {};
+            const specEntries = Object.entries(specs).slice(0, 2);
+            return (
+              <div
+                key={p.id}
+                onClick={() => setDetailId(p.id)}
+                className="border-gradient cursor-pointer group hover:-translate-y-0.5 smooth shadow-soft hover:shadow-soft-lg"
+              >
+                <div className="bg-card rounded-[calc(var(--radius-xl)-1px)] p-5 h-full">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <Badge className={cn("text-[10px] px-1.5 py-0", categoryClass(p.category))}>
+                      {p.category}
+                    </Badge>
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <span className="text-base leading-none">{flagEmoji(p.origin_country)}</span>
+                      <span className="font-medium">{p.origin_country || "—"}</span>
+                    </div>
+                  </div>
+                  <p className="text-base font-semibold leading-snug group-hover:text-primary smooth">
+                    {p.name}
+                  </p>
+                  {p.description && (
+                    <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
+                      {p.description}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-1.5 mt-3 text-[11px] text-muted-foreground">
+                    <Hash className="size-3" />
+                    <span className="font-mono tabular">{p.hs_code || "—"}</span>
+                    <span className="mx-1">·</span>
+                    <Ruler className="size-3" />
+                    <span className="tabular">{p.base_unit}</span>
+                  </div>
+                  {specEntries.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {specEntries.map(([k, v]) => (
+                        <span
+                          key={k}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-muted/70 text-muted-foreground"
+                        >
+                          <span className="font-medium">{k}:</span> {v}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Detail sheet — glass-strong */}
+      <Sheet open={!!detailId} onOpenChange={(o) => !o && setDetailId(null)}>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto custom-scroll glass-strong border-l border-border/60">
+          {selected ? <CatalogDetail product={selected} /> : null}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function EmptyCatalog() {
+  return (
+    <div className="card-premium p-12 flex flex-col items-center justify-center text-center">
+      <div className="size-16 rounded-full bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center mb-4">
+        <Package className="size-7 text-primary" />
+      </div>
+      <p className="text-base font-semibold">No products in catalog</p>
+      <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+        The product catalog is currently empty. Please check back later.
+      </p>
+    </div>
+  );
+}
+
+function CatalogDetail({ product }: { product: ProductCatalogEntry }) {
+  const specs = product.specifications || {};
+  const specEntries = Object.entries(specs);
+
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle className="flex items-center gap-2">
+          <div className="size-9 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center">
+            <Package className="size-5 text-primary" />
+          </div>
+          {product.name}
+        </SheetTitle>
+        <SheetDescription className="flex flex-wrap items-center gap-2">
+          <Badge className={cn("text-[11px]", categoryClass(product.category))}>
+            {product.category}
+          </Badge>
+          {product.origin_country && (
+            <span className="inline-flex items-center gap-1 text-xs">
+              <span className="text-base leading-none">{flagEmoji(product.origin_country)}</span>
+              {product.origin_country}
+            </span>
+          )}
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="px-4 pb-4 space-y-5">
+        {product.description && (
+          <div>
+            <h3 className="text-sm font-semibold mb-1.5">Description</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {product.description}
+            </p>
+          </div>
+        )}
+
+        {/* Key attributes */}
+        <div className="grid grid-cols-2 gap-3">
+          <InfoTile icon={Hash} label="HS code" value={product.hs_code || "—"} mono />
+          <InfoTile icon={Ruler} label="Base unit" value={product.base_unit} />
+          <InfoTile
+            icon={Globe2}
+            label="Origin"
+            value={
+              product.origin_country
+                ? `${flagEmoji(product.origin_country)} ${product.origin_country}`
+                : "—"
+            }
+          />
+          <InfoTile icon={Layers} label="Category" value={product.category} />
+        </div>
+
+        {/* Full specifications as definition list */}
+        {specEntries.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+              <Layers className="size-4 text-primary" />
+              Full specifications
+            </h3>
+            <div className="rounded-xl border border-border/60 overflow-hidden shadow-soft bg-card">
+              <dl className="divide-y divide-border/60">
+                {specEntries.map(([k, v]) => (
+                  <div
+                    key={k}
+                    className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 smooth"
+                  >
+                    <dt className="text-sm text-muted-foreground capitalize">
+                      {k.replace(/_/g, " ")}
+                    </dt>
+                    <dd className="text-sm font-medium tabular">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+        )}
+
+        {product.images && product.images.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Images</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {product.images.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`${product.name} ${i + 1}`}
+                  className="rounded-lg border border-border/60 object-cover aspect-square"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground border-t border-border/60 pt-3">
+          <MapPin className="size-3" />
+          Last updated {fmtDate(product.updated_at)}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function InfoTile({
+  icon: Icon,
+  label,
+  value,
+  mono,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-soft">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Icon className="size-3" />
+        {label}
+      </div>
+      <p className={cn("text-sm font-medium mt-1 truncate", mono && "font-mono tabular")}>
+        {value}
+      </p>
+    </div>
+  );
+}

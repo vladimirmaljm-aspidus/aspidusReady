@@ -1,0 +1,160 @@
+"use client";
+
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Card, CardContent,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Search, ScrollText } from "lucide-react";
+import { PageHeader } from "@/components/common/page-header";
+import { EmptyState } from "@/components/common/empty-state";
+import { fmtDateTime } from "@/lib/utils/format";
+import { AuditLog } from "@/lib/supabase/types";
+
+function initials(name?: string | null): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function actionColor(action: string): string {
+  if (action === "login" || action === "logout" || action.startsWith("login.") || action.startsWith("logout.")) {
+    return "border-transparent bg-chart-1 text-white";
+  }
+  if (action.endsWith(".create")) {
+    return "border-transparent bg-chart-2 text-white";
+  }
+  if (action.endsWith(".update")) {
+    return "border-transparent bg-chart-4 text-white";
+  }
+  if (action.endsWith(".delete")) {
+    return "border-transparent bg-destructive text-white";
+  }
+  if (action.endsWith(".approve")) {
+    return "border-transparent bg-chart-1 text-white";
+  }
+  if (action.endsWith(".reject")) {
+    return "border-transparent bg-destructive text-white";
+  }
+  return "border-transparent bg-secondary text-secondary-foreground";
+}
+
+export function AuditView() {
+  const [search, setSearch] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["audit", search],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      const r = await fetch(`/api/audit?${params}`);
+      if (!r.ok) throw new Error("Failed to load audit log");
+      return r.json() as Promise<{ items: AuditLog[]; total: number }>;
+    },
+  });
+
+  const items = data?.items || [];
+
+  return (
+    <div>
+      <PageHeader
+        title="Audit Log"
+        description={`${data?.total ?? 0} events`}
+      />
+
+      <Card className="mb-4 border-border/60 shadow-soft rounded-xl">
+        <CardContent className="p-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by action, user, entity…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 shadow-soft rounded-xl">
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : items.length === 0 ? (
+            <EmptyState
+              icon={<ScrollText className="size-6" />}
+              title="No audit entries"
+              description="The audit log is empty for the current filters."
+            />
+          ) : (
+            <div className="max-h-[calc(100vh-240px)] overflow-y-auto custom-scroll">
+              <Table>
+                <TableHeader className="sticky top-0 bg-card z-10">
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">Time</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Entity</TableHead>
+                    <TableHead className="hidden md:table-cell">IP</TableHead>
+                    <TableHead className="hidden lg:table-cell">Details</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground tabular">
+                        {fmtDateTime(log.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="size-7">
+                            <AvatarFallback className="text-xs bg-muted">{initials(log.username)}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm font-medium truncate max-w-[140px]">
+                            {log.username || "—"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`font-mono text-xs ${actionColor(log.action)}`}>
+                          {log.action}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm font-mono">
+                        {log.entity_type && log.entity_id
+                          ? `${log.entity_type}:${log.entity_id.slice(0, 8)}`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <span className="font-mono text-xs text-muted-foreground tabular">{log.ip || "—"}</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell max-w-[280px]">
+                        {log.details ? (
+                          <pre className="text-[11px] font-mono bg-muted/60 rounded p-2 overflow-x-auto custom-scroll max-h-24">
+                            {JSON.stringify(log.details, null, 2)}
+                          </pre>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

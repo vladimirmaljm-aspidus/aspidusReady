@@ -1,0 +1,39 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, audit } from "@/lib/api/helpers";
+
+export const runtime = "nodejs";
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const { id } = await params;
+  const body = await req.json();
+  if (body.read) {
+    await auth.store.markNotificationRead(id);
+  }
+  return NextResponse.json({ ok: true });
+}
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Mark all as read for this user
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const url = new URL(req.url);
+  const action = url.searchParams.get("action");
+  if (action === "mark_all_read") {
+    const tenantId = auth.tenantId || "";
+    if (tenantId) {
+      await auth.store.markAllNotificationsRead(tenantId, auth.user.id);
+    }
+    return NextResponse.json({ ok: true });
+  }
+  return NextResponse.json({ error: "Unknown action." }, { status: 400 });
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const { id } = await params;
+  await auth.store.deleteNotification(id);
+  return NextResponse.json({ ok: true });
+}

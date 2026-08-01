@@ -1,0 +1,23 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
+
+export const runtime = "nodejs";
+
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
+  let tenantId = resolveTenantId(auth, req);
+  if (!tenantId && auth.isSuperAdmin) {
+    const tenants = await auth.store.listTenants();
+    tenantId = tenants[0]?.id || null;
+  }
+  if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
+  const url = new URL(req.url);
+  const search = url.searchParams.get("search") || undefined;
+  const status = url.searchParams.get("status") || undefined;
+  const result = await auth.store.listKycSubmissions(tenantId, { search, filters: { status } });
+  return NextResponse.json(result);
+}

@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: aspidus-trade-platform
+    runtime: node
+    plan: starter
+    buildCommand: npm install --legacy-peer-deps && npx prisma generate && npm run build
+    startCommand: HOSTNAME=0.0.0.0 NODE_ENV=production node .next/standalone/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_BACKEND
+        value: supabase
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: SUPABASE_URL
+        sync: false
+        # IMPORTANT: Must be https://xxxxx.supabase.co (NOT postgresql://)
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      # ⚠️  REQUIRED: ADMIN_USERNAME and ADMIN_PASSWORD MUST be set manually
+      #     before running POST /api/setup to create the first admin user.
+      #     Do NOT deploy without setting these to secure custom values.
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
