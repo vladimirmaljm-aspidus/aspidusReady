@@ -34,8 +34,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ items: [] });
     }
     const users = await auth.store.listUsers(tid);
+
+    // ── Tenant isolation ────────────────────────────────────────────────
+    // Regular (non-super) admins must NOT see platform-level users
+    // (super_admin accounts) or users from other tenants. Only super_admin
+    // can see the full list.
+    let visible = users;
+    if (!auth.isSuperAdmin) {
+      visible = users.filter(
+        (u) => u.role !== "super_admin" && u.tenant_id === auth.tenantId
+      );
+    }
+
     // strip hashes
-    const safe = users.map(({ password_hash, totp_secret, ...u }) => u);
+    const safe = visible.map(({ password_hash, totp_secret, ...u }) => u);
     return NextResponse.json({ items: safe });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });

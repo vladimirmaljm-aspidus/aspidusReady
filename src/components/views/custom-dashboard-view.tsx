@@ -67,6 +67,7 @@ import {
   Train,
   AlertTriangle,
   Package,
+  Users,
   CheckCircle2,
   XCircle,
   RotateCcw,
@@ -134,20 +135,31 @@ const STORAGE_KEY = "aspidus-custom-dashboard";
 // ─── API Types ─────────────────────────────────────────────────────────────
 
 interface DashboardInsights {
-  totalRevenue: number;
-  activeDeals: number;
-  conversionRate: number;
-  pendingInvoices: number;
-  revenueTrend: { month: string; revenue: number }[];
-  recentActivity: {
+  kpis: {
+    partners_total: number;
+    partners_active: number;
+    deals_open: number;
+    deals_won_value: number;
+    pipeline_value: number;
+    offers_pending: number;
+    low_stock_count: number;
+    invoices_outstanding: number;
+    inventory_movements_30d: number;
+  };
+  deals_by_stage: { stage: string; count: number; value: number }[];
+  offers_last_30d: { date: string; count: number }[];
+  revenue_last_30d: { date: string; value: number }[];
+  recent_activity: {
     id: string;
     action: string;
-    entity: string;
-    by: string;
-    at: string;
+    entity_type: string | null;
+    entity_id: string | null;
+    username: string | null;
+    created_at: string;
+    details: Record<string, unknown> | null;
   }[];
-  pipeline: Record<string, number>;
-  tasks: { total: number; completed: number; inProgress: number; overdue: number };
+  top_partners: { id: string; name: string; deal_value: number }[];
+  low_stock_products: { id: string; name: string; sku: string; stock: number; reorder_level: number }[];
 }
 
 interface MarketArticle {
@@ -284,32 +296,52 @@ function KpiWidgetContent() {
   const kpis = data
     ? [
         {
-          label: t(locale, "total-revenue"),
-          value: fmtMoney(data.totalRevenue),
-          icon: DollarSign,
-          variant: "positive" as const,
-          trend: { value: 12.5, direction: "up" as const, label: "vs last month" },
-        },
-        {
-          label: t(locale, "active-deals"),
-          value: fmtNumber(data.activeDeals),
-          icon: Handshake,
-          variant: "default" as const,
-          trend: { value: 8.3, direction: "up" as const, label: "vs last month" },
-        },
-        {
-          label: t(locale, "conversion-rate"),
-          value: `${data.conversionRate}%`,
+          label: "Pipeline Value",
+          value: fmtMoney(data.kpis.pipeline_value),
           icon: TrendingUp,
           variant: "positive" as const,
-          trend: { value: 2.1, direction: "up" as const, label: "vs last month" },
         },
         {
-          label: t(locale, "pending-invoices"),
-          value: fmtNumber(data.pendingInvoices),
+          label: "Deals Won",
+          value: fmtMoney(data.kpis.deals_won_value),
+          icon: DollarSign,
+          variant: "positive" as const,
+        },
+        {
+          label: "Open Deals",
+          value: fmtNumber(data.kpis.deals_open),
+          icon: Handshake,
+          variant: "default" as const,
+        },
+        {
+          label: "Pending Offers",
+          value: fmtNumber(data.kpis.offers_pending),
           icon: Receipt,
           variant: "warning" as const,
-          trend: { value: 5.0, direction: "down" as const, label: "vs last month" },
+        },
+        {
+          label: "Active Partners",
+          value: fmtNumber(data.kpis.partners_active),
+          icon: Users,
+          variant: "default" as const,
+        },
+        {
+          label: "Outstanding Invoices",
+          value: fmtNumber(data.kpis.invoices_outstanding),
+          icon: AlertTriangle,
+          variant: "warning" as const,
+        },
+        {
+          label: "Low Stock",
+          value: fmtNumber(data.kpis.low_stock_count),
+          icon: Package,
+          variant: "warning" as const,
+        },
+        {
+          label: "Inventory Movements (30d)",
+          value: fmtNumber(data.kpis.inventory_movements_30d),
+          icon: Activity,
+          variant: "default" as const,
         },
       ]
     : [];
@@ -323,7 +355,6 @@ function KpiWidgetContent() {
           value={kpi.value}
           icon={kpi.icon}
           variant={kpi.variant}
-          trend={kpi.trend}
         />
       ))}
     </div>
@@ -346,20 +377,11 @@ function RevenueChartWidgetContent() {
     return <Skeleton className="h-64 w-full rounded-xl" />;
   }
 
-  const chartData = data?.revenueTrend ?? [
-    { month: "Jan", revenue: 42000 },
-    { month: "Feb", revenue: 48000 },
-    { month: "Mar", revenue: 55000 },
-    { month: "Apr", revenue: 51000 },
-    { month: "May", revenue: 62000 },
-    { month: "Jun", revenue: 68000 },
-    { month: "Jul", revenue: 74000 },
-    { month: "Aug", revenue: 71000 },
-    { month: "Sep", revenue: 82000 },
-    { month: "Oct", revenue: 89000 },
-    { month: "Nov", revenue: 95000 },
-    { month: "Dec", revenue: 102000 },
-  ];
+  // Use real revenue_last_30d data from API, fallback to empty
+  const chartData = (data?.revenue_last_30d ?? []).map((d) => ({
+    month: new Date(d.date).toLocaleDateString("en-US", { day: "numeric", month: "short" }),
+    revenue: d.value,
+  }));
 
   return (
     <div className="h-64 w-full">
@@ -430,13 +452,14 @@ function RecentActivityWidgetContent() {
     );
   }
 
-  const activities = data?.recentActivity ?? [
-    { id: "1", action: "created", entity: "Deal #1042", by: "M. Smith", at: new Date(Date.now() - 1800000).toISOString() },
-    { id: "2", action: "approved", entity: "Offer #2087", by: "J. Davis", at: new Date(Date.now() - 7200000).toISOString() },
-    { id: "3", action: "won", entity: "Deal #1038", by: "A. Wilson", at: new Date(Date.now() - 14400000).toISOString() },
-    { id: "4", action: "delete", entity: "Invoice #5031", by: "K. Brown", at: new Date(Date.now() - 28800000).toISOString() },
-    { id: "5", action: "add", entity: "Partner Acme Trading Ltd.", by: "S. Miller", at: new Date(Date.now() - 43200000).toISOString() },
-  ];
+  // Map real API recent_activity entries to the widget shape
+  const activities = (data?.recent_activity ?? []).map((a) => ({
+    id: a.id,
+    action: a.action,
+    entity: [a.entity_type, a.entity_id].filter(Boolean).join(" ") || "—",
+    by: a.username || "system",
+    at: a.created_at,
+  }));
 
   function actionTone(action: string): string {
     const a = action.toLowerCase();
@@ -541,14 +564,12 @@ function PipelineWidgetContent() {
     );
   }
 
-  const stages = data?.pipeline ?? {
-    Lead: 12,
-    Qualified: 8,
-    Proposal: 6,
-    Negotiation: 4,
-    Won: 3,
-  };
-
+  // Build pipeline stages from real API data (deals_by_stage)
+  const stageData = data?.deals_by_stage ?? [];
+  const stages: Record<string, number> = {};
+  for (const s of stageData) {
+    stages[s.stage] = s.count;
+  }
   const total = Object.values(stages).reduce((s, v) => s + v, 0);
   const stageColors = [
     "bg-muted-foreground/25",
@@ -595,12 +616,14 @@ function PipelineWidgetContent() {
 function TasksWidgetContent() {
   const locale = useI18nStore((s) => s.locale);
 
-  const { data, isLoading } = useQuery<DashboardInsights>({
-    queryKey: ["dashboard"],
+  // Fetch real tasks from /api/tasks
+  const { data: tasksData, isLoading } = useQuery({
+    queryKey: ["dashboard-tasks"],
     queryFn: async () => {
-      const r = await fetch("/api/dashboard");
+      const r = await fetch("/api/tasks");
       if (!r.ok) throw new Error("Failed");
-      return r.json();
+      const d = await r.json();
+      return (d.items || d || []) as Array<{ id: string; done: boolean; priority: string; due_date: string | null }>;
     },
   });
 
@@ -614,7 +637,13 @@ function TasksWidgetContent() {
     );
   }
 
-  const tasks = data?.tasks ?? { total: 24, completed: 14, inProgress: 7, overdue: 3 };
+  const allTasks = tasksData || [];
+  const tasks = {
+    total: allTasks.length,
+    completed: allTasks.filter((t) => t.done).length,
+    inProgress: allTasks.filter((t) => !t.done).length,
+    overdue: allTasks.filter((t) => !t.done && t.due_date && new Date(t.due_date) < new Date()).length,
+  };
   const pct = tasks.total > 0 ? Math.round((tasks.completed / tasks.total) * 100) : 0;
 
   return (

@@ -167,7 +167,7 @@ function highlightVariables(text: string) {
 
 export function EmailTemplatesView() {
   const locale = useI18nStore((s) => s.locale);
-  const t = (key: string) => LABELS[locale][key] || key;
+  const t = (key: string) => LABELS[key] || key;
 
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -245,16 +245,16 @@ export function EmailTemplatesView() {
                 <SelectContent>
                   <SelectItem value="all">{t("all")}</SelectItem>
                   <SelectItem value="transactional">
-                    {CATEGORY_META.transactional.label[locale]}
+                    {CATEGORY_META.transactional.label}
                   </SelectItem>
                   <SelectItem value="marketing">
-                    {CATEGORY_META.marketing.label[locale]}
+                    {CATEGORY_META.marketing.label}
                   </SelectItem>
                   <SelectItem value="notification">
-                    {CATEGORY_META.notification.label[locale]}
+                    {CATEGORY_META.notification.label}
                   </SelectItem>
                   <SelectItem value="compliance">
-                    {CATEGORY_META.compliance.label[locale]}
+                    {CATEGORY_META.compliance.label}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -597,7 +597,7 @@ function TemplateEditorPanel({
                 variant="outline"
                 className={CATEGORY_META[template.category].className}
               >
-                {CATEGORY_META[template.category].label[locale]}
+                {CATEGORY_META[template.category].label}
               </Badge>
             </div>
 
@@ -842,16 +842,16 @@ function NewTemplateDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="transactional">
-                  {CATEGORY_META.transactional.label[locale]}
+                  {CATEGORY_META.transactional.label}
                 </SelectItem>
                 <SelectItem value="marketing">
-                  {CATEGORY_META.marketing.label[locale]}
+                  {CATEGORY_META.marketing.label}
                 </SelectItem>
                 <SelectItem value="notification">
-                  {CATEGORY_META.notification.label[locale]}
+                  {CATEGORY_META.notification.label}
                 </SelectItem>
                 <SelectItem value="compliance">
-                  {CATEGORY_META.compliance.label[locale]}
+                  {CATEGORY_META.compliance.label}
                 </SelectItem>
               </SelectContent>
             </Select>

@@ -167,5 +167,52 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     }
   }
 
+  // ── Auto-register in Document Register ───────────────────────────────
+  // Every issued document (offer/invoice/proforma) must be recorded in the
+  // document register with a sequential number so the firm has a complete
+  // audit trail of all outbound documents. This is idempotent — if an entry
+  // with the same reference_id + version already exists, we skip.
+  try {
+    const existing = await store.listDocumentRegister(opts.tenantId, {
+      limit: 1000,
+      filters: { reference_id: opts.docId },
+    });
+    const alreadyRegistered = existing.items.some(
+      (e) => e.reference_id === opts.docId && e.type === opts.docType
+    );
+    if (!alreadyRegistered) {
+      // Determine the next version number for this document
+      const versions = existing.items.filter(
+        (e) => e.reference_id === opts.docId && e.type === opts.docType
+      );
+      const nextVersion = versions.length + 1;
+
+      await store.upsertDocumentRegisterEntry({
+        tenant_id: opts.tenantId,
+        number: `${doc.number}-V${nextVersion}`,
+        type: opts.docType as any,
+        version: nextVersion,
+        reference_id: opts.docId,
+        partner_id: doc.partner_id,
+        title: `${docTitleLabel} ${doc.number}`,
+        status: "current",
+        created_by: null,
+        metadata: {
+          verification_code: verificationCode,
+          verification_id: verificationId,
+          pdf_hash: pdfHash,
+          pdf_size: buffer.length,
+          currency: doc.currency,
+          total: doc.total,
+          partner_name: partner?.name,
+          generated_at: new Date().toISOString(),
+        },
+      } as any);
+    }
+  } catch (regErr) {
+    // Don't fail the PDF generation if the register write fails — log it.
+    console.error("[pdf.generator] Document register write failed:", regErr);
+  }
+
   return { buffer, verificationCode, pdfHash, verificationId };
 }

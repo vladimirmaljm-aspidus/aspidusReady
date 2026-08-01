@@ -102,7 +102,8 @@ export function CommissionsView() {
     queryFn: async () => {
       const r = await fetch("/api/commission-agents");
       if (!r.ok) throw new Error("Failed to load agents");
-      return r.json() as Promise<CommissionAgent[]>;
+      const data = await r.json();
+      return (data.items || data || []) as CommissionAgent[];
     },
   });
 
@@ -111,7 +112,8 @@ export function CommissionsView() {
     queryFn: async () => {
       const r = await fetch("/api/deal-commissions");
       if (!r.ok) throw new Error("Failed to load deal commissions");
-      return r.json() as Promise<DealCommission[]>;
+      const data = await r.json();
+      return (data.items || data || []) as DealCommission[];
     },
   });
 
@@ -120,7 +122,8 @@ export function CommissionsView() {
     queryFn: async () => {
       const r = await fetch("/api/commission-payouts");
       if (!r.ok) throw new Error("Failed to load payouts");
-      return r.json() as Promise<CommissionPayout[]>;
+      const data = await r.json();
+      return (data.items || data || []) as CommissionPayout[];
     },
   });
 
@@ -129,7 +132,8 @@ export function CommissionsView() {
     queryFn: async () => {
       const r = await fetch("/api/commission-summaries");
       if (!r.ok) throw new Error("Failed to load summaries");
-      return r.json() as Promise<CommissionSummary[]>;
+      const data = await r.json();
+      return (Array.isArray(data) ? data : data.items || []) as CommissionSummary[];
     },
   });
 

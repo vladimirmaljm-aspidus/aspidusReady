@@ -91,11 +91,20 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     headerLeft: { flexDirection: "column", flex: 1 },
     companyName: { fontSize: 15, fontFamily: headingFontFamily, color: primaryColor, marginBottom: 2 },
     companyTagline: { fontSize: 7.5, color: "#888", marginBottom: 3 },
-    companyAddr: { fontSize: 7.5, color: "#666" },
     headerRight: { flexDirection: "column", alignItems: "flex-end", gap: 4 },
     headerLogo: { width: 110, height: 42, objectFit: "contain", marginBottom: 2 },
-    headerQrImage: { width: 40, height: 40 },
-    headerQrLabel: { fontSize: 5.5, color: "#999", textAlign: "center", marginTop: 1 },
+
+    // ── QR code (bottom-left corner, doesn't overlap with content) ─────
+    qrSection: {
+      position: "absolute",
+      bottom: mmToPoints(8),
+      left: marginLeft,
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 2,
+    },
+    qrImage: { width: 50, height: 50 },
+    qrLabel: { fontSize: 6, color: "#999", textAlign: "center" },
 
     // ── Document title + metadata ──────────────────────────────────────
     docHeader: {
@@ -261,26 +270,13 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         <Text style={styles.companyName}>
           {tenant?.legal_name || tenant?.name || "Company"}
         </Text>
-        {tenant?.address_line && (
-          <Text style={styles.companyAddr}>{tenant.address_line}</Text>
+        {tenant?.website && (
+          <Text style={styles.companyTagline}>{tenant.website}</Text>
         )}
-        <Text style={styles.companyAddr}>
-          {[
-            tenant?.city,
-            tenant?.country,
-          ].filter(Boolean).join(", ")}
-        </Text>
       </View>
       <View style={styles.headerRight}>
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         {logoUrl && <Image style={styles.headerLogo} src={logoUrl} />}
-        {qrCodeDataUrl && verificationCode && (
-          <View style={{ alignItems: "center" }}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text */}
-            <Image style={styles.headerQrImage} src={qrCodeDataUrl} />
-            <Text style={styles.headerQrLabel}>Scan to verify</Text>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -475,6 +471,17 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
               This {docType} is informational until confirmed. Prices are subject to change without notice. Payment terms as specified above.
               {(doc as any).bank_details ? ` Bank details: ${(doc as any).bank_details}.` : ""}
             </Text>
+          </View>
+        )}
+
+        {/* QR code — bottom-left corner, positioned absolutely so it never
+            overlaps with body content. The page has paddingBottom that
+            reserves space below the footer line for it. */}
+        {qrCodeDataUrl && verificationCode && (
+          <View style={styles.qrSection} fixed>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image style={styles.qrImage} src={qrCodeDataUrl} />
+            <Text style={styles.qrLabel}>Scan to verify</Text>
           </View>
         )}
 

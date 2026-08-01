@@ -63,6 +63,29 @@ function unitLabel(code: string): string {
   return UNITS_OF_MEASURE.find((u) => u.code === code)?.name || code;
 }
 
+/**
+ * Normalize specifications — the Supabase `product_catalog.specifications`
+ * column can hold EITHER an array of {name, value} pairs (current shape) OR
+ * a Record<string, string> (legacy shape). This helper returns a flat array
+ * of {name, value} pairs so the UI never tries to render a raw object.
+ */
+function normalizeSpecs(raw: unknown): { name: string; value: string }[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return (raw as { name: string; value: string }[]).map((s) => ({
+      name: String(s.name ?? ""),
+      value: String(s.value ?? ""),
+    }));
+  }
+  if (typeof raw === "object" && raw !== null) {
+    return Object.entries(raw as Record<string, unknown>).map(([name, value]) => ({
+      name,
+      value: String(value ?? ""),
+    }));
+  }
+  return [];
+}
+
 // ---- Pagination helper ----
 function generatePageNumbers(current: number, total: number): (number | "ellipsis")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
@@ -235,7 +258,7 @@ export function ProductCatalogView() {
                   </TableHeader>
                   <TableBody>
                     {items.map((p) => {
-                      const specs = p.specifications ? Object.entries(p.specifications).slice(0, 2) : [];
+                      const specs = normalizeSpecs(p.specifications).slice(0, 2);
                       return (
                         <TableRow
                           key={p.id}
@@ -261,9 +284,9 @@ export function ProductCatalogView() {
                           </TableCell>
                           <TableCell className="hidden xl:table-cell">
                             <div className="flex flex-wrap gap-1">
-                              {specs.length === 0 ? <span className="text-xs text-muted-foreground">—</span> : specs.map(([k, v]) => (
-                                <Badge key={k} variant="secondary" className="font-normal">
-                                  <span className="text-muted-foreground mr-1">{k}:</span>{v}
+                              {specs.length === 0 ? <span className="text-xs text-muted-foreground">—</span> : specs.map((s, i) => (
+                                <Badge key={i} variant="secondary" className="font-normal">
+                                  <span className="text-muted-foreground mr-1">{s.name}:</span>{s.value}
                                 </Badge>
                               ))}
                             </div>
@@ -404,7 +427,7 @@ function ProductDetail({
   offers: SupplierOffer[];
   partnerMap: Map<string, Partner>;
 }) {
-  const specs = product.specifications ? Object.entries(product.specifications) : [];
+  const specs = normalizeSpecs(product.specifications);
 
   // Known imported data keys that should be displayed with nice labels
   const IMPORTED_KEY_LABELS: Record<string, string> = {
@@ -419,8 +442,8 @@ function ProductDetail({
   };
 
   // Separate imported data fields from generic specs
-  const importedEntries = specs.filter(([k]) => k in IMPORTED_KEY_LABELS);
-  const otherSpecEntries = specs.filter(([k]) => !(k in IMPORTED_KEY_LABELS));
+  const importedEntries = specs.filter((s) => s.name in IMPORTED_KEY_LABELS);
+  const otherSpecEntries = specs.filter((s) => !(s.name in IMPORTED_KEY_LABELS));
 
   // Extract images from product.images
   const images: string[] = Array.isArray(product.images) ? product.images : [];
@@ -480,45 +503,21 @@ function ProductDetail({
         <div>
           <p className="text-xs text-muted-foreground mb-2">Product Details</p>
           <div className="grid grid-cols-2 gap-2">
-            {importedEntries.map(([k, v]) => (
-              <Card key={k} className="border-border/60 shadow-soft rounded-xl">
+            {importedEntries.map((s) => (
+              <Card key={s.name} className="border-border/60 shadow-soft rounded-xl">
                 <CardContent className="p-3">
-                  <p className="text-xs text-muted-foreground">{IMPORTED_KEY_LABELS[k]}</p>
+                  <p className="text-xs text-muted-foreground">{IMPORTED_KEY_LABELS[s.name] || s.name}</p>
                   <p className="text-sm font-medium mt-0.5 break-words">
-                    {k === "image_url" && typeof v === "string" ? (
-                      <a href={v} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{v}</a>
-                    ) : k === "tags" && Array.isArray(v) ? (
+                    {s.name === "image_url" ? (
+                      <a href={s.value} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{s.value}</a>
+                    ) : s.name === "tags" ? (
                       <div className="flex flex-wrap gap-1 mt-0.5">
-                        {(v as string[]).map((tag: string, i: number) => (
-                          <Badge key={i} variant="secondary" className="text-xs">{tag}</Badge>
-                        ))}
-                      </div>
-                    ) : k === "inventory" && typeof v === "object" && v !== null ? (
-                      <div className="space-y-0.5 mt-0.5">
-                        {Object.entries(v as Record<string, unknown>).map(([pk, pv]) => (
-                          <div key={pk} className="text-xs">
-                            <span className="text-muted-foreground">{pk}:</span> {String(pv)}
-                          </div>
-                        ))}
-                      </div>
-                    ) : k === "coa_params" && typeof v === "object" && v !== null ? (
-                      <div className="space-y-0.5 mt-0.5">
-                        {Object.entries(v as Record<string, unknown>).map(([pk, pv]) => (
-                          <div key={pk} className="text-xs">
-                            <span className="text-muted-foreground">{pk}:</span> {String(pv)}
-                          </div>
-                        ))}
-                      </div>
-                    ) : k === "logistics" && typeof v === "object" && v !== null ? (
-                      <div className="space-y-0.5 mt-0.5">
-                        {Object.entries(v as Record<string, unknown>).map(([pk, pv]) => (
-                          <div key={pk} className="text-xs">
-                            <span className="text-muted-foreground">{pk}:</span> {String(pv)}
-                          </div>
+                        {s.value.split(",").map((tag, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">{tag.trim()}</Badge>
                         ))}
                       </div>
                     ) : (
-                      String(v)
+                      s.value
                     )}
                   </p>
                 </CardContent>
@@ -533,10 +532,10 @@ function ProductDetail({
         <div>
           <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><Tag className="size-3" /> Specifications</p>
           <div className="border border-border/60 rounded-md divide-y divide-border/60">
-            {otherSpecEntries.map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between p-2 text-sm">
-                <span className="text-muted-foreground">{k}</span>
-                <span className="font-medium tabular">{v}</span>
+            {otherSpecEntries.map((s, i) => (
+              <div key={i} className="flex items-center justify-between p-2 text-sm">
+                <span className="text-muted-foreground">{s.name}</span>
+                <span className="font-medium tabular">{s.value}</span>
               </div>
             ))}
           </div>
@@ -607,7 +606,7 @@ function ProductFormDialog({
   useEffect(() => {
     if (open) {
       const baseSpecs = product?.specifications
-        ? Object.entries(product.specifications).map(([key, value]) => ({ key, value: String(value) }))
+        ? normalizeSpecs(product.specifications).map((s) => ({ key: s.name, value: s.value }))
         : [];
       setForm(product
         ? { ...product }
