@@ -36,10 +36,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } = {};
   try { body = await req.json(); } catch { /* empty body ok */ }
 
-  const partnerId = body.partner_id || (calc as any).partner_id;
+  // Resolve partner_id — check body, then calc.partner_id, then calc.buyer_id
+  const partnerId = body.partner_id || (calc as any).partner_id || (calc as any).buyer_id;
   if (!partnerId) {
     return NextResponse.json(
-      { error: "Partner ID is required. Specify a partner in the body or save the calculation with a partner." },
+      { error: "Partner ID is required. Specify a partner in the body or save the calculation with a buyer/partner." },
       { status: 400 }
     );
   }

@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/api/helpers";
+import { validateIBAN, lookupBankByIBAN, getAccountHolderType, getRequiredKycDocuments } from "@/lib/banking/iban";
+
+export const runtime = "nodejs";
+
+/**
+ * POST /api/banking/validate-iban
+ * Body: { iban: "RS35260005601001611239" }
+ *
+ * Returns:
+ *   {
+ *     valid: boolean,
+ *     country: "RS",
+ *     bankCode: "260",
+ *     bankName: "Banca Intesa",
+ *     swift: "DBRSRSBG",
+ *     bic: "DBRSRSBG",
+ *     sepa: false,
+ *     formatted: "RS35 2600 0560 1001 6112 39"
+ *   }
+ */
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
+  let body: { iban?: string; entity_type?: string } = {};
+  try { body = await req.json(); } catch { /* ok */ }
+
+  const iban = (body.iban || "").trim();
+  if (!iban) {
+    return NextResponse.json({ error: "IBAN is required." }, { status: 400 });
+  }
+
+  const result = validateIBAN(iban);
+  const bankInfo = lookupBankByIBAN(iban);
+
+  const holderType = body.entity_type ? getAccountHolderType(body.entity_type) : undefined;
+  const requiredDocs = body.entity_type ? getRequiredKycDocuments(body.entity_type) : undefined;
+
+  return NextResponse.json({
+    valid: result.valid,
+    country: result.country,
+    bankCode: result.bankCode,
+    branchCode: result.branchCode,
+    accountNumber: result.accountNumber,
+    formatted: result.formatted,
+    bankName: bankInfo?.bankName || "",
+    swift: bankInfo?.swift || "",
+    bic: bankInfo?.bic || "",
+    sepa: bankInfo?.sepa || false,
+    accountHolderType: holderType,
+    requiredDocuments: requiredDocs,
+  });
+}

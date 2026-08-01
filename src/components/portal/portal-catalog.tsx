@@ -3,7 +3,10 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { useAppStore } from "@/lib/store/app-store";
 import {
   Select,
   SelectContent,
@@ -27,6 +30,7 @@ import {
   Layers,
   Ruler,
   MapPin,
+  ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDate } from "@/lib/utils/format";
@@ -213,7 +217,41 @@ export function PortalCatalog() {
       {/* Detail sheet — glass-strong */}
       <Sheet open={!!detailId} onOpenChange={(o) => !o && setDetailId(null)}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto custom-scroll glass-strong border-l border-border/60">
-          {selected ? <CatalogDetail product={selected} /> : null}
+          {selected ? (
+            <CatalogDetail
+              product={selected}
+              onRequestQuote={(product) => {
+                // Create a portal RFQ with the product pre-filled
+                const createRfq = async () => {
+                  try {
+                    const r = await fetch("/api/portal/rfqs", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        product_name: product.name,
+                        product_description: product.description,
+                        category: product.category,
+                        unit: product.base_unit,
+                        quantity: 1,
+                        currency: "USD",
+                        notes: `Request for quote for ${product.name} (from catalog)`,
+                        specifications: product.specifications,
+                      }),
+                    });
+                    if (!r.ok) throw new Error("Failed to create RFQ");
+                    toast.success("RFQ created! We'll get back to you with a quote.");
+                    setDetailId(null);
+                    // Navigate to RFQ view
+                    const setView = useAppStore.getState().setView;
+                    setView("portal-rfq");
+                  } catch (e: any) {
+                    toast.error(e.message || "Failed to create RFQ");
+                  }
+                };
+                createRfq();
+              }}
+            />
+          ) : null}
         </SheetContent>
       </Sheet>
     </div>
@@ -234,7 +272,7 @@ function EmptyCatalog() {
   );
 }
 
-function CatalogDetail({ product }: { product: ProductCatalogEntry }) {
+function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEntry; onRequestQuote?: (product: ProductCatalogEntry) => void }) {
   // Normalize specifications — array of {name,value} OR Record<string,string>
   const rawSpecs = product.specifications as unknown;
   const specEntries: { name: string; value: string }[] = Array.isArray(rawSpecs)
@@ -336,6 +374,23 @@ function CatalogDetail({ product }: { product: ProductCatalogEntry }) {
           <MapPin className="size-3" />
           Last updated {fmtDate(product.updated_at)}
         </div>
+
+        {/* Request Quote button — quick action to create an RFQ from this product */}
+        {onRequestQuote && (
+          <div className="border-t border-border/60 pt-4">
+            <Button
+              onClick={() => onRequestQuote(product)}
+              className="w-full gap-2"
+              size="lg"
+            >
+              <ShoppingCart className="size-4" />
+              Request Quote for this Product
+            </Button>
+            <p className="text-[11px] text-muted-foreground text-center mt-2">
+              Get a customized offer with pricing, delivery terms, and specifications.
+            </p>
+          </div>
+        )}
       </div>
     </>
   );

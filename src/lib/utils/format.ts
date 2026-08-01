@@ -1,27 +1,43 @@
 // Formatting helpers shared across views — English locale.
 
+/**
+ * Format a money value with exactly 2 decimal places.
+ * This is the default money formatter — always shows 2 decimals so that
+ * prices like 1.15 are displayed correctly (not rounded to 1).
+ */
 export function fmtMoney(n: number | null | undefined, currency = "USD"): string {
   if (n === null || n === undefined || isNaN(n)) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(n);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    // Fallback if currency code is invalid
+    return `${Number(n).toFixed(2)} ${currency}`;
+  }
 }
 
+/**
+ * Detailed money formatter — same as fmtMoney (2 decimals).
+ * Kept for backward compatibility.
+ */
 export function fmtMoneyDetailed(n: number | null | undefined, currency = "USD"): string {
-  if (n === null || n === undefined || isNaN(n)) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
+  return fmtMoney(n, currency);
 }
 
+/**
+ * Format a number with up to 2 decimal places (trailing zeros removed).
+ * Use this for quantities, rates, percentages.
+ */
 export function fmtNumber(n: number | null | undefined): string {
   if (n === null || n === undefined || isNaN(n)) return "—";
-  return new Intl.NumberFormat("en-US").format(n);
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 export function fmtDate(iso: string | null | undefined, opts?: Intl.DateTimeFormatOptions): string {
