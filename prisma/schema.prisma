@@ -59,7 +59,8 @@ model Tenant {
   erpCostCenters       ErpCostCenter[]
   erpBankAccounts      ErpBankAccount[]
   erpBankTransactions  ErpBankTransaction[]
-  erpJournalLines     ErpJournalLine[]
+  erpJournalLines     ErpJournalLine[] @relation("JLTenant")
+  documentRevisions   DocumentRevision[] @relation("DocRevTenant")
   erpSetting           ErpSetting?
 }
 
@@ -104,7 +105,7 @@ model User {
   trustedDevices      TrustedDevice[]
   tradeCalculations   TradeCalculation[] @relation("TradeCalcCreator")
   documentRegisterEntries DocumentRegisterEntry[]
-  documentRevisions   DocumentRevision[]
+  documentRevisions   DocumentRevision[] @relation("DocRevCreator")
   documentTemplates   DocumentTemplate[] @relation("TemplateCreator")
   approvedPortalAccess PortalAccess[] @relation("PortalApprover")
   reviewedKyc         KycSubmission[] @relation("KycReviewer")
@@ -524,7 +525,7 @@ model DocumentRegisterEntry {
   // Relations
   partner      Partner? @relation(fields: [partner_id], references: [id])
   creator      User?    @relation(fields: [created_by], references: [id])
-  revisions    DocumentRevision[]
+  revisions    DocumentRevision[] @relation("DocRevDocument")
 
   @@index([type])
   @@index([reference_id])
@@ -546,9 +547,9 @@ model DocumentRevision {
   created_at   DateTime @default(now())
 
   // Relations
-  tenant       Tenant    @relation(fields: [tenant_id], references: [id])
-  document     DocumentRegisterEntry @relation(fields: [document_id], references: [id], onDelete: Cascade)
-  creator      User?    @relation(fields: [created_by], references: [id])
+  tenant       Tenant    @relation("DocRevTenant", fields: [tenant_id], references: [id])
+  document     DocumentRegisterEntry @relation("DocRevDocument", fields: [document_id], references: [id], onDelete: Cascade)
+  creator      User?    @relation("DocRevCreator", fields: [created_by], references: [id])
 
   @@index([tenant_id])
   @@index([document_id])
@@ -1339,7 +1340,7 @@ model ErpJournalLine {
   created_at       DateTime  @default(now())
 
   // Relations
-  tenant           Tenant          @relation(fields: [tenant_id], references: [id])
+  tenant           Tenant          @relation("JLTenant", fields: [tenant_id], references: [id])
   journal_entry    ErpJournalEntry  @relation(fields: [journal_entry_id], references: [id])
   account          ErpAccount       @relation(fields: [account_id], references: [id])
   cost_center      ErpCostCenter?   @relation(fields: [cost_center_id], references: [id])
