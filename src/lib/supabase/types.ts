@@ -6,6 +6,7 @@ export type PartnerType = "supplier" | "buyer" | "both" | "agent" | "logistics" 
 export type DealStage = "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
 export type OfferStatus = "draft" | "sent" | "accepted" | "rejected" | "expired";
 export type DemandStatus = "open" | "quoted" | "closed";
+export type DemandPriority = "low" | "medium" | "high";
 export type KycStatus = "not_submitted" | "pending" | "approved" | "rejected";
 
 export interface User {
@@ -172,6 +173,7 @@ export interface Demand {
   number: string;
   partner_id: string;
   status: DemandStatus;
+  priority: DemandPriority;
   subject: string;
   description: string | null;
   requested_delivery: string | null;
@@ -321,6 +323,7 @@ export interface Proforma {
   valid_until: string;
   sent_at: string | null;
   paid_at: string | null;
+  payment_terms: string | null;
   notes: string | null;
   items: OfferLineItem[];
   created_at: string;

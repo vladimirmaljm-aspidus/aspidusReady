@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -30,9 +30,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Plus, Search, Users, Pencil, Trash2, Eye, Mail, Phone, Globe, MapPin,
   Building2, ShieldCheck, Star, Maximize2, DollarSign,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -448,6 +450,21 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
   );
 }
 
+// ---- Simplified type options ----
+const SIMPLIFIED_TYPES = [
+  { value: "buyer", label: "Customer (Buyer)", description: "Buys from you" },
+  { value: "supplier", label: "Supplier", description: "Sells to you" },
+  { value: "both", label: "Both", description: "Both buyer and supplier" },
+  { value: "agent", label: "Agent", description: "Commission agent" },
+] as const;
+
+const OTHER_TYPES = [
+  { value: "logistics", label: "Logistics Provider" },
+  { value: "customs", label: "Customs Broker" },
+  { value: "bank", label: "Bank / Financial" },
+  { value: "inspector", label: "Inspection Agency" },
+];
+
 // ---- Form dialog ----
 function PartnerFormDialog({
   open, onOpenChange, partner, onSaved,
@@ -459,16 +476,40 @@ function PartnerFormDialog({
 }) {
   const [form, setForm] = useState<Partial<Partner>>({});
   const [saving, setSaving] = useState(false);
+  const [showOtherTypes, setShowOtherTypes] = useState(false);
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+
+  const isEditing = !!partner;
 
   useMemo(() => {
     if (open) {
-      setForm(partner
-        ? { ...partner }
-        : ({
-            type: "customer", status: "active", risk_score: 0, currency: "USD",
-            entity_type: "company", category: "regular", payment_terms: "net30",
-            portal_enabled: false, portal_level: "none", kyc_status: "not_submitted",
-          } as Partial<Partner>));
+      if (partner) {
+        setForm({ ...partner });
+        // When editing, open sections that have data
+        const hasAddress = partner.address_line || partner.city || partner.postal_code || partner.country;
+        const hasContact = partner.contact_name || partner.contact_email || partner.contact_phone;
+        const hasBank = partner.bank_name || partner.bank_account || partner.bank_swift;
+        const hasNotes = partner.notes || partner.portal_enabled || partner.is_commissioner;
+        setAddressOpen(!!hasAddress);
+        setContactOpen(!!hasContact);
+        setBankOpen(!!hasBank);
+        setNotesOpen(!!hasNotes);
+        setShowOtherTypes(["logistics", "customs", "bank", "inspector"].includes(partner.type));
+      } else {
+        setForm({
+          type: "buyer", status: "active", risk_score: 0, currency: "EUR",
+          entity_type: "company", category: "new", payment_terms: "net30",
+          portal_enabled: false, portal_level: "none", kyc_status: "not_submitted",
+        } as Partial<Partner>);
+        setAddressOpen(false);
+        setContactOpen(false);
+        setBankOpen(false);
+        setNotesOpen(false);
+        setShowOtherTypes(false);
+      }
     }
   }, [open, partner]);
 
@@ -476,22 +517,41 @@ function PartnerFormDialog({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  const handleTypeChange = useCallback((v: string) => {
+    if (v === "other") {
+      setShowOtherTypes(true);
+      // Don't change the actual type yet — user must pick from sub-list
+    } else {
+      setShowOtherTypes(false);
+      set("type", v as PartnerType);
+      // Smart category defaults for new partners
+      if (!isEditing) {
+        if (v === "buyer") {
+          set("category", "new");
+        } else if (v === "supplier") {
+          set("category", "regular");
+        }
+      }
+    }
+  }, [isEditing]);
+
   async function save() {
     if (!form.name) { toast.error("Name is required."); return; }
     setSaving(true);
     try {
       const method = partner ? "PUT" : "POST";
       const url = partner ? `/api/partners/${partner.id}` : "/api/partners";
+      const payload = { ...form, risk_score: form.risk_score ?? 0 };
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(partner ? "Partner updated." : "Partner created.");
+      toast.success(partner ? "Partner updated." : `"${form.name}" created successfully!`);
       onSaved();
     } catch (e: any) {
       toast.error(e.message || "Saving failed.");
@@ -500,182 +560,286 @@ function PartnerFormDialog({
     }
   }
 
+  // Determine the simplified type value for display
+  const simplifiedTypeValue = SIMPLIFIED_TYPES.find((t) => t.value === form.type)
+    ? (form.type as string)
+    : (showOtherTypes ? "other" : form.type);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>{partner ? "Edit partner" : "New partner"}</DialogTitle>
-          <DialogDescription>Fill in the partner&apos;s basic information.</DialogDescription>
+          <DialogDescription>
+            {partner ? "Update partner information." : "Start with the essentials — you can add more details later."}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[70vh] overflow-y-auto pr-1">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-            <div className="md:col-span-2 space-y-1.5">
-              <Label>Name *</Label>
-              <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="Acme Trading Ltd." />
-            </div>
+        <div className="max-h-[70vh] overflow-y-auto pr-1 custom-scroll">
+          <div className="space-y-4 py-2">
 
-            <div className="space-y-1.5">
-              <Label>Entity Type</Label>
-              <Select value={form.entity_type || "company"} onValueChange={(v) => set("entity_type", v)}>
-                <SelectTrigger><SelectValue placeholder="Select entity type" /></SelectTrigger>
-                <SelectContent>
-                  {ENTITY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select value={form.type} onValueChange={(v) => set("type", v as PartnerType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {PARTNER_TYPES.map((t) => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => set("status", v as Partner["status"])}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                  <SelectItem value="blacklisted">Blacklisted</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={form.category || "regular"} onValueChange={(v) => set("category", v)}>
-                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>
-                  {PARTNER_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* === Essential Fields (always visible) === */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2 space-y-1.5">
+                <Label>Name *</Label>
+                <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="Acme Trading Ltd." />
+              </div>
 
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={form.email || ""} onChange={(e) => set("email", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input value={form.phone || ""} onChange={(e) => set("phone", e.target.value)} />
-            </div>
+              <div className="space-y-1.5">
+                <Label>Type</Label>
+                <Select value={simplifiedTypeValue || "buyer"} onValueChange={handleTypeChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SIMPLIFIED_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        <span className="flex flex-col">
+                          <span>{t.label}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="other">
+                      <span>Other…</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {/* Show description hint for selected simplified type */}
+                {form.type && SIMPLIFIED_TYPES.find((t) => t.value === form.type) && (
+                  <p className="text-xs text-muted-foreground">
+                    {SIMPLIFIED_TYPES.find((t) => t.value === form.type)?.description}
+                  </p>
+                )}
+              </div>
 
-            <div className="space-y-1.5">
-              <Label>Tax ID</Label>
-              <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Website</Label>
-              <Input value={form.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="https://" />
-            </div>
+              {/* Sub-select for "Other" types */}
+              {showOtherTypes && (
+                <div className="space-y-1.5">
+                  <Label>Specific Type</Label>
+                  <Select value={form.type || "logistics"} onValueChange={(v) => set("type", v as PartnerType)}>
+                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      {OTHER_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-            <div className="space-y-1.5">
-              <Label>Currency</Label>
-              <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
-                <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Payment Terms</Label>
-              <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
-                <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="md:col-span-2 space-y-1.5">
-              <Label>Address</Label>
-              <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} placeholder="Street and number" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>City</Label>
-              <Input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Postal code</Label>
-              <Input value={form.postal_code || ""} onChange={(e) => set("postal_code", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Country</Label>
-              <Select value={form.country || ""} onValueChange={(v) => set("country", v)}>
-                <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Risk (0-100)</Label>
-              <Input type="number" min={0} max={100} value={form.risk_score ?? 0} onChange={(e) => set("risk_score", Number(e.target.value))} />
-            </div>
-
-            <div className="md:col-span-2 border-t pt-3 mt-1">
-              <p className="text-xs text-muted-foreground mb-2">Contact person</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input value={form.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={form.contact_email || ""} onChange={(e) => set("contact_email", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input value={form.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} />
-            </div>
-
-            <div className="md:col-span-2 border-t pt-3 mt-1">
-              <p className="text-xs text-muted-foreground mb-2">Bank</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Bank</Label>
-              <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Account</Label>
-              <Input value={form.bank_account || ""} onChange={(e) => set("bank_account", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>SWIFT</Label>
-              <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} />
-            </div>
-
-            <div className="md:col-span-2 space-y-1.5">
-              <Label>Notes</Label>
-              <Textarea rows={3} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} />
-            </div>
-
-            <div className="md:col-span-2 flex items-center gap-3 p-3 rounded-md bg-muted/30">
-              <Switch checked={!!form.portal_enabled} onCheckedChange={(v) => set("portal_enabled", v)} />
-              <div>
-                <p className="text-sm font-medium">Portal access</p>
-                <p className="text-xs text-muted-foreground">Allow partner portal access.</p>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={form.email || ""} onChange={(e) => set("email", e.target.value)} placeholder="contact@company.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={form.phone || ""} onChange={(e) => set("phone", e.target.value)} placeholder="+1 555 123 4567" />
               </div>
             </div>
 
-            <div className="md:col-span-2 flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
-              <Switch checked={!!form.is_commissioner} onCheckedChange={(v) => set("is_commissioner", v)} />
-              <div>
-                <p className="text-sm font-medium text-primary">Commission Agent (Komisionar)</p>
-                <p className="text-xs text-muted-foreground">Mark this partner as a commission agent who earns a percentage or fixed amount from deals they introduce.</p>
-              </div>
-            </div>
+            {/* === Address & Details (collapsible) === */}
+            <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {addressOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                  Address &amp; Details
+                  {!addressOpen && (form.address_line || form.city || form.tax_id) && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Filled</Badge>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 pb-2">
+                  <div className="space-y-1.5">
+                    <Label>Entity Type</Label>
+                    <Select value={form.entity_type || "company"} onValueChange={(v) => set("entity_type", v)}>
+                      <SelectTrigger><SelectValue placeholder="Select entity type" /></SelectTrigger>
+                      <SelectContent>
+                        {ENTITY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={form.status} onValueChange={(v) => set("status", v as Partner["status"])}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="blacklisted">Blacklisted</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Category</Label>
+                    <Select value={form.category || "regular"} onValueChange={(v) => set("category", v)}>
+                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                      <SelectContent>
+                        {PARTNER_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Tax ID</Label>
+                    <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} placeholder="e.g. VAT number" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Website</Label>
+                    <Input value={form.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="https://" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Currency</Label>
+                    <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
+                      <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Payment Terms</Label>
+                    <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
+                      <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
+                      <SelectContent>
+                        {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="md:col-span-2 space-y-1.5">
+                    <Label>Address</Label>
+                    <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} placeholder="Street and number" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>City</Label>
+                    <Input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Postal code</Label>
+                    <Input value={form.postal_code || ""} onChange={(e) => set("postal_code", e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Country</Label>
+                    <Select value={form.country || ""} onValueChange={(v) => set("country", v)}>
+                      <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* === Contact Person (collapsible) === */}
+            <Collapsible open={contactOpen} onOpenChange={setContactOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {contactOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                  Contact Person
+                  {!contactOpen && (form.contact_name || form.contact_email) && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Filled</Badge>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 pb-2">
+                  <div className="space-y-1.5">
+                    <Label>Name</Label>
+                    <Input value={form.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} placeholder="John Doe" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Email</Label>
+                    <Input type="email" value={form.contact_email || ""} onChange={(e) => set("contact_email", e.target.value)} placeholder="john@company.com" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Phone</Label>
+                    <Input value={form.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} placeholder="+1 555 123 4567" />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* === Bank Details (collapsible) === */}
+            <Collapsible open={bankOpen} onOpenChange={setBankOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {bankOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                  Bank Details
+                  {!bankOpen && (form.bank_name || form.bank_account) && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Filled</Badge>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 pb-2">
+                  <div className="space-y-1.5">
+                    <Label>Bank Name</Label>
+                    <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} placeholder="e.g. Deutsche Bank" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Account</Label>
+                    <Input value={form.bank_account || ""} onChange={(e) => set("bank_account", e.target.value)} placeholder="IBAN or account number" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>SWIFT / BIC</Label>
+                    <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} placeholder="e.g. DEUTDEFF" />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* === Notes & Options (collapsible) === */}
+            <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {notesOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                  Notes &amp; Options
+                  {!notesOpen && form.notes && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Filled</Badge>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 pt-1 pb-2">
+                  <div className="space-y-1.5">
+                    <Label>Notes</Label>
+                    <Textarea rows={3} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder="Any additional notes about this partner…" />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
+                    <Switch checked={!!form.portal_enabled} onCheckedChange={(v) => set("portal_enabled", v)} />
+                    <div>
+                      <p className="text-sm font-medium">Portal access</p>
+                      <p className="text-xs text-muted-foreground">Allow partner portal access.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
+                    <Switch checked={!!form.is_commissioner} onCheckedChange={(v) => set("is_commissioner", v)} />
+                    <div>
+                      <p className="text-sm font-medium text-primary">Commission Agent (Komisionar)</p>
+                      <p className="text-xs text-muted-foreground">Mark this partner as a commission agent who earns a percentage or fixed amount from deals they introduce.</p>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : (partner ? "Save changes" : "Create partner")}
           </Button>
         </DialogFooter>
       </DialogContent>

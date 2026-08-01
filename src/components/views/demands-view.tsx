@@ -28,14 +28,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Collapsible, CollapsibleTrigger, CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {
   Plus, Search, Inbox, Pencil, Trash2, Eye, X, Calendar, FileInput, ArrowRightLeft,
   Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, FileCheck, Import,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
-import { Demand, DemandItem, DemandStatus, Partner, Product, PortalRfq } from "@/lib/supabase/types";
+import { Demand, DemandItem, DemandStatus, DemandPriority, Partner, Product, PortalRfq } from "@/lib/supabase/types";
 import { CURRENCIES } from "@/lib/data/reference";
 
 const STATUS_LABELS: Record<DemandStatus, string> = {
@@ -44,12 +48,26 @@ const STATUS_LABELS: Record<DemandStatus, string> = {
   closed: "Closed",
 };
 
+const PRIORITY_LABELS: Record<DemandPriority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
 function StatusBadge({ status }: { status: DemandStatus }) {
   if (status === "open")
     return <Badge className="border-transparent bg-primary text-primary-foreground">{STATUS_LABELS[status]}</Badge>;
   if (status === "quoted")
     return <Badge className="border-transparent bg-[var(--chart-4)] text-black">{STATUS_LABELS[status]}</Badge>;
   return <Badge className="border-transparent bg-muted text-muted-foreground">{STATUS_LABELS[status]}</Badge>;
+}
+
+function PriorityBadge({ priority }: { priority: DemandPriority }) {
+  if (priority === "high")
+    return <Badge className="border-transparent bg-destructive text-destructive-foreground">{PRIORITY_LABELS[priority]}</Badge>;
+  if (priority === "medium")
+    return <Badge className="border-transparent bg-amber-500 text-white">{PRIORITY_LABELS[priority]}</Badge>;
+  return <Badge className="border-transparent bg-muted text-muted-foreground">{PRIORITY_LABELS[priority]}</Badge>;
 }
 
 const UNIT_OPTIONS = ["pcs", "kg", "l", "m", "m²", "m³", "hr", "can", "set", "t"];
@@ -199,6 +217,7 @@ export function DemandsView() {
                     <TableHead>Number</TableHead>
                     <TableHead className="hidden md:table-cell">Subject</TableHead>
                     <TableHead className="hidden lg:table-cell">Partner</TableHead>
+                    <TableHead>Priority</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Items</TableHead>
                     <TableHead className="hidden xl:table-cell">Date</TableHead>
@@ -217,6 +236,7 @@ export function DemandsView() {
                         <div className="font-medium truncate max-w-[220px]">{d.subject || "—"}</div>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">{partnerName(d.partner_id)}</TableCell>
+                      <TableCell><PriorityBadge priority={d.priority || "medium"} /></TableCell>
                       <TableCell><StatusBadge status={d.status} /></TableCell>
                       <TableCell className="text-right font-mono tabular">{(d.items || []).length}</TableCell>
                       <TableCell className="hidden xl:table-cell">{fmtDate(d.created_at)}</TableCell>
@@ -325,6 +345,7 @@ function DemandDetail({
     <div className="px-4 pb-6">
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <StatusBadge status={demand.status} />
+        <PriorityBadge priority={demand.priority || "medium"} />
         <span className="text-sm text-muted-foreground">{partnerName}</span>
       </div>
 
@@ -540,6 +561,12 @@ function DemandFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const isEditing = !!demand;
+
+  // Collapsible sections: open by default when editing, closed when creating
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [itemsOpen, setItemsOpen] = useState(false);
+
   const [form, setForm] = useState<Partial<Demand> & { items: DemandItem[] }>({ items: [] });
   const [saving, setSaving] = useState(false);
   const [partnerContext, setPartnerContext] = useState<PartnerContext | null>(null);
@@ -576,15 +603,19 @@ function DemandFormDialog({
         ...demand,
         items: (demand.items || []).map((i) => ({ ...i })),
       } : {
-        currency: "USD",
+        currency: "EUR",
         status: "open",
+        priority: "medium",
         items: [],
         description: "",
         requested_delivery: null,
       });
       setPartnerContext(null);
+      // When editing, expand all sections; when creating, collapse them
+      setDetailsOpen(isEditing);
+      setItemsOpen(isEditing);
     }
-  }, [open, demand]);
+  }, [open, demand, isEditing]);
 
   function set<K extends keyof Demand>(k: K, v: Demand[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -632,7 +663,7 @@ function DemandFormDialog({
       setForm((f) => ({
         ...f,
         partner_id: partnerId,
-        currency: p.preferred_currency || f.currency || "USD",
+        currency: p.preferred_currency || f.currency || "EUR",
       }));
 
       toast.success(`Partner data loaded: ${p.name}`, { description: "Currency & preferences auto-filled." });
@@ -696,7 +727,11 @@ function DemandFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(demand ? "Demand updated." : "Demand created.");
+      if (demand) {
+        toast.success("Demand updated.", { description: form.subject });
+      } else {
+        toast.success("Demand created!", { description: form.subject });
+      }
       onSaved();
     } catch (e: any) {
       toast.error(e.message || "Saving failed.");
@@ -713,243 +748,325 @@ function DemandFormDialog({
             <Sparkles className="size-4 text-amber-500" />
             {demand ? "Edit demand" : "New demand"}
           </DialogTitle>
-          <DialogDescription>Fill in the header and items for this demand. Auto-fill is enabled for partners and products.</DialogDescription>
+          <DialogDescription>
+            {demand
+              ? "Update the demand details below."
+              : "Fill in the essentials to create a demand. Expand sections for more options."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-          {/* Auto-number badge */}
-          {!demand && autoNumber && (
-            <div className="md:col-span-2 flex items-center gap-2">
-              <Badge variant="outline" className="font-mono text-xs">
-                <Sparkles className="size-3 text-amber-500 mr-1" />
-                {autoNumber}
-              </Badge>
-              <span className="text-xs text-muted-foreground">Auto-generated number</span>
-            </div>
-          )}
-
-          {/* Partner select with auto-fill */}
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              Partner *
-              {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-              {partnerContext && !loadingPartner && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                  <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+        <div className="space-y-4 py-2">
+          {/* ─── Essential Section (always visible) ─── */}
+          <div className="space-y-3">
+            {/* Auto-number badge */}
+            {!demand && autoNumber && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-xs">
+                  <Sparkles className="size-3 text-amber-500 mr-1" />
+                  {autoNumber}
                 </Badge>
-              )}
-            </Label>
-            <Select
-              value={form.partner_id || ""}
-              onValueChange={(v) => {
-                set("partner_id", v);
-                fetchPartnerContext(v);
-              }}
-            >
-              <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
-              <SelectContent>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{p.name}</span>
-                      <span className="text-xs text-muted-foreground">({p.type})</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Partner context panel */}
-          {selectedPartner && partnerContext && (
-            <div className="md:col-span-2 rounded-lg border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Building2 className="size-4 text-amber-600" />
-                <span className="text-sm font-medium">{selectedPartner.name}</span>
-                <Badge variant="outline" className="text-xs">{selectedPartner.type}</Badge>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
-                {selectedPartner.address_line && (
-                  <div className="flex items-start gap-1.5">
-                    <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
-                    <span className="text-muted-foreground">{[selectedPartner.address_line, selectedPartner.city, selectedPartner.country].filter(Boolean).join(", ")}</span>
-                  </div>
-                )}
-                {selectedPartner.vat_number && (
-                  <div className="flex items-center gap-1.5">
-                    <Hash className="size-3 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">VAT: {selectedPartner.vat_number}</span>
-                  </div>
-                )}
-                {selectedPartner.email && (
-                  <div className="flex items-center gap-1.5">
-                    <Mail className="size-3 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">{selectedPartner.email}</span>
-                  </div>
-                )}
-                {selectedPartner.phone && (
-                  <div className="flex items-center gap-1.5">
-                    <Phone className="size-3 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">{selectedPartner.phone}</span>
-                  </div>
-                )}
-                {selectedPartner.preferred_currency && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground">Currency: {selectedPartner.preferred_currency}</span>
-                  </div>
-                )}
-                {selectedPartner.preferred_incoterm && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground">Incoterm: {selectedPartner.preferred_incoterm}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Subject *</Label>
-            <Input
-              value={form.subject || ""}
-              onChange={(e) => set("subject", e.target.value)}
-              placeholder="Equipment inquiry"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Currency</Label>
-            <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.value}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Requested delivery</Label>
-            <Input
-              type="date"
-              value={form.requested_delivery ? form.requested_delivery.slice(0, 10) : ""}
-              onChange={(e) => set("requested_delivery", e.target.value ? new Date(e.target.value).toISOString() : null)}
-            />
-          </div>
-
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Description</Label>
-            <Textarea
-              rows={2}
-              value={form.description || ""}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="Demand details…"
-            />
-          </div>
-
-          {/* Items editor */}
-          <div className="md:col-span-2 border-t pt-3 mt-1">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium">Items</p>
-              <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                <Plus className="size-4 mr-1" /> Add item
-              </Button>
-            </div>
-
-            {(form.items || []).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
-                No items. Click &ldquo;Add item&quot; to start.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
-                {(form.items || []).map((it, idx) => (
-                  <div key={idx} className="rounded-md border border-border/60 p-2 grid grid-cols-12 gap-1.5 items-end">
-                    <div className="col-span-12 sm:col-span-5 space-y-1">
-                      <Label className="text-xs">Product</Label>
-                      <Select
-                        value={it.product_name ? "__selected__" : "__custom__"}
-                        onValueChange={(v) => {
-                          if (v === "__custom__") return;
-                          // Find product by name (workaround for non-id based items)
-                          const prod = productList.find((p) => p.name === v);
-                          if (prod) selectProductForItem(idx, prod.id);
-                        }}
-                      >
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Select product" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-48">
-                          <SelectItem value="__custom__">— Manual entry —</SelectItem>
-                          {productList.map((p) => (
-                            <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        className="h-9"
-                        value={it.product_name || ""}
-                        onChange={(e) => setItem(idx, { product_name: e.target.value })}
-                        placeholder="e.g. Laptop 16GB"
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Quantity</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.quantity}
-                        onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Unit</Label>
-                      <Select value={it.unit} onValueChange={(v) => setItem(idx, { unit: v })}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {UNIT_OPTIONS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-3 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Target price</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.target_price ?? ""}
-                        onChange={(e) => setItem(idx, { target_price: e.target.value === "" ? null : Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="size-9 text-destructive"
-                        onClick={() => removeItem(idx)}
-                        title="Remove"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                    <div className="col-span-12 space-y-1">
-                      <Label className="text-xs">Notes</Label>
-                      <Input
-                        className="h-8 text-xs"
-                        value={it.notes || ""}
-                        onChange={(e) => setItem(idx, { notes: e.target.value })}
-                        placeholder="Additional requirements…"
-                      />
-                    </div>
-                  </div>
-                ))}
+                <span className="text-xs text-muted-foreground">Auto-generated number</span>
               </div>
             )}
+
+            {/* Subject */}
+            <div className="space-y-1.5">
+              <Label>Subject *</Label>
+              <Input
+                value={form.subject || ""}
+                onChange={(e) => set("subject", e.target.value)}
+                placeholder="Equipment inquiry"
+              />
+            </div>
+
+            {/* Partner select with auto-fill */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                Partner *
+                {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+                {partnerContext && !loadingPartner && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                    <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                  </Badge>
+                )}
+              </Label>
+              <Select
+                value={form.partner_id || ""}
+                onValueChange={(v) => {
+                  set("partner_id", v);
+                  fetchPartnerContext(v);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
+                <SelectContent>
+                  {partners.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{p.name}</span>
+                        <span className="text-xs text-muted-foreground">({p.type})</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Partner context panel */}
+            {selectedPartner && partnerContext && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="size-4 text-amber-600" />
+                  <span className="text-sm font-medium">{selectedPartner.name}</span>
+                  <Badge variant="outline" className="text-xs">{selectedPartner.type}</Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                  {selectedPartner.address_line && (
+                    <div className="flex items-start gap-1.5">
+                      <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
+                      <span className="text-muted-foreground">{[selectedPartner.address_line, selectedPartner.city, selectedPartner.country].filter(Boolean).join(", ")}</span>
+                    </div>
+                  )}
+                  {selectedPartner.vat_number && (
+                    <div className="flex items-center gap-1.5">
+                      <Hash className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">VAT: {selectedPartner.vat_number}</span>
+                    </div>
+                  )}
+                  {selectedPartner.email && (
+                    <div className="flex items-center gap-1.5">
+                      <Mail className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">{selectedPartner.email}</span>
+                    </div>
+                  )}
+                  {selectedPartner.phone && (
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">{selectedPartner.phone}</span>
+                    </div>
+                  )}
+                  {selectedPartner.preferred_currency && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">Currency: {selectedPartner.preferred_currency}</span>
+                    </div>
+                  )}
+                  {selectedPartner.preferred_incoterm && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">Incoterm: {selectedPartner.preferred_incoterm}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Priority & Status row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Priority</Label>
+                <Select value={form.priority || "medium"} onValueChange={(v) => set("priority", v as DemandPriority)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={form.status || "open"} onValueChange={(v) => set("status", v as DemandStatus)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="quoted">Quoted</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
+
+          {/* ─── Details Section (collapsible) ─── */}
+          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full text-left py-2 border-t border-border/60 hover:bg-muted/30 transition-colors rounded-md px-1"
+              >
+                {detailsOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="size-4 text-muted-foreground" />
+                )}
+                <span className="text-sm font-medium">Details</span>
+                {!detailsOpen && (
+                  <span className="text-xs text-muted-foreground">
+                    Currency, delivery date, notes
+                  </span>
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                <div className="space-y-1.5">
+                  <Label>Currency</Label>
+                  <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.value}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Requested delivery</Label>
+                  <Input
+                    type="date"
+                    value={form.requested_delivery ? form.requested_delivery.slice(0, 10) : ""}
+                    onChange={(e) => set("requested_delivery", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1.5">
+                  <Label>Notes</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.description || ""}
+                    onChange={(e) => set("description", e.target.value)}
+                    placeholder="Additional notes or requirements…"
+                  />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* ─── Items Section (collapsible) ─── */}
+          <Collapsible open={itemsOpen} onOpenChange={setItemsOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full text-left py-2 border-t border-border/60 hover:bg-muted/30 transition-colors rounded-md px-1"
+              >
+                {itemsOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="size-4 text-muted-foreground" />
+                )}
+                <span className="text-sm font-medium">Items</span>
+                {!itemsOpen && form.items?.length > 0 && (
+                  <Badge variant="outline" className="text-xs">{form.items.length} item{form.items.length !== 1 ? "s" : ""}</Badge>
+                )}
+                {!itemsOpen && (!form.items || form.items.length === 0) && (
+                  <span className="text-xs text-muted-foreground">Add products & quantities</span>
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-muted-foreground">Products & quantities</p>
+                  <Button type="button" size="sm" variant="outline" onClick={addItem}>
+                    <Plus className="size-4 mr-1" /> Add item
+                  </Button>
+                </div>
+
+                {(form.items || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4 border rounded-md border-dashed">
+                    No items yet. Click &ldquo;Add item&rdquo; to add products.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
+                    {(form.items || []).map((it, idx) => (
+                      <div key={idx} className="rounded-md border border-border/60 p-2 grid grid-cols-12 gap-1.5 items-end">
+                        <div className="col-span-12 sm:col-span-5 space-y-1">
+                          <Label className="text-xs">Product</Label>
+                          <Select
+                            value={it.product_name ? "__selected__" : "__custom__"}
+                            onValueChange={(v) => {
+                              if (v === "__custom__") return;
+                              // Find product by name (workaround for non-id based items)
+                              const prod = productList.find((p) => p.name === v);
+                              if (prod) selectProductForItem(idx, prod.id);
+                            }}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Select product" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-48">
+                              <SelectItem value="__custom__">— Manual entry —</SelectItem>
+                              {productList.map((p) => (
+                                <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            className="h-9"
+                            value={it.product_name || ""}
+                            onChange={(e) => setItem(idx, { product_name: e.target.value })}
+                            placeholder="e.g. Laptop 16GB"
+                          />
+                        </div>
+                        <div className="col-span-4 sm:col-span-2 space-y-1">
+                          <Label className="text-xs">Quantity</Label>
+                          <Input
+                            type="number"
+                            className="h-9"
+                            value={it.quantity}
+                            onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-4 sm:col-span-2 space-y-1">
+                          <Label className="text-xs">Unit</Label>
+                          <Select value={it.unit} onValueChange={(v) => setItem(idx, { unit: v })}>
+                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {UNIT_OPTIONS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-3 sm:col-span-2 space-y-1">
+                          <Label className="text-xs">Target price</Label>
+                          <Input
+                            type="number"
+                            className="h-9"
+                            value={it.target_price ?? ""}
+                            onChange={(e) => setItem(idx, { target_price: e.target.value === "" ? null : Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-1 flex justify-end">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-9 text-destructive"
+                            onClick={() => removeItem(idx)}
+                            title="Remove"
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+                        <div className="col-span-12 space-y-1">
+                          <Label className="text-xs">Notes</Label>
+                          <Input
+                            className="h-8 text-xs"
+                            value={it.notes || ""}
+                            onChange={(e) => setItem(idx, { notes: e.target.value })}
+                            placeholder="Additional requirements…"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : demand ? "Save changes" : "Create demand"}
           </Button>
         </DialogFooter>
       </DialogContent>

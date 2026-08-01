@@ -328,10 +328,11 @@ export class MockStore implements Store {
       number: d.number || num,
       partner_id: d.partner_id || "",
       status: d.status || "open",
+      priority: d.priority || "medium",
       subject: d.subject || "Nova potražnja",
       description: d.description || null,
       requested_delivery: d.requested_delivery || null,
-      currency: d.currency || "USD",
+      currency: d.currency || "EUR",
       items: d.items || [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -535,10 +536,11 @@ export class MockStore implements Store {
     const newP: Proforma = {
       id: p.id || mock.nid("pro_"), number: p.number || num, offer_id: p.offer_id || null,
       partner_id: p.partner_id || "", status: p.status || "draft", subject: p.subject || "New proforma",
-      currency: p.currency || "USD", subtotal: p.subtotal ?? 0, discount_total: p.discount_total ?? 0,
+      currency: p.currency || "EUR", subtotal: p.subtotal ?? 0, discount_total: p.discount_total ?? 0,
       tax_total: p.tax_total ?? 0, total: p.total ?? 0, issue_date: p.issue_date || new Date().toISOString(),
       valid_until: p.valid_until || new Date(Date.now() + 14 * 86400000).toISOString(),
-      sent_at: p.sent_at || null, paid_at: p.paid_at || null, notes: p.notes || null,
+      sent_at: p.sent_at || null, paid_at: p.paid_at || null, payment_terms: p.payment_terms || "net30",
+      notes: p.notes || null,
       items: p.items || [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
     mock.proformas.push(newP); return newP;

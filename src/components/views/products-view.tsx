@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -28,8 +28,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Plus, Search, Package, Pencil, Trash2, Eye, AlertTriangle, CheckCircle2,
+  ChevronDown, ChevronRight, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -356,6 +358,17 @@ function ProductDetail({ product }: { product: Product }) {
   );
 }
 
+// ---- SKU auto-generation ----
+function generateSku(name: string): string {
+  if (!name.trim()) return "";
+  const words = name.trim().split(/\s+/);
+  const parts = words.map((w) =>
+    w.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, "")
+  );
+  const suffix = String(Math.floor(Math.random() * 999) + 1).padStart(3, "0");
+  return parts.join("-") + "-" + suffix;
+}
+
 // ---- Form dialog ----
 function ProductFormDialog({
   open, onOpenChange, product, onSaved,
@@ -367,12 +380,14 @@ function ProductFormDialog({
 }) {
   const [form, setForm] = useState<Partial<Product>>({});
   const [saving, setSaving] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useMemo(() => {
     if (open) {
       setForm(product ? { ...product } : {
         unit: "pcs",
-        currency: "USD",
+        currency: "EUR",
         stock: 0,
         reorder_level: 0,
         active: true,
@@ -380,6 +395,9 @@ function ProductFormDialog({
         cost: 0,
         attributes: null,
       });
+      // Open collapsibles when editing (so user can see all fields)
+      setPricingOpen(!!product);
+      setDetailsOpen(!!product);
     }
   }, [open, product]);
 
@@ -387,17 +405,26 @@ function ProductFormDialog({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  const handleAutoSku = useCallback(() => {
+    const sku = generateSku(form.name || "");
+    if (sku) set("sku", sku);
+  }, [form.name]);
+
   async function save() {
-    if (!form.sku) { toast.error("SKU is required."); return; }
     if (!form.name) { toast.error("Name is required."); return; }
+    // Auto-generate SKU if not provided
+    if (!form.sku && form.name) {
+      set("sku", generateSku(form.name));
+    }
     setSaving(true);
     try {
       const method = product ? "PUT" : "POST";
       const url = product ? `/api/products/${product.id}` : "/api/products";
+      const body = { ...form, sku: form.sku || generateSku(form.name || "") };
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
@@ -417,79 +444,182 @@ function ProductFormDialog({
       <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>{product ? "Edit product" : "New product"}</DialogTitle>
-          <DialogDescription>Fill in the product details.</DialogDescription>
+          <DialogDescription>
+            {product ? "Update the product details." : "Start with the basics — you can add more details later."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-          <div className="space-y-1.5">
-            <Label>SKU *</Label>
-            <Input value={form.sku || ""} onChange={(e) => set("sku", e.target.value)} placeholder="ALU-ROD-6" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Category</Label>
-            <Select value={form.category || ""} onValueChange={(v) => set("category", v)}>
-              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {PRODUCT_CATEGORIES_LOCAL.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="space-y-4 py-2">
+          {/* ── Essential fields (always visible) ── */}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold">Product name *</Label>
+              <Input
+                value={form.name || ""}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder="e.g. Aluminum Rod"
+                className="h-11 text-base"
+                autoFocus
+              />
+            </div>
 
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Name *</Label>
-            <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} />
-          </div>
-
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Description</Label>
-            <Textarea rows={3} value={form.description || ""} onChange={(e) => set("description", e.target.value)} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Unit</Label>
-            <Select value={form.unit} onValueChange={(v) => set("unit", v)}>
-              <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
-              <SelectContent>
-                {PRODUCT_UNITS.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Currency</Label>
-            <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
-              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Price</Label>
-            <Input type="number" min={0} step="0.01" value={form.price ?? 0} onChange={(e) => set("price", Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Cost</Label>
-            <Input type="number" min={0} step="0.01" value={form.cost ?? 0} onChange={(e) => set("cost", Number(e.target.value))} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Stock</Label>
-            <Input type="number" min={0} value={form.stock ?? 0} onChange={(e) => set("stock", Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Reorder level</Label>
-            <Input type="number" min={0} value={form.reorder_level ?? 0} onChange={(e) => set("reorder_level", Number(e.target.value))} />
-          </div>
-
-          <div className="md:col-span-2 flex items-center gap-3 p-3 rounded-md bg-muted/30">
-            <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} />
-            <div>
-              <p className="text-sm font-medium">Active</p>
-              <p className="text-xs text-muted-foreground">Active products are available for new offers.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Price *</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.price ?? 0}
+                  onChange={(e) => set("price", Number(e.target.value))}
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit</Label>
+                <Select value={form.unit} onValueChange={(v) => set("unit", v)}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                  <SelectContent>
+                    {PRODUCT_UNITS.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
+
+          {/* ── Pricing & Inventory (collapsible) ── */}
+          <Collapsible open={pricingOpen} onOpenChange={setPricingOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                {pricingOpen ? (
+                  <ChevronDown className="size-4 transition-transform" />
+                ) : (
+                  <ChevronRight className="size-4 transition-transform" />
+                )}
+                Pricing & Inventory
+                {!pricingOpen && (form.cost || form.stock || form.reorder_level) && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">filled</Badge>
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 pb-2">
+                <div className="space-y-1.5">
+                  <Label>Cost</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.cost ?? 0}
+                    onChange={(e) => set("cost", Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Currency</Label>
+                  <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Stock</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.stock ?? 0}
+                    onChange={(e) => set("stock", Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Reorder level</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.reorder_level ?? 0}
+                    onChange={(e) => set("reorder_level", Number(e.target.value))}
+                  />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* ── Details (collapsible) ── */}
+          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                {detailsOpen ? (
+                  <ChevronDown className="size-4 transition-transform" />
+                ) : (
+                  <ChevronRight className="size-4 transition-transform" />
+                )}
+                Details
+                {!detailsOpen && (form.sku || form.category || form.description) && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">filled</Badge>
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-3 pt-1 pb-2">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label>SKU</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={handleAutoSku}
+                    >
+                      <Wand2 className="size-3" /> Auto
+                    </Button>
+                  </div>
+                  <Input
+                    value={form.sku || ""}
+                    onChange={(e) => set("sku", e.target.value)}
+                    placeholder="Auto-generated from name"
+                    className="font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Category</Label>
+                  <Select value={form.category || ""} onValueChange={(v) => set("category", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {PRODUCT_CATEGORIES_LOCAL.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <Textarea
+                    rows={3}
+                    value={form.description || ""}
+                    onChange={(e) => set("description", e.target.value)}
+                    placeholder="Optional product description…"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
+                  <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} />
+                  <div>
+                    <p className="text-sm font-medium">Active</p>
+                    <p className="text-xs text-muted-foreground">Active products are available for new offers.</p>
+                  </div>
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         </div>
 

@@ -33,6 +33,9 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  Collapsible, CollapsibleTrigger, CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {
   Plus, Search, Handshake, Pencil, Trash2, Eye, Calendar, User, TrendingUp, LayoutGrid, List,
   FileText, Loader2, MapPin, Mail, Phone, DollarSign, BarChart3, Target, CheckCircle2,
   ChevronDown, ChevronUp, ArrowRight,
@@ -804,6 +807,16 @@ function DealDetail({
   );
 }
 
+// ---- Stage-to-probability mapping ----
+const STAGE_PROBABILITY: Record<DealStage, number> = {
+  lead: 20,
+  qualified: 40,
+  proposal: 60,
+  negotiation: 80,
+  won: 100,
+  lost: 0,
+};
+
 // ---- Form dialog ----
 function DealFormDialog({
   open, onOpenChange, deal, partners, onSaved,
@@ -814,8 +827,14 @@ function DealFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const isEditing = !!deal;
   const [form, setForm] = useState<Partial<Deal>>({});
   const [saving, setSaving] = useState(false);
+
+  // Collapsible section state — all open when editing, closed when creating
+  const [detailsOpen, setDetailsOpen] = useState(isEditing);
+  const [lineItemsOpen, setLineItemsOpen] = useState(isEditing);
+  const [commissionOpen, setCommissionOpen] = useState(isEditing);
 
   // Partner auto-fill context
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>("");
@@ -847,7 +866,7 @@ function DealFormDialog({
           deal_profit: (form.value || 0) - (form.buy_cost || 0),
           deal_quantity: form.quantity || 0,
           deal_unit: form.unit || "",
-          currency: form.currency || "USD",
+          currency: form.currency || "EUR",
         }),
       });
       if (!r.ok) return null;
@@ -874,12 +893,23 @@ function DealFormDialog({
       const initial = deal ? { ...deal } : {
         stage: "lead" as DealStage,
         value: 0,
-        currency: "USD",
-        probability: 10,
+        currency: "EUR",
+        probability: 20,
         partner_id: partners[0]?.id || "",
       };
       setForm(initial);
       setSelectedPartnerId(initial.partner_id || "");
+
+      // Expand all sections when editing, collapse when creating
+      if (deal) {
+        setDetailsOpen(true);
+        setLineItemsOpen(true);
+        setCommissionOpen(true);
+      } else {
+        setDetailsOpen(false);
+        setLineItemsOpen(false);
+        setCommissionOpen(false);
+      }
     }
   }, [open, deal, partners]);
 
@@ -897,8 +927,10 @@ function DealFormDialog({
       // Auto-stage progression: if value > 0 and partner selected → "qualified", else → "lead"
       if (form.value && form.value > 0 && form.partner_id) {
         updates.stage = "qualified";
+        updates.probability = STAGE_PROBABILITY["qualified"];
       } else if (!form.value || form.value === 0) {
         updates.stage = "lead";
+        updates.probability = STAGE_PROBABILITY["lead"];
       }
 
       if (Object.keys(updates).length > 0) {
@@ -915,8 +947,10 @@ function DealFormDialog({
       if (k === "value") {
         if (v && Number(v) > 0 && updated.partner_id) {
           updated.stage = "qualified";
+          updated.probability = STAGE_PROBABILITY["qualified"];
         } else {
           updated.stage = "lead";
+          updated.probability = STAGE_PROBABILITY["lead"];
         }
       }
 
@@ -924,8 +958,18 @@ function DealFormDialog({
       if (k === "partner_id") {
         if (v && updated.value && Number(updated.value) > 0) {
           updated.stage = "qualified";
+          updated.probability = STAGE_PROBABILITY["qualified"];
         } else if (!v || !updated.value || Number(updated.value) === 0) {
           updated.stage = "lead";
+          updated.probability = STAGE_PROBABILITY["lead"];
+        }
+      }
+
+      // Auto-probability: when stage changes, update probability to match
+      if (k === "stage") {
+        const stageVal = v as DealStage;
+        if (stageVal in STAGE_PROBABILITY) {
+          updated.probability = STAGE_PROBABILITY[stageVal];
         }
       }
 
@@ -960,7 +1004,9 @@ function DealFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(deal ? "Deal updated." : "Deal created.");
+      toast.success(deal ? "Deal updated." : `Deal "${form.title}" created.`, {
+        description: deal ? undefined : "It has been added to your pipeline.",
+      });
       onSaved();
     } catch (e: any) {
       toast.error(e.message || "Saving failed.");
@@ -981,284 +1027,333 @@ function DealFormDialog({
       <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>{deal ? "Edit deal" : "New deal"}</DialogTitle>
-          <DialogDescription>Fill in the deal details. Partner data auto-fills when selected.</DialogDescription>
+          <DialogDescription>
+            {deal
+              ? "Update the deal details below."
+              : "Start with the basics — expand sections for more options."}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Title *</Label>
-            <Input value={form.title || ""} onChange={(e) => set("title", e.target.value)} placeholder="Aluminium profile delivery" />
-          </div>
+        <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4 py-2">
+          {/* ===== Essential fields (always visible) ===== */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="md:col-span-2 space-y-1.5">
+              <Label>Title *</Label>
+              <Input value={form.title || ""} onChange={(e) => set("title", e.target.value)} placeholder="Aluminium profile delivery" />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label>Partner *</Label>
-            <Select value={form.partner_id} onValueChange={handlePartnerChange}>
-              <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
-              <SelectContent>
-                {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Stage</Label>
-            <Select value={form.stage} onValueChange={(v) => set("stage", v as DealStage)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {STAGES.map((s) => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label>Partner *</Label>
+              <Select value={form.partner_id} onValueChange={handlePartnerChange}>
+                <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
+                <SelectContent>
+                  {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Stage</Label>
+              <Select value={form.stage} onValueChange={(v) => set("stage", v as DealStage)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STAGES.map((s) => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Value</Label>
+              <Input type="number" min={0} step="0.01" value={form.value ?? 0} onChange={(e) => set("value", Number(e.target.value))} />
+              {form.value && Number(form.value) > 0 && form.partner_id && (
+                <p className="text-[10px] text-chart-3 flex items-center gap-1">
+                  <CheckCircle2 className="size-3" /> Auto-staged to &quot;Qualified&quot;
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Currency</Label>
+              <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
+                <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {CURRENCIES_LIST.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Auto-fill info card when partner is selected */}
           {selectedPartner && (
-            <div className="md:col-span-2">
-              <Card className="border-primary/20 bg-primary/5 shadow-soft rounded-xl">
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="size-3.5 text-primary" />
-                      <span className="text-xs font-medium text-primary">Auto-filled from partner</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs"
-                      onClick={() => setShowPartnerContext(!showPartnerContext)}
-                    >
-                      {showPartnerContext ? "Hide" : "Show"} details
-                      {showPartnerContext ? <ChevronUp className="size-3 ml-1" /> : <ChevronDown className="size-3 ml-1" />}
-                    </Button>
+            <Card className="border-primary/20 bg-primary/5 shadow-soft rounded-xl">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="size-3.5 text-primary" />
+                    <span className="text-xs font-medium text-primary">Auto-filled from partner</span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                    {selectedPartner.address_line && (
-                      <div className="flex items-start gap-1.5">
-                        <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
-                        <span className="text-muted-foreground truncate">
-                          {selectedPartner.city || selectedPartner.country || selectedPartner.address_line}
-                        </span>
-                      </div>
-                    )}
-                    {selectedPartner.preferred_currency && (
-                      <div className="flex items-center gap-1.5">
-                        <DollarSign className="size-3 text-muted-foreground shrink-0" />
-                        <span className="text-muted-foreground">{selectedPartner.preferred_currency}</span>
-                      </div>
-                    )}
-                    {selectedPartner.contact_email && (
-                      <div className="flex items-center gap-1.5">
-                        <Mail className="size-3 text-muted-foreground shrink-0" />
-                        <span className="text-muted-foreground truncate">{selectedPartner.contact_email}</span>
-                      </div>
-                    )}
-                    {selectedPartner.contact_phone && (
-                      <div className="flex items-center gap-1.5">
-                        <Phone className="size-3 text-muted-foreground shrink-0" />
-                        <span className="text-muted-foreground">{selectedPartner.contact_phone}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Expandable partner context details */}
-                  {showPartnerContext && (
-                    <div className="mt-3 pt-3 border-t border-primary/10 space-y-3">
-                      {/* Quick stats */}
-                      {ctxLoading ? (
-                        <div className="space-y-1">
-                          <Skeleton className="h-4 w-24" />
-                          <div className="grid grid-cols-3 gap-2">
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                          </div>
-                        </div>
-                      ) : quickStats ? (
-                        <div>
-                          <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Partner Quick Stats</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
-                              <p className="text-[9px] text-muted-foreground">Total Value</p>
-                              <p className="text-[11px] font-semibold font-mono tabular">{fmtMoney(quickStats.totalDealsValue, quickStats.currency)}</p>
-                            </div>
-                            <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
-                              <p className="text-[9px] text-muted-foreground">Win Rate</p>
-                              <p className="text-[11px] font-semibold font-mono tabular">{quickStats.winRate}%</p>
-                            </div>
-                            <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
-                              <p className="text-[9px] text-muted-foreground">Avg Deal</p>
-                              <p className="text-[11px] font-semibold font-mono tabular">{fmtMoney(quickStats.avgDealSize, quickStats.currency)}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-muted-foreground">No historical data for this partner.</p>
-                      )}
-
-                      {/* Recent deals */}
-                      {partnerCtx && partnerCtx.deals.length > 0 && (
-                        <div>
-                          <p className="text-[10px] font-medium text-muted-foreground mb-1">Recent deals</p>
-                          <div className="space-y-1 max-h-28 overflow-y-auto custom-scroll">
-                            {partnerCtx.deals.slice(0, 5).map((d) => (
-                              <div key={d.id} className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-muted/40">
-                                <span className="truncate max-w-[55%]">{d.title}</span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-mono tabular text-muted-foreground">{fmtMoney(d.value, d.currency)}</span>
-                                  <Badge className={`${STAGE_BADGE[d.stage]} text-[9px] px-1 py-0`}>
-                                    {STAGE_LABELS[d.stage]}
-                                  </Badge>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Recent offers */}
-                      {partnerCtx && partnerCtx.offers.length > 0 && (
-                        <div>
-                          <p className="text-[10px] font-medium text-muted-foreground mb-1">Recent offers</p>
-                          <div className="space-y-1 max-h-28 overflow-y-auto custom-scroll">
-                            {partnerCtx.offers.slice(0, 5).map((o) => (
-                              <div key={o.id} className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-muted/40">
-                                <span className="truncate max-w-[55%]">{o.number}</span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-mono tabular text-muted-foreground">{fmtMoney(o.total, o.currency)}</span>
-                                  <Badge variant="outline" className="text-[9px] px-1 py-0">{o.status}</Badge>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs"
+                    onClick={() => setShowPartnerContext(!showPartnerContext)}
+                  >
+                    {showPartnerContext ? "Hide" : "Show"} details
+                    {showPartnerContext ? <ChevronUp className="size-3 ml-1" /> : <ChevronDown className="size-3 ml-1" />}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  {selectedPartner.address_line && (
+                    <div className="flex items-start gap-1.5">
+                      <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
+                      <span className="text-muted-foreground truncate">
+                        {selectedPartner.city || selectedPartner.country || selectedPartner.address_line}
+                      </span>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label>Value</Label>
-            <Input type="number" min={0} step="0.01" value={form.value ?? 0} onChange={(e) => set("value", Number(e.target.value))} />
-            {form.value && Number(form.value) > 0 && form.partner_id && (
-              <p className="text-[10px] text-chart-3 flex items-center gap-1">
-                <CheckCircle2 className="size-3" /> Auto-staged to &quot;Qualified&quot;
-              </p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label>Currency</Label>
-            <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
-              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {CURRENCIES_LIST.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Expected close</Label>
-            <Input
-              type="date"
-              value={expectedCloseValue}
-              onChange={(e) => set("expected_close", e.target.value ? new Date(e.target.value).toISOString() : (null as any))}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Probability: {form.probability ?? 0}%</Label>
-            <div className="pt-2.5">
-              <Slider
-                value={[form.probability ?? 0]}
-                min={0}
-                max={100}
-                step={5}
-                onValueChange={(v) => set("probability", v[0])}
-              />
-            </div>
-          </div>
-
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Description</Label>
-            <Textarea rows={4} value={form.description || ""} onChange={(e) => set("description", e.target.value)} />
-          </div>
-
-          {/* Commission Agent Section */}
-          <div className="md:col-span-2 border-t pt-3 mt-1">
-            <div className="flex items-center gap-2 mb-3">
-              <DollarSign className="size-4 text-primary" />
-              <span className="text-sm font-medium">Commission Agent</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Commission Agent</Label>
-                <Select value={form.commission_agent_id || "none"} onValueChange={(v) => set("commission_agent_id", v === "none" ? null : (v as any))}>
-                  <SelectTrigger><SelectValue placeholder="No commission agent" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No commission agent</SelectItem>
-                    {commissionAgents.filter(a => a.active).map((a) => {
-                      const p = partners.find(p => p.id === a.partner_id);
-                      return (
-                        <SelectItem key={a.id} value={a.id}>
-                          {p?.name || a.id} ({a.commission_type === "profit_percent" ? `${a.commission_rate}% profit` : a.commission_type === "per_unit" ? `${a.commission_per_unit}/unit` : a.commission_type === "fixed" ? `Fixed ${a.commission_rate}` : a.commission_type === "revenue_percent" ? `${a.commission_rate}% revenue` : "Custom"})
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Buy Cost (for profit calculation)</Label>
-                <Input type="number" min={0} step="0.01" value={form.buy_cost ?? 0} onChange={(e) => set("buy_cost", Number(e.target.value))} placeholder="0.00" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Quantity</Label>
-                <Input type="number" min={0} step="1" value={form.quantity ?? 0} onChange={(e) => set("quantity", Number(e.target.value))} placeholder="0" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Unit of Measure</Label>
-                <Input value={form.unit || ""} onChange={(e) => set("unit", e.target.value)} placeholder="pcs, kg, set, etc." />
-              </div>
-            </div>
-            {/* Commission preview */}
-            {commissionPreview && form.commission_agent_id && (
-              <Card className="mt-3 border-primary/20 bg-primary/5 shadow-soft rounded-xl">
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="size-3.5 text-primary" />
-                      <span className="text-xs font-medium text-primary">Estimated Commission</span>
+                  {selectedPartner.preferred_currency && (
+                    <div className="flex items-center gap-1.5">
+                      <DollarSign className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">{selectedPartner.preferred_currency}</span>
                     </div>
-                    <span className="text-lg font-bold font-mono tabular text-primary">
-                      {fmtMoney(commissionPreview.calculated_commission, commissionPreview.currency)}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
-                    <p>Type: {commissionPreview.breakdown?.formula}</p>
-                    <p>Deal Value: {fmtMoney(form.value || 0, form.currency || "USD")}</p>
-                    <p>Deal Profit: {fmtMoney((form.value || 0) - (form.buy_cost || 0), form.currency || "USD")}</p>
-                    {commissionPreview.commission_type === "per_unit" && (
-                      <p>Quantity: {form.quantity || 0} {form.unit || ""}</p>
+                  )}
+                  {selectedPartner.contact_email && (
+                    <div className="flex items-center gap-1.5">
+                      <Mail className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground truncate">{selectedPartner.contact_email}</span>
+                    </div>
+                  )}
+                  {selectedPartner.contact_phone && (
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">{selectedPartner.contact_phone}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Expandable partner context details */}
+                {showPartnerContext && (
+                  <div className="mt-3 pt-3 border-t border-primary/10 space-y-3">
+                    {/* Quick stats */}
+                    {ctxLoading ? (
+                      <div className="space-y-1">
+                        <Skeleton className="h-4 w-24" />
+                        <div className="grid grid-cols-3 gap-2">
+                          <Skeleton className="h-10 w-full" />
+                          <Skeleton className="h-10 w-full" />
+                          <Skeleton className="h-10 w-full" />
+                        </div>
+                      </div>
+                    ) : quickStats ? (
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Partner Quick Stats</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
+                            <p className="text-[9px] text-muted-foreground">Total Value</p>
+                            <p className="text-[11px] font-semibold font-mono tabular">{fmtMoney(quickStats.totalDealsValue, quickStats.currency)}</p>
+                          </div>
+                          <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
+                            <p className="text-[9px] text-muted-foreground">Win Rate</p>
+                            <p className="text-[11px] font-semibold font-mono tabular">{quickStats.winRate}%</p>
+                          </div>
+                          <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
+                            <p className="text-[9px] text-muted-foreground">Avg Deal</p>
+                            <p className="text-[11px] font-semibold font-mono tabular">{fmtMoney(quickStats.avgDealSize, quickStats.currency)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">No historical data for this partner.</p>
+                    )}
+
+                    {/* Recent deals */}
+                    {partnerCtx && partnerCtx.deals.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1">Recent deals</p>
+                        <div className="space-y-1 max-h-28 overflow-y-auto custom-scroll">
+                          {partnerCtx.deals.slice(0, 5).map((d) => (
+                            <div key={d.id} className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-muted/40">
+                              <span className="truncate max-w-[55%]">{d.title}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono tabular text-muted-foreground">{fmtMoney(d.value, d.currency)}</span>
+                                <Badge className={`${STAGE_BADGE[d.stage]} text-[9px] px-1 py-0`}>
+                                  {STAGE_LABELS[d.stage]}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recent offers */}
+                    {partnerCtx && partnerCtx.offers.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1">Recent offers</p>
+                        <div className="space-y-1 max-h-28 overflow-y-auto custom-scroll">
+                          {partnerCtx.offers.slice(0, 5).map((o) => (
+                            <div key={o.id} className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-muted/40">
+                              <span className="truncate max-w-[55%]">{o.number}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono tabular text-muted-foreground">{fmtMoney(o.total, o.currency)}</span>
+                                <Badge variant="outline" className="text-[9px] px-1 py-0">{o.status}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
+          {/* ===== Details (collapsible) ===== */}
+          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
+              <FileText className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium flex-1 text-left">Details</span>
+              <span className="text-xs text-muted-foreground mr-1">Probability, close date, notes</span>
+              {detailsOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
+                <div className="space-y-1.5">
+                  <Label>Probability: {form.probability ?? 0}%</Label>
+                  <div className="pt-2.5">
+                    <Slider
+                      value={[form.probability ?? 0]}
+                      min={0}
+                      max={100}
+                      step={5}
+                      onValueChange={(v) => set("probability", v[0])}
+                    />
+                  </div>
+                  {form.stage && STAGE_PROBABILITY[form.stage] !== undefined && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Suggested for {STAGE_LABELS[form.stage]}: {STAGE_PROBABILITY[form.stage]}%
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Expected close</Label>
+                  <Input
+                    type="date"
+                    value={expectedCloseValue}
+                    onChange={(e) => set("expected_close", e.target.value ? new Date(e.target.value).toISOString() : (null as any))}
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-1.5">
+                  <Label>Notes</Label>
+                  <Textarea rows={3} value={form.description || ""} onChange={(e) => set("description", e.target.value)} placeholder="Additional details about this deal…" />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* ===== Line Items (collapsible) ===== */}
+          <Collapsible open={lineItemsOpen} onOpenChange={setLineItemsOpen}>
+            <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
+              <BarChart3 className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium flex-1 text-left">Line Items</span>
+              <span className="text-xs text-muted-foreground mr-1">Quantity, unit, buy cost</span>
+              {lineItemsOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3">
+                <div className="space-y-1.5">
+                  <Label>Quantity</Label>
+                  <Input type="number" min={0} step={1} value={form.quantity ?? 0} onChange={(e) => set("quantity", Number(e.target.value))} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Unit of Measure</Label>
+                  <Input value={form.unit || ""} onChange={(e) => set("unit", e.target.value)} placeholder="pcs, kg, set, etc." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Buy Cost</Label>
+                  <Input type="number" min={0} step="0.01" value={form.buy_cost ?? 0} onChange={(e) => set("buy_cost", Number(e.target.value))} placeholder="0.00" />
+                  {form.buy_cost && Number(form.buy_cost) > 0 && form.value && Number(form.value) > 0 && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Profit: {fmtMoney(Number(form.value) - Number(form.buy_cost), form.currency || "EUR")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* ===== Commission (collapsible) ===== */}
+          <Collapsible open={commissionOpen} onOpenChange={setCommissionOpen}>
+            <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
+              <DollarSign className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium flex-1 text-left">Commission</span>
+              <span className="text-xs text-muted-foreground mr-1">Agent, type, value</span>
+              {commissionOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-3 pt-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Commission Agent</Label>
+                    <Select value={form.commission_agent_id || "none"} onValueChange={(v) => set("commission_agent_id", v === "none" ? null : (v as any))}>
+                      <SelectTrigger><SelectValue placeholder="No commission agent" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No commission agent</SelectItem>
+                        {commissionAgents.filter(a => a.active).map((a) => {
+                          const p = partners.find(p => p.id === a.partner_id);
+                          return (
+                            <SelectItem key={a.id} value={a.id}>
+                              {p?.name || a.id} ({a.commission_type === "profit_percent" ? `${a.commission_rate}% profit` : a.commission_type === "per_unit" ? `${a.commission_per_unit}/unit` : a.commission_type === "fixed" ? `Fixed ${a.commission_rate}` : a.commission_type === "revenue_percent" ? `${a.commission_rate}% revenue` : "Custom"})
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Commission preview */}
+                {commissionPreview && form.commission_agent_id && (
+                  <Card className="border-primary/20 bg-primary/5 shadow-soft rounded-xl">
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="size-3.5 text-primary" />
+                          <span className="text-xs font-medium text-primary">Estimated Commission</span>
+                        </div>
+                        <span className="text-lg font-bold font-mono tabular text-primary">
+                          {fmtMoney(commissionPreview.calculated_commission, commissionPreview.currency)}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
+                        <p>Type: {commissionPreview.breakdown?.formula}</p>
+                        <p>Deal Value: {fmtMoney(form.value || 0, form.currency || "EUR")}</p>
+                        <p>Deal Profit: {fmtMoney((form.value || 0) - (form.buy_cost || 0), form.currency || "EUR")}</p>
+                        {commissionPreview.commission_type === "per_unit" && (
+                          <p>Quantity: {form.quantity || 0} {form.unit || ""}</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Lost reason (conditional, always visible when stage is lost) */}
           {(form.stage === "lost" || deal?.stage === "lost") && (
-            <div className="md:col-span-2 space-y-1.5">
+            <div className="space-y-1.5">
               <Label>Lost reason</Label>
               <Textarea rows={2} value={form.lost_reason || ""} onChange={(e) => set("lost_reason", e.target.value)} />
             </div>
           )}
         </div>
-        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : deal ? "Save changes" : "Create deal"}
           </Button>
         </DialogFooter>
       </DialogContent>

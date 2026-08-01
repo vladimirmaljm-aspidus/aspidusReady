@@ -25,8 +25,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Plus, Pencil, Trash2, Building2, ShieldAlert, Users, Globe, CreditCard,
-  CheckCircle2, Layers,
+  CheckCircle2, Layers, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -280,18 +283,35 @@ function TenantFormDialog({
 }) {
   const [form, setForm] = useState<Partial<Tenant>>({});
   const [saving, setSaving] = useState(false);
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [bankingOpen, setBankingOpen] = useState(false);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+
+  const isEditing = !!tenant;
 
   useEffect(() => {
     if (open) {
       setForm(tenant
         ? { ...tenant }
         : ({
-            name: "", legal_name: "", country: "", currency: "USD",
+            name: "", legal_name: "", country: "", currency: "EUR",
             tax_id: "", vat_number: "", registration_number: "",
             address_line: "", city: "", postal_code: "",
             bank_name: "", bank_iban: "", bank_swift: "",
-            plan: "starter", status: "active", max_users: 5, primary_color: "",
+            plan: "business", status: "active", max_users: 10, primary_color: "",
           } as Partial<Tenant>));
+      // When editing, expand sections that have data
+      if (tenant) {
+        const hasAddress = tenant.address_line || tenant.city || tenant.postal_code;
+        const hasBanking = tenant.bank_name || tenant.bank_iban || tenant.bank_swift;
+        setAddressOpen(!!hasAddress);
+        setBankingOpen(!!hasBanking);
+        setSubscriptionOpen(true); // always show subscription when editing
+      } else {
+        setAddressOpen(false);
+        setBankingOpen(false);
+        setSubscriptionOpen(false);
+      }
     }
   }, [open, tenant]);
 
@@ -314,7 +334,7 @@ function TenantFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(tenant ? "Tenant updated." : "Tenant created.");
+      toast.success(tenant ? "Tenant updated." : `"${form.name}" created successfully!`);
       onSaved();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Saving failed.");
@@ -323,153 +343,200 @@ function TenantFormDialog({
     }
   }
 
+  // Helper: check if a collapsed section has data
+  const sectionBadge = (hasData: boolean) =>
+    hasData ? <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">Filled</Badge> : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>{tenant ? "Edit tenant" : "New tenant"}</DialogTitle>
-          <DialogDescription>Configure tenant identity, banking, and subscription.</DialogDescription>
+          <DialogDescription>
+            {tenant ? "Update the tenant details." : "Start with the basics — you can add more details later."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Name *</Label>
-            <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="Acme Trading" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Legal name</Label>
-            <Input value={form.legal_name || ""} onChange={(e) => set("legal_name", e.target.value)} placeholder="Acme Trading Ltd." />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Country</Label>
-            <Select value={form.country || ""} onValueChange={(v) => set("country", v)}>
-              <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {COUNTRIES.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    <span className="mr-2">{flagEmoji(c.code)}</span>{c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Currency</Label>
-            <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {CURRENCIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    <span className="font-mono mr-2">{c.value}</span> {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Tax ID</Label>
-            <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>VAT number</Label>
-            <Input value={form.vat_number || ""} onChange={(e) => set("vat_number", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Registration number</Label>
-            <Input value={form.registration_number || ""} onChange={(e) => set("registration_number", e.target.value)} />
-          </div>
+          <div className="space-y-4 py-2">
 
-          <div className="md:col-span-2">
-            <Separator className="my-2" />
-            <p className="text-xs text-muted-foreground mb-2">Address</p>
-          </div>
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Address line</Label>
-            <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>City</Label>
-            <Input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Postal code</Label>
-            <Input value={form.postal_code || ""} onChange={(e) => set("postal_code", e.target.value)} />
-          </div>
-
-          <div className="md:col-span-2">
-            <Separator className="my-2" />
-            <p className="text-xs text-muted-foreground mb-2">Banking</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Bank name</Label>
-            <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>IBAN</Label>
-            <Input value={form.bank_iban || ""} onChange={(e) => set("bank_iban", e.target.value)} className="font-mono" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>SWIFT / BIC</Label>
-            <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} className="font-mono" />
-          </div>
-
-          <div className="md:col-span-2">
-            <Separator className="my-2" />
-            <p className="text-xs text-muted-foreground mb-2">Subscription</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Plan</Label>
-            <Select value={form.plan || "starter"} onValueChange={(v) => set("plan", v as Plan)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="trial">Trial</SelectItem>
-                <SelectItem value="starter">Starter</SelectItem>
-                <SelectItem value="business">Business</SelectItem>
-                <SelectItem value="enterprise">Enterprise</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <Select value={form.status || "active"} onValueChange={(v) => set("status", v as TenantStatus)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Max users</Label>
-            <Input type="number" min={1} value={form.max_users ?? 5} onChange={(e) => set("max_users", Number(e.target.value))} className="tabular" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Primary color (optional)</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={form.primary_color || "#0f766e"}
-                onChange={(e) => set("primary_color", e.target.value)}
-                className="size-9 rounded-md border border-border cursor-pointer bg-background p-1"
-                aria-label="Primary color"
-              />
-              <Input
-                value={form.primary_color || ""}
-                onChange={(e) => set("primary_color", e.target.value)}
-                placeholder="#0f766e"
-                className="font-mono"
-              />
+            {/* ── Essential fields (always visible) ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2 space-y-1.5">
+                <Label>Company Name *</Label>
+                <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Acme Trading" autoFocus />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Country</Label>
+                <Select value={form.country || ""} onValueChange={(v) => set("country", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        <span className="mr-2">{flagEmoji(c.code)}</span>{c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Currency</Label>
+                <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        <span className="font-mono mr-2">{c.value}</span> {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {/* ── Legal & Tax (collapsible) ── */}
+            <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full flex items-center justify-between px-0 hover:bg-transparent">
+                  <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    Legal & Address
+                    {sectionBadge(!!(form.legal_name || form.tax_id || form.vat_number || form.registration_number || form.address_line || form.city || form.postal_code))}
+                  </span>
+                  <ChevronDown className={`size-4 text-muted-foreground transition-transform ${addressOpen ? "rotate-180" : ""}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label>Legal name</Label>
+                    <Input value={form.legal_name || ""} onChange={(e) => set("legal_name", e.target.value)} placeholder="Acme Trading Ltd." />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Tax ID</Label>
+                    <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} placeholder="e.g. 123456789" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>VAT number</Label>
+                    <Input value={form.vat_number || ""} onChange={(e) => set("vat_number", e.target.value)} placeholder="e.g. RS123456789" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Registration number</Label>
+                    <Input value={form.registration_number || ""} onChange={(e) => set("registration_number", e.target.value)} />
+                  </div>
+                  <div className="md:col-span-2 space-y-1.5">
+                    <Label>Address</Label>
+                    <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} placeholder="Street and number" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>City</Label>
+                    <Input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Postal code</Label>
+                    <Input value={form.postal_code || ""} onChange={(e) => set("postal_code", e.target.value)} />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* ── Banking (collapsible) ── */}
+            <Collapsible open={bankingOpen} onOpenChange={setBankingOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full flex items-center justify-between px-0 hover:bg-transparent">
+                  <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    Bank Details
+                    {sectionBadge(!!(form.bank_name || form.bank_iban || form.bank_swift))}
+                  </span>
+                  <ChevronDown className={`size-4 text-muted-foreground transition-transform ${bankingOpen ? "rotate-180" : ""}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label>Bank name</Label>
+                    <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} placeholder="e.g. National Bank" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>IBAN</Label>
+                    <Input value={form.bank_iban || ""} onChange={(e) => set("bank_iban", e.target.value)} placeholder="e.g. RS35107007000000123456" className="font-mono" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>SWIFT / BIC</Label>
+                    <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} placeholder="e.g. NBORCSBG" className="font-mono" />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* ── Subscription (collapsible) ── */}
+            <Collapsible open={subscriptionOpen} onOpenChange={setSubscriptionOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full flex items-center justify-between px-0 hover:bg-transparent">
+                  <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    Subscription & Settings
+                    {sectionBadge(true)}
+                  </span>
+                  <ChevronDown className={`size-4 text-muted-foreground transition-transform ${subscriptionOpen ? "rotate-180" : ""}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label>Plan</Label>
+                    <Select value={form.plan || "business"} onValueChange={(v) => set("plan", v as Plan)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="trial">Trial</SelectItem>
+                        <SelectItem value="starter">Starter</SelectItem>
+                        <SelectItem value="business">Business</SelectItem>
+                        <SelectItem value="enterprise">Enterprise</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={form.status || "active"} onValueChange={(v) => set("status", v as TenantStatus)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="suspended">Suspended</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Max users</Label>
+                    <Input type="number" min={1} value={form.max_users ?? 10} onChange={(e) => set("max_users", Number(e.target.value))} className="tabular" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Primary color (optional)</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={form.primary_color || "#0f766e"}
+                        onChange={(e) => set("primary_color", e.target.value)}
+                        className="size-9 rounded-md border border-border cursor-pointer bg-background p-1"
+                        aria-label="Primary color"
+                      />
+                      <Input
+                        value={form.primary_color || ""}
+                        onChange={(e) => set("primary_color", e.target.value)}
+                        placeholder="#0f766e"
+                        className="font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
           </div>
-        </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : tenant ? "Save changes" : "Create tenant"}
           </Button>
         </DialogFooter>
       </DialogContent>

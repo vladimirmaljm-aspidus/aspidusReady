@@ -31,7 +31,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, Sparkles, Zap, FileDown,
+  Collapsible, CollapsibleTrigger, CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {
+  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, ChevronRight, Sparkles, Zap, FileDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -821,6 +824,11 @@ function InvoiceFormDialog({
     proformas: any[];
   } | null>(null);
 
+  // Collapsible section states
+  const isEditing = !!invoice;
+  const [lineItemsOpen, setLineItemsOpen] = useState(true);
+  const [notesOpen, setNotesOpen] = useState(false);
+
   const offers = useQuery({
     queryKey: ["offers", "list", "100"],
     queryFn: async () => {
@@ -845,19 +853,29 @@ function InvoiceFormDialog({
   useEffect(() => {
     if (open) {
       setPartnerContext(null);
-      setForm(invoice ? {
-        ...invoice,
-        items: (invoice.items || []).map((i) => ({ ...i })),
-        payment_terms: "Net 30",
-      } : {
-        currency: "USD",
-        issue_date: new Date().toISOString(),
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        notes: "",
-        status: "draft",
-        items: [],
-        payment_terms: "Net 30",
-      });
+      if (invoice) {
+        setForm({
+          ...invoice,
+          items: (invoice.items || []).map((i) => ({ ...i })),
+          payment_terms: invoice.payment_terms || "Net 30",
+        });
+        // When editing, expand all sections
+        setLineItemsOpen(true);
+        setNotesOpen(true);
+      } else {
+        setForm({
+          currency: "EUR",
+          issue_date: new Date().toISOString(),
+          due_date: calculateDueDate("Net 30").toISOString(),
+          notes: "",
+          status: "draft",
+          items: [],
+          payment_terms: "Net 30",
+        });
+        // When creating new, line items open, notes closed
+        setLineItemsOpen(true);
+        setNotesOpen(false);
+      }
     }
   }, [open, invoice]);
 
@@ -917,7 +935,7 @@ function InvoiceFormDialog({
         const updates: Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string } = { ...f };
 
         // Fill currency if not already set
-        if (p.preferred_currency && f.currency === "USD") {
+        if (p.preferred_currency && f.currency === "EUR") {
           updates.currency = p.preferred_currency;
         }
 
@@ -1044,7 +1062,6 @@ function InvoiceFormDialog({
   const totals = useMemo(() => computeTotals(form.items || []), [form.items]);
 
   async function save() {
-    if (!form.subject) { toast.error("Enter a subject."); return; }
     if (!form.partner_id) { toast.error("Select a partner."); return; }
     setSaving(true);
     try {
@@ -1070,7 +1087,12 @@ function InvoiceFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Failed to save");
       }
-      toast.success(invoice ? "Invoice updated." : "Invoice created.");
+      const saved = await r.json();
+      if (invoice) {
+        toast.success(`Invoice ${saved.number || invoice.number} updated.`);
+      } else {
+        toast.success(`Invoice ${saved.number || ""} created successfully!`);
+      }
       onSaved();
     } catch (e: any) {
       toast.error(e.message || "Save failed.");
@@ -1087,317 +1109,394 @@ function InvoiceFormDialog({
       <DialogContent size="full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {invoice ? "Edit invoice" : "New invoice"}
+            {isEditing ? "Edit invoice" : "New invoice"}
             {partnerContextLoading && (
               <span className="size-3.5 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500" />
             )}
           </DialogTitle>
-          <DialogDescription>Fill in the invoice header and add line items. Fields auto-fill when you select a partner or offer.</DialogDescription>
+          <DialogDescription>
+            {isEditing
+              ? "Update the invoice details below."
+              : "Fill in the essentials, then add line items. Fields auto-fill when you select a partner."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Subject *</Label>
-            <Input
-              value={form.subject || ""}
-              onChange={(e) => set("subject", e.target.value)}
-              placeholder="Invoice for equipment supply 2026"
-            />
-          </div>
 
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              Partner *
-              {partnerContextLoading && (
-                <span className="size-3 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500" />
-              )}
-              {partnerContext && (
-                <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
-                  <Sparkles className="size-3" /> Auto-filled
-                </span>
-              )}
-            </Label>
-            <Select value={form.partner_id || ""} onValueChange={handlePartnerChange}>
-              <SelectTrigger><SelectValue placeholder="Select partner" /></SelectTrigger>
-              <SelectContent>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              Linked offer
-              <span className="text-xs text-muted-foreground">(auto-fills all fields)</span>
-            </Label>
-            <Select
-              value={form.offer_id || "__none__"}
-              onValueChange={(v) => handleOfferChange(v === "__none__" ? null : v)}
-            >
-              <SelectTrigger><SelectValue placeholder="No linked offer" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— No offer —</SelectItem>
-                {offerList
-                  .filter((o) => o.status === "accepted" || o.status === "sent")
-                  .map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      <span className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs">{o.number}</span>
-                        <span className="text-muted-foreground">· {o.subject}</span>
-                        <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">
-                          {o.status === "accepted" ? "✓" : "→"}
-                        </Badge>
-                      </span>
-                    </SelectItem>
+          {/* ── Essential section (always visible) ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                Partner *
+                {partnerContextLoading && (
+                  <span className="size-3 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500" />
+                )}
+                {partnerContext && (
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                    <Sparkles className="size-3" /> Auto-filled
+                  </span>
+                )}
+              </Label>
+              <Select value={form.partner_id || ""} onValueChange={handlePartnerChange}>
+                <SelectTrigger><SelectValue placeholder="Select partner" /></SelectTrigger>
+                <SelectContent>
+                  {partners.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
-              </SelectContent>
-            </Select>
-          </div>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-1.5">
-            <Label>Currency</Label>
-            <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
-              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-1.5">
+              <Label>Currency</Label>
+              <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
+                <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              Payment Terms
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
-                <Zap className="size-3" /> Auto-due
-              </span>
-            </Label>
-            <Select
-              value={form.payment_terms || "Net 30"}
-              onValueChange={handlePaymentTermsChange}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PAYMENT_TERMS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                Payment Terms
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                  <Zap className="size-3" /> Auto-due
+                </span>
+              </Label>
+              <Select
+                value={form.payment_terms || "Net 30"}
+                onValueChange={handlePaymentTermsChange}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TERMS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-1.5">
-            <Label>Issue date</Label>
-            <Input
-              type="date"
-              value={form.issue_date ? form.issue_date.slice(0, 10) : ""}
-              onChange={(e) => set("issue_date", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
-            />
-          </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                Due date
+                {form.payment_terms && form.payment_terms !== "Custom" && (
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400">Auto from {form.payment_terms}</span>
+                )}
+              </Label>
+              <Input
+                type="date"
+                value={form.due_date ? form.due_date.slice(0, 10) : ""}
+                onChange={(e) => set("due_date", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
+              />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              Due date
-              {form.payment_terms && form.payment_terms !== "Custom" && (
-                <span className="text-xs text-emerald-600 dark:text-emerald-400">Auto from {form.payment_terms}</span>
-              )}
-            </Label>
-            <Input
-              type="date"
-              value={form.due_date ? form.due_date.slice(0, 10) : ""}
-              onChange={(e) => set("due_date", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
-            />
-          </div>
-
-          {/* Partner context info card */}
-          {partnerContext?.partner && (
-            <div className="md:col-span-2 p-3 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Partner Auto-fill</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                {partnerContext.partner.vat_number && (
-                  <div>
-                    <span className="text-muted-foreground">VAT:</span>{" "}
-                    <span className="font-medium">{partnerContext.partner.vat_number}</span>
-                  </div>
-                )}
-                {partnerContext.partner.bank_name && (
-                  <div>
-                    <span className="text-muted-foreground">Bank:</span>{" "}
-                    <span className="font-medium">{partnerContext.partner.bank_name}</span>
-                  </div>
-                )}
-                {partnerContext.partner.bank_iban && (
-                  <div>
-                    <span className="text-muted-foreground">IBAN:</span>{" "}
-                    <span className="font-mono font-medium">{partnerContext.partner.bank_iban}</span>
-                  </div>
-                )}
-                {partnerContext.partner.bank_swift && (
-                  <div>
-                    <span className="text-muted-foreground">SWIFT:</span>{" "}
-                    <span className="font-mono font-medium">{partnerContext.partner.bank_swift}</span>
-                  </div>
-                )}
-                {partnerContext.partner.preferred_payment_terms && (
-                  <div>
-                    <span className="text-muted-foreground">Terms:</span>{" "}
-                    <span className="font-medium">{partnerContext.partner.preferred_payment_terms}</span>
-                  </div>
-                )}
-                {partnerContext.partner.address_line && (
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground">Address:</span>{" "}
-                    <span className="font-medium">
-                      {partnerContext.partner.address_line}
-                      {partnerContext.partner.city ? `, ${partnerContext.partner.city}` : ""}
-                      {partnerContext.partner.country ? `, ${partnerContext.partner.country}` : ""}
+            {/* Partner context info card */}
+            {partnerContext?.partner && (
+              <div className="md:col-span-2 p-3 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Partner Auto-fill</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  {partnerContext.partner.vat_number && (
+                    <div>
+                      <span className="text-muted-foreground">VAT:</span>{" "}
+                      <span className="font-medium">{partnerContext.partner.vat_number}</span>
+                    </div>
+                  )}
+                  {partnerContext.partner.bank_name && (
+                    <div>
+                      <span className="text-muted-foreground">Bank:</span>{" "}
+                      <span className="font-medium">{partnerContext.partner.bank_name}</span>
+                    </div>
+                  )}
+                  {partnerContext.partner.bank_iban && (
+                    <div>
+                      <span className="text-muted-foreground">IBAN:</span>{" "}
+                      <span className="font-mono font-medium">{partnerContext.partner.bank_iban}</span>
+                    </div>
+                  )}
+                  {partnerContext.partner.bank_swift && (
+                    <div>
+                      <span className="text-muted-foreground">SWIFT:</span>{" "}
+                      <span className="font-mono font-medium">{partnerContext.partner.bank_swift}</span>
+                    </div>
+                  )}
+                  {partnerContext.partner.preferred_payment_terms && (
+                    <div>
+                      <span className="text-muted-foreground">Terms:</span>{" "}
+                      <span className="font-medium">{partnerContext.partner.preferred_payment_terms}</span>
+                    </div>
+                  )}
+                  {partnerContext.partner.address_line && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Address:</span>{" "}
+                      <span className="font-medium">
+                        {partnerContext.partner.address_line}
+                        {partnerContext.partner.city ? `, ${partnerContext.partner.city}` : ""}
+                        {partnerContext.partner.country ? `, ${partnerContext.partner.country}` : ""}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {partnerContext.offers?.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-emerald-200/50 dark:border-emerald-800/50">
+                    <span className="text-xs text-muted-foreground">
+                      {partnerContext.offers.length} previous offer(s) · {partnerContext.invoices?.length || 0} invoice(s)
                     </span>
                   </div>
                 )}
               </div>
-              {partnerContext.offers?.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-emerald-200/50 dark:border-emerald-800/50">
-                  <span className="text-xs text-muted-foreground">
-                    {partnerContext.offers.length} previous offer(s) · {partnerContext.invoices?.length || 0} invoice(s)
+            )}
+          </div>
+
+          {/* ── Line Items section (collapsible) ── */}
+          <Collapsible open={lineItemsOpen} onOpenChange={setLineItemsOpen} className="border-t pt-2 mt-1">
+            <CollapsibleTrigger asChild>
+              <button type="button" className="flex items-center gap-2 w-full py-2 text-sm font-medium hover:text-foreground/80 transition-colors group">
+                {lineItemsOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                ) : (
+                  <ChevronRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                )}
+                <span>Line Items</span>
+                {(form.items || []).length > 0 && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({(form.items || []).length} item{(form.items || []).length !== 1 ? "s" : ""} · {fmtMoney(totals.total, form.currency || "EUR")})
                   </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Line items editor */}
-          <div className="md:col-span-2 border-t pt-3 mt-1">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium">Line items</p>
-              <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                <Plus className="size-4 mr-1" /> Add item
-              </Button>
-            </div>
-
-            {(form.items || []).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
-                No items yet. Click "Add item" or select an offer to auto-fill.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
-                {(form.items || []).map((it, idx) => (
-                  <div key={idx} className="rounded-md border p-2 grid grid-cols-12 gap-1.5 items-end">
-                    <div className="col-span-12 sm:col-span-5 space-y-1">
-                      <Label className="text-xs">Product</Label>
-                      <Select
-                        value={it.product_id || "__custom__"}
-                        onValueChange={(v) => {
-                          if (v === "__custom__") return;
-                          selectProduct(idx, v);
-                        }}
-                      >
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__custom__">— Manual —</SelectItem>
-                          {productList.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-3 pb-2">
+                {/* Linked offer + Add item row */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                  <div className="flex-1 space-y-1 w-full">
+                    <Label className="flex items-center gap-1.5 text-xs">
+                      Linked offer
+                      <span className="text-muted-foreground">(auto-fills all fields)</span>
+                    </Label>
+                    <Select
+                      value={form.offer_id || "__none__"}
+                      onValueChange={(v) => handleOfferChange(v === "__none__" ? null : v)}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue placeholder="No linked offer" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— No offer —</SelectItem>
+                        {offerList
+                          .filter((o) => o.status === "accepted" || o.status === "sent")
+                          .map((o) => (
+                            <SelectItem key={o.id} value={o.id}>
+                              <span className="flex items-center gap-1.5">
+                                <span className="font-mono text-xs">{o.number}</span>
+                                <span className="text-muted-foreground">· {o.subject}</span>
+                                <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">
+                                  {o.status === "accepted" ? "✓" : "→"}
+                                </Badge>
+                              </span>
+                            </SelectItem>
                           ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        className="h-8 text-xs"
-                        placeholder="Product name"
-                        value={it.product_name || ""}
-                        onChange={(e) => setItem(idx, { product_name: e.target.value })}
-                      />
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={addItem} className="mt-auto shrink-0">
+                    <Plus className="size-4 mr-1" /> Add item
+                  </Button>
+                </div>
+
+                {(form.items || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
+                    No items yet. Click &quot;Add item&quot; or select an offer to auto-fill.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
+                    {(form.items || []).map((it, idx) => (
+                      <div key={idx} className="rounded-md border p-2 grid grid-cols-12 gap-1.5 items-end">
+                        <div className="col-span-12 sm:col-span-5 space-y-1">
+                          <Label className="text-xs">Product</Label>
+                          <Select
+                            value={it.product_id || "__custom__"}
+                            onValueChange={(v) => {
+                              if (v === "__custom__") return;
+                              selectProduct(idx, v);
+                            }}
+                          >
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__custom__">— Manual —</SelectItem>
+                              {productList.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Product name"
+                            value={it.product_name || ""}
+                            onChange={(e) => setItem(idx, { product_name: e.target.value })}
+                          />
+                        </div>
+                        <div className="col-span-3 sm:col-span-2 space-y-1">
+                          <Label className="text-xs">Qty</Label>
+                          <Input
+                            type="number"
+                            className="h-9"
+                            value={it.quantity}
+                            onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-4 sm:col-span-2 space-y-1">
+                          <Label className="text-xs">Price</Label>
+                          <Input
+                            type="number"
+                            className="h-9"
+                            value={it.unit_price}
+                            onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-2 sm:col-span-1 space-y-1">
+                          <Label className="text-xs">Disc%</Label>
+                          <Input
+                            type="number"
+                            className="h-9"
+                            value={it.discount}
+                            onChange={(e) => setItem(idx, { discount: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-2 sm:col-span-1 space-y-1">
+                          <Label className="text-xs">VAT%</Label>
+                          <Input
+                            type="number"
+                            className="h-9"
+                            value={it.tax_rate}
+                            onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-1 flex justify-end">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-9 text-destructive"
+                            onClick={() => removeItem(idx)}
+                            title="Remove item"
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+                        <div className="col-span-12 text-right text-xs text-muted-foreground -mt-1">
+                          Line total: <span className="tabular font-medium text-foreground">{fmtMoney(lineTotal(it), form.currency || "EUR")}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Computed totals */}
+                {(form.items || []).length > 0 && (
+                  <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="tabular">{fmtMoney(totals.subtotal, form.currency || "EUR")}</span>
                     </div>
-                    <div className="col-span-3 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Qty</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.quantity}
-                        onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
-                      />
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Discount</span>
+                      <span className="tabular">- {fmtMoney(totals.discount_total, form.currency || "EUR")}</span>
                     </div>
-                    <div className="col-span-4 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Price</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.unit_price}
-                        onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
-                      />
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax</span>
+                      <span className="tabular">{fmtMoney(totals.tax_total, form.currency || "EUR")}</span>
                     </div>
-                    <div className="col-span-2 sm:col-span-1 space-y-1">
-                      <Label className="text-xs">Disc%</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.discount}
-                        onChange={(e) => setItem(idx, { discount: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-2 sm:col-span-1 space-y-1">
-                      <Label className="text-xs">Tax%</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.tax_rate}
-                        onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="size-9 text-destructive"
-                        onClick={() => removeItem(idx)}
-                        title="Remove item"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                    <div className="col-span-12 text-right text-xs text-muted-foreground -mt-1">
-                      Line total: <span className="tabular font-medium text-foreground">{fmtMoney(lineTotal(it), form.currency || "USD")}</span>
+                    <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
+                      <span>Total</span>
+                      <span className="tabular">{fmtMoney(totals.total, form.currency || "EUR")}</span>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
-            )}
+            </CollapsibleContent>
+          </Collapsible>
 
-            {/* Computed totals */}
-            <div className="mt-3 ml-auto w-full sm:w-72 space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="tabular">{fmtMoney(totals.subtotal, form.currency || "USD")}</span>
+          {/* ── Notes section (collapsible) ── */}
+          <Collapsible open={notesOpen} onOpenChange={setNotesOpen} className="border-t pt-2 mt-1">
+            <CollapsibleTrigger asChild>
+              <button type="button" className="flex items-center gap-2 w-full py-2 text-sm font-medium hover:text-foreground/80 transition-colors group">
+                {notesOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                ) : (
+                  <ChevronRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                )}
+                <span>Notes</span>
+                {form.notes && (
+                  <span className="text-xs text-muted-foreground font-normal truncate max-w-[200px]">
+                    — {form.notes.slice(0, 40)}{form.notes.length > 40 ? "…" : ""}
+                  </span>
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pb-2 space-y-1.5">
+                <Textarea
+                  rows={3}
+                  value={form.notes || ""}
+                  onChange={(e) => set("notes", e.target.value)}
+                  placeholder="Payment instructions, special conditions, etc."
+                />
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Discount</span>
-                <span className="tabular">- {fmtMoney(totals.discount_total, form.currency || "USD")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax</span>
-                <span className="tabular">{fmtMoney(totals.tax_total, form.currency || "USD")}</span>
-              </div>
-              <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
-                <span>Total</span>
-                <span className="tabular">{fmtMoney(totals.total, form.currency || "USD")}</span>
-              </div>
-            </div>
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
 
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Notes</Label>
-            <Textarea rows={2} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} />
-          </div>
-        </div>
+          {/* ── More details (collapsible, only for edit) ── */}
+          {isEditing && (
+            <Collapsible defaultOpen className="border-t pt-2 mt-1">
+              <CollapsibleTrigger asChild>
+                <button type="button" className="flex items-center gap-2 w-full py-2 text-sm font-medium hover:text-foreground/80 transition-colors group">
+                  <ChevronDown className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  <span>More Details</span>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-2">
+                  <div className="md:col-span-2 space-y-1.5">
+                    <Label>Subject</Label>
+                    <Input
+                      value={form.subject || ""}
+                      onChange={(e) => set("subject", e.target.value)}
+                      placeholder="Invoice for equipment supply 2026"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Issue date</Label>
+                    <Input
+                      type="date"
+                      value={form.issue_date ? form.issue_date.slice(0, 10) : ""}
+                      onChange={(e) => set("issue_date", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={form.status || "draft"} onValueChange={(v) => set("status", v as InvoiceStatus)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {INVOICE_STATUSES.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : isEditing ? "Save changes" : "Create invoice"}
           </Button>
         </DialogFooter>
       </DialogContent>

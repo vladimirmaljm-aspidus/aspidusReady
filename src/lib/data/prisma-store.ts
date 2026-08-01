@@ -554,7 +554,7 @@ export class PrismaStore implements Store {
     if (params?.search) {
       where.OR = [
         { number: { contains: params.search } },
-        { title: { contains: params.search } },
+        { subject: { contains: params.search } },
       ];
     }
     const total = await db.demand.count({ where });
@@ -577,11 +577,13 @@ export class PrismaStore implements Store {
       tenant_id: d.tenant_id ?? "",
       partner_id: d.partner_id ?? "",
       number: d.number ?? "",
-      title: d.title ?? null,
+      subject: d.subject ?? "",
       status: d.status ?? "open",
+      priority: d.priority ?? "medium",
+      description: d.description ?? null,
+      requested_delivery: d.requested_delivery ? new Date(d.requested_delivery) : null,
+      currency: d.currency ?? "EUR",
       items: stringifyJSON(d.items) ?? "[]",
-      notes: d.notes ?? null,
-      closed_at: d.closed_at ? new Date(d.closed_at) : null,
     };
     let r;
     if (d.id) {
@@ -694,6 +696,7 @@ export class PrismaStore implements Store {
       items: stringifyJSON(p.items) ?? "[]",
       valid_until: p.valid_until ? new Date(p.valid_until) : null,
       paid_at: p.paid_at ? new Date(p.paid_at) : null,
+      payment_terms: p.payment_terms ?? "net30",
       notes: p.notes ?? null,
     };
     let r;

@@ -27,9 +27,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Plus, Search, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, FileCheck, Wallet, AlertCircle,
-  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight,
+  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -678,10 +679,16 @@ function ProformaFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const isEditing = !!proforma;
+
   const [form, setForm] = useState<Partial<Proforma> & { items: OfferLineItem[] }>({ items: [] });
   const [saving, setSaving] = useState(false);
   const [partnerContext, setPartnerContext] = useState<PartnerContext | null>(null);
   const [loadingPartner, setLoadingPartner] = useState(false);
+
+  // Collapsible sections: open by default for new, all open for edit
+  const [itemsOpen, setItemsOpen] = useState(!isEditing);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const offers = useQuery({
     queryKey: ["offers", "list", "100"],
@@ -708,19 +715,31 @@ function ProformaFormDialog({
     if (open) {
       const now = new Date();
       const validUntil = new Date(now);
-      validUntil.setDate(validUntil.getDate() + 30); // Auto-fill valid until: 30 days
+      validUntil.setDate(validUntil.getDate() + 30);
 
       setForm(proforma ? {
         ...proforma,
         items: (proforma.items || []).map((i) => ({ ...i })),
       } : {
-        currency: "USD",
+        currency: "EUR",
+        payment_terms: "net30",
         issue_date: now.toISOString(),
-        valid_until: validUntil.toISOString(), // 30 days from now
+        valid_until: validUntil.toISOString(),
         notes: "",
         status: "draft",
+        subject: "",
         items: [],
       });
+
+      // When editing, expand all sections so the user can see all fields
+      if (proforma) {
+        setItemsOpen(true);
+        setNotesOpen(true);
+      } else {
+        setItemsOpen(true);
+        setNotesOpen(false);
+      }
+
       setPartnerContext(null);
     }
   }, [open, proforma]);
@@ -783,7 +802,7 @@ function ProformaFormDialog({
       setForm((f) => ({
         ...f,
         partner_id: partnerId,
-        currency: p.preferred_currency || f.currency || "USD",
+        currency: p.preferred_currency || f.currency || "EUR",
       }));
 
       toast.success(`Partner data loaded: ${p.name}`, { description: "Currency & preferences auto-filled." });
@@ -800,7 +819,6 @@ function ProformaFormDialog({
   const totals = computeTotals(form.items || []);
 
   async function save() {
-    if (!form.subject) { toast.error("Enter a subject."); return; }
     if (!form.partner_id) { toast.error("Select a partner."); return; }
     setSaving(true);
     try {
@@ -808,6 +826,7 @@ function ProformaFormDialog({
       const url = proforma ? `/api/proformas/${proforma.id}` : "/api/proformas";
       const body = {
         ...form,
+        subject: form.subject || `Proforma for ${selectedPartner?.name || "partner"}`,
         items: (form.items || []).map((it) => ({ ...it, total: lineTotal(it) })),
         ...computeTotals(form.items || []),
       };
@@ -820,7 +839,12 @@ function ProformaFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Failed to save");
       }
-      toast.success(proforma ? "Proforma updated." : "Proforma created.");
+      const saved = await r.json();
+      if (proforma) {
+        toast.success("Proforma updated.", { description: `Reference: ${saved.number || proforma.number}` });
+      } else {
+        toast.success("Proforma created!", { description: `Reference: ${saved.number}` });
+      }
       onSaved();
     } catch (e: any) {
       toast.error(e.message || "Save failed.");
@@ -838,279 +862,329 @@ function ProformaFormDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-amber-500" />
-            {proforma ? "Edit proforma" : "New proforma"}
+            {isEditing ? "Edit proforma" : "New proforma"}
           </DialogTitle>
-          <DialogDescription>Fill in the proforma header and add line items. Auto-fill is enabled for partners. Valid until is auto-set to 30 days.</DialogDescription>
+          <DialogDescription>
+            {isEditing
+              ? "Update the proforma details below."
+              : "Start by choosing a partner, then add your line items. Defaults are pre-filled for you."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Subject *</Label>
-            <Input
-              value={form.subject || ""}
-              onChange={(e) => set("subject", e.target.value)}
-              placeholder="Proforma for equipment supply 2026"
-            />
-          </div>
+          <div className="space-y-4 py-2">
 
-          {/* Partner select with auto-fill */}
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              Partner *
-              {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-              {partnerContext && !loadingPartner && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                  <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
-                </Badge>
+            {/* ─── Essential section (always visible) ─── */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Partner select with auto-fill */}
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    Partner *
+                    {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+                    {partnerContext && !loadingPartner && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                        <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                      </Badge>
+                    )}
+                  </Label>
+                  <Select
+                    value={form.partner_id || ""}
+                    onValueChange={(v) => {
+                      set("partner_id", v);
+                      fetchPartnerContext(v);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select partner" /></SelectTrigger>
+                    <SelectContent>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            <span className="text-xs text-muted-foreground">({p.type})</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Currency */}
+                <div className="space-y-1.5">
+                  <Label>Currency</Label>
+                  <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Payment terms */}
+                <div className="space-y-1.5">
+                  <Label>Payment terms</Label>
+                  <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_TERMS_LOCAL.map((pt) => (
+                        <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Subject (optional, smaller) */}
+                <div className="space-y-1.5">
+                  <Label className="text-muted-foreground">Subject <span className="text-xs">(optional)</span></Label>
+                  <Input
+                    value={form.subject || ""}
+                    onChange={(e) => set("subject", e.target.value)}
+                    placeholder="Auto-generated if left empty"
+                  />
+                </div>
+              </div>
+
+              {/* Partner context panel */}
+              {selectedPartner && partnerContext && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Building2 className="size-4 text-amber-600" />
+                    <span className="text-sm font-medium">{selectedPartner.name}</span>
+                    <Badge variant="outline" className="text-xs">{selectedPartner.type}</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                    {selectedPartner.address_line && (
+                      <div className="flex items-start gap-1.5">
+                        <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
+                        <span className="text-muted-foreground">{[selectedPartner.address_line, selectedPartner.city, selectedPartner.country].filter(Boolean).join(", ")}</span>
+                      </div>
+                    )}
+                    {selectedPartner.vat_number && (
+                      <div className="flex items-center gap-1.5">
+                        <Hash className="size-3 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground">VAT: {selectedPartner.vat_number}</span>
+                      </div>
+                    )}
+                    {selectedPartner.email && (
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="size-3 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground">{selectedPartner.email}</span>
+                      </div>
+                    )}
+                    {selectedPartner.phone && (
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="size-3 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground">{selectedPartner.phone}</span>
+                      </div>
+                    )}
+                    {selectedPartner.preferred_currency && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">Currency: {selectedPartner.preferred_currency}</span>
+                      </div>
+                    )}
+                    {selectedPartner.bank_name && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">Bank: {selectedPartner.bank_name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
-            </Label>
-            <Select
-              value={form.partner_id || ""}
-              onValueChange={(v) => {
-                set("partner_id", v);
-                fetchPartnerContext(v);
-              }}
-            >
-              <SelectTrigger><SelectValue placeholder="Select partner" /></SelectTrigger>
-              <SelectContent>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{p.name}</span>
-                      <span className="text-xs text-muted-foreground">({p.type})</span>
+            </div>
+
+            {/* ─── Line Items (collapsible, open by default for new) ─── */}
+            <Collapsible open={itemsOpen} onOpenChange={setItemsOpen}>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full group">
+                <ChevronDown className={`size-4 transition-transform ${itemsOpen ? "" : "-rotate-90"}`} />
+                <span className="text-sm font-semibold">Line items</span>
+                {(form.items || []).length > 0 && (
+                  <Badge variant="secondary" className="text-xs">{(form.items || []).length}</Badge>
+                )}
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {fmtMoney(totals.total, form.currency || "EUR")}
+                </span>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-3 space-y-3">
+                  {/* Dates & linked offer (inside line items, compact) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Issue date</Label>
+                      <Input
+                        type="date"
+                        className="h-9"
+                        value={form.issue_date ? form.issue_date.slice(0, 10) : ""}
+                        onChange={(e) => set("issue_date", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
+                      />
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Partner context panel */}
-          {selectedPartner && partnerContext && (
-            <div className="md:col-span-2 rounded-lg border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Building2 className="size-4 text-amber-600" />
-                <span className="text-sm font-medium">{selectedPartner.name}</span>
-                <Badge variant="outline" className="text-xs">{selectedPartner.type}</Badge>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
-                {selectedPartner.address_line && (
-                  <div className="flex items-start gap-1.5">
-                    <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
-                    <span className="text-muted-foreground">{[selectedPartner.address_line, selectedPartner.city, selectedPartner.country].filter(Boolean).join(", ")}</span>
-                  </div>
-                )}
-                {selectedPartner.vat_number && (
-                  <div className="flex items-center gap-1.5">
-                    <Hash className="size-3 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">VAT: {selectedPartner.vat_number}</span>
-                  </div>
-                )}
-                {selectedPartner.email && (
-                  <div className="flex items-center gap-1.5">
-                    <Mail className="size-3 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">{selectedPartner.email}</span>
-                  </div>
-                )}
-                {selectedPartner.phone && (
-                  <div className="flex items-center gap-1.5">
-                    <Phone className="size-3 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">{selectedPartner.phone}</span>
-                  </div>
-                )}
-                {selectedPartner.preferred_currency && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground">Currency: {selectedPartner.preferred_currency}</span>
-                  </div>
-                )}
-                {selectedPartner.bank_name && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground">Bank: {selectedPartner.bank_name}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label>Linked offer (optional)</Label>
-            <Select
-              value={form.offer_id || "__none__"}
-              onValueChange={(v) => set("offer_id", v === "__none__" ? null : v)}
-            >
-              <SelectTrigger><SelectValue placeholder="No linked offer" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— No offer —</SelectItem>
-                {offerList.map((o) => (
-                  <SelectItem key={o.id} value={o.id}>{o.number} · {o.subject}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Currency</Label>
-            <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
-              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Issue date</Label>
-            <Input
-              type="date"
-              value={form.issue_date ? form.issue_date.slice(0, 10) : ""}
-              onChange={(e) => set("issue_date", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              Valid until
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                <Sparkles className="size-2.5 text-amber-500" /> 30 days
-              </Badge>
-            </Label>
-            <Input
-              type="date"
-              value={form.valid_until ? form.valid_until.slice(0, 10) : ""}
-              onChange={(e) => set("valid_until", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
-            />
-          </div>
-
-          {/* Line items editor */}
-          <div className="md:col-span-2 border-t pt-3 mt-1">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium">Line items</p>
-              <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                <Plus className="size-4 mr-1" /> Add item
-              </Button>
-            </div>
-
-            {(form.items || []).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
-                No items yet. Click &ldquo;Add item&rdquo;.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
-                {(form.items || []).map((it, idx) => (
-                  <div key={idx} className="rounded-md border p-2 grid grid-cols-12 gap-1.5 items-end">
-                    <div className="col-span-12 sm:col-span-5 space-y-1">
-                      <Label className="text-xs">Product</Label>
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1">
+                        Valid until
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
+                          <Sparkles className="size-2 text-amber-500" /> 30d
+                        </Badge>
+                      </Label>
+                      <Input
+                        type="date"
+                        className="h-9"
+                        value={form.valid_until ? form.valid_until.slice(0, 10) : ""}
+                        onChange={(e) => set("valid_until", e.target.value ? new Date(e.target.value).toISOString() : null as unknown as string)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Linked offer <span className="text-muted-foreground">(optional)</span></Label>
                       <Select
-                        value={it.product_id || "__custom__"}
-                        onValueChange={(v) => {
-                          if (v === "__custom__") return;
-                          selectProduct(idx, v);
-                        }}
+                        value={form.offer_id || "__none__"}
+                        onValueChange={(v) => set("offer_id", v === "__none__" ? null : v)}
                       >
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__custom__">— Manual —</SelectItem>
-                          {productList.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          <SelectItem value="__none__">— No offer —</SelectItem>
+                          {offerList.map((o) => (
+                            <SelectItem key={o.id} value={o.id}>{o.number} · {o.subject}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <Input
-                        className="h-8 text-xs"
-                        placeholder="Product name"
-                        value={it.product_name || ""}
-                        onChange={(e) => setItem(idx, { product_name: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-3 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Qty</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.quantity}
-                        onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Price</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.unit_price}
-                        onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-2 sm:col-span-1 space-y-1">
-                      <Label className="text-xs">Disc%</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.discount}
-                        onChange={(e) => setItem(idx, { discount: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-2 sm:col-span-1 space-y-1">
-                      <Label className="text-xs">Tax%</Label>
-                      <Input
-                        type="number"
-                        className="h-9"
-                        value={it.tax_rate}
-                        onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="size-9 text-destructive"
-                        onClick={() => removeItem(idx)}
-                        title="Remove item"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                    <div className="col-span-12 text-right text-xs text-muted-foreground -mt-1">
-                      Line total: <span className="tabular font-medium text-foreground">{fmtMoney(lineTotal(it), form.currency || "USD")}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
 
-            {/* Computed totals */}
-            <div className="mt-3 ml-auto w-full sm:w-72 space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="tabular">{fmtMoney(totals.subtotal, form.currency || "USD")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Discount</span>
-                <span className="tabular">- {fmtMoney(totals.discount_total, form.currency || "USD")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax</span>
-                <span className="tabular">{fmtMoney(totals.tax_total, form.currency || "USD")}</span>
-              </div>
-              <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
-                <span>Total</span>
-                <span className="tabular">{fmtMoney(totals.total, form.currency || "USD")}</span>
-              </div>
-            </div>
-          </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Add products or services to this proforma</p>
+                    <Button type="button" size="sm" variant="outline" onClick={addItem}>
+                      <Plus className="size-4 mr-1" /> Add item
+                    </Button>
+                  </div>
 
-          <div className="md:col-span-2 space-y-1.5">
-            <Label>Notes</Label>
-            <Textarea rows={2} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} />
+                  {(form.items || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6 border rounded-md border-dashed">
+                      No items yet. Click &ldquo;Add item&rdquo; to start building your proforma.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
+                      {(form.items || []).map((it, idx) => (
+                        <div key={idx} className="rounded-md border p-2.5 grid grid-cols-12 gap-1.5 items-end">
+                          <div className="col-span-12 sm:col-span-5 space-y-1">
+                            <Label className="text-xs">Description</Label>
+                            <Select
+                              value={it.product_id || "__custom__"}
+                              onValueChange={(v) => {
+                                if (v === "__custom__") return;
+                                selectProduct(idx, v);
+                              }}
+                            >
+                              <SelectTrigger className="h-9"><SelectValue placeholder="Select product or type" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__custom__">— Manual entry —</SelectItem>
+                                {productList.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              className="h-8 text-xs"
+                              placeholder="Product name"
+                              value={it.product_name || ""}
+                              onChange={(e) => setItem(idx, { product_name: e.target.value })}
+                            />
+                          </div>
+                          <div className="col-span-3 sm:col-span-2 space-y-1">
+                            <Label className="text-xs">Qty</Label>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={it.quantity}
+                              onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="col-span-4 sm:col-span-2 space-y-1">
+                            <Label className="text-xs">Unit price</Label>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={it.unit_price}
+                              onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="col-span-2 sm:col-span-1 space-y-1">
+                            <Label className="text-xs">VAT %</Label>
+                            <Input
+                              type="number"
+                              className="h-9"
+                              value={it.tax_rate}
+                              onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="size-9 text-destructive"
+                              onClick={() => removeItem(idx)}
+                              title="Remove item"
+                            >
+                              <X className="size-4" />
+                            </Button>
+                          </div>
+                          <div className="col-span-12 text-right text-xs text-muted-foreground -mt-1">
+                            Line total: <span className="tabular font-medium text-foreground">{fmtMoney(lineTotal(it), form.currency || "EUR")}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Computed totals */}
+                  <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="tabular">{fmtMoney(totals.subtotal, form.currency || "EUR")}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Discount</span>
+                      <span className="tabular">- {fmtMoney(totals.discount_total, form.currency || "EUR")}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax</span>
+                      <span className="tabular">{fmtMoney(totals.tax_total, form.currency || "EUR")}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
+                      <span>Total</span>
+                      <span className="tabular">{fmtMoney(totals.total, form.currency || "EUR")}</span>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* ─── Notes (collapsible, closed by default for new) ─── */}
+            <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full group">
+                <ChevronDown className={`size-4 transition-transform ${notesOpen ? "" : "-rotate-90"}`} />
+                <span className="text-sm font-semibold">Notes</span>
+                {form.notes && (
+                  <Badge variant="secondary" className="text-xs">Has notes</Badge>
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-3">
+                  <Textarea
+                    rows={3}
+                    value={form.notes || ""}
+                    onChange={(e) => set("notes", e.target.value)}
+                    placeholder="Add any internal notes or payment instructions…"
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
           </div>
-        </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : isEditing ? "Save changes" : "Create proforma"}
           </Button>
         </DialogFooter>
       </DialogContent>

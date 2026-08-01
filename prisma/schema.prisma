@@ -298,10 +298,11 @@ model Demand {
   number               String   @unique
   partner_id           String
   status               String   @default("open")  // open | quoted | closed
+  priority             String   @default("medium")  // low | medium | high
   subject              String
   description          String?
   requested_delivery   DateTime?
-  currency             String   @default("USD")
+  currency             String   @default("EUR")
   items                String   // JSON array of DemandItem
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
@@ -482,7 +483,7 @@ model Proforma {
   partner_id     String
   status         String   @default("draft")  // draft | sent | paid | expired
   subject        String
-  currency       String   @default("USD")
+  currency       String   @default("EUR")
   subtotal       Float    @default(0)
   discount_total Float    @default(0)
   tax_total      Float    @default(0)
@@ -491,6 +492,7 @@ model Proforma {
   valid_until    DateTime
   sent_at        DateTime?
   paid_at        DateTime?
+  payment_terms  String?  @default("net30")
   notes          String?
   items          String   // JSON array of OfferLineItem
   created_at     DateTime @default(now())
