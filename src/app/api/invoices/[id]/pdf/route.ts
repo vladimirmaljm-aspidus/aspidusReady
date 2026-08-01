@@ -16,14 +16,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
 
   try {
+    const invoice = await auth.store.getInvoice(id);
+    const partner = invoice?.partner_id ? await auth.store.getPartner(invoice.partner_id) : null;
+    const tenant = await auth.store.getTenant(tenantId);
+
     const result = await generatePdf({ docType: "invoice", docId: id, tenantId });
     await audit(auth.store, auth.user, req, "invoice.pdf", "invoice", id, {
       verification_code: result.verificationCode,
     });
+
+    const safeName = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    const tenantName = safeName(tenant?.name || "Aspidus");
+    const docNum = safeName(invoice?.number || id);
+    const partnerName = partner ? `_${safeName(partner.name)}` : "";
+    const filename = `${tenantName}_Invoice_${docNum}${partnerName}.pdf`;
+
     return new NextResponse(new Uint8Array(result.buffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="invoice-${id}.pdf"`,
+        "Content-Disposition": `inline; filename="${filename}"`,
         "Content-Length": result.buffer.length.toString(),
       },
     });
