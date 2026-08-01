@@ -46,6 +46,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { Partner, PartnerType, PartnerEntityType, PortalAccess, PortalTier } from "@/lib/supabase/types";
+import { getTierMeta, ORDERED_TIERS } from "@/lib/portal/tiers";
 import { useAppStore } from "@/lib/store/app-store";
 import { CURRENCIES, ENTITY_TYPES, PAYMENT_TERMS_LOCAL, COUNTRIES } from "@/lib/data/reference";
 
@@ -572,15 +573,15 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
           status: "approved",
           can_view_offers: true,
           can_view_documents: true,
-          can_view_catalog: data.tier !== "limited",
-          can_view_invoices: data.tier !== "limited",
+          can_view_catalog: getTierMeta(data.tier).canSubmitRfq || data.tier !== "basic",
+          can_view_invoices: data.tier === "premium" || data.tier === "business",
           can_view_profile: true,
-          can_view_company_info: data.tier === "premium",
-          can_submit_rfq: data.tier !== "limited",
-          can_download_pdf: data.tier !== "limited",
-          exempt_kyc: data.tier === "premium",
-          exempt_document_upload: data.tier === "premium",
-          exempt_location_share: data.tier === "premium",
+          can_view_company_info: data.tier === "premium" || data.tier === "business",
+          can_submit_rfq: getTierMeta(data.tier).canSubmitRfq,
+          can_download_pdf: getTierMeta(data.tier).canDownloadPdf,
+          exempt_kyc: !getTierMeta(data.tier).requiresKyc,
+          exempt_document_upload: !getTierMeta(data.tier).requiresDocuments,
+          exempt_location_share: !getTierMeta(data.tier).requiresLocation,
           must_set_password: true,
         }),
       });
@@ -1174,7 +1175,8 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
             <div className="space-y-3">
               <Label>Access Tier</Label>
               <div className="space-y-2">
-                {(["limited", "standard", "premium"] as PortalTier[]).map((tier) => {
+                {ORDERED_TIERS.map((meta) => {
+                  const tier = meta.value;
                   const info = TIER_INFO[tier];
                   const isSelected = portalTier === tier;
                   return (

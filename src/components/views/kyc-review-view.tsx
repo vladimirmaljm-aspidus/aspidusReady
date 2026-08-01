@@ -553,19 +553,48 @@ function ReviewDialog({
   // Approve + transfer
   const approveMut = useMutation({
     mutationFn: async () => {
-      const r = await fetch(`/api/kyc/${id}/approve`, { method: "POST" });
+      const r = await fetch(`/api/kyc/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Approve failed");
       }
-      return r.json() as Promise<{ submission: KycSubmission; partner: Partner; transferred: boolean }>;
+      return r.json() as Promise<{ submission: KycSubmission; partner: Partner; transferred: boolean; portal_access: any }>;
     },
     onSuccess: (data) => {
       setApprovedResult({ partner: data.partner, submission: data.submission });
-      toast.success("Approved — data transferred to partner record.");
+      toast.success(
+        data.portal_access
+          ? "Approved — partner updated, portal access auto-provisioned, welcome email sent."
+          : "Approved — data transferred to partner record."
+      );
       onApproved();
     },
     onError: (e: any) => toast.error(e.message || "Approval failed."),
+  });
+
+  // Request resubmission (admin asks client for more info)
+  const resubmitMut = useMutation({
+    mutationFn: async (note: string) => {
+      const r = await fetch(`/api/kyc/${id}/resubmit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Resubmit failed");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Resubmission requested — client has been emailed.");
+      onApproved();
+    },
+    onError: (e: any) => toast.error(e.message || "Resubmit failed."),
   });
 
   const sub = q.data;
@@ -877,6 +906,20 @@ function ReviewDialog({
                   : "Verify all documents and data before approving. Approval auto-transfers data to the partner record."}
               </p>
               <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  className="border-amber-500/40 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40"
+                  onClick={() => {
+                    const note = prompt(
+                      "What does the client need to update or provide? This note will be emailed to them."
+                    );
+                    if (note !== null) resubmitMut.mutate(note);
+                  }}
+                  disabled={approveMut.isPending || resubmitMut.isPending}
+                >
+                  <AlertTriangle className="size-4 mr-1" />
+                  Request update
+                </Button>
                 <Button
                   variant="outline"
                   className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
