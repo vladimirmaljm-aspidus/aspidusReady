@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 function whitelistUserFields(body: Record<string, unknown>): Record<string, unknown> {
   const allowed = new Set([
     "tenant_id", "username", "email", "full_name", "role",
-    "permissions", "active", "must_change_password",
+    "permissions", "active", "must_change_password", "password_hash",
   ]);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
