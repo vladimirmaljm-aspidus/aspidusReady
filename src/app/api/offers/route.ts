@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const body = await req.json();
+  body.tenant_id = auth.tenantId!;
   if (!body.owner_id) body.owner_id = auth.user.id;
   // recompute totals from items if not provided
   if (Array.isArray(body.items) && body.items.length > 0 && body.total === undefined) {

@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const body = await req.json();
+  body.tenant_id = auth.tenantId!;
   // generate a real key on create
   if (!body.id) {
     const raw = "asp_" + randomBytes(24).toString("hex");

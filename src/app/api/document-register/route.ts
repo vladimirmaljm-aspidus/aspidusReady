@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const body = await req.json();
+  body.tenant_id = auth.tenantId!;
   if (!body.created_by) body.created_by = auth.user.id;
   const created = await auth.store.upsertDocumentRegisterEntry(body);
   await audit(auth.store, auth.user, req, body.id ? "document.register.update" : "document.register.create", "document_register", created.id, { number: created.number });

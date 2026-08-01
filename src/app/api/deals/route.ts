@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
     const body = await req.json();
+    body.tenant_id = auth.tenantId!;
     if (!body.owner_id) body.owner_id = auth.user.id;
     const created = await auth.store.upsertDeal(body);
     await audit(auth.store, auth.user, req, body.id ? "deal.update" : "deal.create", "deal", created.id, { title: created.title });

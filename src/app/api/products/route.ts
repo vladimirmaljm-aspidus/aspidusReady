@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
     const body = await req.json();
+    body.tenant_id = auth.tenantId!;
     const created = await auth.store.upsertProduct(body);
     await audit(auth.store, auth.user, req, body.id ? "product.update" : "product.create", "product", created.id, { sku: created.sku, name: created.name });
     return NextResponse.json(created);

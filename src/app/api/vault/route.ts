@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const body = await req.json();
+  body.tenant_id = auth.tenantId!;
   const created = await auth.store.upsertVaultSecret(body);
   await audit(auth.store, auth.user, req, body.id ? "vault.update" : "vault.create", "vault_secret", created.id, { key: created.key });
   const { encrypted_value, ...safe } = created;
