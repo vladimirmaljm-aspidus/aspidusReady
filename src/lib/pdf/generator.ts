@@ -124,6 +124,16 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
   // Resolve the logo URL so @react-pdf/renderer can fetch it
   const resolvedLogoUrl = await resolveLogoUrl(tenant?.logo_url);
 
+  // Build PDF metadata (visible in the PDF document properties dialog)
+  const docTitleLabel = opts.docType === "offer" ? "Offer" : opts.docType === "invoice" ? "Invoice" : "Proforma";
+  const pdfMeta = {
+    title: `${docTitleLabel} ${doc.number} — ${tenant?.name || "Aspidus"}`,
+    author: tenant?.name || "Aspidus CRM",
+    subject: `${docTitleLabel} issued to ${partner?.name || "client"} on ${new Date().toLocaleDateString("en-US")}`,
+    creator: "Aspidus CRM System",
+    keywords: [opts.docType, doc.number, partner?.name, doc.currency, verificationCode].filter(Boolean).join(", "),
+  };
+
   // Build + render the PDF
   const element = React.createElement(buildPdfDocument, {
     doc,
@@ -134,6 +144,7 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     verificationCode,
     qrCodeDataUrl,
     logoUrl: resolvedLogoUrl,
+    pdfMeta,
   });
   const buffer = await renderToBuffer(element as any);
 

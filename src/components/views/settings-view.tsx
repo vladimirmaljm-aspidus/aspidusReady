@@ -45,7 +45,7 @@ type SecurityForm = {
 };
 
 type CommsForm = {
-  email_provider: "resend" | "smtp" | "none";
+  email_provider: "resend" | "postmark" | "smtp" | "none";
   // SMTP
   smtp_host: string;
   smtp_port: number;
@@ -54,6 +54,10 @@ type CommsForm = {
   // Resend
   resend_api_key: string;
   resend_from_email: string;
+  // Postmark
+  postmark_server_token: string;
+  postmark_from_email: string;
+  postmark_message_stream: string;
   // Common
   from_name: string;
   from_email: string;
@@ -80,6 +84,7 @@ const DEFAULT_COMMS: CommsForm = {
   email_provider: "resend",
   smtp_host: "", smtp_port: 587, smtp_user: "", smtp_password: "",
   resend_api_key: "", resend_from_email: "",
+  postmark_server_token: "", postmark_from_email: "", postmark_message_stream: "outbound",
   from_name: "", from_email: "", reply_to: "",
 };
 
@@ -518,7 +523,7 @@ function CommsTab() {
         {/* Provider picker */}
         <div className="space-y-2">
           <Label>Email provider</Label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <ProviderCard
               active={value.email_provider === "resend"}
               onClick={() => set("email_provider", "resend")}
@@ -526,6 +531,13 @@ function CommsTab() {
               subtitle="Recommended"
               description="HTTP API — no SMTP blocks. Free: 100/day."
               badge="BEST"
+            />
+            <ProviderCard
+              active={value.email_provider === "postmark"}
+              onClick={() => set("email_provider", "postmark")}
+              title="Postmark"
+              subtitle="Transactional"
+              description="Reliable HTTP API. Trial: 100/month."
             />
             <ProviderCard
               active={value.email_provider === "smtp"}
@@ -616,7 +628,7 @@ function CommsTab() {
             </div>
             <p className="text-xs text-muted-foreground">
               Note: SMTP on ports 465/587 is blocked on Render free plan.
-              If your test email times out, switch to Resend (recommended).
+              If your test email times out, switch to Resend or Postmark.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -634,6 +646,63 @@ function CommsTab() {
               <div className="space-y-1.5">
                 <Label>SMTP password</Label>
                 <Input type="password" value={value.smtp_password} onChange={(e) => set("smtp_password", e.target.value)} placeholder="••••••••" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Postmark fields */}
+        {value.email_provider === "postmark" && (
+          <div className="rounded-lg border border-sky-500/30 bg-sky-50/50 dark:bg-sky-950/20 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Mail className="size-4 text-sky-600" />
+              <h4 className="text-sm font-semibold text-sky-900 dark:text-sky-200">Postmark Configuration</h4>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Postmark is a reliable transactional email API by Wildbit.
+              Excellent deliverability, no SMTP port blocks.
+              Trial: 100 emails/month free.
+            </p>
+            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Sign up at <a href="https://postmarkapp.com" target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline">postmarkapp.com</a> (free trial)</li>
+              <li>Create a Server → go to <strong>API Tokens</strong> → copy the <strong>Server API token</strong></li>
+              <li>Go to <strong>Sender Signatures</strong> → add &amp; confirm your sending email</li>
+              <li>Paste the server token below</li>
+              <li>Use the confirmed email as the from email</li>
+            </ol>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Postmark server token</Label>
+                <Input
+                  type="password"
+                  value={value.postmark_server_token}
+                  onChange={(e) => set("postmark_server_token", e.target.value)}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Postmark from email</Label>
+                <Input
+                  type="email"
+                  value={value.postmark_from_email}
+                  onChange={(e) => set("postmark_from_email", e.target.value)}
+                  placeholder="noreply@yourdomain.com"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Must match a confirmed sender signature in Postmark.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Message stream</Label>
+                <Input
+                  value={value.postmark_message_stream}
+                  onChange={(e) => set("postmark_message_stream", e.target.value)}
+                  placeholder="outbound"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Default is "outbound". Use "broadcast" for bulk emails.
+                </p>
               </div>
             </div>
           </div>
@@ -731,6 +800,10 @@ function EmailTestSection({ value }: { value: CommsForm }) {
           // Resend
           resend_api_key: value.resend_api_key,
           resend_from_email: value.resend_from_email,
+          // Postmark
+          postmark_server_token: value.postmark_server_token,
+          postmark_from_email: value.postmark_from_email,
+          postmark_message_stream: value.postmark_message_stream,
           // SMTP
           smtp_host: value.smtp_host,
           smtp_port: value.smtp_port,
@@ -754,9 +827,11 @@ function EmailTestSection({ value }: { value: CommsForm }) {
   const canTest =
     value.email_provider === "resend"
       ? !!value.resend_api_key
-      : value.email_provider === "smtp"
-        ? !!value.smtp_host && !!value.smtp_user
-        : false;
+      : value.email_provider === "postmark"
+        ? !!value.postmark_server_token
+        : value.email_provider === "smtp"
+          ? !!value.smtp_host && !!value.smtp_user
+          : false;
 
   return (
     <div className="mt-2 pt-5 border-t border-border/60">

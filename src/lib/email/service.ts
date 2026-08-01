@@ -7,11 +7,10 @@ import { getStore } from "@/lib/data/store";
  * Providers (selected per-tenant in Settings → Communications):
  *   1. resend    — HTTP API, recommended. No SMTP port blocks, works on Render free.
  *                  Free tier: 100 emails/day, 3000/month. https://resend.com
- *   2. smtp      — traditional SMTP. Works when the host allows outbound SMTP
- *                  (Render free plan blocks ports 465/587 — use Resend instead).
- *   3. supabase  — uses a Supabase Edge Function as the sender. Useful when
- *                  you want all outbound email routed through your Supabase
- *                  project. (Future — placeholder for now.)
+ *   2. postmark  — HTTP API by Wildbit. Reliable transactional email.
+ *                  Free trial: 100 emails/month. https://postmarkapp.com
+ *   3. smtp      — traditional SMTP. Works when the host allows outbound SMTP
+ *                  (Render free plan blocks ports 465/587 — use Resend/Postmark instead).
  *
  * If no provider is configured, emails are queued in the mail_queue table
  * (dev mode) so they can be retried once a provider is set up.
@@ -49,12 +48,23 @@ interface ResendConfig {
   replyTo?: string;
 }
 
-export type EmailProvider = "resend" | "smtp" | "none";
+interface PostmarkConfig {
+  serverToken: string;
+  fromName: string;
+  fromEmail: string;
+  /** Optional — reply-to address */
+  replyTo?: string;
+  /** Optional — Postmark message stream (default "outbound") */
+  messageStream?: string;
+}
+
+export type EmailProvider = "resend" | "postmark" | "smtp" | "none";
 
 interface EmailConfig {
   provider: EmailProvider;
   smtp?: SmtpConfig;
   resend?: ResendConfig;
+  postmark?: PostmarkConfig;
   fromName: string;
   fromEmail: string;
 }
@@ -94,6 +104,16 @@ export async function getEmailConfig(tenantId?: string): Promise<EmailConfig | n
     };
   }
 
+  if (comms.postmark_server_token) {
+    config.postmark = {
+      serverToken: comms.postmark_server_token,
+      fromName,
+      fromEmail: comms.postmark_from_email || fromEmail,
+      replyTo: comms.reply_to || undefined,
+      messageStream: comms.postmark_message_stream || "outbound",
+    };
+  }
+
   return config;
 }
 
@@ -105,7 +125,13 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ success: bool
   const config = await getEmailConfig(opts.tenantId);
 
   // No provider configured — queue for later
-  if (!config || config.provider === "none" || (config.provider === "smtp" && !config.smtp) || (config.provider === "resend" && !config.resend)) {
+  if (
+    !config ||
+    config.provider === "none" ||
+    (config.provider === "smtp" && !config.smtp) ||
+    (config.provider === "resend" && !config.resend) ||
+    (config.provider === "postmark" && !config.postmark)
+  ) {
     console.log(`[email:dev] To: ${opts.to} | Subject: ${opts.subject}`);
     const store = await getStore();
     await store.upsertMailQueueEntry({
@@ -122,6 +148,8 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ success: bool
 
     if (config.provider === "resend" && config.resend) {
       result = await sendViaResend(opts, config.resend);
+    } else if (config.provider === "postmark" && config.postmark) {
+      result = await sendViaPostmark(opts, config.postmark);
     } else if (config.provider === "smtp" && config.smtp) {
       result = await sendViaSmtp(opts, config.smtp);
     } else {
@@ -192,6 +220,56 @@ async function sendViaResend(opts: SendEmailOptions, cfg: ResendConfig): Promise
 
   const data = await res.json();
   return { success: true, messageId: data.id };
+}
+
+// ============================================================
+// Provider: Postmark (HTTP API by Wildbit)
+// ============================================================
+
+async function sendViaPostmark(opts: SendEmailOptions, cfg: PostmarkConfig): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const payload: Record<string, unknown> = {
+    From: `${cfg.fromName} <${cfg.fromEmail}>`,
+    To: opts.to,
+    Subject: opts.subject,
+    HtmlBody: opts.html,
+    MessageStream: cfg.messageStream || "outbound",
+  };
+  if (opts.text) payload.TextBody = opts.text;
+  if (cfg.replyTo) payload.ReplyTo = cfg.replyTo;
+
+  // Attachments — Postmark expects base64 content
+  if (opts.attachments && opts.attachments.length > 0) {
+    payload.Attachments = opts.attachments.map((a) => ({
+      Name: a.filename,
+      Content: a.content.toString("base64"),
+      ContentType: a.contentType,
+    }));
+  }
+
+  const res = await fetch("https://api.postmarkapp.com/email", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Postmark-Server-Token": cfg.serverToken,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    let errMsg = `Postmark API error ${res.status}`;
+    try {
+      const errJson = JSON.parse(errText);
+      errMsg = errJson.Message || errJson.message || errMsg;
+    } catch {
+      errMsg = errText || errMsg;
+    }
+    return { success: false, error: errMsg };
+  }
+
+  const data = await res.json();
+  return { success: true, messageId: data.MessageID };
 }
 
 // ============================================================

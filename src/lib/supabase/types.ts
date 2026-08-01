@@ -518,8 +518,13 @@ export interface Tenant {
   address_line: string | null;
   city: string | null;
   postal_code: string | null;
+  // Contact (shown in PDF footer + portal)
+  email: string | null;
+  phone: string | null;
+  website: string | null;
   // Bank details (for invoices)
   bank_name: string | null;
+  bank_account: string | null;
   bank_iban: string | null;
   bank_swift: string | null;
   // Branding
@@ -756,6 +761,7 @@ export interface DocumentTemplate {
   body_font_family: string;
   body_font_size: number;
   body_line_height: number;
+  heading_font_family: string;
   primary_color: string; // hex
   accent_color: string;
   // Table styling

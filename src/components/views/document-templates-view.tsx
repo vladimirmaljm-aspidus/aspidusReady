@@ -89,6 +89,7 @@ function defaultTemplate(name = "Untitled template"): TemplateFormState {
     body_font_family: "Inter, system-ui, sans-serif",
     body_font_size: 11,
     body_line_height: 1.5,
+    heading_font_family: "Helvetica-Bold",
     primary_color: "#0f766e",
     accent_color: "#0d9488",
     table_header_bg: "#0f766e",

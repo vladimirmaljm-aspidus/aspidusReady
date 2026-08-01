@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
     provider?: EmailProvider;
     resend_api_key?: string;
     resend_from_email?: string;
+    postmark_server_token?: string;
+    postmark_from_email?: string;
+    postmark_message_stream?: string;
     smtp_host?: string;
     smtp_port?: number;
     smtp_user?: string;
@@ -159,6 +162,103 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
       return NextResponse.json(
         { ok: false, error: e?.message || "Resend request failed", category: "network" },
+        { status: 200 }
+      );
+    }
+  }
+
+  // ── POSTMARK ─────────────────────────────────────────────────────────
+  if (provider === "postmark") {
+    const serverToken = body.postmark_server_token || saved.postmark_server_token;
+    const postmarkFromEmail = body.postmark_from_email || saved.postmark_from_email || fromEmail;
+    const messageStream = body.postmark_message_stream || saved.postmark_message_stream || "outbound";
+
+    if (!serverToken) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Postmark server token is required. Get one at https://postmarkapp.com/servers",
+          category: "missing_config",
+        },
+        { status: 200 }
+      );
+    }
+
+    try {
+      const res = await fetch("https://api.postmarkapp.com/email", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Postmark-Server-Token": serverToken,
+        },
+        body: JSON.stringify({
+          From: `${fromName} <${postmarkFromEmail}>`,
+          To: body.to,
+          Subject: `[Aspidus] Email test — ${new Date().toISOString()}`,
+          HtmlBody: `
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;">
+              <div style="background:#0f766e;color:white;padding:24px 28px;border-radius:12px 12px 0 0;">
+                <h1 style="margin:0;font-size:18px;font-weight:600;">Email Configuration Test</h1>
+                <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">Aspidus CRM · Postmark · ${new Date().toISOString()}</p>
+              </div>
+              <div style="background:white;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+                <p style="color:#333;font-size:14px;line-height:1.6;">Hi,</p>
+                <p style="color:#555;font-size:14px;line-height:1.6;">
+                  This is a test email sent from your Aspidus CRM settings panel via <strong>Postmark</strong>.
+                  If you are reading this, your Postmark integration is working correctly.
+                </p>
+                <table style="width:100%;font-size:13px;color:#555;margin:16px 0;border-collapse:collapse;">
+                  <tr><td style="padding:6px 0;color:#888;width:140px;">Provider</td><td style="padding:6px 0;">Postmark (HTTP API)</td></tr>
+                  <tr><td style="padding:6px 0;color:#888;">From</td><td style="padding:6px 0;font-family:monospace;">${fromName} &lt;${postmarkFromEmail}&gt;</td></tr>
+                  <tr><td style="padding:6px 0;color:#888;">Message stream</td><td style="padding:6px 0;font-family:monospace;">${messageStream}</td></tr>
+                  <tr><td style="padding:6px 0;color:#888;">Sent at</td><td style="padding:6px 0;">${new Date().toLocaleString()}</td></tr>
+                </table>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;" />
+                <p style="color:#888;font-size:12px;line-height:1.5;">
+                  This is an automated test message. Please do not reply.
+                </p>
+              </div>
+            </div>
+          `,
+          MessageStream: messageStream,
+          ...(body.reply_to || saved.reply_to ? { ReplyTo: body.reply_to || saved.reply_to } : {}),
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        let errMsg = `Postmark API error ${res.status}`;
+        let category = "postmark_error";
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.Message || errJson.message || errMsg;
+          if (res.status === 401) {
+            category = "auth_failed";
+            errMsg = "Invalid Postmark server token. Check that you copied the full token from your Postmark server settings.";
+          } else if (res.status === 422) {
+            category = "domain_not_verified";
+            errMsg = "Sender signature not confirmed. In Postmark dashboard, add and confirm your sender signature (domain or email).";
+          } else if (res.status === 429) {
+            category = "rate_limit";
+            errMsg = "Rate limit exceeded. Postmark trial allows 100 emails/month.";
+          }
+        } catch {
+          errMsg = errText || errMsg;
+        }
+        return NextResponse.json({ ok: false, error: errMsg, category }, { status: 200 });
+      }
+
+      const data = await res.json();
+      return NextResponse.json({
+        ok: true,
+        messageId: data.MessageID,
+        provider: "postmark",
+        testedAt: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      return NextResponse.json(
+        { ok: false, error: e?.message || "Postmark request failed", category: "network" },
         { status: 200 }
       );
     }
