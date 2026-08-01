@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
-import { notifyKycRejected } from "@/lib/notif/helper";
-import { onKycRejected } from "@/lib/kyc/automation";
+import { onKycResubmit } from "@/lib/kyc/automation";
 
 export const runtime = "nodejs";
 
 /**
- * POST /api/kyc/[id]/reject
+ * POST /api/kyc/[id]/resubmit
  *
- * Rejects a KYC submission and sends the "KYC Rejected" email to the portal
- * client with the admin-provided reason.
+ * Admin requests additional information from the client. Sets the submission
+ * status back to "resubmit" and sends the "Update Required" email with the
+ * admin's note (which fields/documents need attention).
  *
- * Body: { reason?: string }
+ * Body: { note?: string }
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -20,26 +20,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const { id } = await params;
-  let body: { reason?: string } = {};
+  let body: { note?: string } = {};
   try { body = await req.json(); } catch { /* ok */ }
 
   const updated = await auth.store.upsertKycSubmission({
-    id, status: "rejected", rejection_reason: body.reason || null,
-    reviewed_by: auth.user.id, reviewed_at: new Date().toISOString(),
-  });
-  await audit(auth.store, auth.user, req, "kyc.reject", "kyc_submission", id, { reason: body.reason });
+    id,
+    status: "resubmit",
+    review_notes: body.note || null,
+    reviewed_by: auth.user.id,
+    reviewed_at: new Date().toISOString(),
+  } as any);
+
+  await audit(auth.store, auth.user, req, "kyc.resubmit", "kyc_submission", id, { note: body.note });
 
   const partner = await auth.store.getPartner(updated.partner_id);
-  await notifyKycRejected(auth.tenantId || updated.tenant_id, partner?.name || "Client", id, body.reason);
-
-  // Send the rejection email
   const tenant = await auth.store.getTenant(updated.tenant_id);
-  await onKycRejected({
+  await onKycResubmit({
     store: auth.store,
     submission: updated,
     partner: partner as any,
     tenant,
-    reason: body.reason || null,
+    note: body.note || null,
   });
 
   return NextResponse.json(updated);

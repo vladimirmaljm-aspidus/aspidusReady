@@ -13,6 +13,7 @@ import {
   Crown,
   Shield,
   Boxes,
+  Briefcase,
   User,
   Building2,
   Loader2,
@@ -42,13 +43,23 @@ const TIER_META: Record<
     className: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
     icon: Crown,
   },
+  business: {
+    label: "Business",
+    className: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    icon: Briefcase,
+  },
   standard: {
     label: "Standard",
-    className: "border-transparent bg-primary/10 text-primary",
+    className: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-400",
     icon: Shield,
   },
+  basic: {
+    label: "Basic",
+    className: "border-transparent bg-muted text-muted-foreground",
+    icon: Boxes,
+  },
   limited: {
-    label: "Limited",
+    label: "Basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },

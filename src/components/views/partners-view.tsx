@@ -102,20 +102,58 @@ const PORTAL_STATUS_BADGE: Record<string, "default" | "secondary" | "destructive
 };
 
 const TIER_INFO: Record<PortalTier, { label: string; description: string; features: string[] }> = {
-  limited: {
-    label: "Limited",
-    description: "Basic access for viewing offers and documents",
-    features: ["View offers", "View documents", "View profile"],
+  premium: {
+    label: "Premium",
+    description:
+      "VIP client. Light KYC review only — document verification and geolocation are optional. Full feature access.",
+    features: [
+      "Full feature access",
+      "Light KYC review (no document upload required)",
+      "Geolocation not required",
+      "PDF downloads",
+      "RFQ submission",
+      "Company info access",
+    ],
+  },
+  business: {
+    label: "Business",
+    description:
+      "Trusted regular client. Full KYC, document upload, and geolocation required. Full feature access.",
+    features: [
+      "Full feature access",
+      "Full KYC verification required",
+      "Document upload required",
+      "Geolocation required",
+      "PDF downloads",
+      "RFQ submission",
+    ],
   },
   standard: {
     label: "Standard",
-    description: "Full portal access for active partners",
-    features: ["All Limited features", "View catalog", "View invoices", "Submit RFQs", "Download PDFs"],
+    description:
+      "Standard client. Full KYC, documents, and geolocation required. Can submit RFQs but cannot download PDFs.",
+    features: [
+      "View offers / documents / catalog",
+      "Submit RFQs",
+      "Full KYC + documents + geolocation required",
+      "No PDF download",
+    ],
   },
-  premium: {
-    label: "Premium",
-    description: "Complete access with exemptions for trusted partners",
-    features: ["All Standard features", "Company info access", "KYC exemption", "Document upload exemption"],
+  basic: {
+    label: "Basic",
+    description:
+      "Entry-level / trial client. Full KYC, documents, and geolocation required. Read-only access.",
+    features: [
+      "View catalog and own offers",
+      "No RFQ submission",
+      "No PDF download",
+      "Full KYC + documents + geolocation required",
+    ],
+  },
+  limited: {
+    label: "Basic (legacy)",
+    description: "Legacy limited tier — equivalent to Basic.",
+    features: ["Same as Basic tier"],
   },
 };
 

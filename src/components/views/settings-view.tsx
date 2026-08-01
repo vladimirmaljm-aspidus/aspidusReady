@@ -15,7 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
-import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon } from "lucide-react";
+import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle } from "lucide-react";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import { CURRENCIES } from "@/lib/data/reference";
 
@@ -537,8 +537,156 @@ function CommsTab() {
             {saving ? "Saving…" : "Save"}
           </Button>
         </div>
+
+        <SMTPTestSection value={value} />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * SMTP test panel — lets the admin verify the saved SMTP configuration by
+ * sending a real test email to any address. Uses the values currently typed
+ * into the form (so the admin can test BEFORE saving).
+ */
+function SMTPTestSection({ value }: { value: CommsForm }) {
+  const [testEmail, setTestEmail] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<
+    | { ok: true; messageId?: string; response?: string; testedAt?: string }
+    | { ok: false; error: string; category?: string }
+    | null
+  >(null);
+
+  async function runTest() {
+    if (!testEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail)) {
+      setResult({ ok: false, error: "Enter a valid recipient email address." });
+      return;
+    }
+    if (!value.smtp_host || !value.smtp_user) {
+      setResult({
+        ok: false,
+        error: "Fill in SMTP host and user above first.",
+      });
+      return;
+    }
+    setTesting(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/settings/test-smtp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: testEmail,
+          smtp_host: value.smtp_host,
+          smtp_port: value.smtp_port,
+          smtp_user: value.smtp_user,
+          smtp_password: value.smtp_password,
+          from_email: value.from_email,
+          from_name: value.from_name,
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch (e: any) {
+      setResult({ ok: false, error: e?.message || "Network error" });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 pt-6 border-t border-border/60">
+      <div className="flex items-center gap-2 mb-2">
+        <Send className="size-4 text-primary" />
+        <h4 className="text-sm font-semibold">Test SMTP Configuration</h4>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Send a test email to verify your SMTP settings work. Uses the values
+        currently entered above (you can test before saving).
+      </p>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Input
+          type="email"
+          value={testEmail}
+          onChange={(e) => setTestEmail(e.target.value)}
+          placeholder="recipient@example.com"
+          className="flex-1"
+          disabled={testing}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") runTest();
+          }}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={runTest}
+          disabled={testing || !value.smtp_host}
+          className="gap-2"
+        >
+          {testing ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Sending test…
+            </>
+          ) : (
+            <>
+              <Send className="size-4" />
+              Send test email
+            </>
+          )}
+        </Button>
+      </div>
+
+      {result && (
+        <div
+          className={
+            "mt-3 p-3 rounded-lg border text-sm " +
+            (result.ok
+              ? "bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200"
+              : "bg-destructive/10 border-destructive/30 text-destructive")
+          }
+        >
+          {result.ok ? (
+            <div className="space-y-1">
+              <p className="font-medium flex items-center gap-1.5">
+                <CheckCircle2 className="size-4" />
+                Test email sent successfully
+              </p>
+              {result.messageId && (
+                <p className="text-xs opacity-80 font-mono">
+                  Message ID: {result.messageId}
+                </p>
+              )}
+              <p className="text-xs opacity-80">
+                Check the recipient inbox (and spam folder) for the test
+                message.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <p className="font-medium flex items-center gap-1.5">
+                <XCircle className="size-4" />
+                Test failed
+              </p>
+              <p className="text-xs">{result.error}</p>
+              {result.category && (
+                <p className="text-xs opacity-80">
+                  {result.category === "host_unreachable" &&
+                    "Hint: check that the SMTP host and port are correct and that your network allows outbound SMTP."}
+                  {result.category === "auth_failed" &&
+                    "Hint: the username or password is incorrect. For Gmail, use an App Password, not your account password."}
+                  {result.category === "timeout" &&
+                    "Hint: the server did not respond in time. Try a different port (465 for SSL, 587 for STARTTLS)."}
+                  {result.category === "tls" &&
+                    "Hint: TLS/certificate problem. If you trust the server, try port 587 with STARTTLS."}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -15,9 +15,12 @@ import {
   Crown,
   Shield,
   Boxes,
+  Briefcase,
   Loader2,
   Menu,
   X,
+  MapPin,
+  ShieldAlert,
 } from "lucide-react";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
@@ -27,6 +30,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { initials, fmtRelative } from "@/lib/utils/format";
 import { toast } from "sonner";
 import type { PortalAccess, PortalTier, Partner } from "@/lib/supabase/types";
+import { getTierMeta } from "@/lib/portal/tiers";
+import { usePortalGeolocation } from "@/lib/portal/use-geolocation";
 
 const PortalDashboard = dynamic(
   () => import("@/components/portal/portal-dashboard").then((m) => m.PortalDashboard),
@@ -84,13 +89,23 @@ const TIER_META: Record<
     className: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
     icon: Crown,
   },
+  business: {
+    label: "Business",
+    className: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    icon: Briefcase,
+  },
   standard: {
     label: "Standard",
-    className: "border-transparent bg-primary/10 text-primary",
+    className: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-400",
     icon: Shield,
   },
+  basic: {
+    label: "Basic",
+    className: "border-transparent bg-muted text-muted-foreground",
+    icon: Boxes,
+  },
   limited: {
-    label: "Limited",
+    label: "Basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },
@@ -106,15 +121,27 @@ const VIEW_TITLES: Record<string, string> = {
   "portal-profile": "My Profile",
 };
 
-export function PortalShell() {
+export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   const portalAccess = useAppStore((s) => s.portalAccess) as PortalAccess | null;
   const setPortalAccess = useAppStore((s) => s.setPortalAccess);
   const setAppMode = useAppStore((s) => s.setAppMode);
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
+
+  // Apply the initial view once on mount (when navigating to a deep link like
+  // /portal/offers the corresponding page passes initialView so the sidebar
+  // highlights the right item).
+  useEffect(() => {
+    if (initialView) setView(initialView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [partner, setPartner] = useState<Partner | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+
+  // Geolocation capture (required for non-Premium tiers; the hook handles
+  // the audit logging and re-logs every 5 minutes).
+  const geo = usePortalGeolocation(portalAccess);
 
   // Fetch partner profile once for sidebar/topbar display
   useEffect(() => {
@@ -143,6 +170,64 @@ export function PortalShell() {
   }
 
   if (!portalAccess) return null;
+
+  // Geolocation gate — required for all non-Premium tiers. Block rendering
+  // until the browser has granted (or denied) location permission. Premium
+  // clients skip this entirely.
+  if (geo.required && !geo.shared && (geo.loading || !geo.error)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-mesh-portal p-6">
+        <div className="max-w-md w-full text-center space-y-4">
+          <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <MapPin className="size-8 text-primary animate-pulse" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Sharing your location…</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Your browser should be asking for permission to share your
+              location. This is required for your tier
+              (<strong>{getTierMeta(portalAccess.tier).label}</strong>) and is
+              logged securely for compliance.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={signOut}>
+            Cancel & sign out
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (geo.required && !geo.shared && geo.error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-mesh-portal p-6">
+        <div className="max-w-md w-full text-center space-y-4">
+          <div className="size-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+            <ShieldAlert className="size-8 text-destructive" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Location sharing required</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Your portal tier (<strong>{getTierMeta(portalAccess.tier).label}</strong>)
+              requires geolocation to be shared. Please enable location
+              permissions in your browser and reload this page.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2 font-mono">
+              Error: {geo.error}
+            </p>
+          </div>
+          <div className="flex gap-2 justify-center">
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+            <Button variant="ghost" size="sm" onClick={signOut}>
+              Sign out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const tier = portalAccess.tier;
   const TierIcon = TIER_META[tier].icon;

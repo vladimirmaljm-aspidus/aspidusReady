@@ -116,7 +116,7 @@ export function welcomePortalEmail(opts: {
   baseUrl: string;
   tier: string;
 }): { subject: string; html: string } {
-  const setupUrl = `${opts.baseUrl}/#portal=${opts.accessId}`;
+  const setupUrl = `${opts.baseUrl}/portal/login?access_id=${opts.accessId}`;
   const subject = `Welcome to ${opts.tenantName} Client Portal`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">

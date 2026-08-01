@@ -659,7 +659,25 @@ export interface TradeOfferLineItem extends OfferLineItem {
 export type PartnerEntityType = "company" | "individual";
 
 // Portal access tiers — from most restricted to full
-export type PortalTier = "limited" | "standard" | "premium";
+/**
+ * Portal access tiers — 4 levels.
+ *
+ * - `premium`   — VIP clients. KYC verification is optional (light review only),
+ *                 document upload optional, geolocation NOT required. Full
+ *                 feature access including PDF downloads and RFQ submission.
+ * - `business`  — Trusted regular clients. Full KYC required, document upload
+ *                 required, geolocation required. Full feature access.
+ * - `standard`  — Standard clients. Full KYC + documents + geolocation.
+ *                 Can view offers/documents/catalog and submit RFQs but
+ *                 cannot download PDFs.
+ * - `basic`     — Entry-level / trial clients. Full KYC + documents +
+ *                 geolocation. Read-only access to catalog and own offers
+ *                 (no RFQ submission, no PDF download).
+ *
+ * `limited` is kept as a legacy alias for backward compatibility with rows
+ * created before this enum was expanded — new code should map it to `basic`.
+ */
+export type PortalTier = "premium" | "business" | "standard" | "basic" | "limited";
 
 // ============================================================
 // Portal access configuration (per-partner)

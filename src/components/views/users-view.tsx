@@ -36,6 +36,7 @@ import { Plus, Pencil, Trash2, Users as UsersIcon, ShieldAlert, ChevronDown, Wan
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
+import { PermissionTree } from "@/components/common/permission-tree";
 import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin, isSuperAdmin, SafeUser } from "@/lib/store/app-store";
 import { UserRole, Tenant } from "@/lib/supabase/types";
@@ -359,7 +360,7 @@ type UserForm = {
   tenant_id: string;
   password: string;
   active: boolean;
-  permissions: string;
+  permissions: string[] | null;
 };
 
 function UserFormDialog({
@@ -375,7 +376,7 @@ function UserFormDialog({
   const isSA = isSuperAdmin(currentUser);
 
   const [form, setForm] = useState<UserForm>({
-    username: "", email: "", full_name: "", role: "staff", tenant_id: "", password: "", active: true, permissions: "",
+    username: "", email: "", full_name: "", role: "staff", tenant_id: "", password: "", active: true, permissions: null,
   });
   const [saving, setSaving] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -402,7 +403,7 @@ function UserFormDialog({
         tenant_id: user?.tenant_id || defaultTenantId,
         password: "",
         active: user?.active ?? true,
-        permissions: (user?.permissions || []).join(", "),
+        permissions: user?.permissions || null,
       });
       setAdvancedOpen(!!(user?.permissions && user.permissions.length > 0));
       setShowPassword(false);
@@ -461,13 +462,9 @@ function UserFormDialog({
         active: form.active,
       };
 
-      // Permissions: only send custom permissions if the user explicitly set them
-      if (hasCustomPermissions && form.permissions.trim()) {
-        const perms = form.permissions.split(",").map((s) => s.trim()).filter(Boolean);
-        body.permissions = perms.length ? perms : null;
-      } else {
-        body.permissions = null;
-      }
+      // Permissions: send the array as-is (null means "use role defaults")
+      body.permissions =
+        form.permissions && form.permissions.length > 0 ? form.permissions : null;
 
       if (form.password) body.password = form.password;
 
@@ -743,23 +740,19 @@ function UserFormDialog({
                     <Switch checked={form.active} onCheckedChange={(v) => set("active", v)} />
                   </div>
 
-                  {/* Permissions — only for existing users with custom permissions */}
-                  {user && hasCustomPermissions && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="permissions">Custom permissions</Label>
-                      <Textarea
-                        id="permissions"
-                        rows={2}
-                        value={form.permissions}
-                        onChange={(e) => set("permissions", e.target.value)}
-                        placeholder="partner.*, deal.read, offer.create — leave blank for role defaults"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        This user has custom permissions. Clear the field to use role defaults instead.
-                        Rules: <code>*</code> for all, <code>module.*</code> for an entire module, <code>module.action</code> for a specific action.
-                      </p>
+                  {/* Permissions — granular checkbox tree */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Custom permissions</Label>
+                      <span className="text-[11px] text-muted-foreground">
+                        Leave empty to use role defaults
+                      </span>
                     </div>
-                  )}
+                    <PermissionTree
+                      value={form.permissions}
+                      onChange={(v) => set("permissions", v as string[] | null)}
+                    />
+                  </div>
 
                 </div>
               </CollapsibleContent>
