@@ -1110,6 +1110,8 @@ export class PrismaStore implements Store {
   async deleteApiKey(id: string): Promise<void> {
     await db.apiKey.delete({ where: { id } });
   }
+  async authenticateApiKey(_rawKey: string): Promise<{ apiKey: ApiKey; tenantId: string } | null> { return null; }
+  async updateApiKeyLastUsed(_id: string, _ip: string): Promise<void> {}
 
   // ─── Webhooks ───────────────────────────────────────────────────────────
 

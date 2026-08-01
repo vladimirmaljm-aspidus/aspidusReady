@@ -398,6 +398,7 @@ export interface VaultSecret {
 // ---------- API Keys ----------
 export interface ApiKey {
   id: string;
+  tenant_id: string;
   name: string;
   key_prefix: string; // first 8 chars shown
   key_hash: string; // full hash, never returned to client

@@ -1,28 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
+function getAuthUser(auth: AuthContext | ApiKeyAuthContext) {
+  if ("user" in auth) return auth.user;
+  return { id: `api:${auth.apiKeyId}`, username: auth.apiKeyName };
+}
+
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-  const tid = auth.tenantId!;
+  const tid = resolveTenantId(auth, req);
+
+  if ("apiKeyId" in auth && !hasPermission(auth.permissions, "offers:read")) {
+    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+  }
+
   const url = new URL(req.url);
   const search = url.searchParams.get("search") || undefined;
   const partner_id = url.searchParams.get("partner_id") || undefined;
   const status = url.searchParams.get("status") || undefined;
   const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
   const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
-  const result = await auth.store.listOffers(tid, { search, limit, offset, filters: { partner_id, status } });
+  const result = await auth.store.listOffers(tid!, { search, limit, offset, filters: { partner_id, status } });
   return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+  const tid = resolveTenantId(auth, req);
+
+  if ("apiKeyId" in auth && !hasPermission(auth.permissions, "offers:write")) {
+    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+  }
+
   const body = await req.json();
-  body.tenant_id = auth.tenantId!;
-  if (!body.owner_id) body.owner_id = auth.user.id;
+  body.tenant_id = tid!;
+  if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
   // recompute totals from items if not provided
   if (Array.isArray(body.items) && body.items.length > 0 && body.total === undefined) {
     let subtotal = 0, discountTotal = 0, taxTotal = 0;
@@ -42,6 +58,6 @@ export async function POST(req: NextRequest) {
     body.total = subtotal - discountTotal + taxTotal;
   }
   const created = await auth.store.upsertOffer(body);
-  await audit(auth.store, auth.user, req, body.id ? "offer.update" : "offer.create", "offer", created.id, { number: created.number });
+  await audit(auth.store, getAuthUser(auth), req, body.id ? "offer.update" : "offer.create", "offer", created.id, { number: created.number });
   return NextResponse.json(created);
 }

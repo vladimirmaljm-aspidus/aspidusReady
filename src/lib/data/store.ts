@@ -132,6 +132,8 @@ export interface Store {
   listApiKeys(tenantId: string): Promise<ApiKey[]>;
   upsertApiKey(k: Partial<ApiKey> & { id?: string }): Promise<ApiKey>;
   deleteApiKey(id: string): Promise<void>;
+  authenticateApiKey(rawKey: string): Promise<{ apiKey: ApiKey; tenantId: string } | null>;
+  updateApiKeyLastUsed(id: string, ip: string): Promise<void>;
 
   // webhooks
   listWebhooks(tenantId: string): Promise<Webhook[]>;

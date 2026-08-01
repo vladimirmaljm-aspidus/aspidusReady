@@ -10,10 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, KeyRound, Trash2, Lock, ShieldAlert, Copy, Check, AlertTriangle, Calendar,
+  Eye, Code, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -32,6 +33,87 @@ import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { ApiKey } from "@/lib/supabase/types";
 
 type SafeApiKey = Omit<ApiKey, "key_hash">;
+
+// --- Permission presets ---
+const PERMISSION_PRESETS: Record<string, { label: string; desc: string; perms: string[] }> = {
+  full_access: { label: "Full Access", desc: "Complete read/write access to everything", perms: ["*"] },
+  read_only: { label: "Read Only", desc: "Read access to all data, no modifications", perms: ["partners:read", "products:read", "offers:read", "deals:read", "invoices:read", "proformas:read", "documents:read"] },
+  sales: { label: "Sales", desc: "Manage partners, offers, and deals", perms: ["partners:*", "offers:*", "deals:*", "products:read"] },
+  finance: { label: "Finance", desc: "Manage invoices, proformas, and ERP", perms: ["invoices:*", "proformas:*", "erp:*", "partners:read", "offers:read"] },
+  logistics: { label: "Logistics", desc: "Manage inventory and documents", perms: ["inventory:*", "documents:*", "products:read", "partners:read"] },
+  api_tester: { label: "API Tester", desc: "Read access for testing integrations", perms: ["partners:read", "products:read", "offers:read"] },
+};
+
+// --- Permission categories ---
+const PERMISSION_CATEGORIES: Record<string, { label: string; perms: { value: string; label: string }[] }> = {
+  Partners: {
+    label: "Partners / Clients",
+    perms: [
+      { value: "partners:read", label: "View partners" },
+      { value: "partners:write", label: "Create/edit partners" },
+      { value: "partners:delete", label: "Delete partners" },
+      { value: "partners:*", label: "Full partner access" },
+    ],
+  },
+  Products: {
+    label: "Products / Goods",
+    perms: [
+      { value: "products:read", label: "View products" },
+      { value: "products:write", label: "Create/edit products" },
+      { value: "products:delete", label: "Delete products" },
+      { value: "products:*", label: "Full product access" },
+    ],
+  },
+  Offers: {
+    label: "Offers / Quotes",
+    perms: [
+      { value: "offers:read", label: "View offers" },
+      { value: "offers:write", label: "Create/edit offers" },
+      { value: "offers:delete", label: "Delete offers" },
+      { value: "offers:*", label: "Full offer access" },
+    ],
+  },
+  Deals: {
+    label: "Deals",
+    perms: [
+      { value: "deals:read", label: "View deals" },
+      { value: "deals:write", label: "Create/edit deals" },
+      { value: "deals:*", label: "Full deal access" },
+    ],
+  },
+  Invoices: {
+    label: "Invoices & Proformas",
+    perms: [
+      { value: "invoices:read", label: "View invoices" },
+      { value: "invoices:write", label: "Create/edit invoices" },
+      { value: "proformas:read", label: "View proformas" },
+      { value: "proformas:write", label: "Create/edit proformas" },
+    ],
+  },
+  Documents: {
+    label: "Documents",
+    perms: [
+      { value: "documents:read", label: "View documents" },
+      { value: "documents:write", label: "Upload/edit documents" },
+      { value: "documents:*", label: "Full document access" },
+    ],
+  },
+  ERP: {
+    label: "Accounting / ERP",
+    perms: [
+      { value: "erp:read", label: "View accounting data" },
+      { value: "erp:write", label: "Create journal entries" },
+      { value: "erp:*", label: "Full ERP access" },
+    ],
+  },
+  Portal: {
+    label: "Portal",
+    perms: [
+      { value: "portal:read", label: "View portal data" },
+      { value: "portal:write", label: "Manage portal access" },
+    ],
+  },
+};
 
 const PERM_COLORS = [
   "bg-[var(--chart-1)] text-white",
@@ -126,6 +208,7 @@ export function ApiKeysView() {
             <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Keep keys secure</p>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
               API keys allow external systems to access the CRM. Keep them secure and rotate them periodically.
+              Use <code className="font-mono text-xs bg-muted px-1 rounded">Authorization: Bearer asp_xxx</code> header to authenticate.
             </p>
           </div>
         </CardContent>
@@ -260,29 +343,44 @@ function CreateKeyDialog({
   onCreated: (fullKey: string) => void;
 }) {
   const [name, setName] = useState("");
-  const [permissions, setPermissions] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<string>("");
+  const [customPermissions, setCustomPermissions] = useState<string[]>([]);
   const [expiresAt, setExpiresAt] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setName("");
-      setPermissions("");
+      setSelectedPreset("");
+      setCustomPermissions([]);
       setExpiresAt("");
     }
   }, [open]);
 
+  // When preset changes, apply it
+  useEffect(() => {
+    if (selectedPreset && PERMISSION_PRESETS[selectedPreset]) {
+      setCustomPermissions(PERMISSION_PRESETS[selectedPreset].perms);
+    } else if (selectedPreset === "custom") {
+      setCustomPermissions([]);
+    }
+  }, [selectedPreset]);
+
+  function togglePerm(perm: string) {
+    setCustomPermissions((prev) =>
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
+    );
+    setSelectedPreset("custom");
+  }
+
   async function save() {
     if (!name.trim()) { toast.error("Name is required."); return; }
+    if (customPermissions.length === 0) { toast.error("Select at least one permission."); return; }
     setSaving(true);
     try {
-      const perms = permissions
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
       const body: Record<string, unknown> = {
         name: name.trim(),
-        permissions: perms,
+        permissions: customPermissions,
         active: true,
       };
       if (expiresAt) body.expires_at = new Date(expiresAt).toISOString();
@@ -309,33 +407,81 @@ function CreateKeyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg">
+      <DialogContent size="lg" className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>New API key</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="size-5" />
+            New API key
+          </DialogTitle>
           <DialogDescription>Generate a key for an external system to access the CRM.</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid gap-3 py-2">
+        <div className="grid gap-4 py-2">
+          {/* Name */}
           <div className="space-y-1.5">
             <Label>Name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Inventory sync service" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Inventory sync service" />
           </div>
 
+          {/* Preset selection */}
           <div className="space-y-1.5">
-            <Label>Permissions</Label>
-            <Textarea
-              value={permissions}
-              onChange={(e) => setPermissions(e.target.value)}
-              rows={3}
-              placeholder="partners:read, offers:*, deals:read"
-              className="font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              Comma-separated. Use <code className="font-mono">:*</code> for wildcard scope.
-            </p>
+            <Label>Permission preset</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {Object.entries(PERMISSION_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedPreset(key)}
+                  className={`text-left p-2.5 rounded-lg border text-xs transition-colors ${
+                    selectedPreset === key
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                      : "border-border hover:border-primary/30"
+                  }`}
+                >
+                  <span className="font-medium block">{preset.label}</span>
+                  <span className="text-muted-foreground block mt-0.5">{preset.desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
+          {/* Custom permissions */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Permissions</Label>
+              <Badge variant="secondary" className="text-xs">{customPermissions.length} selected</Badge>
+            </div>
+            <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+              {Object.entries(PERMISSION_CATEGORIES).map(([catKey, cat]) => (
+                <div key={catKey}>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">{cat.label}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cat.perms.map((perm) => {
+                      const isSelected = customPermissions.includes(perm.value);
+                      const isWild = customPermissions.includes("*") || customPermissions.includes(`${perm.value.split(":")[0]}:*`);
+                      return (
+                        <button
+                          key={perm.value}
+                          type="button"
+                          onClick={() => togglePerm(perm.value)}
+                          className={`text-xs px-2 py-1 rounded-md border transition-colors ${
+                            isSelected || isWild
+                              ? "bg-primary/10 border-primary text-primary"
+                              : "bg-background border-border hover:border-primary/30"
+                          }`}
+                        >
+                          {perm.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Expires */}
           <div className="space-y-1.5">
             <Label>Expires (optional)</Label>
             <div className="relative">
@@ -354,7 +500,7 @@ function CreateKeyDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving}>
+          <Button onClick={save} disabled={saving || !name.trim() || customPermissions.length === 0}>
             {saving ? "Generating…" : "Generate key"}
           </Button>
         </DialogFooter>
@@ -396,10 +542,34 @@ function KeyRevealDialog({ fullKey, onClose }: { fullKey: string | null; onClose
             <code className="text-xs font-mono break-all block text-foreground">{fullKey}</code>
           </div>
 
-          <Button onClick={copy} variant="outline" className="w-full">
-            {copied ? <Check className="size-4 mr-1 text-emerald-600" /> : <Copy className="size-4 mr-1" />}
-            {copied ? "Copied" : "Copy to clipboard"}
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={copy} variant="outline" className="w-full">
+              {copied ? <Check className="size-4 mr-1 text-emerald-600" /> : <Copy className="size-4 mr-1" />}
+              {copied ? "Copied" : "Copy to clipboard"}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                const example = `curl -H "Authorization: Bearer ${fullKey}" /api/partners`;
+                navigator.clipboard.writeText(example).catch(() => {});
+                toast.success("Example command copied.");
+              }}
+            >
+              <Code className="size-4 mr-1" />
+              Copy example
+            </Button>
+          </div>
+
+          <div className="rounded-lg border p-3 space-y-1.5">
+            <p className="text-xs font-medium">Usage examples:</p>
+            <div className="text-xs font-mono bg-muted/50 rounded p-2 space-y-1">
+              <p className="text-muted-foreground"># Test your key</p>
+              <p>curl -H &quot;Authorization: Bearer {fullKey?.slice(0, 12)}…&quot; /api/api-keys/test</p>
+              <p className="text-muted-foreground mt-1"># List partners</p>
+              <p>curl -H &quot;Authorization: Bearer {fullKey?.slice(0, 12)}…&quot; /api/partners</p>
+            </div>
+          </div>
 
           <p className="text-xs text-muted-foreground flex items-start gap-1.5">
             <Lock className="size-3 mt-0.5 shrink-0" />

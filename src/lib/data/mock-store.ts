@@ -644,6 +644,8 @@ export class MockStore implements Store {
   async deleteApiKey(id: string): Promise<void> {
     const idx = mock.apiKeys.findIndex((k) => k.id === id); if (idx >= 0) mock.apiKeys.splice(idx, 1);
   }
+  async authenticateApiKey(_rawKey: string): Promise<{ apiKey: ApiKey; tenantId: string } | null> { return null; }
+  async updateApiKeyLastUsed(_id: string, _ip: string): Promise<void> {}
 
   // ---- webhooks ----
   async listWebhooks(_tenantId: string): Promise<Webhook[]> { return [...mock.webhooks]; }

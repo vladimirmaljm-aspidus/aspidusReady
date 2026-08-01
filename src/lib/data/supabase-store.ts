@@ -24,6 +24,7 @@ import {
   UserPreference,
 } from "@/lib/supabase/types";
 import { verifyPassword } from "@/lib/auth/password";
+import { createHash } from "crypto";
 
 type SupaRow = Record<string, unknown>;
 
@@ -625,6 +626,30 @@ export class SupabaseStore implements Store {
   async deleteApiKey(id: string): Promise<void> {
     const { error } = await this.sb().from("api_keys").delete().eq("id", id);
     if (error) throw error;
+  }
+  async authenticateApiKey(rawKey: string): Promise<{ apiKey: ApiKey; tenantId: string } | null> {
+    if (!rawKey.startsWith("asp_")) return null;
+    const hash = createHash("sha256").update(rawKey).digest("hex");
+    const prefix = rawKey.slice(0, 12);
+    const { data, error } = await this.sb()
+      .from("api_keys")
+      .select("*")
+      .eq("key_prefix", prefix)
+      .eq("key_hash", hash)
+      .eq("active", true)
+      .maybeSingle();
+    if (error) { console.error("[authenticateApiKey]", error); return null; }
+    if (!data) return null;
+    const key = data as ApiKey;
+    // Check expiration
+    if (key.expires_at && new Date(key.expires_at) < new Date()) return null;
+    return { apiKey: key, tenantId: key.tenant_id };
+  }
+  async updateApiKeyLastUsed(id: string, ip: string): Promise<void> {
+    await this.sb()
+      .from("api_keys")
+      .update({ last_used_at: new Date().toISOString(), last_used_ip: ip })
+      .eq("id", id);
   }
 
   // ---- webhooks ----
