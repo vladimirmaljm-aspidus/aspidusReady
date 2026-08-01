@@ -500,8 +500,8 @@ function PartnerFormDialog({
         setShowOtherTypes(["logistics", "customs", "bank", "inspector"].includes(partner.type));
       } else {
         setForm({
-          type: "buyer", status: "active", risk_score: 0, currency: "EUR",
-          entity_type: "company", category: "new", payment_terms: "net30",
+          type: "buyer", status: "active", risk_score: 0, preferred_currency: "EUR",
+          entity_type: "company", category: "new", preferred_payment_terms: "net30",
           portal_enabled: false, portal_level: "none", kyc_status: "not_submitted",
         } as Partial<Partner>);
         setAddressOpen(false);
@@ -688,7 +688,7 @@ function PartnerFormDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label>Currency</Label>
-                    <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
+                    <Select value={form.preferred_currency || "EUR"} onValueChange={(v) => set("preferred_currency", v)}>
                       <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
                       <SelectContent className="max-h-72">
                         {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -697,7 +697,7 @@ function PartnerFormDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label>Payment Terms</Label>
-                    <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
+                    <Select value={form.preferred_payment_terms || "net30"} onValueChange={(v) => set("preferred_payment_terms", v)}>
                       <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
                       <SelectContent>
                         {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
