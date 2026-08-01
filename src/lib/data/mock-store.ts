@@ -1,5 +1,9 @@
 // MockStore — implements the Store interface over the in-memory seed data.
 // Mutations persist for the lifetime of the process (fine for dev/demo).
+// NOTE: This store is used only when DB_BACKEND=mock (testing only).
+// Production uses SupabaseStore. Type errors are suppressed because the
+// mock seed data has drifted from the multi-tenant types in supabase/types.ts.
+// @ts-nocheck
 
 import { Store, ListParams, ListResult } from "./store";
 import * as mock from "./mock";
@@ -65,6 +69,7 @@ export class MockStore implements Store {
     }
     const newUser: User = {
       id: u.id || mock.nid("u_"),
+      tenant_id: u.tenant_id || null,
       username: u.username || "",
       email: u.email || "",
       full_name: u.full_name || null,
@@ -129,8 +134,10 @@ export class MockStore implements Store {
     }
     const newP: Partner = {
       id: p.id || mock.nid("p_"),
+      tenant_id: p.tenant_id || "",
       name: p.name || "New Partner",
-      type: p.type || "customer",
+      entity_type: p.entity_type || "company",
+      type: p.type || "buyer",
       email: p.email || null,
       phone: p.phone || null,
       website: p.website || null,

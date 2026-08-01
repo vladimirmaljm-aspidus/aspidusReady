@@ -71,9 +71,23 @@ export const commissionPayouts: CommissionPayout[] = [];
 
 export function computeInsights(): DashboardInsights {
   return {
-    activeDeals: 0, totalRevenue: 0, pendingOffers: 0, openDemands: 0,
-    revenueByMonth: [], topProducts: [], recentActivity: [],
-    dealsByStage: {},
+    kpis: {
+      partners_total: 0,
+      partners_active: 0,
+      deals_open: 0,
+      deals_won_value: 0,
+      pipeline_value: 0,
+      offers_pending: 0,
+      low_stock_count: 0,
+      invoices_outstanding: 0,
+      inventory_movements_30d: 0,
+    },
+    deals_by_stage: [],
+    offers_last_30d: [],
+    revenue_last_30d: [],
+    recent_activity: [],
+    top_partners: [],
+    low_stock_products: [],
   };
 }
 

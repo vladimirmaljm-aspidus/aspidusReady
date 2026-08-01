@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await audit(auth.store, auth.user, req, "invoice.pdf", "invoice", id, {
       verification_code: result.verificationCode,
     });
-    return new NextResponse(result.buffer, {
+    return new NextResponse(new Uint8Array(result.buffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="invoice-${id}.pdf"`,

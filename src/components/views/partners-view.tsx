@@ -45,9 +45,9 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
-import { Partner, PartnerType, PortalAccess, PortalTier } from "@/lib/supabase/types";
+import { Partner, PartnerType, PartnerEntityType, PortalAccess, PortalTier } from "@/lib/supabase/types";
 import { useAppStore } from "@/lib/store/app-store";
-import { CURRENCIES, ENTITY_TYPES, PARTNER_CATEGORIES, PAYMENT_TERMS_LOCAL, COUNTRIES } from "@/lib/data/reference";
+import { CURRENCIES, ENTITY_TYPES, PAYMENT_TERMS_LOCAL, COUNTRIES } from "@/lib/data/reference";
 
 const PAGE_SIZE = 20;
 
@@ -1533,19 +1533,10 @@ function PartnerFormDialog({
                           </div>
                           <div className="space-y-1.5">
                             <Label>Entity Type</Label>
-                            <Select value={form.entity_type || "company"} onValueChange={(v) => set("entity_type", v)}>
+                            <Select value={form.entity_type || "company"} onValueChange={(v) => set("entity_type", v as PartnerEntityType)}>
                               <SelectTrigger><SelectValue placeholder="Select entity type" /></SelectTrigger>
                               <SelectContent>
                                 {ENTITY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label>Category</Label>
-                            <Select value={(form as any).category || "regular"} onValueChange={(v) => set("category" as keyof Partner, v as any)}>
-                              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                              <SelectContent>
-                                {PARTNER_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>

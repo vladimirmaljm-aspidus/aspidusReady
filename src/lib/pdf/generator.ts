@@ -135,7 +135,7 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     qrCodeDataUrl,
     logoUrl: resolvedLogoUrl,
   });
-  const buffer = await renderToBuffer(element);
+  const buffer = await renderToBuffer(element as any);
 
   // Compute hash + create verification record
   if (opts.createVerification !== false && verificationCode) {

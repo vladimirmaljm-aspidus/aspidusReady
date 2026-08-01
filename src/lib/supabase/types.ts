@@ -105,6 +105,7 @@ export interface Product {
 
 export interface Deal {
   id: string;
+  tenant_id: string;
   title: string;
   partner_id: string;
   owner_id: string | null;
@@ -140,6 +141,7 @@ export interface OfferLineItem {
 
 export interface Offer {
   id: string;
+  tenant_id: string;
   number: string;
   deal_id: string | null;
   partner_id: string;
@@ -185,6 +187,7 @@ export interface DemandItem {
 
 export interface Demand {
   id: string;
+  tenant_id: string;
   number: string;
   partner_id: string;
   status: DemandStatus;
@@ -211,6 +214,7 @@ export interface Demand {
 
 export interface SharedDocument {
   id: string;
+  tenant_id: string;
   partner_id: string;
   filename: string;
   mime_type: string;
@@ -219,11 +223,18 @@ export interface SharedDocument {
   category: "contract" | "invoice" | "spec" | "other";
   uploaded_by: string | null;
   visible_to_partner: boolean;
+  description: string | null;
+  file_type: string | null;
+  file_size: number | null;
+  file_path: string | null;
+  url: string | null;
+  visibility: string | null;
   created_at: string;
 }
 
 export interface AuditLog {
   id: string;
+  tenant_id?: string | null;
   user_id: string | null;
   username: string | null;
   action: string;
@@ -310,6 +321,7 @@ export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 
 export interface Invoice {
   id: string;
+  tenant_id: string;
   number: string;
   offer_id: string | null;
   partner_id: string;
@@ -326,6 +338,8 @@ export interface Invoice {
   paid_at: string | null;
   notes: string | null;
   items: OfferLineItem[];
+  // Optional UI-only field
+  payment_terms?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -335,6 +349,7 @@ export type ProformaStatus = "draft" | "sent" | "paid" | "expired";
 
 export interface Proforma {
   id: string;
+  tenant_id: string;
   number: string;
   offer_id: string | null;
   partner_id: string;
@@ -376,9 +391,12 @@ export interface DocumentRegisterEntry {
 
 export interface DocumentRevision {
   id: string;
+  tenant_id?: string;
   document_id: string;
   version: number;
   change_note: string;
+  file_url?: string | null;
+  change_summary?: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -767,7 +785,7 @@ export interface VerificationLog {
 // ============================================================
 // KYC (Know Your Customer) — full compliance workflow
 // ============================================================
-export type KycStatus = "draft" | "submitted" | "under_review" | "approved" | "rejected" | "resubmit";
+export type KycSubmissionStatus = "draft" | "submitted" | "under_review" | "approved" | "rejected" | "resubmit";
 export type KycDocumentType =
   | "passport"
   | "id_card"
@@ -790,6 +808,10 @@ export interface KycDocument {
   mime_type: string;
   size: number;
   uploaded_at: string;
+  // Optional fields for backward compat with view components
+  file_path?: string | null;
+  url?: string | null;
+  status?: string;
 }
 
 export interface KycSubmission {
@@ -797,7 +819,7 @@ export interface KycSubmission {
   tenant_id: string;
   partner_id: string;
   portal_access_id: string | null;
-  status: KycStatus;
+  status: KycSubmissionStatus;
 
   // Entity type
   entity_type: PartnerEntityType;
@@ -893,6 +915,7 @@ export interface PortalRfq {
   // Admin response
   linked_offer_id: string | null;
   linked_demand_id: string | null;
+  deal_id?: string | null;
   admin_notes: string | null;
 
   // Meta

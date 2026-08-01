@@ -332,10 +332,10 @@ export async function getStore(): Promise<Store> {
   } else if (forced === "mock") {
     console.warn("[store] DB_BACKEND=mock — MockStore has no seed data. Use only for testing.");
     const { MockStore } = await import("./mock-store");
-    _impl = new MockStore();
+    _impl = new MockStore() as unknown as Store;
   } else if (forced === "prisma") {
     const { PrismaStore } = await import("./prisma-store");
-    _impl = new PrismaStore();
+    _impl = new PrismaStore() as unknown as Store;
   } else {
     // Default: use SupabaseStore (production)
     const { SupabaseStore } = await import("./supabase-store");

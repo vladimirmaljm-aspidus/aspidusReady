@@ -87,7 +87,7 @@ const ERP_LABELS: Record<string, string> = {
     "account-category": "Account Category",
     "parent-account": "Parent Account",
     "tax-code": "Tax Code",
-    description: "Description",
+    "description-label": "Description",
     "is-active": "Active",
     "initialize-eu": "Initialize EU Standard",
     "initialize-uae": "Initialize UAE Standard",
@@ -1946,9 +1946,9 @@ function BalanceSheetTable({ items }: { items: BalanceSheetItem[] }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{ERP_LABELS.code.en}</TableHead>
-            <TableHead>{ERP_LABELS.name.en}</TableHead>
-            <TableHead className="text-right">{ERP_LABELS.amount.en}</TableHead>
+            <TableHead>{ERP_LABELS.code}</TableHead>
+            <TableHead>{ERP_LABELS.name}</TableHead>
+            <TableHead className="text-right">{ERP_LABELS.amount}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

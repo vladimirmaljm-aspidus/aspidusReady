@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAdmin, audit } from "@/lib/api/helpers";
+import { requireAdmin, audit } from "@/lib/api/helpers";
 import { randomBytes, createHash } from "crypto";
 
 export const runtime = "nodejs";

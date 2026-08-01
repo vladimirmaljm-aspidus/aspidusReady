@@ -17,19 +17,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     });
   }
   // log the verification
+  const logResult: "valid" | "invalid" | "revoked" | "modified" =
+    v.status === "active" ? "valid" :
+    v.status === "revoked" ? "revoked" :
+    v.status === "superseded" ? "modified" :
+    "invalid";
   await store.logVerification({
     verification_id: v.id,
     code: v.verification_code,
     ip: _req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
     user_agent: _req.headers.get("user-agent") || null,
-    result: v.status === "active" ? "valid" : v.status,
+    result: logResult,
     details: null,
   });
 
   if (v.status !== "active") {
     return NextResponse.json({
       valid: false,
-      result: v.status,
+      result: logResult,
       message: v.status === "revoked"
         ? "This document has been revoked by the issuer."
         : "This document has been superseded by a newer version.",

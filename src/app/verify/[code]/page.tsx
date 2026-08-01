@@ -14,12 +14,17 @@ export default async function VerifyPage({ params }: { params: Promise<{ code: s
 
     // Log the verification attempt (resilient — won't throw)
     if (v) {
+      const logResult: "valid" | "invalid" | "revoked" | "modified" =
+        v.status === "active" ? "valid" :
+        v.status === "revoked" ? "revoked" :
+        v.status === "superseded" ? "modified" :
+        "invalid";
       await store.logVerification({
         verification_id: v.id,
         code: v.verification_code,
         ip: null,
         user_agent: null,
-        result: v.status === "active" ? "valid" : v.status,
+        result: logResult,
         details: null,
       });
     }

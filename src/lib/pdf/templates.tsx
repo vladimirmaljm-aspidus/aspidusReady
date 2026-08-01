@@ -174,7 +174,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
             {tenant?.city && <Text style={styles.companyAddr}>{[tenant.postal_code, tenant.city, tenant.country].filter(Boolean).join(", ")}</Text>}
             {tenant?.bank_swift && <Text style={styles.companyContact}>SWIFT: {tenant.bank_swift} · IBAN: {tenant.bank_iban || "—"}</Text>}
           </View>
-          {logoUrl && <Image style={styles.headerLogo} src={logoUrl} alt="Company logo" />}
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
+          {logoUrl && <Image style={styles.headerLogo} src={logoUrl} />}
         </View>
 
         {/* Document title + metadata */}
@@ -192,7 +193,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
             {docType === "offer" && (doc as Offer).valid_until && (
               <View style={styles.docMetaRow}>
                 <Text style={styles.docMetaLabel}>Valid Until:</Text>
-                <Text style={styles.docMetaValue}>{new Date((doc as Offer).valid_until).toLocaleDateString("en-US")}</Text>
+                <Text style={styles.docMetaValue}>{new Date((doc as Offer).valid_until as string).toLocaleDateString("en-US")}</Text>
               </View>
             )}
             {(docType === "invoice" || docType === "proforma") && (doc as any).due_date && (
@@ -323,7 +324,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         {/* QR Code */}
         {qrCodeDataUrl && verificationCode && (
           <View style={styles.qrSection}>
-            <Image style={styles.qrImage} src={qrCodeDataUrl} alt="QR" />
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image style={styles.qrImage} src={qrCodeDataUrl} />
             <Text style={styles.qrText}>Scan to verify{"\n"}authenticity</Text>
           </View>
         )}
@@ -332,7 +334,10 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         <View style={styles.footer}>
           <View style={styles.footerTop}>
             {verificationCode && <Text style={styles.footerHash}>VERIFICATION HASH: {verificationCode}</Text>}
-            <Text style={styles.footerPage}>Page {({ pageNumber, totalPages }: any) => `${pageNumber} of ${totalPages}`}</Text>
+            <Text
+              style={styles.footerPage}
+              render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) => `Page ${pageNumber} of ${totalPages}`}
+            />
           </View>
           {tenant?.legal_name && (
             <Text style={styles.footerAddr}>{[tenant.legal_name, tenant.address_line, tenant.city, tenant.country].filter(Boolean).join(" · ")}</Text>

@@ -16,14 +16,16 @@ export async function GET(req: NextRequest) {
   // Test basic data access
   let partnerCount = 0;
   let productCount = 0;
-  try {
-    const partners = await auth.store.listPartners(tid, { limit: 1 });
-    partnerCount = partners.total;
-  } catch { /* ok */ }
-  try {
-    const products = await auth.store.listProducts(tid, { limit: 1 });
-    productCount = products.total;
-  } catch { /* ok */ }
+  if (tid) {
+    try {
+      const partners = await auth.store.listPartners(tid, { limit: 1 });
+      partnerCount = partners.total;
+    } catch { /* ok */ }
+    try {
+      const products = await auth.store.listProducts(tid, { limit: 1 });
+      productCount = products.total;
+    } catch { /* ok */ }
+  }
 
   return NextResponse.json({
     authenticated: true,

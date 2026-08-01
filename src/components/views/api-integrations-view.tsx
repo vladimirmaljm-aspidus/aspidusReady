@@ -1166,62 +1166,6 @@ function MarketNewsTab({
           )}
         </CardContent>
       </Card>
-
-      {/* ── Configuration Dialog ──────────────────────────────────────────────── */}
-      <Dialog open={!!configIntg} onOpenChange={(o) => { if (!o) setConfigIntg(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Configure {configIntg ? t(configIntg.nameKey) : ""}</DialogTitle>
-            <DialogDescription>
-              Enter your API key and connection settings for this integration.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="api-key" className="text-xs">API Key</Label>
-              <Input
-                id="api-key"
-                type="password"
-                placeholder="Enter API key…"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Status</Label>
-              <div className="flex items-center gap-2">
-                {configIntg?.connected ? (
-                  <Badge className="bg-emerald-600 text-white gap-1 text-[10px]">
-                    <CheckCircle2 className="size-3" />
-                    {t("api-connected")}
-                  </Badge>
-                ) : (
-                  <Badge variant="destructive" className="gap-1 text-[10px]">
-                    <XCircle className="size-3" />
-                    {t("api-disconnected")}
-                  </Badge>
-                )}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Endpoint</Label>
-              <p className="text-xs text-muted-foreground font-mono break-all">{configIntg?.endpoint}</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setConfigIntg(null)}>Cancel</Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                toast.success(`${t(configIntg?.nameKey || "")} configuration saved.`);
-                setConfigIntg(null);
-              }}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

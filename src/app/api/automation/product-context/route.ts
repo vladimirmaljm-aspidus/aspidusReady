@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
+import type { Product, ProductCatalogEntry } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
 
@@ -31,8 +32,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const store = auth.store;
-    let product = null;
-    let catalogEntry = null;
+    let product: Product | null = null;
+    let catalogEntry: ProductCatalogEntry | null = null;
 
     // 1. Product details
     if (productId) {

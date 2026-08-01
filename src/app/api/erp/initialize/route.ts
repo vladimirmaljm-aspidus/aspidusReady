@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, resolveTenantId, audit } from "@/lib/api/helpers";
+import type { ErpAccount } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
 
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
     }
 
     const accounts = standard === "eu" ? EU_ACCOUNTS : UAE_ACCOUNTS;
-    const createdAccounts = [];
+    const createdAccounts: ErpAccount[] = [];
 
     for (const account of accounts) {
       const created = await auth.store.upsertErpAccount({
