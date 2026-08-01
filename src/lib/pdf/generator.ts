@@ -3,6 +3,7 @@ import React from "react";
 import { buildPdfDocument } from "./templates";
 import { generateQrCodeDataUrl, generateVerificationCode, computePdfHash } from "./qr";
 import { getStore } from "@/lib/data/store";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Offer, Invoice, Proforma, Partner, Tenant, DocumentTemplate } from "@/lib/supabase/types";
 
 export interface GeneratePdfOptions {
@@ -17,6 +18,73 @@ export interface GeneratePdfResult {
   verificationCode?: string;
   pdfHash?: string;
   verificationId?: string;
+}
+
+/**
+ * Resolve the tenant logo URL into a form that @react-pdf/renderer can fetch.
+ *
+ * Cases handled:
+ *  1. null / undefined → null
+ *  2. Full public URL (http…) → try to get a signed URL (works for private buckets);
+ *     fall back to the original URL if signing fails.
+ *  3. Relative storage path (e.g. "tenant-id/logo.png") → build a signed URL;
+ *     fall back to constructing the public URL from SUPABASE_URL.
+ */
+async function resolveLogoUrl(logoUrl: string | null | undefined): Promise<string | null> {
+  if (!logoUrl) return null;
+
+  // If Supabase is not configured, return the URL as-is (dev/mock mode)
+  if (!isSupabaseConfigured()) return logoUrl;
+
+  try {
+    const sb = getSupabase();
+    const supabaseUrl = process.env.SUPABASE_URL || "";
+
+    // Determine the storage path inside the "tenant-logos" bucket
+    let storagePath: string | null = null;
+
+    if (logoUrl.startsWith("http")) {
+      // Full URL — extract the path after the bucket segment
+      // Public URL format: https://{ref}.supabase.co/storage/v1/object/public/tenant-logos/{path}
+      // Signed URL format: https://{ref}.supabase.co/storage/v1/object/sign/tenant-logos/{path}?token=...
+      const publicPrefix = `/storage/v1/object/public/tenant-logos/`;
+      const signedPrefix = `/storage/v1/object/sign/tenant-logos/`;
+      const idx1 = logoUrl.indexOf(publicPrefix);
+      const idx2 = logoUrl.indexOf(signedPrefix);
+
+      if (idx1 !== -1) {
+        storagePath = decodeURIComponent(logoUrl.substring(idx1 + publicPrefix.length)).split("?")[0];
+      } else if (idx2 !== -1) {
+        storagePath = decodeURIComponent(logoUrl.substring(idx2 + signedPrefix.length)).split("?")[0];
+      } else {
+        // Not a Supabase storage URL — return as-is (could be an external logo)
+        return logoUrl;
+      }
+    } else {
+      // Relative path — e.g. "tenant-id/logo.png"
+      storagePath = logoUrl;
+    }
+
+    if (storagePath) {
+      // Try to get a signed URL (works for both public and private buckets)
+      const { data, error } = await sb.storage
+        .from("tenant-logos")
+        .createSignedUrl(storagePath, 3600); // 1 hour expiry
+
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+
+      // Fallback: construct the public URL manually
+      console.warn(`[PDF] Signed URL failed for logo path "${storagePath}": ${error?.message}. Falling back to public URL.`);
+      return `${supabaseUrl}/storage/v1/object/public/tenant-logos/${storagePath}`;
+    }
+  } catch (err) {
+    console.warn("[PDF] Error resolving logo URL:", err);
+  }
+
+  // Last resort — return the original URL
+  return logoUrl;
 }
 
 export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdfResult> {
@@ -53,6 +121,9 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
   }
 
+  // Resolve the logo URL so @react-pdf/renderer can fetch it
+  const resolvedLogoUrl = await resolveLogoUrl(tenant?.logo_url);
+
   // Build + render the PDF
   const element = React.createElement(buildPdfDocument, {
     doc,
@@ -62,7 +133,7 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     template,
     verificationCode,
     qrCodeDataUrl,
-    logoUrl: tenant?.logo_url,
+    logoUrl: resolvedLogoUrl,
   });
   const buffer = await renderToBuffer(element);
 

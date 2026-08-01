@@ -1,23 +1,30 @@
 import { getStore } from "@/lib/data/store";
+import type { DocumentVerification } from "@/lib/supabase/types";
 import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, FileText, Calendar, Hash, Eye } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function VerifyPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const store = await getStore();
-  const v = await store.getDocumentVerificationByCode(code);
+  let v: DocumentVerification | null = null;
 
-  // Log the verification attempt
-  if (v) {
-    await store.logVerification({
-      verification_id: v.id,
-      code: v.verification_code,
-      ip: null,
-      user_agent: null,
-      result: v.status === "active" ? "valid" : v.status,
-      details: null,
-    });
+  try {
+    const store = await getStore();
+    v = await store.getDocumentVerificationByCode(code);
+
+    // Log the verification attempt (resilient — won't throw)
+    if (v) {
+      await store.logVerification({
+        verification_id: v.id,
+        code: v.verification_code,
+        ip: null,
+        user_agent: null,
+        result: v.status === "active" ? "valid" : v.status,
+        details: null,
+      });
+    }
+  } catch (err) {
+    console.warn("[VerifyPage] Error during verification lookup:", err);
   }
 
   const isValid = v && v.status === "active";
@@ -97,7 +104,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ code: s
                     <span className="text-sm text-muted-foreground">Issued On</span>
                   </div>
                   <span className="text-sm font-medium">
-                    {new Date(v.issued_at).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })}
+                    {v.issued_at ? new Date(v.issued_at).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
@@ -105,7 +112,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ code: s
                     <Eye className="size-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">Times Verified</span>
                   </div>
-                  <span className="text-sm font-medium tabular">{v.verification_count + 1}</span>
+                  <span className="text-sm font-medium tabular">{(v.verification_count ?? 0) + 1}</span>
                 </div>
               </div>
 

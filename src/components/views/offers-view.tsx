@@ -37,13 +37,13 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer,
+  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
-import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal } from "@/lib/supabase/types";
+import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 
 const PAGE_SIZE = 20;
@@ -580,8 +580,109 @@ function OfferDetail({
   isCreatingInvoice: boolean;
   isCreatingProforma: boolean;
 }) {
+  const qc = useQueryClient();
   const statuses: OfferStatus[] = ["draft", "sent", "accepted", "rejected", "expired"];
   const totals = computeTotals(offer.items || []);
+
+  // ─── Version / Revision tracking ───
+  const [showVersionDialog, setShowVersionDialog] = useState(false);
+  const [changeNote, setChangeNote] = useState("");
+  const [savingVersion, setSavingVersion] = useState(false);
+
+  const revisions = useQuery({
+    queryKey: ["document-revisions", offer.id],
+    queryFn: async () => {
+      try {
+        const r = await fetch(`/api/document-register/${offer.id}`);
+        if (!r.ok) return [];
+        const data = await r.json();
+        return (data.items || []) as DocumentRevision[];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!offer.id,
+  });
+
+  const revisionList = revisions.data || [];
+
+  async function handleSaveVersion() {
+    if (!changeNote.trim()) {
+      toast.error("Please enter a change note.");
+      return;
+    }
+    setSavingVersion(true);
+    try {
+      // 1. Find existing register entries for this offer to determine next version
+      const regRes = await fetch(`/api/document-register?reference_id=${offer.id}&type=offer`);
+      const regData = await regRes.json().catch(() => ({ items: [] }));
+      const existingEntries = regData.items || [];
+      const maxVersion = existingEntries.reduce((max: number, e: any) => Math.max(max, e.version || 0), 0);
+      const nextVersion = maxVersion + 1;
+
+      // 2. Mark previous entries as superseded
+      for (const entry of existingEntries) {
+        if (entry.status === "current") {
+          await fetch(`/api/document-register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...entry, status: "superseded" }),
+          });
+        }
+      }
+
+      // 3. Create new document register entry
+      const registerEntry = {
+        number: `${offer.number || "OF"}-V${nextVersion}`,
+        type: "offer",
+        version: nextVersion,
+        reference_id: offer.id,
+        partner_id: offer.partner_id,
+        title: offer.subject || `Offer ${offer.number}`,
+        status: "current",
+        metadata: {
+          total: offer.total,
+          currency: offer.currency,
+          status: offer.status,
+          items_count: offer.items?.length || 0,
+        },
+      };
+      const regRes2 = await fetch(`/api/document-register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(registerEntry),
+      });
+      if (!regRes2.ok) {
+        const e = await regRes2.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to create document register entry");
+      }
+      const regEntry = await regRes2.json();
+
+      // 4. Create revision record
+      const revRes = await fetch(`/api/document-revisions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document_id: regEntry.id,
+          version: nextVersion,
+          change_note: changeNote.trim(),
+        }),
+      });
+      if (!revRes.ok) {
+        const e = await revRes.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to create revision");
+      }
+
+      toast.success("Version saved!", { description: `Version ${nextVersion} saved successfully.` });
+      setChangeNote("");
+      setShowVersionDialog(false);
+      qc.invalidateQueries({ queryKey: ["document-revisions", offer.id] });
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save version.");
+    } finally {
+      setSavingVersion(false);
+    }
+  }
 
   // Check if any trade fields have data
   const hasTradeData = !!(offer.offer_no || offer.bank_details || offer.pol || offer.pod || offer.vessel || offer.container_no || offer.lead_time || offer.packaging || offer.payment_terms || offer.tax_clause || offer.incoterm || offer.selling_price);
@@ -617,6 +718,18 @@ function OfferDetail({
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-2 mb-4">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowVersionDialog(true)}
+            >
+              <Save className="size-4 mr-1" /> Save Version
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Save a new version of this offer with a change note</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -836,6 +949,117 @@ function OfferDetail({
           </a>
         </Button>
       </div>
+
+      {/* Version History */}
+      <div className="pt-4 mt-4 border-t">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold flex items-center gap-1.5">
+            <History className="size-4" /> Version History
+          </h4>
+          <Button variant="outline" size="sm" onClick={() => setShowVersionDialog(true)}>
+            <GitBranch className="size-4 mr-1" /> Save New Version
+          </Button>
+        </div>
+
+        {revisions.isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : revisionList.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
+            <GitBranch className="size-6 text-muted-foreground/40 mx-auto mb-1" />
+            <p className="text-sm text-muted-foreground">No versions saved yet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Click &ldquo;Save New Version&rdquo; to create the first version</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border/60 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-20">Version</TableHead>
+                  <TableHead>Change Note</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
+                  <TableHead className="w-36">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {revisionList.map((rev, i) => (
+                  <TableRow key={rev.id || i}>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono text-xs">V{rev.version}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{rev.change_note || "—"}</TableCell>
+                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{rev.created_by || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground tabular-nums">{fmtDateTime(rev.created_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      {/* Save Version Dialog */}
+      <Dialog open={showVersionDialog} onOpenChange={setShowVersionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="size-5" /> Save New Version
+            </DialogTitle>
+            <DialogDescription>
+              Save a snapshot of this offer as a new version. Previous versions will be marked as superseded.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Change Note *</Label>
+              <Textarea
+                value={changeNote}
+                onChange={(e) => setChangeNote(e.target.value)}
+                placeholder="Describe what changed in this version…"
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                A brief description of the changes made, e.g. &ldquo;Updated pricing for Q3&rdquo; or &ldquo;Added shipping details&rdquo;.
+              </p>
+            </div>
+            <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground text-sm">Offer Summary</p>
+              <div className="flex justify-between">
+                <span>Number</span>
+                <span className="font-mono">{offer.number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Status</span>
+                <span>{offer.status}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total</span>
+                <span className="font-mono">{fmtMoney(offer.total, offer.currency)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Items</span>
+                <span>{offer.items?.length || 0}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVersionDialog(false)} disabled={savingVersion}>Cancel</Button>
+            <Button onClick={handleSaveVersion} disabled={savingVersion || !changeNote.trim()}>
+              {savingVersion ? (
+                <>
+                  <Loader2 className="size-4 mr-1 animate-spin" /> Saving…
+                </>
+              ) : (
+                <>
+                  <Save className="size-4 mr-1" /> Save Version
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

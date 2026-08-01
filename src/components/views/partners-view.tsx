@@ -38,12 +38,14 @@ import {
   Plus, Search, Users, Pencil, Trash2, Eye, Mail, Phone, Globe, MapPin,
   Building2, ShieldCheck, Star, Maximize2, DollarSign,
   ChevronDown, ChevronRight,
+  ExternalLink, Send, Zap, CheckCircle2, Clock, AlertCircle, XCircle, KeyRound,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
-import { Partner, PartnerType } from "@/lib/supabase/types";
+import { Partner, PartnerType, PortalAccess, PortalTier } from "@/lib/supabase/types";
 import { useAppStore } from "@/lib/store/app-store";
 import { CURRENCIES, ENTITY_TYPES, PARTNER_CATEGORIES, PAYMENT_TERMS_LOCAL, COUNTRIES } from "@/lib/data/reference";
 
@@ -72,10 +74,68 @@ const KYC_LABELS = {
   not_submitted: "Not submitted", pending: "Pending", approved: "Approved", rejected: "Rejected",
 } as const;
 
+const PORTAL_STATUS_LABELS: Record<string, string> = {
+  pending_approval: "Pending Approval",
+  approved: "Approved",
+  invited: "Invited",
+  active: "Active",
+  suspended: "Suspended",
+  revoked: "Revoked",
+};
+
+const PORTAL_STATUS_ICON: Record<string, typeof Clock> = {
+  pending_approval: Clock,
+  approved: CheckCircle2,
+  invited: Send,
+  active: CheckCircle2,
+  suspended: AlertCircle,
+  revoked: XCircle,
+};
+
+const PORTAL_STATUS_BADGE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  pending_approval: "outline",
+  approved: "secondary",
+  invited: "default",
+  active: "default",
+  suspended: "destructive",
+  revoked: "destructive",
+};
+
+const TIER_INFO: Record<PortalTier, { label: string; description: string; features: string[] }> = {
+  limited: {
+    label: "Limited",
+    description: "Basic access for viewing offers and documents",
+    features: ["View offers", "View documents", "View profile"],
+  },
+  standard: {
+    label: "Standard",
+    description: "Full portal access for active partners",
+    features: ["All Limited features", "View catalog", "View invoices", "Submit RFQs", "Download PDFs"],
+  },
+  premium: {
+    label: "Premium",
+    description: "Complete access with exemptions for trusted partners",
+    features: ["All Standard features", "Company info access", "KYC exemption", "Document upload exemption"],
+  },
+};
+
 function riskColor(score: number): string {
   if (score < 30) return "text-emerald-600";
   if (score < 60) return "text-amber-600";
   return "text-destructive";
+}
+
+// Helper to generate a partner code from company name
+function generatePartnerCode(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((w) => w.slice(0, 3))
+    .join("")
+    .slice(0, 8);
 }
 
 export function PartnersView() {
@@ -223,6 +283,7 @@ export function PartnersView() {
                       <TableHead>Status</TableHead>
                       <TableHead className="w-32">Risk</TableHead>
                       <TableHead className="hidden xl:table-cell">KYC</TableHead>
+                      <TableHead className="hidden xl:table-cell">Portal</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -264,6 +325,15 @@ export function PartnersView() {
                           <Badge variant={p.kyc_status === "approved" ? "default" : p.kyc_status === "pending" ? "secondary" : "outline"}>
                             {KYC_LABELS[p.kyc_status]}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell">
+                          {p.portal_enabled ? (
+                            <Badge variant="secondary" className="gap-1">
+                              <Star className="size-3" /> {p.portal_level}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
@@ -414,6 +484,7 @@ function generatePageNumbers(current: number, total: number): (number | "ellipsi
 
 // ---- Detail panel ----
 function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
+  const qc = useQueryClient();
   const contactInfo = [
     { icon: Mail, label: "Email", value: partner.email },
     { icon: Phone, label: "Phone", value: partner.phone },
@@ -421,6 +492,110 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
     { icon: MapPin, label: "Address", value: [partner.address_line, partner.city, partner.state, partner.postal_code, partner.country].filter(Boolean).join(", ") || null },
     { icon: Building2, label: "Tax ID", value: partner.tax_id },
   ].filter((x) => x.value);
+
+  // Portal access state
+  const [showActivateDialog, setShowActivateDialog] = useState(false);
+  const [portalEmail, setPortalEmail] = useState(partner.email || "");
+  const [portalTier, setPortalTier] = useState<PortalTier>("standard");
+  const [creatingPortal, setCreatingPortal] = useState(false);
+  const [sendingInvite, setSendingInvite] = useState(false);
+
+  // Fetch portal access for this partner
+  const portalQuery = useQuery({
+    queryKey: ["portal-access", partner.id],
+    queryFn: async () => {
+      const r = await fetch(`/api/portal-access?partner_id=${partner.id}`);
+      if (!r.ok) throw new Error("Failed to load portal access");
+      const data = await r.json();
+      // API returns { items: PortalAccess[] }, find the one for this partner
+      const items: PortalAccess[] = data.items || [];
+      return items.find((p) => p.partner_id === partner.id) || null;
+    },
+    enabled: !!partner.id,
+  });
+
+  const portalAccess = portalQuery.data;
+
+  // Create portal access mutation
+  const createPortalMut = useMutation({
+    mutationFn: async (data: { partner_id: string; portal_email: string; tier: PortalTier }) => {
+      const r = await fetch("/api/portal-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partner_id: data.partner_id,
+          portal_email: data.portal_email,
+          tier: data.tier,
+          status: "approved",
+          can_view_offers: true,
+          can_view_documents: true,
+          can_view_catalog: data.tier !== "limited",
+          can_view_invoices: data.tier !== "limited",
+          can_view_profile: true,
+          can_view_company_info: data.tier === "premium",
+          can_submit_rfq: data.tier !== "limited",
+          can_download_pdf: data.tier !== "limited",
+          exempt_kyc: data.tier === "premium",
+          exempt_document_upload: data.tier === "premium",
+          exempt_location_share: data.tier === "premium",
+          must_set_password: true,
+        }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to create portal access");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Portal access activated!");
+      qc.invalidateQueries({ queryKey: ["portal-access", partner.id] });
+      qc.invalidateQueries({ queryKey: ["partners"] });
+      setShowActivateDialog(false);
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to activate portal."),
+  });
+
+  // Send invite email mutation
+  const sendInviteMut = useMutation({
+    mutationFn: async () => {
+      if (!portalAccess?.id) throw new Error("No portal access found");
+      const r = await fetch(`/api/portal-access/${portalAccess.id}/invite`, {
+        method: "POST",
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to send invite");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Invite email sent!");
+      qc.invalidateQueries({ queryKey: ["portal-access", partner.id] });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to send invite."),
+  });
+
+  const handleActivatePortal = async () => {
+    if (!portalEmail.trim()) {
+      toast.error("Portal email is required.");
+      return;
+    }
+    createPortalMut.mutate({
+      partner_id: partner.id,
+      portal_email: portalEmail.trim(),
+      tier: portalTier,
+    });
+  };
+
+  const handleSendInvite = async () => {
+    setSendingInvite(true);
+    try {
+      await sendInviteMut.mutateAsync();
+    } finally {
+      setSendingInvite(false);
+    }
+  };
 
   return (
     <div className="px-4 pb-6">
@@ -442,6 +617,12 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
             <DollarSign className="size-3" /> Commission Agent
           </Badge>
         )}
+        {portalAccess && (
+          <Badge variant={PORTAL_STATUS_BADGE[portalAccess.status]} className="gap-1">
+            {(() => { const Icon = PORTAL_STATUS_ICON[portalAccess.status]; return <Icon className="size-3" />; })()}
+            Portal: {PORTAL_STATUS_LABELS[portalAccess.status]}
+          </Badge>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -461,11 +642,14 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       </div>
 
       <Tabs defaultValue="info">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="info">Info</TabsTrigger>
           <TabsTrigger value="contact">Contact</TabsTrigger>
           <TabsTrigger value="bank">Bank</TabsTrigger>
           <TabsTrigger value="deals">Deals</TabsTrigger>
+          <TabsTrigger value="portal" className="gap-1">
+            <KeyRound className="size-3.5" /> Portal
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="space-y-3 mt-3">
@@ -516,7 +700,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
             )}
           </div>
 
-          {/* Portal info */}
+          {/* Portal info (summary in info tab) */}
           <div className="p-3 rounded-md border border-border/60">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
               <Star className="size-3" /> Portal Access
@@ -626,17 +810,265 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
             </div>
           )}
         </TabsContent>
+
+        {/* ====== PORTAL TAB ====== */}
+        <TabsContent value="portal" className="space-y-4 mt-3">
+          {portalQuery.isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          ) : portalAccess ? (
+            <>
+              {/* Portal Status Card */}
+              <Card className="border-border/60 shadow-soft rounded-xl">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {(() => { const Icon = PORTAL_STATUS_ICON[portalAccess.status]; return <Icon className="size-5" />; })()}
+                      <div>
+                        <p className="text-sm font-medium">Portal Status</p>
+                        <p className="text-xs text-muted-foreground">{PORTAL_STATUS_LABELS[portalAccess.status]}</p>
+                      </div>
+                    </div>
+                    <Badge variant={PORTAL_STATUS_BADGE[portalAccess.status]} className="text-sm px-3 py-1">
+                      {PORTAL_STATUS_LABELS[portalAccess.status]}
+                    </Badge>
+                  </div>
+
+                  {/* Status timeline */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-sm">
+                      <CheckCircle2 className={`size-4 ${portalAccess.status !== "pending_approval" ? "text-emerald-500" : "text-muted-foreground"}`} />
+                      <span className={portalAccess.status === "pending_approval" ? "text-muted-foreground" : ""}>Approved</span>
+                      {portalAccess.approved_at && <span className="text-xs text-muted-foreground ml-auto">{fmtDate(portalAccess.approved_at)}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Send className={`size-4 ${["invited", "active"].includes(portalAccess.status) ? "text-emerald-500" : "text-muted-foreground"}`} />
+                      <span className={!["invited", "active"].includes(portalAccess.status) ? "text-muted-foreground" : ""}>Invite Sent</span>
+                      {portalAccess.invited_at && <span className="text-xs text-muted-foreground ml-auto">{fmtDate(portalAccess.invited_at)}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <CheckCircle2 className={`size-4 ${portalAccess.status === "active" ? "text-emerald-500" : "text-muted-foreground"}`} />
+                      <span className={portalAccess.status !== "active" ? "text-muted-foreground" : ""}>Active</span>
+                      {portalAccess.last_login_at && <span className="text-xs text-muted-foreground ml-auto">Last login {fmtRelative(portalAccess.last_login_at)}</span>}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Portal Details */}
+              <Card className="border-border/60 shadow-soft rounded-xl">
+                <CardContent className="p-4 space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Details</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-2 rounded-md bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Portal Email</p>
+                      <p className="text-sm font-medium">{portalAccess.portal_email || "—"}</p>
+                    </div>
+                    <div className="p-2 rounded-md bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Tier</p>
+                      <p className="text-sm font-medium">{TIER_INFO[portalAccess.tier].label}</p>
+                    </div>
+                    <div className="p-2 rounded-md bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Welcome Email</p>
+                      <p className="text-sm font-medium">{portalAccess.welcome_email_sent ? "Sent" : "Not sent"}</p>
+                    </div>
+                    <div className="p-2 rounded-md bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Password Set</p>
+                      <p className="text-sm font-medium">{portalAccess.must_set_password ? "Pending" : "Yes"}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Actions */}
+              <div className="space-y-2">
+                {/* Send Invite Email */}
+                {!portalAccess.welcome_email_sent && portalAccess.status !== "active" && (
+                  <Button
+                    className="w-full"
+                    onClick={handleSendInvite}
+                    disabled={sendingInvite || sendInviteMut.isPending}
+                  >
+                    {sendingInvite || sendInviteMut.isPending ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="size-4 mr-2" />
+                    )}
+                    Send Invite Email
+                  </Button>
+                )}
+
+                {/* Re-send invite if already sent but not active */}
+                {portalAccess.welcome_email_sent && portalAccess.status !== "active" && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleSendInvite}
+                    disabled={sendingInvite || sendInviteMut.isPending}
+                  >
+                    {sendingInvite || sendInviteMut.isPending ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="size-4 mr-2" />
+                    )}
+                    Re-send Invite Email
+                  </Button>
+                )}
+              </div>
+
+              {/* Test Portal Login Section */}
+              <Card className="border-border/60 shadow-soft rounded-xl">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="size-4 text-muted-foreground" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Test Portal Login</p>
+                  </div>
+                  <div className="p-3 rounded-md bg-muted/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">Portal Email</p>
+                      <p className="text-sm font-mono">{portalAccess.portal_email || "—"}</p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <Badge variant={PORTAL_STATUS_BADGE[portalAccess.status]} className="text-xs">
+                        {PORTAL_STATUS_LABELS[portalAccess.status]}
+                      </Badge>
+                    </div>
+                  </div>
+                  <Button variant="outline" className="w-full" asChild>
+                    <a
+                      href={`/portal/login?email=${encodeURIComponent(portalAccess.portal_email || "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="size-4 mr-2" />
+                      Open Portal Login
+                    </a>
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            /* No portal access yet */
+            <Card className="border-border/60 shadow-soft rounded-xl">
+              <CardContent className="p-6 text-center space-y-4">
+                <div className="mx-auto w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
+                  <KeyRound className="size-8 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-medium">No Portal Access</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Activate the portal to allow this partner to view offers, submit RFQs, and manage their account online.
+                  </p>
+                </div>
+                <Button onClick={() => setShowActivateDialog(true)} size="lg">
+                  <Zap className="size-4 mr-2" />
+                  Activate Portal
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
       </Tabs>
+
+      {/* Activate Portal Dialog */}
+      <Dialog open={showActivateDialog} onOpenChange={setShowActivateDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="size-5" />
+              Activate Portal Access
+            </DialogTitle>
+            <DialogDescription>
+              Create a portal account for {partner.name}. They&apos;ll receive an invite email to set up their password.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Portal Email */}
+            <div className="space-y-2">
+              <Label htmlFor="portal-email">Portal Email</Label>
+              <Input
+                id="portal-email"
+                type="email"
+                value={portalEmail}
+                onChange={(e) => setPortalEmail(e.target.value)}
+                placeholder="partner@company.com"
+              />
+              <p className="text-xs text-muted-foreground">
+                This email will be used for portal login. Auto-filled from partner email.
+              </p>
+            </div>
+
+            {/* Tier Selection */}
+            <div className="space-y-3">
+              <Label>Access Tier</Label>
+              <div className="space-y-2">
+                {(["limited", "standard", "premium"] as PortalTier[]).map((tier) => {
+                  const info = TIER_INFO[tier];
+                  const isSelected = portalTier === tier;
+                  return (
+                    <button
+                      key={tier}
+                      type="button"
+                      onClick={() => setPortalTier(tier)}
+                      className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border/60 hover:border-border hover:bg-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm">{info.label}</p>
+                        {isSelected && (
+                          <CheckCircle2 className="size-4 text-primary" />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{info.description}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {info.features.map((f) => (
+                          <Badge key={f} variant={isSelected ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0">
+                            {f}
+                          </Badge>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowActivateDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleActivatePortal}
+              disabled={createPortalMut.isPending || !portalEmail.trim()}
+            >
+              {createPortalMut.isPending ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <Zap className="size-4 mr-2" />
+              )}
+              Create & Invite
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ---- Simplified type options ----
-const SIMPLIFIED_TYPES = [
-  { value: "buyer", label: "Buyer (Customer)", description: "Buys from you" },
-  { value: "supplier", label: "Supplier", description: "Sells to you" },
-  { value: "both", label: "Both", description: "Both buyer and supplier" },
-  { value: "agent", label: "Commission Agent", description: "Earns commission from deals" },
+// ---- Visual type buttons for the form ----
+const TYPE_BUTTONS = [
+  { value: "buyer" as PartnerType, label: "Buyer", description: "Buys from you", icon: "🛒" },
+  { value: "supplier" as PartnerType, label: "Supplier", description: "Sells to you", icon: "📦" },
+  { value: "both" as PartnerType, label: "Both", description: "Buyer & supplier", icon: "🔄" },
+  { value: "agent" as PartnerType, label: "Agent", description: "Commission agent", icon: "💼" },
 ] as const;
 
 const OTHER_TYPES = [
@@ -659,6 +1091,7 @@ function PartnerFormDialog({
   const [saving, setSaving] = useState(false);
   const [showOtherTypes, setShowOtherTypes] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [quickCreate, setQuickCreate] = useState(true);
 
   const isEditing = !!partner;
 
@@ -674,6 +1107,7 @@ function PartnerFormDialog({
           partner.portal_enabled || partner.is_commissioner ||
           partner.contact_name || partner.contact_email;
         setMoreOpen(!!hasAdvanced);
+        setQuickCreate(false);
       } else {
         setForm({
           type: "buyer", status: "active", risk_score: 0, preferred_currency: "USD",
@@ -682,6 +1116,7 @@ function PartnerFormDialog({
         } as Partial<Partner>);
         setShowOtherTypes(false);
         setMoreOpen(false);
+        setQuickCreate(true);
       }
     }
   }, [open, partner]);
@@ -690,17 +1125,21 @@ function PartnerFormDialog({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  const handleTypeChange = useCallback((v: string) => {
-    if (v === "other") {
-      setShowOtherTypes(true);
-    } else {
-      setShowOtherTypes(false);
-      set("type", v as PartnerType);
+  // Auto-generate partner code from name
+  const handleNameChange = useCallback((name: string) => {
+    set("name", name);
+    if (!isEditing && name.trim()) {
+      // Auto-generate code from name
+      const code = generatePartnerCode(name);
+      if (code) {
+        set("tax_id" as keyof Partner, code as any);
+      }
     }
-  }, []);
+  }, [isEditing]);
 
   async function save() {
     if (!form.name?.trim()) { toast.error("Name is required."); return; }
+    if (quickCreate && !form.email?.trim()) { toast.error("Email is required for Quick Create."); return; }
     setSaving(true);
     try {
       const method = partner ? "PUT" : "POST";
@@ -724,270 +1163,405 @@ function PartnerFormDialog({
     }
   }
 
-  // Determine the simplified type value for display
-  const simplifiedTypeValue = SIMPLIFIED_TYPES.find((t) => t.value === form.type)
-    ? (form.type as string)
-    : (showOtherTypes ? "other" : form.type);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>{partner ? "Edit partner" : "New partner"}</DialogTitle>
           <DialogDescription>
-            {partner ? "Update partner information." : "Just the basics — you can add more details later."}
+            {partner ? "Update partner information." : quickCreate ? "Just the basics — name and email to get started." : "Add detailed partner information."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1 custom-scroll">
           <div className="space-y-4 py-2">
 
-            {/* === Essential Fields (always visible) === */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2 space-y-1.5">
-                <Label>Partner Name *</Label>
-                <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="Acme Trading Ltd." />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Type</Label>
-                <Select value={simplifiedTypeValue || "buyer"} onValueChange={handleTypeChange}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SIMPLIFIED_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        <span className="flex flex-col">
-                          <span>{t.label}</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="other">
-                      <span>Other…</span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {form.type && SIMPLIFIED_TYPES.find((t) => t.value === form.type) && (
-                  <p className="text-xs text-muted-foreground">
-                    {SIMPLIFIED_TYPES.find((t) => t.value === form.type)?.description}
-                  </p>
-                )}
-              </div>
-
-              {/* Sub-select for "Other" types */}
-              {showOtherTypes && (
-                <div className="space-y-1.5">
-                  <Label>Specific Type</Label>
-                  <Select value={form.type || "logistics"} onValueChange={(v) => set("type", v as PartnerType)}>
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                    <SelectContent>
-                      {OTHER_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input type="email" value={form.email || ""} onChange={(e) => set("email", e.target.value)} placeholder="contact@company.com" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input value={form.phone || ""} onChange={(e) => set("phone", e.target.value)} placeholder="+1 555 123 4567" />
-              </div>
-            </div>
-
-            {/* === More Details (single collapsible section) === */}
-            <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            {/* Quick Create Toggle (only for new partners) */}
+            {!isEditing && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/30">
+                <Button
+                  size="sm"
+                  variant={quickCreate ? "default" : "ghost"}
+                  onClick={() => setQuickCreate(true)}
+                  className="gap-1"
                 >
-                  {moreOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                  More Details
-                  {!moreOpen && (form.address_line || form.city || form.tax_id || form.bank_name || form.notes || form.contact_name) && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Filled</Badge>
-                  )}
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="space-y-4 pt-1 pb-2">
+                  <Zap className="size-3.5" />
+                  Quick Create
+                </Button>
+                <Button
+                  size="sm"
+                  variant={!quickCreate ? "default" : "ghost"}
+                  onClick={() => setQuickCreate(false)}
+                  className="gap-1"
+                >
+                  <Building2 className="size-3.5" />
+                  Full Form
+                </Button>
+              </div>
+            )}
 
-                  {/* Address & Trade */}
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Address &amp; Trade</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Status</Label>
-                        <Select value={form.status || "active"} onValueChange={(v) => set("status", v as Partner["status"])}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
-                            <SelectItem value="blacklisted">Blacklisted</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Entity Type</Label>
-                        <Select value={form.entity_type || "company"} onValueChange={(v) => set("entity_type", v)}>
-                          <SelectTrigger><SelectValue placeholder="Select entity type" /></SelectTrigger>
-                          <SelectContent>
-                            {ENTITY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Category</Label>
-                        <Select value={form.category || "regular"} onValueChange={(v) => set("category", v)}>
-                          <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                          <SelectContent>
-                            {PARTNER_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Tax ID</Label>
-                        <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} placeholder="e.g. VAT number" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>VAT Number</Label>
-                        <Input value={form.vat_number || ""} onChange={(e) => set("vat_number", e.target.value)} placeholder="e.g. EU VAT number" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Registration No.</Label>
-                        <Input value={form.registration_number || ""} onChange={(e) => set("registration_number", e.target.value)} placeholder="Company registration number" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Website</Label>
-                        <Input value={form.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="https://" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Currency</Label>
-                        <Select value={form.preferred_currency || "USD"} onValueChange={(v) => set("preferred_currency", v)}>
-                          <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-                          <SelectContent className="max-h-72">
-                            {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Payment Terms</Label>
-                        <Select value={form.preferred_payment_terms || "net30"} onValueChange={(v) => set("preferred_payment_terms", v)}>
-                          <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
-                          <SelectContent>
-                            {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="md:col-span-2 space-y-1.5">
-                        <Label>Address</Label>
-                        <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} placeholder="Street and number" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>City</Label>
-                        <Input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>State / Region</Label>
-                        <Input value={form.state || ""} onChange={(e) => set("state", e.target.value)} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Postal code</Label>
-                        <Input value={form.postal_code || ""} onChange={(e) => set("postal_code", e.target.value)} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Country</Label>
-                        <Select value={form.country || ""} onValueChange={(v) => set("country", v)}>
-                          <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
-                          <SelectContent className="max-h-72">
-                            {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Person */}
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Contact Person</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Name</Label>
-                        <Input value={form.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} placeholder="John Doe" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Email</Label>
-                        <Input type="email" value={form.contact_email || ""} onChange={(e) => set("contact_email", e.target.value)} placeholder="john@company.com" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Phone</Label>
-                        <Input value={form.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} placeholder="+1 555 123 4567" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bank Details */}
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Bank Details</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Bank Name</Label>
-                        <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} placeholder="e.g. Deutsche Bank" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Account</Label>
-                        <Input value={form.bank_account || ""} onChange={(e) => set("bank_account", e.target.value)} placeholder="IBAN or account number" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>IBAN</Label>
-                        <Input value={form.bank_iban || ""} onChange={(e) => set("bank_iban", e.target.value)} placeholder="e.g. DE89 3704 0044 0532 0130 00" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>SWIFT / BIC</Label>
-                        <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} placeholder="e.g. DEUTDEFF" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Notes & Options */}
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Notes &amp; Options</p>
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label>Notes</Label>
-                        <Textarea rows={3} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder="Any additional notes about this partner…" />
-                      </div>
-
-                      <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
-                        <Switch checked={!!form.portal_enabled} onCheckedChange={(v) => set("portal_enabled", v)} />
-                        <div>
-                          <p className="text-sm font-medium">Portal access</p>
-                          <p className="text-xs text-muted-foreground">Allow partner portal access.</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
-                        <Switch checked={!!form.is_commissioner} onCheckedChange={(v) => set("is_commissioner", v)} />
-                        <div>
-                          <p className="text-sm font-medium text-primary">Commission Agent</p>
-                          <p className="text-xs text-muted-foreground">Mark this partner as a commission agent who earns from deals they introduce.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
+            {/* === Quick Create Mode === */}
+            {quickCreate && !isEditing ? (
+              <div className="space-y-4">
+                {/* Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="quick-name">Partner Name *</Label>
+                  <Input
+                    id="quick-name"
+                    value={form.name || ""}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    placeholder="Acme Trading Ltd."
+                    className="text-lg"
+                    autoFocus
+                  />
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
 
+                {/* Type - Visual Buttons */}
+                <div className="space-y-2">
+                  <Label>Partner Type</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TYPE_BUTTONS.map((t) => {
+                      const isSelected = form.type === t.value && !showOtherTypes;
+                      return (
+                        <button
+                          key={t.value}
+                          type="button"
+                          onClick={() => {
+                            set("type", t.value);
+                            setShowOtherTypes(false);
+                            if (t.value === "agent") {
+                              set("is_commissioner" as keyof Partner, true as any);
+                            } else {
+                              set("is_commissioner" as keyof Partner, false as any);
+                            }
+                          }}
+                          className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                            isSelected
+                              ? "border-primary bg-primary/5 shadow-sm"
+                              : "border-border/60 hover:border-border hover:bg-muted/30"
+                          }`}
+                        >
+                          <span className="text-xl">{t.icon}</span>
+                          <div>
+                            <p className={`font-medium text-sm ${isSelected ? "text-primary" : ""}`}>{t.label}</p>
+                            <p className="text-xs text-muted-foreground">{t.description}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Other types link */}
+                  {!showOtherTypes && (
+                    <button
+                      type="button"
+                      onClick={() => setShowOtherTypes(true)}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline"
+                    >
+                      Other types (logistics, customs, bank, inspector)…
+                    </button>
+                  )}
+                  {showOtherTypes && (
+                    <div className="space-y-1.5">
+                      <Label>Specific Type</Label>
+                      <Select value={form.type || "logistics"} onValueChange={(v) => set("type", v as PartnerType)}>
+                        <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectContent>
+                          {OTHER_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div className="space-y-2">
+                  <Label htmlFor="quick-email">Email *</Label>
+                  <Input
+                    id="quick-email"
+                    type="email"
+                    value={form.email || ""}
+                    onChange={(e) => set("email", e.target.value)}
+                    placeholder="contact@company.com"
+                  />
+                </div>
+
+                {/* Phone (optional) */}
+                <div className="space-y-2">
+                  <Label htmlFor="quick-phone">Phone <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    id="quick-phone"
+                    value={form.phone || ""}
+                    onChange={(e) => set("phone", e.target.value)}
+                    placeholder="+1 555 123 4567"
+                  />
+                </div>
+              </div>
+            ) : (
+              /* === Full Form Mode / Edit Mode === */
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="md:col-span-2 space-y-1.5">
+                    <Label>Partner Name *</Label>
+                    <Input value={form.name || ""} onChange={(e) => handleNameChange(e.target.value)} placeholder="Acme Trading Ltd." />
+                  </div>
+
+                  {/* Type - Visual Buttons for full form too */}
+                  <div className="md:col-span-2 space-y-2">
+                    <Label>Type</Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {TYPE_BUTTONS.map((t) => {
+                        const isSelected = form.type === t.value && !showOtherTypes;
+                        return (
+                          <button
+                            key={t.value}
+                            type="button"
+                            onClick={() => {
+                              set("type", t.value);
+                              setShowOtherTypes(false);
+                              if (t.value === "agent") {
+                                set("is_commissioner" as keyof Partner, true as any);
+                              } else {
+                                set("is_commissioner" as keyof Partner, false as any);
+                              }
+                            }}
+                            className={`flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? "border-primary bg-primary/5 shadow-sm"
+                                : "border-border/60 hover:border-border hover:bg-muted/30"
+                            }`}
+                          >
+                            <span className="text-lg">{t.icon}</span>
+                            <p className={`text-xs font-medium ${isSelected ? "text-primary" : ""}`}>{t.label}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Other types link */}
+                    {!showOtherTypes && (
+                      <button
+                        type="button"
+                        onClick={() => setShowOtherTypes(true)}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline"
+                      >
+                        Other types…
+                      </button>
+                    )}
+                    {showOtherTypes && (
+                      <div className="space-y-1.5">
+                        <Label>Specific Type</Label>
+                        <Select value={form.type || "logistics"} onValueChange={(v) => set("type", v as PartnerType)}>
+                          <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                          <SelectContent>
+                            {OTHER_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Email</Label>
+                    <Input type="email" value={form.email || ""} onChange={(e) => set("email", e.target.value)} placeholder="contact@company.com" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Phone</Label>
+                    <Input value={form.phone || ""} onChange={(e) => set("phone", e.target.value)} placeholder="+1 555 123 4567" />
+                  </div>
+                </div>
+
+                {/* === More Details (single collapsible section) === */}
+                <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {moreOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                      More Details
+                      {!moreOpen && (form.address_line || form.city || form.tax_id || form.bank_name || form.notes || form.contact_name) && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Filled</Badge>
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="space-y-4 pt-1 pb-2">
+
+                      {/* Address & Trade */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Address &amp; Trade</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Status</Label>
+                            <Select value={form.status || "active"} onValueChange={(v) => set("status", v as Partner["status"])}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="inactive">Inactive</SelectItem>
+                                <SelectItem value="blacklisted">Blacklisted</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Entity Type</Label>
+                            <Select value={form.entity_type || "company"} onValueChange={(v) => set("entity_type", v)}>
+                              <SelectTrigger><SelectValue placeholder="Select entity type" /></SelectTrigger>
+                              <SelectContent>
+                                {ENTITY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Category</Label>
+                            <Select value={(form as any).category || "regular"} onValueChange={(v) => set("category" as keyof Partner, v as any)}>
+                              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                              <SelectContent>
+                                {PARTNER_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Tax ID</Label>
+                            <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} placeholder="e.g. VAT number" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>VAT Number</Label>
+                            <Input value={form.vat_number || ""} onChange={(e) => set("vat_number", e.target.value)} placeholder="e.g. EU VAT number" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Registration No.</Label>
+                            <Input value={form.registration_number || ""} onChange={(e) => set("registration_number", e.target.value)} placeholder="Company registration number" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Website</Label>
+                            <Input value={form.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="https://" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Currency</Label>
+                            <Select value={form.preferred_currency || "USD"} onValueChange={(v) => set("preferred_currency", v)}>
+                              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                              <SelectContent className="max-h-72">
+                                {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Payment Terms</Label>
+                            <Select value={form.preferred_payment_terms || "net30"} onValueChange={(v) => set("preferred_payment_terms", v)}>
+                              <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
+                              <SelectContent>
+                                {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="md:col-span-2 space-y-1.5">
+                            <Label>Address</Label>
+                            <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} placeholder="Street and number" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>City</Label>
+                            <Input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>State / Region</Label>
+                            <Input value={form.state || ""} onChange={(e) => set("state", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Postal code</Label>
+                            <Input value={form.postal_code || ""} onChange={(e) => set("postal_code", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Country</Label>
+                            <Select value={form.country || ""} onValueChange={(v) => set("country", v)}>
+                              <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                              <SelectContent className="max-h-72">
+                                {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Contact Person */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Contact Person</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Name</Label>
+                            <Input value={form.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} placeholder="John Doe" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Email</Label>
+                            <Input type="email" value={form.contact_email || ""} onChange={(e) => set("contact_email", e.target.value)} placeholder="john@company.com" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Phone</Label>
+                            <Input value={form.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} placeholder="+1 555 123 4567" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bank Details */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Bank Details</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Bank Name</Label>
+                            <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} placeholder="e.g. Deutsche Bank" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Account</Label>
+                            <Input value={form.bank_account || ""} onChange={(e) => set("bank_account", e.target.value)} placeholder="IBAN or account number" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>IBAN</Label>
+                            <Input value={form.bank_iban || ""} onChange={(e) => set("bank_iban", e.target.value)} placeholder="e.g. DE89 3704 0044 0532 0130 00" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>SWIFT / BIC</Label>
+                            <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} placeholder="e.g. DEUTDEFF" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Notes & Options */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Notes &amp; Options</p>
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <Label>Notes</Label>
+                            <Textarea rows={3} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder="Any additional notes about this partner…" />
+                          </div>
+
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
+                            <Switch checked={!!form.portal_enabled} onCheckedChange={(v) => set("portal_enabled", v)} />
+                            <div>
+                              <p className="text-sm font-medium">Portal access</p>
+                              <p className="text-xs text-muted-foreground">Allow partner portal access.</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
+                            <Switch checked={!!form.is_commissioner} onCheckedChange={(v) => set("is_commissioner", v)} />
+                            <div>
+                              <p className="text-sm font-medium text-primary">Commission Agent</p>
+                              <p className="text-xs text-muted-foreground">Mark this partner as a commission agent who earns from deals they introduce.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </>
+            )}
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : (partner ? "Save changes" : "Create partner")}
+            {saving ? "Saving…" : (partner ? "Save changes" : quickCreate ? "Create partner" : "Create partner")}
           </Button>
         </DialogFooter>
       </DialogContent>

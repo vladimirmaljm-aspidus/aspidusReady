@@ -1,0 +1,18 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, audit } from "@/lib/api/helpers";
+
+export const runtime = "nodejs";
+
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const body = await req.json();
+  body.tenant_id = auth.tenantId!;
+  if (!body.created_by) body.created_by = auth.user.id;
+  const created = await auth.store.addDocumentRevision(body);
+  await audit(auth.store, auth.user, req, "document.revision.create", "document_revision", created.id, {
+    document_id: created.document_id,
+    version: created.version,
+  });
+  return NextResponse.json(created);
+}

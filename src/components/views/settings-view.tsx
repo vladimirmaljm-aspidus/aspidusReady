@@ -15,7 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
-import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog } from "lucide-react";
+import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon } from "lucide-react";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import { CURRENCIES } from "@/lib/data/reference";
 
@@ -73,6 +73,25 @@ const DEFAULT_COMMS: CommsForm = {
   smtp_host: "", smtp_port: 587, smtp_user: "", smtp_password: "",
   from_name: "", from_email: "",
 };
+
+/**
+ * Resolve a logo URL for display in the browser.
+ * If the URL is a relative Supabase Storage path (e.g. "tenant-id/logo.png"),
+ * construct the full public URL using NEXT_PUBLIC_SUPABASE_URL.
+ */
+function resolveLogoUrlForDisplay(logoUrl: string | null): string | null {
+  if (!logoUrl) return null;
+  // Already a full URL
+  if (logoUrl.startsWith("http")) return logoUrl;
+  // Mock URL (dev mode) — can't display
+  if (logoUrl.startsWith("mock://")) return null;
+  // Relative Supabase Storage path — construct the public URL
+  const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (sbUrl) {
+    return `${sbUrl}/storage/v1/object/public/tenant-logos/${logoUrl}`;
+  }
+  return null;
+}
 
 async function fetchSetting<T>(key: string, fallback: T): Promise<T> {
   const r = await fetch(`/api/settings?key=${key}`);
@@ -268,12 +287,14 @@ function CompanyTab() {
 function LogoUpload() {
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [tenantId, setTenantId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Fetch tenant to get current logo
     fetch("/api/auth/me").then(r => r.json()).then(data => {
       if (data.user?.tenant_id) {
+        setTenantId(data.user.tenant_id);
         fetch(`/api/tenants`).then(r => r.json()).then(tenants => {
           const t = tenants.items?.find((x: any) => x.id === data.user.tenant_id);
           if (t?.logo_url) setLogoUrl(t.logo_url);
@@ -288,11 +309,12 @@ function LogoUpload() {
     setUploading(true);
     try {
       const me = await fetch("/api/auth/me").then(r => r.json());
-      const tenantId = me.user?.tenant_id;
-      if (!tenantId) { toast.error("No tenant context."); return; }
+      const tid = me.user?.tenant_id;
+      if (!tid) { toast.error("No tenant context."); return; }
+      setTenantId(tid);
       const formData = new FormData();
       formData.append("logo", file);
-      const res = await fetch(`/api/tenants/${tenantId}/logo`, { method: "POST", body: formData });
+      const res = await fetch(`/api/tenants/${tid}/logo`, { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Upload failed."); return; }
       setLogoUrl(data.url);
@@ -301,30 +323,85 @@ function LogoUpload() {
       toast.error("Upload failed.");
     } finally {
       setUploading(false);
+      // Reset file input so the same file can be re-selected
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
+  async function handleRemove() {
+    if (!tenantId) return;
+    setUploading(true);
+    try {
+      // Update tenant to clear logo_url
+      const res = await fetch(`/api/tenants`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: tenantId, logo_url: null }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        toast.error(e.error || "Failed to remove logo.");
+        return;
+      }
+      setLogoUrl(null);
+      toast.success("Logo removed.");
+    } catch {
+      toast.error("Failed to remove logo.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const displayUrl = resolveLogoUrlForDisplay(logoUrl);
+
   return (
     <div className="mt-6 pt-6 border-t">
-      <Label className="text-sm font-medium">Company Logo</Label>
-      <p className="text-xs text-muted-foreground mt-1 mb-3">
+      <Label className="text-sm font-medium flex items-center gap-2">
+        <ImageIcon className="size-4" />
+        Company Logo
+      </Label>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
         Upload your company logo. It will appear in the top-right corner of all PDF documents (offers, invoices, proformas).
       </p>
-      <div className="flex items-center gap-4">
-        <div className="size-20 rounded-lg border-2 border-border/60 flex items-center justify-center bg-muted/30 overflow-hidden">
-          {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+      <div className="flex items-start gap-4">
+        <div className="size-24 rounded-lg border-2 border-dashed border-border/60 flex items-center justify-center bg-muted/30 overflow-hidden relative group">
+          {displayUrl ? (
+            <>
+              <img src={displayUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+              <button
+                onClick={handleRemove}
+                disabled={uploading}
+                className="absolute top-1 right-1 size-6 rounded-full bg-destructive/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
+                title="Remove logo"
+              >
+                <X className="size-3.5" />
+              </button>
+            </>
           ) : (
-            <Building2 className="size-8 text-muted-foreground/40" />
+            <div className="flex flex-col items-center gap-1 text-muted-foreground/40">
+              <Building2 className="size-8" />
+              <span className="text-[10px]">No logo</span>
+            </div>
           )}
         </div>
-        <div>
-          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleUpload} className="hidden" />
+        <div className="flex flex-col gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            onChange={handleUpload}
+            className="hidden"
+          />
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
             {uploading ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Upload className="size-4 mr-1.5" />}
             {uploading ? "Uploading…" : "Upload Logo"}
           </Button>
-          <p className="text-xs text-muted-foreground mt-1.5">PNG, JPEG, WebP or SVG · Max 2MB</p>
+          <p className="text-xs text-muted-foreground">PNG, JPEG, WebP or SVG · Max 2MB</p>
+          {displayUrl && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <ImageIcon className="size-3" /> Logo set — visible on PDFs
+            </p>
+          )}
         </div>
       </div>
     </div>

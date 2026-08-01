@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 /** List all API keys for the current tenant */
 export async function GET() {
-  const auth = await requireAuth();
+  const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
   const tid = auth.tenantId!;
   const keys = await auth.store.listApiKeys(tid);
