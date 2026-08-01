@@ -266,14 +266,30 @@ export interface Session {
 
 export interface UserTask {
   id: string;
-  user_id: string;
+  tenant_id: string;
+  user_id: string; // creator / owner
+  assigned_to: string | null; // who is responsible (null = unassigned)
   title: string;
+  description: string | null;
   done: boolean;
+  status: "todo" | "in_progress" | "done" | "blocked" | "cancelled";
+  priority: "low" | "medium" | "high" | "urgent";
   due_date: string | null;
-  entity_type: string | null;
+  completed_at: string | null;
+  // Links to other entities
+  entity_type: string | null; // partner | product | deal | offer | invoice | demand
   entity_id: string | null;
-  priority: "low" | "medium" | "high";
+  partner_id: string | null;
+  product_id: string | null;
+  deal_id: string | null;
+  // Instructions / notes for the assignee
+  instructions: string | null;
+  // Tracking
+  estimated_hours: number | null;
+  actual_hours: number | null;
+  tags: string[] | null;
   created_at: string;
+  updated_at: string;
 }
 
 export interface InventoryMovement {

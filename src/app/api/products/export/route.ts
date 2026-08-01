@@ -1,0 +1,23 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
+import { toCSV, csvResponse, parseExportParams } from "@/lib/export/csv";
+
+export const runtime = "nodejs";
+
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  const tid = resolveTenantId(auth, req);
+  if (!tid) return csvResponse("products.csv", "");
+
+  const result = await auth.store.listProducts(tid, { limit: 10000 });
+  const { columns } = parseExportParams(req);
+
+  const cols = columns || [
+    "sku", "name", "category", "unit", "price", "currency",
+    "cost", "stock", "reorder_level", "active", "created_at",
+  ];
+
+  const csv = toCSV(result.items as unknown as Record<string, unknown>[], cols);
+  return csvResponse(`products-${new Date().toISOString().split("T")[0]}.csv`, csv);
+}
