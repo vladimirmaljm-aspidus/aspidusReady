@@ -15,7 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
-import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle } from "lucide-react";
+import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle, Zap, AlertTriangle } from "lucide-react";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import { CURRENCIES } from "@/lib/data/reference";
 
@@ -45,12 +45,19 @@ type SecurityForm = {
 };
 
 type CommsForm = {
+  email_provider: "resend" | "smtp" | "none";
+  // SMTP
   smtp_host: string;
   smtp_port: number;
   smtp_user: string;
   smtp_password: string;
+  // Resend
+  resend_api_key: string;
+  resend_from_email: string;
+  // Common
   from_name: string;
   from_email: string;
+  reply_to: string;
 };
 
 const DEFAULT_COMPANY: CompanyForm = {
@@ -70,8 +77,10 @@ const DEFAULT_SECURITY: SecurityForm = {
 };
 
 const DEFAULT_COMMS: CommsForm = {
+  email_provider: "resend",
   smtp_host: "", smtp_port: 587, smtp_user: "", smtp_password: "",
-  from_name: "", from_email: "",
+  resend_api_key: "", resend_from_email: "",
+  from_name: "", from_email: "", reply_to: "",
 };
 
 /**
@@ -503,57 +512,204 @@ function CommsTab() {
     <Card className="border-border/60 shadow-soft rounded-xl">
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Mail className="size-5" /> Communications</CardTitle>
-        <CardDescription>SMTP configuration for sending email from the system.</CardDescription>
+        <CardDescription>Configure how the system sends emails — portal invitations, KYC notifications, offers, invoices.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-5">
+        {/* Provider picker */}
+        <div className="space-y-2">
+          <Label>Email provider</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <ProviderCard
+              active={value.email_provider === "resend"}
+              onClick={() => set("email_provider", "resend")}
+              title="Resend"
+              subtitle="Recommended"
+              description="HTTP API — no SMTP blocks. Free: 100/day."
+              badge="BEST"
+            />
+            <ProviderCard
+              active={value.email_provider === "smtp"}
+              onClick={() => set("email_provider", "smtp")}
+              title="SMTP"
+              subtitle="Traditional"
+              description="Standard SMTP. May be blocked on free hosting."
+            />
+            <ProviderCard
+              active={value.email_provider === "none"}
+              onClick={() => set("email_provider", "none")}
+              title="None"
+              subtitle="Disabled"
+              description="Queue emails for later (dev mode)."
+            />
+          </div>
+        </div>
+
+        {/* Common fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>SMTP host</Label>
-            <Input value={value.smtp_host} onChange={(e) => set("smtp_host", e.target.value)} placeholder="smtp.gmail.com" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>SMTP port</Label>
-            <Input type="number" min={1} max={65535} value={value.smtp_port} onChange={(e) => set("smtp_port", Number(e.target.value))} placeholder="587" className="tabular" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>SMTP user</Label>
-            <Input value={value.smtp_user} onChange={(e) => set("smtp_user", e.target.value)} placeholder="user@company.com" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>SMTP password</Label>
-            <Input type="password" value={value.smtp_password} onChange={(e) => set("smtp_password", e.target.value)} placeholder="••••••••" />
-          </div>
-          <div className="space-y-1.5">
             <Label>From name</Label>
-            <Input value={value.from_name} onChange={(e) => set("from_name", e.target.value)} placeholder="CRM Acme" />
+            <Input value={value.from_name} onChange={(e) => set("from_name", e.target.value)} placeholder="Aspidus CRM" />
           </div>
           <div className="space-y-1.5">
             <Label>From email</Label>
             <Input type="email" value={value.from_email} onChange={(e) => set("from_email", e.target.value)} placeholder="noreply@company.com" />
           </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <Label>Reply-to email (optional)</Label>
+            <Input type="email" value={value.reply_to} onChange={(e) => set("reply_to", e.target.value)} placeholder="support@company.com" />
+          </div>
         </div>
-        <div className="mt-4 flex justify-end">
+
+        {/* Resend fields */}
+        {value.email_provider === "resend" && (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Zap className="size-4 text-emerald-600" />
+              <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">Resend Configuration</h4>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Resend is a modern email API that works reliably from any hosting
+              provider (no SMTP port blocks). Free tier: 100 emails/day,
+              3,000/month.
+            </p>
+            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Sign up at <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline">resend.com</a> (free)</li>
+              <li>Go to API Keys → Create API Key → copy it (starts with <code className="bg-muted px-1 rounded">re_</code>)</li>
+              <li>Paste the key below</li>
+              <li>For production: add &amp; verify your domain in Resend dashboard</li>
+              <li>For testing: use <code className="bg-muted px-1 rounded">onboarding@resend.dev</code> as the from email</li>
+            </ol>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Resend API key</Label>
+                <Input
+                  type="password"
+                  value={value.resend_api_key}
+                  onChange={(e) => set("resend_api_key", e.target.value)}
+                  placeholder="re_xxxxxxxxxxxxxxxxxxxx"
+                  className="font-mono"
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Resend from email</Label>
+                <Input
+                  type="email"
+                  value={value.resend_from_email}
+                  onChange={(e) => set("resend_from_email", e.target.value)}
+                  placeholder="onboarding@resend.dev (testing) or noreply@yourdomain.com (production)"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Use <code className="bg-muted px-1 rounded">onboarding@resend.dev</code> for testing.
+                  For production, use an email on a domain you've verified in Resend.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SMTP fields */}
+        {value.email_provider === "smtp" && (
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-amber-600" />
+              <h4 className="text-sm font-semibold">SMTP Configuration</h4>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Note: SMTP on ports 465/587 is blocked on Render free plan.
+              If your test email times out, switch to Resend (recommended).
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>SMTP host</Label>
+                <Input value={value.smtp_host} onChange={(e) => set("smtp_host", e.target.value)} placeholder="smtp.gmail.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SMTP port</Label>
+                <Input type="number" min={1} max={65535} value={value.smtp_port} onChange={(e) => set("smtp_port", Number(e.target.value))} placeholder="587" className="tabular" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SMTP user</Label>
+                <Input value={value.smtp_user} onChange={(e) => set("smtp_user", e.target.value)} placeholder="user@company.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SMTP password</Label>
+                <Input type="password" value={value.smtp_password} onChange={(e) => set("smtp_password", e.target.value)} placeholder="••••••••" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* None */}
+        {value.email_provider === "none" && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="size-4 text-amber-600" />
+              <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200">Email Disabled</h4>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Emails will be queued in the Mail Queue but not sent. Choose
+              Resend or SMTP above to enable sending.
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end">
           <Button onClick={() => save(value)} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </Button>
         </div>
 
-        <SMTPTestSection value={value} />
+        <EmailTestSection value={value} />
       </CardContent>
     </Card>
   );
 }
 
+/** Provider picker card */
+function ProviderCard({
+  active, onClick, title, subtitle, description, badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  subtitle: string;
+  description: string;
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "relative text-left p-3 rounded-lg border-2 transition-all smooth " +
+        (active
+          ? "border-primary bg-primary/5 shadow-sm"
+          : "border-border/60 hover:border-border hover:bg-muted/30")
+      }
+    >
+      {badge && (
+        <span className="absolute -top-2 -right-2 px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-600 text-white">
+          {badge}
+        </span>
+      )}
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="text-sm font-semibold">{title}</span>
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{subtitle}</span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">{description}</p>
+    </button>
+  );
+}
+
 /**
- * SMTP test panel — lets the admin verify the saved SMTP configuration by
- * sending a real test email to any address. Uses the values currently typed
- * into the form (so the admin can test BEFORE saving).
+ * Email test panel — sends a real test email using the currently-selected
+ * provider. Lets the admin verify the config BEFORE saving.
  */
-function SMTPTestSection({ value }: { value: CommsForm }) {
+function EmailTestSection({ value }: { value: CommsForm }) {
   const [testEmail, setTestEmail] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<
-    | { ok: true; messageId?: string; response?: string; testedAt?: string }
+    | { ok: true; messageId?: string; provider?: string; testedAt?: string }
     | { ok: false; error: string; category?: string }
     | null
   >(null);
@@ -563,27 +719,27 @@ function SMTPTestSection({ value }: { value: CommsForm }) {
       setResult({ ok: false, error: "Enter a valid recipient email address." });
       return;
     }
-    if (!value.smtp_host || !value.smtp_user) {
-      setResult({
-        ok: false,
-        error: "Fill in SMTP host and user above first.",
-      });
-      return;
-    }
     setTesting(true);
     setResult(null);
     try {
-      const res = await fetch("/api/settings/test-smtp", {
+      const res = await fetch("/api/settings/test-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: testEmail,
+          provider: value.email_provider,
+          // Resend
+          resend_api_key: value.resend_api_key,
+          resend_from_email: value.resend_from_email,
+          // SMTP
           smtp_host: value.smtp_host,
           smtp_port: value.smtp_port,
           smtp_user: value.smtp_user,
           smtp_password: value.smtp_password,
-          from_email: value.from_email,
+          // Common
           from_name: value.from_name,
+          from_email: value.from_email,
+          reply_to: value.reply_to,
         }),
       });
       const data = await res.json();
@@ -595,15 +751,22 @@ function SMTPTestSection({ value }: { value: CommsForm }) {
     }
   }
 
+  const canTest =
+    value.email_provider === "resend"
+      ? !!value.resend_api_key
+      : value.email_provider === "smtp"
+        ? !!value.smtp_host && !!value.smtp_user
+        : false;
+
   return (
-    <div className="mt-6 pt-6 border-t border-border/60">
+    <div className="mt-2 pt-5 border-t border-border/60">
       <div className="flex items-center gap-2 mb-2">
         <Send className="size-4 text-primary" />
-        <h4 className="text-sm font-semibold">Test SMTP Configuration</h4>
+        <h4 className="text-sm font-semibold">Test Email Configuration</h4>
       </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Send a test email to verify your SMTP settings work. Uses the values
-        currently entered above (you can test before saving).
+        Send a test email to verify your {value.email_provider === "resend" ? "Resend" : value.email_provider === "smtp" ? "SMTP" : ""} settings work.
+        Uses the values currently entered above (you can test before saving).
       </p>
       <div className="flex flex-col sm:flex-row gap-2">
         <Input
@@ -621,7 +784,7 @@ function SMTPTestSection({ value }: { value: CommsForm }) {
           type="button"
           variant="secondary"
           onClick={runTest}
-          disabled={testing || !value.smtp_host}
+          disabled={testing || !canTest}
           className="gap-2"
         >
           {testing ? (
@@ -651,7 +814,7 @@ function SMTPTestSection({ value }: { value: CommsForm }) {
             <div className="space-y-1">
               <p className="font-medium flex items-center gap-1.5">
                 <CheckCircle2 className="size-4" />
-                Test email sent successfully
+                Test email sent successfully via {result.provider || "provider"}
               </p>
               {result.messageId && (
                 <p className="text-xs opacity-80 font-mono">
@@ -659,8 +822,7 @@ function SMTPTestSection({ value }: { value: CommsForm }) {
                 </p>
               )}
               <p className="text-xs opacity-80">
-                Check the recipient inbox (and spam folder) for the test
-                message.
+                Check the recipient inbox (and spam folder) for the test message.
               </p>
             </div>
           ) : (
@@ -675,11 +837,17 @@ function SMTPTestSection({ value }: { value: CommsForm }) {
                   {result.category === "host_unreachable" &&
                     "Hint: check that the SMTP host and port are correct and that your network allows outbound SMTP."}
                   {result.category === "auth_failed" &&
-                    "Hint: the username or password is incorrect. For Gmail, use an App Password, not your account password."}
+                    "Hint: the username or password / API key is incorrect. For Gmail, use an App Password, not your account password."}
                   {result.category === "timeout" &&
-                    "Hint: the server did not respond in time. Try a different port (465 for SSL, 587 for STARTTLS)."}
+                    "Hint: the server did not respond in time. SMTP on ports 465/587 is blocked on Render free plan — switch to Resend."}
                   {result.category === "tls" &&
                     "Hint: TLS/certificate problem. If you trust the server, try port 587 with STARTTLS."}
+                  {result.category === "domain_not_verified" &&
+                    "Hint: your Resend sending domain is not verified. Use onboarding@resend.dev for testing, or verify your domain in Resend dashboard."}
+                  {result.category === "rate_limit" &&
+                    "Hint: Resend free tier allows 100 emails/day. Upgrade or wait until tomorrow."}
+                  {result.category === "missing_config" &&
+                    "Hint: fill in the provider configuration above first."}
                 </p>
               )}
             </div>

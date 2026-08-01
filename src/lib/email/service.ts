@@ -2,8 +2,19 @@ import nodemailer from "nodemailer";
 import { getStore } from "@/lib/data/store";
 
 /**
- * Email service — uses SMTP config from tenant settings.
- * Falls back to console logging if SMTP is not configured (dev mode).
+ * Email service — multi-provider.
+ *
+ * Providers (selected per-tenant in Settings → Communications):
+ *   1. resend    — HTTP API, recommended. No SMTP port blocks, works on Render free.
+ *                  Free tier: 100 emails/day, 3000/month. https://resend.com
+ *   2. smtp      — traditional SMTP. Works when the host allows outbound SMTP
+ *                  (Render free plan blocks ports 465/587 — use Resend instead).
+ *   3. supabase  — uses a Supabase Edge Function as the sender. Useful when
+ *                  you want all outbound email routed through your Supabase
+ *                  project. (Future — placeholder for now.)
+ *
+ * If no provider is configured, emails are queued in the mail_queue table
+ * (dev mode) so they can be retried once a provider is set up.
  */
 
 interface EmailAttachment {
@@ -30,31 +41,72 @@ interface SmtpConfig {
   fromEmail: string;
 }
 
-async function getSmtpConfig(tenantId?: string): Promise<SmtpConfig | null> {
-  // Try tenant-specific config first, then global
+interface ResendConfig {
+  apiKey: string;
+  fromName: string;
+  fromEmail: string;
+  /** Optional — reply-to address */
+  replyTo?: string;
+}
+
+export type EmailProvider = "resend" | "smtp" | "none";
+
+interface EmailConfig {
+  provider: EmailProvider;
+  smtp?: SmtpConfig;
+  resend?: ResendConfig;
+  fromName: string;
+  fromEmail: string;
+}
+
+/**
+ * Load the email configuration for a tenant (or the global config).
+ * Returns the resolved provider + its credentials.
+ */
+export async function getEmailConfig(tenantId?: string): Promise<EmailConfig | null> {
   const store = await getStore();
   const comms = await store.getSetting<any>("comms");
-  if (comms && comms.smtp_host && comms.smtp_user) {
-    return {
+  if (!comms) return null;
+
+  const provider: EmailProvider = comms.email_provider || (comms.smtp_host ? "smtp" : "none");
+  const fromName = comms.from_name || "Aspidus CRM";
+  const fromEmail = comms.from_email || "noreply@aspidus.com";
+
+  const config: EmailConfig = { provider, fromName, fromEmail };
+
+  if (comms.smtp_host && comms.smtp_user) {
+    config.smtp = {
       host: comms.smtp_host,
       port: comms.smtp_port || 587,
       user: comms.smtp_user,
       password: comms.smtp_password || "",
-      fromName: comms.from_name || "Aspidus CRM",
-      fromEmail: comms.from_email || "noreply@aspidus.com",
+      fromName,
+      fromEmail,
     };
   }
-  return null;
+
+  if (comms.resend_api_key) {
+    config.resend = {
+      apiKey: comms.resend_api_key,
+      fromName,
+      fromEmail: comms.resend_from_email || fromEmail,
+      replyTo: comms.reply_to || undefined,
+    };
+  }
+
+  return config;
 }
 
-export async function sendEmail(opts: SendEmailOptions): Promise<{ success: boolean; error?: string; messageId?: string }> {
-  const smtp = await getSmtpConfig(opts.tenantId);
+/**
+ * Send an email using the configured provider.
+ * Falls back to queueing in mail_queue if no provider is set up.
+ */
+export async function sendEmail(opts: SendEmailOptions): Promise<{ success: boolean; error?: string; messageId?: string; provider?: EmailProvider }> {
+  const config = await getEmailConfig(opts.tenantId);
 
-  // No SMTP configured — log to console (dev mode) and queue
-  if (!smtp) {
+  // No provider configured — queue for later
+  if (!config || config.provider === "none" || (config.provider === "smtp" && !config.smtp) || (config.provider === "resend" && !config.resend)) {
     console.log(`[email:dev] To: ${opts.to} | Subject: ${opts.subject}`);
-    console.log(`[email:dev] Body: ${opts.text || opts.html.substring(0, 200)}...`);
-    // Queue in mail_queue table for later retry
     const store = await getStore();
     await store.upsertMailQueueEntry({
       to_email: opts.to,
@@ -62,32 +114,22 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ success: bool
       body: opts.html,
       status: "queued",
     });
-    return { success: true, messageId: "dev-queued" };
+    return { success: true, messageId: "dev-queued", provider: "none" };
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: smtp.port === 465,
-      auth: { user: smtp.user, pass: smtp.password },
-    });
+    let result: { success: boolean; messageId?: string; error?: string };
 
-    const info = await transporter.sendMail({
-      from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
-      to: opts.to,
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text || opts.html.replace(/<[^>]*>/g, ""),
-      attachments: opts.attachments?.map(a => ({
-        filename: a.filename,
-        content: a.content,
-        contentType: a.contentType,
-      })),
-    });
+    if (config.provider === "resend" && config.resend) {
+      result = await sendViaResend(opts, config.resend);
+    } else if (config.provider === "smtp" && config.smtp) {
+      result = await sendViaSmtp(opts, config.smtp);
+    } else {
+      throw new Error("No email provider available");
+    }
 
-    // Mark as sent in queue
-    return { success: true, messageId: info.messageId };
+    if (!result.success) throw new Error(result.error || "Unknown error");
+    return { success: true, messageId: result.messageId, provider: config.provider };
   } catch (e: any) {
     console.error("[email:error]", e.message);
     // Queue for retry
@@ -100,8 +142,87 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ success: bool
       attempts: 1,
       error: e.message,
     });
-    return { success: false, error: e.message };
+    return { success: false, error: e.message, provider: config.provider };
   }
+}
+
+// ============================================================
+// Provider: Resend (HTTP API — recommended)
+// ============================================================
+
+async function sendViaResend(opts: SendEmailOptions, cfg: ResendConfig): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const payload: Record<string, unknown> = {
+    from: `${cfg.fromName} <${cfg.fromEmail}>`,
+    to: [opts.to],
+    subject: opts.subject,
+    html: opts.html,
+  };
+  if (opts.text) payload.text = opts.text;
+  if (cfg.replyTo) payload.reply_to = cfg.replyTo;
+
+  // Attachments — Resend expects base64 content
+  if (opts.attachments && opts.attachments.length > 0) {
+    payload.attachments = opts.attachments.map((a) => ({
+      filename: a.filename,
+      content: a.content.toString("base64"),
+      content_type: a.contentType,
+    }));
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    let errMsg = `Resend API error ${res.status}`;
+    try {
+      const errJson = JSON.parse(errText);
+      errMsg = errJson.message || errJson.error || errMsg;
+    } catch {
+      errMsg = errText || errMsg;
+    }
+    return { success: false, error: errMsg };
+  }
+
+  const data = await res.json();
+  return { success: true, messageId: data.id };
+}
+
+// ============================================================
+// Provider: SMTP (traditional)
+// ============================================================
+
+async function sendViaSmtp(opts: SendEmailOptions, cfg: SmtpConfig): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const transporter = nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.port === 465,
+    auth: { user: cfg.user, pass: cfg.password },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  });
+
+  const info = await transporter.sendMail({
+    from: `"${cfg.fromName}" <${cfg.fromEmail}>`,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    text: opts.text || opts.html.replace(/<[^>]*>/g, ""),
+    attachments: opts.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      contentType: a.contentType,
+    })),
+  });
+
+  return { success: true, messageId: info.messageId };
 }
 
 // ============================================================
