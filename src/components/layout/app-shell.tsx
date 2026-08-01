@@ -49,6 +49,7 @@ const KycReviewView = dynamic(() => import("@/components/views/kyc-review-view")
 const PortalRfqsView = dynamic(() => import("@/components/views/portal-rfqs-view").then((m) => m.PortalRfqsView), { ssr: false });
 const FeatureFlagsView = dynamic(() => import("@/components/views/feature-flags-view").then((m) => m.FeatureFlagsView), { ssr: false });
 const CustomDashboardView = dynamic(() => import("@/components/views/custom-dashboard-view").then((m) => m.CustomDashboardView), { ssr: false });
+const CalendarView = dynamic(() => import("@/components/views/calendar-view").then((m) => m.CalendarView), { ssr: false });
 const EmailTemplatesView = dynamic(() => import("@/components/views/email-templates-view").then((m) => m.EmailTemplatesView), { ssr: false });
 const ApiIntegrationsView = dynamic(() => import("@/components/views/api-integrations-view").then((m) => m.ApiIntegrationsView), { ssr: false });
 const CommissionsView = dynamic(() => import("@/components/views/commissions-view").then((m) => m.CommissionsView), { ssr: false });
@@ -93,6 +94,7 @@ function ViewContent({ view }: { view: string }) {
     case "portal-rfqs":          return <PortalRfqsView />;
     case "feature-flags":        return <FeatureFlagsView />;
     case "custom-dashboard":      return <CustomDashboardView />;
+    case "calendar":             return <CalendarView />;
     case "email-templates":      return <EmailTemplatesView />;
     case "api-integrations":     return <ApiIntegrationsView />;
     case "erp":                  return <ErpView />;

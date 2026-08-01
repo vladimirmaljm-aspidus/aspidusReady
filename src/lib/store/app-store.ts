@@ -47,6 +47,7 @@ export type ViewKey =
   | "custom-dashboard"
   | "email-templates"
   | "api-integrations"
+  | "calendar"
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"

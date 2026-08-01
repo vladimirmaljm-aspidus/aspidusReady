@@ -278,6 +278,9 @@ export function OffersView() {
         description={`${total} total`}
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => window.open("/api/offers/export?format=csv", "_blank")}>
+              <Download className="size-4 mr-1" /> Export CSV
+            </Button>
             <Button variant="outline" onClick={() => setShowDealPicker(true)}>
               <Handshake className="size-4 mr-1" /> From Deal
             </Button>

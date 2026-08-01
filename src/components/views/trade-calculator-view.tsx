@@ -17,7 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from "@/components/ui/sheet";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -30,7 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Plus, Pencil, Trash2, Eye, Calculator, X, TrendingUp, TrendingDown,
   DollarSign, Ship, Container, ArrowLeftRight, Sparkles, Loader2, Building2,
-  MapPin, Lightbulb,
+  MapPin, Lightbulb, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -369,6 +369,33 @@ export function TradeCalculatorView() {
               buyer={partnerMap.get(detail.data.buyer_id || "")}
             />
           ) : null}
+          {detail.data && (
+            <SheetFooter className="mt-4 pt-4 border-t border-border/60">
+              <Button
+                onClick={async () => {
+                  try {
+                    const r = await fetch(`/api/trade-calculator/${detail.data!.id}/create-offer`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({}),
+                    });
+                    if (!r.ok) {
+                      const e = await r.json().catch(() => ({}));
+                      throw new Error(e.error || "Failed to create offer");
+                    }
+                    const offer = await r.json();
+                    toast.success(`Offer ${offer.number} created!`);
+                    setDetailId(null);
+                  } catch (e: any) {
+                    toast.error(e.message || "Failed to create offer");
+                  }
+                }}
+                className="gap-2"
+              >
+                <FileText className="size-4" /> Create Offer from Calculation
+              </Button>
+            </SheetFooter>
+          )}
         </SheetContent>
       </Sheet>
 

@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/pagination";
 import {
   Plus, Search, Package, Pencil, Trash2, Eye, AlertTriangle, CheckCircle2,
-  ChevronDown, ChevronRight, Wand2,
+  ChevronDown, ChevronRight, Wand2, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -128,9 +128,14 @@ export function ProductsView() {
         title="Products"
         description={`${total} total`}
         actions={
-          <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New product
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => window.open("/api/products/export?format=csv", "_blank")}>
+              <Download className="size-4 mr-1" /> Export CSV
+            </Button>
+            <Button onClick={() => { setEditing(null); setShowForm(true); }}>
+              <Plus className="size-4 mr-1" /> New product
+            </Button>
+          </div>
         }
       />
 

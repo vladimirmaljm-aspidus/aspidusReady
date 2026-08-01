@@ -279,6 +279,9 @@ export function InvoicesView() {
         description={`${data?.total ?? 0} total`}
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => window.open("/api/invoices/export?format=csv", "_blank")}>
+              <Download className="size-4 mr-1" /> Export CSV
+            </Button>
             <Button
               variant="outline"
               onClick={() => setShowOfferPicker(true)}

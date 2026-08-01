@@ -9,7 +9,7 @@ import {
   FolderOpen, ListChecks, ScrollText, Settings, ShieldCheck, Key,
   Webhook, Lock, Mail, Receipt, FileSignature, Boxes,
   ChevronLeft, ChevronRight, Building2, BookOpen, Calculator,
-  ToggleRight, LayoutGrid, Plug, DollarSign, BookMarked,
+  ToggleRight, LayoutGrid, Plug, DollarSign, BookMarked, Calendar,
 } from "lucide-react";
 import {
   Tooltip,
@@ -46,6 +46,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { key: "dashboard", i18nKey: "dashboard", i18nSection: "overview", icon: LayoutDashboard },
       { key: "custom-dashboard", i18nKey: "custom-dashboard", i18nSection: "overview", icon: LayoutGrid },
+      { key: "calendar", i18nKey: "calendar", i18nSection: "overview", icon: Calendar },
       { key: "tasks", i18nKey: "tasks", i18nSection: "overview", icon: ListChecks },
     ],
   },

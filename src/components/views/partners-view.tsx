@@ -39,7 +39,7 @@ import {
   Building2, ShieldCheck, Star, Maximize2, DollarSign,
   ChevronDown, ChevronRight,
   ExternalLink, Send, Zap, CheckCircle2, Clock, AlertCircle, XCircle, KeyRound,
-  Loader2, Copy, Check, Link as LinkIcon,
+  Loader2, Copy, Check, Link as LinkIcon, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -254,9 +254,14 @@ export function PartnersView() {
         title="Partners"
         description={`${total} total`}
         actions={
-          <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New partner
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => window.open("/api/partners/export?format=csv", "_blank")}>
+              <Download className="size-4 mr-1" /> Export CSV
+            </Button>
+            <Button onClick={() => { setEditing(null); setShowForm(true); }}>
+              <Plus className="size-4 mr-1" /> New partner
+            </Button>
+          </div>
         }
       />
 
