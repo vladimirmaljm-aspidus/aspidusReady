@@ -57,6 +57,8 @@ export async function GET(req: NextRequest) {
             converted: data.conversion_result,
             source: "exchangerate-api",
             cached: false,
+            rateDate: data.time_last_update_utc || new Date().toISOString(),
+            rateTime: "Live rate (real-time)",
           });
         }
       }
@@ -79,6 +81,8 @@ export async function GET(req: NextRequest) {
         converted: amount * rate,
         source: "frankfurter-ecb",
         cached: true,
+        rateDate: cache.data?.date || new Date().toISOString(),
+        rateTime: "ECB reference rate (updated daily at 16:00 CET)",
       });
     }
 
@@ -111,6 +115,8 @@ export async function GET(req: NextRequest) {
       converted: amount * rate,
       source: "frankfurter-ecb",
       cached: false,
+      rateDate: data.date || new Date().toISOString(),
+      rateTime: "ECB reference rate (updated daily at 16:00 CET)",
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 502 });
