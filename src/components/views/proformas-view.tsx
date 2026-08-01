@@ -763,6 +763,7 @@ function ProformaFormDialog({
       product_id: p.id,
       product_name: p.name,
       sku: p.sku,
+      unit: p.unit || "pcs",
       unit_price: p.price,
     });
   }
@@ -771,7 +772,7 @@ function ProformaFormDialog({
     setForm((f) => ({
       ...f,
       items: [...(f.items || []), {
-        product_id: "", product_name: "", sku: "",
+        product_id: "", product_name: "", sku: "", unit: "pcs",
         quantity: 1, unit_price: 0, discount: 0, tax_rate: 20, total: 0,
       }],
     }));

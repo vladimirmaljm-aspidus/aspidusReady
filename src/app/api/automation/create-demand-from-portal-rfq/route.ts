@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     // 4. Build demand items from RFQ data
     const demandItems = [
       {
+        product_id: null as string | null,
         product_name: rfq.product_name,
         quantity: rfq.quantity,
         unit: rfq.unit,

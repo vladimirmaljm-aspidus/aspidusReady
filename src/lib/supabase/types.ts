@@ -131,6 +131,7 @@ export interface OfferLineItem {
   product_name: string;
   sku: string;
   quantity: number;
+  unit: string;
   unit_price: number;
   discount: number;
   tax_rate: number;
@@ -156,11 +157,25 @@ export interface Offer {
   sent_at: string | null;
   responded_at: string | null;
   items: OfferLineItem[];
+  // Trade / import fields
+  offer_no: string | null;
+  bank_details: string | null;
+  pol: string | null;
+  pod: string | null;
+  vessel: string | null;
+  container_no: string | null;
+  lead_time: string | null;
+  packaging: string | null;
+  payment_terms: string | null;
+  tax_clause: string | null;
+  incoterm: string | null;
+  selling_price: number | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface DemandItem {
+  product_id: string | null;
   product_name: string;
   quantity: number;
   unit: string;
@@ -179,6 +194,17 @@ export interface Demand {
   requested_delivery: string | null;
   currency: string;
   items: DemandItem[];
+  // Trade / import fields
+  product_id: string | null;
+  product_name: string | null;
+  target_price: number | null;
+  is_new_product: boolean;
+  source: string | null;
+  auto_hints: string | null;
+  buyer_bank: string | null;
+  destination: string | null;
+  needed_by: string | null;
+  payment_terms: string | null;
   created_at: string;
   updated_at: string;
 }

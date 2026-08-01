@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -37,7 +37,7 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package,
+  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -45,6 +45,8 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+
+const PAGE_SIZE = 20;
 
 const STATUS_LABELS: Record<OfferStatus, string> = {
   draft: "Draft",
@@ -127,14 +129,17 @@ export function OffersView() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDealPicker, setShowDealPicker] = useState(false);
+  const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["offers", search, statusFilter, partnerFilter],
+    queryKey: ["offers", search, statusFilter, partnerFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(page * PAGE_SIZE));
       const r = await fetch(`/api/offers?${params}`);
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json() as Promise<{ items: Offer[]; total: number }>;
@@ -261,6 +266,8 @@ export function OffersView() {
   });
 
   const items = data?.items || [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const partnerList = partners.data?.items || [];
   const partnerName = (id: string) => partnerList.find((p) => p.id === id)?.name || "—";
 
@@ -268,7 +275,7 @@ export function OffersView() {
     <div>
       <PageHeader
         title="Offers"
-        description={`${data?.total ?? 0} total`}
+        description={`${total} total`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setShowDealPicker(true)}>
@@ -288,11 +295,11 @@ export function OffersView() {
             <Input
               placeholder="Search by number, subject…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               className="pl-9"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
             <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
@@ -303,7 +310,7 @@ export function OffersView() {
               <SelectItem value="expired">Expired</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={partnerFilter} onValueChange={setPartnerFilter}>
+          <Select value={partnerFilter} onValueChange={(v) => { setPartnerFilter(v); setPage(0); }}>
             <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Partner" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All partners</SelectItem>
@@ -329,54 +336,72 @@ export function OffersView() {
               action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New offer</Button>}
             />
           ) : (
-            <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card z-10">
-                  <TableRow>
-                    <TableHead>Number</TableHead>
-                    <TableHead className="hidden md:table-cell">Subject</TableHead>
-                    <TableHead className="hidden lg:table-cell">Partner</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="hidden xl:table-cell">Sent</TableHead>
-                    <TableHead className="hidden xl:table-cell">Responded</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((o) => (
-                    <TableRow
-                      key={o.id}
-                      className="cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => setDetailId(o.id)}
-                    >
-                      <TableCell className="font-mono text-xs tabular">{o.number}</TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="font-medium truncate max-w-[200px]">{o.subject || "—"}</div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">{partnerName(o.partner_id)}</TableCell>
-                      <TableCell><StatusBadge status={o.status} /></TableCell>
-                      <TableCell className="text-right font-mono tabular">{fmtMoney(o.total, o.currency)}</TableCell>
-                      <TableCell className="hidden xl:table-cell">{fmtDate(o.sent_at)}</TableCell>
-                      <TableCell className="hidden xl:table-cell">{fmtDate(o.responded_at)}</TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(o.id)} title="View">
-                            <Eye className="size-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(o); setShowForm(true); }} title="Edit">
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(o.id)} title="Delete">
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card z-10">
+                    <TableRow>
+                      <TableHead>Number</TableHead>
+                      <TableHead className="hidden md:table-cell">Subject</TableHead>
+                      <TableHead className="hidden lg:table-cell">Partner</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="hidden xl:table-cell">Valid Until</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((o) => (
+                      <TableRow
+                        key={o.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setDetailId(o.id)}
+                      >
+                        <TableCell className="font-mono text-xs tabular">{o.number}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div className="font-medium truncate max-w-[200px]">{o.subject || "—"}</div>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">{partnerName(o.partner_id)}</TableCell>
+                        <TableCell><StatusBadge status={o.status} /></TableCell>
+                        <TableCell className="text-right font-mono tabular">{fmtMoney(o.total, o.currency)}</TableCell>
+                        <TableCell className="hidden xl:table-cell">{fmtDate(o.valid_until)}</TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(o.id)} title="View">
+                              <Eye className="size-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(o); setShowForm(true); }} title="Edit">
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(o.id)} title="Delete">
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                      Previous
+                    </Button>
+                    <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
+                    <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -558,6 +583,9 @@ function OfferDetail({
   const statuses: OfferStatus[] = ["draft", "sent", "accepted", "rejected", "expired"];
   const totals = computeTotals(offer.items || []);
 
+  // Check if any trade fields have data
+  const hasTradeData = !!(offer.offer_no || offer.bank_details || offer.pol || offer.pod || offer.vessel || offer.container_no || offer.lead_time || offer.packaging || offer.payment_terms || offer.tax_clause || offer.incoterm || offer.selling_price);
+
   return (
     <div className="px-4 pb-6">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -623,6 +651,7 @@ function OfferDetail({
         </Tooltip>
       </div>
 
+      {/* Key dates */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> Valid until</p>
@@ -642,6 +671,90 @@ function OfferDetail({
         </div>
       </div>
 
+      {/* Trade / Import Details */}
+      {hasTradeData && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <Ship className="size-4" /> Trade Details
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {offer.offer_no && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Hash className="size-3" /> Supplier Ref</p>
+                <p className="text-sm font-medium">{offer.offer_no}</p>
+              </div>
+            )}
+            {offer.incoterm && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="size-3" /> Incoterm</p>
+                <p className="text-sm font-medium">{offer.incoterm}</p>
+              </div>
+            )}
+            {offer.payment_terms && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><CreditCard className="size-3" /> Payment Terms</p>
+                <p className="text-sm font-medium">{offer.payment_terms}</p>
+              </div>
+            )}
+            {offer.pol && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> Port of Loading</p>
+                <p className="text-sm font-medium">{offer.pol}</p>
+              </div>
+            )}
+            {offer.pod && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> Port of Discharge</p>
+                <p className="text-sm font-medium">{offer.pod}</p>
+              </div>
+            )}
+            {offer.vessel && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Ship className="size-3" /> Vessel</p>
+                <p className="text-sm font-medium">{offer.vessel}</p>
+              </div>
+            )}
+            {offer.container_no && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Container className="size-3" /> Container No.</p>
+                <p className="text-sm font-medium">{offer.container_no}</p>
+              </div>
+            )}
+            {offer.lead_time && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Timer className="size-3" /> Lead Time</p>
+                <p className="text-sm font-medium">{offer.lead_time}</p>
+              </div>
+            )}
+            {offer.packaging && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Package className="size-3" /> Packaging</p>
+                <p className="text-sm font-medium">{offer.packaging}</p>
+              </div>
+            )}
+            {offer.bank_details && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="size-3" /> Bank Details</p>
+                <p className="text-sm font-medium whitespace-pre-wrap">{offer.bank_details}</p>
+              </div>
+            )}
+            {offer.tax_clause && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><FileCheck className="size-3" /> Tax Clause</p>
+                <p className="text-sm font-medium">{offer.tax_clause}</p>
+              </div>
+            )}
+            {offer.selling_price != null && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Landmark className="size-3" /> Selling Price</p>
+                <p className="text-sm font-medium">{fmtMoney(offer.selling_price, offer.currency)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Line items */}
       <div className="rounded-lg border border-border/60 overflow-hidden mb-4">
         <Table>
           <TableHeader className="bg-muted/50">
@@ -649,6 +762,7 @@ function OfferDetail({
               <TableHead>Product</TableHead>
               <TableHead className="hidden sm:table-cell">SKU</TableHead>
               <TableHead className="text-right">Quantity</TableHead>
+              <TableHead className="hidden sm:table-cell">Unit</TableHead>
               <TableHead className="text-right">Unit price</TableHead>
               <TableHead className="text-right hidden sm:table-cell">Discount %</TableHead>
               <TableHead className="text-right hidden sm:table-cell">Tax %</TableHead>
@@ -658,7 +772,7 @@ function OfferDetail({
           <TableBody>
             {(offer.items || []).length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-6">
                   No line items.
                 </TableCell>
               </TableRow>
@@ -670,6 +784,7 @@ function OfferDetail({
                 </TableCell>
                 <TableCell className="hidden sm:table-cell font-mono text-xs tabular">{it.sku || "—"}</TableCell>
                 <TableCell className="text-right font-mono tabular">{it.quantity}</TableCell>
+                <TableCell className="hidden sm:table-cell">{it.unit || "—"}</TableCell>
                 <TableCell className="text-right font-mono tabular">{fmtMoney(it.unit_price, offer.currency)}</TableCell>
                 <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.discount}%</TableCell>
                 <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.tax_rate}%</TableCell>
@@ -680,6 +795,7 @@ function OfferDetail({
         </Table>
       </div>
 
+      {/* Totals */}
       <div className="ml-auto w-full sm:w-72 space-y-1 mb-4 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Subtotal</span>
@@ -705,7 +821,7 @@ function OfferDetail({
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/40">{offer.notes}</p>
         </div>
       )}
-      {offer.terms && (
+      {offer.terms && typeof offer.terms === "string" && (
         <div className="mb-3">
           <p className="text-xs text-muted-foreground mb-1">Terms</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/40">{offer.terms}</p>
@@ -736,11 +852,7 @@ function OfferFormDialog({
 }) {
   const isEditing = !!offer;
 
-  // Collapsible sections: open by default for new offers (line items open, notes closed);
-  // When editing, expand all sections so user can see all fields
-  const [lineItemsOpen, setLineItemsOpen] = useState(true);
-  const [notesOpen, setNotesOpen] = useState(false);
-
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
   const [form, setForm] = useState<Partial<Offer> & { items: OfferLineItem[] }>({ items: [] });
   const [saving, setSaving] = useState(false);
   const [partnerContext, setPartnerContext] = useState<PartnerContext | null>(null);
@@ -768,29 +880,26 @@ function OfferFormDialog({
     enabled: open,
   });
 
-  useMemo(() => {
+  // ─── Fix: useMemo → useEffect for form initialization ───
+  useEffect(() => {
     if (open) {
       if (offer) {
-        // Editing existing offer — expand all sections
         setForm({
           ...offer,
           items: (offer.items || []).map((i) => ({ ...i })),
         });
-        setLineItemsOpen(true);
-        setNotesOpen(true);
+        setMoreDetailsOpen(true);
       } else {
-        // New offer — smart defaults
         setForm({
           status: "draft",
-          currency: "EUR",
+          currency: "USD",
           payment_terms: "net30",
           valid_until: thirtyDaysFromNow(),
           notes: "",
           terms: "",
           items: [],
         });
-        setLineItemsOpen(true);
-        setNotesOpen(false);
+        setMoreDetailsOpen(false);
       }
       setPartnerContext(null);
       setProductContextMap({});
@@ -822,12 +931,11 @@ function OfferFormDialog({
       const ctx: PartnerContext = await r.json();
       setPartnerContext(ctx);
 
-      // Auto-fill partner preferences
       const p = ctx.partner;
       setForm((f) => ({
         ...f,
         partner_id: partnerId,
-        currency: p.preferred_currency || f.currency || "EUR",
+        currency: p.preferred_currency || f.currency || "USD",
         terms: p.preferred_payment_terms || f.terms || "",
       }));
 
@@ -845,15 +953,14 @@ function OfferFormDialog({
     const p = (products.data?.items || []).find((x) => x.id === productId);
     if (!p) return;
 
-    // Immediately fill basic product info
     setItem(idx, {
       product_id: p.id,
       product_name: p.name,
       sku: p.sku,
       unit_price: p.price,
+      unit: p.unit || "pcs",
     });
 
-    // Fetch product context for richer data
     setLoadingProductIdx(idx);
     try {
       const r = await fetch(`/api/automation/product-context?product_id=${productId}`);
@@ -861,7 +968,6 @@ function OfferFormDialog({
       const ctx: ProductContext = await r.json();
       setProductContextMap((prev) => ({ ...prev, [idx]: ctx }));
 
-      // Update unit price from catalog if available
       if (ctx.catalogEntry?.price) {
         setItem(idx, { unit_price: ctx.catalogEntry.price });
       }
@@ -878,7 +984,7 @@ function OfferFormDialog({
     setForm((f) => ({
       ...f,
       items: [...(f.items || []), {
-        product_id: "", product_name: "", sku: "",
+        product_id: "", product_name: "", sku: "", unit: "pcs",
         quantity: 1, unit_price: 0, discount: 0, tax_rate: 20, total: 0,
       }],
     }));
@@ -958,7 +1064,7 @@ function OfferFormDialog({
           {/* ─── Essential Section (always visible) ─── */}
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Partner select with auto-fill */}
+              {/* Partner select */}
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   Partner *
@@ -990,13 +1096,15 @@ function OfferFormDialog({
                 </Select>
               </div>
 
+              {/* Currency */}
               <div className="space-y-1.5">
-                <Label>Subject</Label>
-                <Input
-                  value={form.subject || ""}
-                  onChange={(e) => set("subject", e.target.value)}
-                  placeholder="Equipment supply 2026"
-                />
+                <Label>Currency</Label>
+                <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -1101,18 +1209,16 @@ function OfferFormDialog({
               </div>
             )}
 
-            {/* Currency, Payment terms, Valid until row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Valid Until + Payment Terms row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Currency</Label>
-                <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Valid until</Label>
+                <Input
+                  type="date"
+                  value={form.valid_until ? form.valid_until.slice(0, 10) : ""}
+                  onChange={(e) => set("valid_until", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                />
               </div>
-
               <div className="space-y-1.5">
                 <Label>Payment Terms</Label>
                 <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
@@ -1122,94 +1228,48 @@ function OfferFormDialog({
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-1.5">
-                <Label>Valid until</Label>
-                <Input
-                  type="date"
-                  value={form.valid_until ? form.valid_until.slice(0, 10) : ""}
-                  onChange={(e) => set("valid_until", e.target.value ? new Date(e.target.value).toISOString() : null)}
-                />
-              </div>
             </div>
           </div>
 
-          {/* ─── Line Items Section (collapsible) ─── */}
-          <Collapsible open={lineItemsOpen} onOpenChange={setLineItemsOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors"
-              >
-                {lineItemsOpen ? (
-                  <ChevronDown className="size-4 text-muted-foreground shrink-0" />
-                ) : (
-                  <ChevronRight className="size-4 text-muted-foreground shrink-0" />
-                )}
-                <span className="text-sm font-medium flex items-center gap-1.5">
-                  Line Items
-                  <Sparkles className="size-3.5 text-amber-500" />
-                  <span className="text-xs text-muted-foreground font-normal">Auto-fill enabled</span>
-                </span>
-                {(form.items || []).length > 0 && (
-                  <Badge variant="secondary" className="ml-auto text-xs">
-                    {(form.items || []).length} item{(form.items || []).length !== 1 ? "s" : ""} · {fmtMoney(totals.total, form.currency || "EUR")}
-                  </Badge>
-                )}
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="pt-3 space-y-3">
-                {/* Deal selector (optional) */}
-                <div className="max-w-xs space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Linked Deal (optional)</Label>
-                  <Select
-                    value={form.deal_id || "__none__"}
-                    onValueChange={(v) => set("deal_id", v === "__none__" ? null : v)}
-                  >
-                    <SelectTrigger className="h-9"><SelectValue placeholder="No deal" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— No deal —</SelectItem>
-                      {dealList.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>{d.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+          {/* ─── Line Items Section (inline table) ─── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium">Line Items</span>
+                <Sparkles className="size-3.5 text-amber-500" />
+                <span className="text-xs text-muted-foreground">Auto-fill enabled</span>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={addItem}>
+                <Plus className="size-4 mr-1" /> Add item
+              </Button>
+            </div>
 
-                {/* Line items list */}
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {(form.items || []).length === 0
-                      ? "No items yet — click \"Add item\" to start"
-                      : `${(form.items || []).length} line item${(form.items || []).length !== 1 ? "s" : ""}`}
-                  </p>
-                  <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                    <Plus className="size-4 mr-1" /> Add item
-                  </Button>
-                </div>
-
-                {(form.items || []).length === 0 ? (
-                  <div className="border rounded-md border-dashed border-border/60 p-6 text-center">
-                    <Package className="size-8 text-muted-foreground/40 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No line items yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">Click &ldquo;Add item&rdquo; to add products or services</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-96 overflow-y-auto custom-scroll pr-1">
+            {(form.items || []).length === 0 ? (
+              <div className="border rounded-md border-dashed border-border/60 p-6 text-center">
+                <Package className="size-8 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No line items yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Click &ldquo;Add item&rdquo; to add products or services</p>
+              </div>
+            ) : (
+              <div className="rounded-md border border-border/60 overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow>
+                      <TableHead className="min-w-[180px]">Product</TableHead>
+                      <TableHead className="w-20 text-right">Qty</TableHead>
+                      <TableHead className="w-20">Unit</TableHead>
+                      <TableHead className="w-28 text-right">Unit Price</TableHead>
+                      <TableHead className="w-16 text-right hidden sm:table-cell">Disc%</TableHead>
+                      <TableHead className="w-16 text-right hidden sm:table-cell">Tax%</TableHead>
+                      <TableHead className="w-28 text-right">Line Total</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {(form.items || []).map((it, idx) => (
-                      <div key={idx} className="rounded-md border border-border/60 p-2">
-                        <div className="grid grid-cols-12 gap-1.5 items-end">
-                          <div className="col-span-12 sm:col-span-5 space-y-1">
-                            <Label className="text-xs flex items-center gap-1">
-                              Product
-                              {loadingProductIdx === idx && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-                              {productContextMap[idx] && loadingProductIdx !== idx && (
-                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
-                                  <Sparkles className="size-2 text-amber-500" /> Auto
-                                </Badge>
-                              )}
-                            </Label>
+                      <TableRow key={idx}>
+                        <TableCell>
+                          <div className="space-y-1">
                             <Select
                               value={it.product_id || "__custom__"}
                               onValueChange={(v) => {
@@ -1217,7 +1277,9 @@ function OfferFormDialog({
                                 selectProduct(idx, v);
                               }}
                             >
-                              <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="__custom__">— Manual —</SelectItem>
                                 {productList.map((p) => (
@@ -1231,156 +1293,244 @@ function OfferFormDialog({
                               </SelectContent>
                             </Select>
                             <Input
-                              className="h-8 text-xs"
+                              className="h-7 text-xs"
                               placeholder="Product name"
                               value={it.product_name || ""}
                               onChange={(e) => setItem(idx, { product_name: e.target.value })}
                             />
+                            {productContextMap[idx] && (
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                {productContextMap[idx].inventoryStatus && (
+                                  <span className="flex items-center gap-0.5">
+                                    <Package className="size-2.5" />
+                                    Stock: {productContextMap[idx].inventoryStatus!.stock}
+                                  </span>
+                                )}
+                                {productContextMap[idx].priceHistory?.length > 0 && (
+                                  <span className="flex items-center gap-0.5">
+                                    <Info className="size-2.5" />
+                                    Last: {fmtMoney(productContextMap[idx].priceHistory[0].unit_price, productContextMap[idx].priceHistory[0].currency)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {loadingProductIdx === idx && (
+                              <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                            )}
                           </div>
-                          <div className="col-span-3 sm:col-span-2 space-y-1">
-                            <Label className="text-xs">Quantity</Label>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={it.quantity}
-                              onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
-                            />
-                          </div>
-                          <div className="col-span-4 sm:col-span-2 space-y-1">
-                            <Label className="text-xs">Unit price</Label>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={it.unit_price}
-                              onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
-                            />
-                          </div>
-                          <div className="col-span-2 sm:col-span-1 space-y-1">
-                            <Label className="text-xs">Disc%</Label>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={it.discount}
-                              onChange={(e) => setItem(idx, { discount: Number(e.target.value) })}
-                            />
-                          </div>
-                          <div className="col-span-2 sm:col-span-1 space-y-1">
-                            <Label className="text-xs">Tax%</Label>
-                            <Input
-                              type="number"
-                              className="h-9"
-                              value={it.tax_rate}
-                              onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
-                            />
-                          </div>
-                          <div className="col-span-1 flex justify-end">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="size-9 text-destructive"
-                              onClick={() => removeItem(idx)}
-                              title="Remove"
-                            >
-                              <X className="size-4" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Product context info */}
-                        {productContextMap[idx] && (
-                          <div className="mt-1.5 rounded bg-muted/40 p-1.5 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              {productContextMap[idx].inventoryStatus && (
-                                <span className="flex items-center gap-1">
-                                  <Package className="size-3" />
-                                  Stock: {productContextMap[idx].inventoryStatus!.stock} {productContextMap[idx].inventoryStatus!.unit}
-                                  {productContextMap[idx].inventoryStatus!.low_stock && (
-                                    <Badge variant="destructive" className="text-[9px] h-3.5 px-1 ml-1">Low</Badge>
-                                  )}
-                                </span>
-                              )}
-                              {productContextMap[idx].priceHistory?.length > 0 && (
-                                <span className="flex items-center gap-1">
-                                  <Info className="size-3" />
-                                  Last price: {fmtMoney(productContextMap[idx].priceHistory[0].unit_price, productContextMap[idx].priceHistory[0].currency)}
-                                </span>
-                              )}
-                              {productContextMap[idx].supplierOffers?.length > 0 && (
-                                <span className="flex items-center gap-1">
-                                  <Landmark className="size-3" />
-                                  {productContextMap[idx].supplierOffers.length} supplier offer(s)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="mt-1 text-right text-xs text-muted-foreground">
-                          Line total: <span className="font-mono font-medium text-foreground tabular">{fmtMoney(lineTotal(it), form.currency || "EUR")}</span>
-                        </div>
-                      </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            className="h-8 text-xs w-16 text-right"
+                            value={it.quantity}
+                            onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            className="h-8 text-xs w-16"
+                            value={it.unit || "pcs"}
+                            onChange={(e) => setItem(idx, { unit: e.target.value })}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            className="h-8 text-xs w-24 text-right"
+                            value={it.unit_price}
+                            onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right hidden sm:table-cell">
+                          <Input
+                            type="number"
+                            className="h-8 text-xs w-14 text-right"
+                            value={it.discount}
+                            onChange={(e) => setItem(idx, { discount: Number(e.target.value) })}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right hidden sm:table-cell">
+                          <Input
+                            type="number"
+                            className="h-8 text-xs w-14 text-right"
+                            value={it.tax_rate}
+                            onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right font-mono tabular text-sm">
+                          {fmtMoney(lineTotal(it), form.currency || "USD")}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-destructive"
+                            onClick={() => removeItem(idx)}
+                            title="Remove"
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </div>
-                )}
-
-                {/* Auto-calculated totals */}
-                {(form.items || []).length > 0 && (
-                  <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Sparkles className="size-3 text-amber-500" />
-                      <span className="text-xs text-muted-foreground">Auto-calculated</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subtotal</span>
-                      <span className="font-mono tabular">{fmtMoney(totals.subtotal, form.currency || "EUR")}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Discount</span>
-                      <span className="font-mono tabular">- {fmtMoney(totals.discount_total, form.currency || "EUR")}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tax</span>
-                      <span className="font-mono tabular">{fmtMoney(totals.tax_total, form.currency || "EUR")}</span>
-                    </div>
-                    <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
-                      <span>Total</span>
-                      <span className="font-mono tabular">{fmtMoney(totals.total, form.currency || "EUR")}</span>
-                    </div>
-                  </div>
-                )}
+                  </TableBody>
+                </Table>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+            )}
 
-          {/* ─── Notes Section (collapsible) ─── */}
-          <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
+            {/* Auto-calculated totals */}
+            {(form.items || []).length > 0 && (
+              <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Sparkles className="size-3 text-amber-500" />
+                  <span className="text-xs text-muted-foreground">Auto-calculated</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-mono tabular">{fmtMoney(totals.subtotal, form.currency || "USD")}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Discount</span>
+                  <span className="font-mono tabular">- {fmtMoney(totals.discount_total, form.currency || "USD")}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tax</span>
+                  <span className="font-mono tabular">{fmtMoney(totals.tax_total, form.currency || "USD")}</span>
+                </div>
+                <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
+                  <span>Total</span>
+                  <span className="font-mono tabular">{fmtMoney(totals.total, form.currency || "USD")}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ─── More Details Section (collapsible) ─── */}
+          <Collapsible open={moreDetailsOpen} onOpenChange={setMoreDetailsOpen}>
             <CollapsibleTrigger asChild>
               <button
                 type="button"
                 className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors"
               >
-                {notesOpen ? (
+                {moreDetailsOpen ? (
                   <ChevronDown className="size-4 text-muted-foreground shrink-0" />
                 ) : (
                   <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 )}
-                <span className="text-sm font-medium">Notes & Terms</span>
-                {(form.notes || form.terms) && (
-                  <Badge variant="secondary" className="ml-auto text-xs">Has content</Badge>
-                )}
+                <span className="text-sm font-medium">More Details</span>
+                <span className="text-xs text-muted-foreground">Subject, deal, incoterm, shipping, bank, notes…</span>
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="pt-3 space-y-3">
-                <div className="space-y-1.5">
-                  <Label>Notes</Label>
-                  <Textarea rows={2} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder="Additional notes visible to the partner…" />
+              <div className="pt-3 space-y-4">
+                {/* Subject + Deal */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Subject</Label>
+                    <Input
+                      value={form.subject || ""}
+                      onChange={(e) => set("subject", e.target.value)}
+                      placeholder="Equipment supply 2026"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Linked Deal</Label>
+                    <Select
+                      value={form.deal_id || "__none__"}
+                      onValueChange={(v) => set("deal_id", v === "__none__" ? null : v)}
+                    >
+                      <SelectTrigger><SelectValue placeholder="No deal" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— No deal —</SelectItem>
+                        {dealList.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label>Terms</Label>
-                  <Textarea rows={2} value={form.terms || ""} onChange={(e) => set("terms", e.target.value)} placeholder="Delivery time, payment terms…" />
+                {/* Trade fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Supplier Ref (offer_no)</Label>
+                    <Input value={form.offer_no || ""} onChange={(e) => set("offer_no", e.target.value)} placeholder="SUP-2026-001" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Incoterm</Label>
+                    <Select value={form.incoterm || "__none__"} onValueChange={(v) => set("incoterm", v === "__none__" ? null : v)}>
+                      <SelectTrigger><SelectValue placeholder="Select incoterm" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        <SelectItem value="EXW">EXW</SelectItem>
+                        <SelectItem value="FOB">FOB</SelectItem>
+                        <SelectItem value="CIF">CIF</SelectItem>
+                        <SelectItem value="CFR">CFR</SelectItem>
+                        <SelectItem value="DDP">DDP</SelectItem>
+                        <SelectItem value="DAP">DAP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Selling Price</Label>
+                    <Input type="number" value={form.selling_price ?? ""} onChange={(e) => set("selling_price", e.target.value === "" ? null : Number(e.target.value))} placeholder="Per unit" />
+                  </div>
+                </div>
+
+                {/* Shipping */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Port of Loading (POL)</Label>
+                    <Input value={form.pol || ""} onChange={(e) => set("pol", e.target.value)} placeholder="Shanghai" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Port of Discharge (POD)</Label>
+                    <Input value={form.pod || ""} onChange={(e) => set("pod", e.target.value)} placeholder="Rotterdam" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vessel</Label>
+                    <Input value={form.vessel || ""} onChange={(e) => set("vessel", e.target.value)} placeholder="MV Ever Given" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Container No.</Label>
+                    <Input value={form.container_no || ""} onChange={(e) => set("container_no", e.target.value)} placeholder="MSKU-1234567" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Lead Time</Label>
+                    <Input value={form.lead_time || ""} onChange={(e) => set("lead_time", e.target.value)} placeholder="14 days" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Packaging</Label>
+                    <Input value={form.packaging || ""} onChange={(e) => set("packaging", e.target.value)} placeholder="50 kg PP bags" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Tax Clause</Label>
+                    <Input value={form.tax_clause || ""} onChange={(e) => set("tax_clause", e.target.value)} placeholder="VAT reverse charge" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Bank Details</Label>
+                    <Input value={form.bank_details || ""} onChange={(e) => set("bank_details", e.target.value)} placeholder="Bank name · IBAN" />
+                  </div>
+                </div>
+
+                {/* Notes & Terms */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Notes</Label>
+                    <Textarea rows={2} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder="Additional notes visible to the partner…" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Terms</Label>
+                    <Textarea rows={2} value={typeof form.terms === "string" ? form.terms : ""} onChange={(e) => set("terms", e.target.value)} placeholder="Delivery time, payment terms…" />
+                  </div>
                 </div>
               </div>
             </CollapsibleContent>

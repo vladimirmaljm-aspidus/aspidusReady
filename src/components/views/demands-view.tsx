@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -33,14 +33,16 @@ import {
 import {
   Plus, Search, Inbox, Pencil, Trash2, Eye, X, Calendar, FileInput, ArrowRightLeft,
   Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, FileCheck, Import,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Globe, CreditCard, Banknote, Package, Truck, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Demand, DemandItem, DemandStatus, DemandPriority, Partner, Product, PortalRfq } from "@/lib/supabase/types";
-import { CURRENCIES } from "@/lib/data/reference";
+import { CURRENCIES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+
+const PAGE_SIZE = 20;
 
 const STATUS_LABELS: Record<DemandStatus, string> = {
   open: "Open",
@@ -106,13 +108,16 @@ export function DemandsView() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showRfqPicker, setShowRfqPicker] = useState(false);
+  const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["demands", search, statusFilter],
+    queryKey: ["demands", search, statusFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(page * PAGE_SIZE));
       const r = await fetch(`/api/demands?${params}`);
       if (!r.ok) throw new Error("Failed to load demands");
       return r.json() as Promise<{ items: Demand[]; total: number }>;
@@ -153,6 +158,8 @@ export function DemandsView() {
   });
 
   const items = data?.items || [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const partnerList = partners.data?.items || [];
   const partnerName = (id: string) => partnerList.find((p) => p.id === id)?.name || "—";
 
@@ -160,7 +167,7 @@ export function DemandsView() {
     <div>
       <PageHeader
         title="Demands"
-        description={`${data?.total ?? 0} total`}
+        description={`${total} total`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setShowRfqPicker(true)}>
@@ -180,11 +187,11 @@ export function DemandsView() {
             <Input
               placeholder="Search…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               className="pl-9"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
             <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
@@ -210,54 +217,74 @@ export function DemandsView() {
               action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New demand</Button>}
             />
           ) : (
-            <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card z-10">
-                  <TableRow>
-                    <TableHead>Number</TableHead>
-                    <TableHead className="hidden md:table-cell">Subject</TableHead>
-                    <TableHead className="hidden lg:table-cell">Partner</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Items</TableHead>
-                    <TableHead className="hidden xl:table-cell">Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((d) => (
-                    <TableRow
-                      key={d.id}
-                      className="cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => setDetailId(d.id)}
-                    >
-                      <TableCell className="font-mono text-xs tabular">{d.number}</TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="font-medium truncate max-w-[220px]">{d.subject || "—"}</div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">{partnerName(d.partner_id)}</TableCell>
-                      <TableCell><PriorityBadge priority={d.priority || "medium"} /></TableCell>
-                      <TableCell><StatusBadge status={d.status} /></TableCell>
-                      <TableCell className="text-right font-mono tabular">{(d.items || []).length}</TableCell>
-                      <TableCell className="hidden xl:table-cell">{fmtDate(d.created_at)}</TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(d.id)} title="View">
-                            <Eye className="size-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(d); setShowForm(true); }} title="Edit">
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(d.id)} title="Delete">
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card z-10">
+                    <TableRow>
+                      <TableHead>Number</TableHead>
+                      <TableHead className="hidden md:table-cell">Subject</TableHead>
+                      <TableHead className="hidden lg:table-cell">Partner</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Items</TableHead>
+                      <TableHead className="hidden xl:table-cell">Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((d) => (
+                      <TableRow
+                        key={d.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setDetailId(d.id)}
+                      >
+                        <TableCell className="font-mono text-xs tabular">{d.number}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div className="font-medium truncate max-w-[220px]">{d.subject || "—"}</div>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">{partnerName(d.partner_id)}</TableCell>
+                        <TableCell><PriorityBadge priority={d.priority || "medium"} /></TableCell>
+                        <TableCell><StatusBadge status={d.status} /></TableCell>
+                        <TableCell className="text-right font-mono tabular">{(d.items || []).length}</TableCell>
+                        <TableCell className="hidden xl:table-cell">{fmtDate(d.created_at)}</TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(d.id)} title="View">
+                              <Eye className="size-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(d); setShowForm(true); }} title="Edit">
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(d.id)} title="Delete">
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                      Previous
+                    </Button>
+                    <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
+                    <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -341,6 +368,9 @@ function DemandDetail({
   demand: Demand;
   partnerName: string;
 }) {
+  // Check if any trade fields have data
+  const hasTradeData = !!(demand.product_id || demand.product_name || demand.target_price != null || demand.is_new_product || demand.source || demand.auto_hints || demand.buyer_bank || demand.destination || demand.needed_by || demand.payment_terms);
+
   return (
     <div className="px-4 pb-6">
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -349,6 +379,7 @@ function DemandDetail({
         <span className="text-sm text-muted-foreground">{partnerName}</span>
       </div>
 
+      {/* Key dates */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> Requested delivery</p>
@@ -359,6 +390,71 @@ function DemandDetail({
           <p className="text-sm font-medium">{fmtDateTime(demand.created_at)}</p>
         </div>
       </div>
+
+      {/* Trade / Import Details */}
+      {hasTradeData && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <Truck className="size-4" /> Trade Details
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {demand.product_name && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Package className="size-3" /> Product</p>
+                <p className="text-sm font-medium">{demand.product_name}</p>
+              </div>
+            )}
+            {demand.target_price != null && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Tag className="size-3" /> Target Price</p>
+                <p className="text-sm font-medium">{fmtMoney(demand.target_price, demand.currency)}</p>
+              </div>
+            )}
+            {demand.is_new_product && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Sparkles className="size-3" /> New Product</p>
+                <p className="text-sm font-medium">Yes</p>
+              </div>
+            )}
+            {demand.source && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Import className="size-3" /> Source</p>
+                <p className="text-sm font-medium capitalize">{demand.source}</p>
+              </div>
+            )}
+            {demand.payment_terms && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><CreditCard className="size-3" /> Payment Terms</p>
+                <p className="text-sm font-medium">{demand.payment_terms}</p>
+              </div>
+            )}
+            {demand.destination && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> Destination</p>
+                <p className="text-sm font-medium">{demand.destination}</p>
+              </div>
+            )}
+            {demand.needed_by && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> Needed By</p>
+                <p className="text-sm font-medium">{fmtDate(demand.needed_by)}</p>
+              </div>
+            )}
+            {demand.buyer_bank && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="size-3" /> Buyer Bank</p>
+                <p className="text-sm font-medium whitespace-pre-wrap">{demand.buyer_bank}</p>
+              </div>
+            )}
+            {demand.auto_hints && (
+              <div className="col-span-2 p-3 rounded-lg bg-muted/40 border border-border/60">
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Sparkles className="size-3" /> Auto Hints</p>
+                <p className="text-sm font-medium whitespace-pre-wrap">{demand.auto_hints}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Items */}
       <div className="rounded-lg border border-border/60 overflow-hidden mb-4">
@@ -563,10 +659,7 @@ function DemandFormDialog({
 }) {
   const isEditing = !!demand;
 
-  // Collapsible sections: open by default when editing, closed when creating
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [itemsOpen, setItemsOpen] = useState(false);
-
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
   const [form, setForm] = useState<Partial<Demand> & { items: DemandItem[] }>({ items: [] });
   const [saving, setSaving] = useState(false);
   const [partnerContext, setPartnerContext] = useState<PartnerContext | null>(null);
@@ -597,25 +690,29 @@ function DemandFormDialog({
     }
   }, [open, demand]);
 
-  useMemo(() => {
+  // ─── Fix: useMemo → useEffect for form initialization ───
+  useEffect(() => {
     if (open) {
-      setForm(demand ? {
-        ...demand,
-        items: (demand.items || []).map((i) => ({ ...i })),
-      } : {
-        currency: "EUR",
-        status: "open",
-        priority: "medium",
-        items: [],
-        description: "",
-        requested_delivery: null,
-      });
+      if (demand) {
+        setForm({
+          ...demand,
+          items: (demand.items || []).map((i) => ({ ...i })),
+        });
+        setMoreDetailsOpen(true);
+      } else {
+        setForm({
+          currency: "USD",
+          status: "open",
+          priority: "medium",
+          items: [],
+          description: "",
+          requested_delivery: null,
+        });
+        setMoreDetailsOpen(false);
+      }
       setPartnerContext(null);
-      // When editing, expand all sections; when creating, collapse them
-      setDetailsOpen(isEditing);
-      setItemsOpen(isEditing);
     }
-  }, [open, demand, isEditing]);
+  }, [open, demand]);
 
   function set<K extends keyof Demand>(k: K, v: Demand[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -633,7 +730,7 @@ function DemandFormDialog({
     setForm((f) => ({
       ...f,
       items: [...(f.items || []), {
-        product_name: "", quantity: 1, unit: "pcs", target_price: null, notes: "",
+        product_id: null, product_name: "", quantity: 1, unit: "pcs", target_price: null, notes: "",
       }],
     }));
   }
@@ -658,12 +755,11 @@ function DemandFormDialog({
       const ctx: PartnerContext = await r.json();
       setPartnerContext(ctx);
 
-      // Auto-fill partner preferences
       const p = ctx.partner;
       setForm((f) => ({
         ...f,
         partner_id: partnerId,
-        currency: p.preferred_currency || f.currency || "EUR",
+        currency: p.preferred_currency || f.currency || "USD",
       }));
 
       toast.success(`Partner data loaded: ${p.name}`, { description: "Currency & preferences auto-filled." });
@@ -680,20 +776,18 @@ function DemandFormDialog({
     const p = productList.find((x) => x.id === productId);
     if (!p) return;
 
-    // Immediately fill basic product info
     setItem(idx, {
+      product_id: p.id,
       product_name: p.name,
       unit: p.unit,
       target_price: p.price || null,
     });
 
-    // Fetch product context for richer data
     try {
       const r = await fetch(`/api/automation/product-context?product_id=${productId}`);
       if (!r.ok) throw new Error("Failed to load product context");
       const ctx: ProductContext = await r.json();
 
-      // Update price from catalog if available
       if (ctx.product?.price) {
         setItem(idx, { target_price: ctx.product.price });
       }
@@ -707,7 +801,6 @@ function DemandFormDialog({
   const selectedPartner = form.partner_id ? partners.find((p) => p.id === form.partner_id) : undefined;
 
   async function save() {
-    if (!form.subject) { toast.error("Subject is required."); return; }
     if (!form.partner_id) { toast.error("Select a partner."); return; }
     setSaving(true);
     try {
@@ -717,6 +810,7 @@ function DemandFormDialog({
         ...form,
         number: form.number || autoNumber || undefined,
         items: form.items || [],
+        status: form.status || "open",
       };
       const r = await fetch(url, {
         method,
@@ -730,7 +824,7 @@ function DemandFormDialog({
       if (demand) {
         toast.success("Demand updated.", { description: form.subject });
       } else {
-        toast.success("Demand created!", { description: form.subject });
+        toast.success("Demand created!", { description: form.subject || "New demand" });
       }
       onSaved();
     } catch (e: any) {
@@ -770,46 +864,73 @@ function DemandFormDialog({
               </div>
             )}
 
-            {/* Subject */}
-            <div className="space-y-1.5">
-              <Label>Subject *</Label>
-              <Input
-                value={form.subject || ""}
-                onChange={(e) => set("subject", e.target.value)}
-                placeholder="Equipment inquiry"
-              />
-            </div>
+            {/* Partner + Product row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Partner select */}
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  Partner *
+                  {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+                  {partnerContext && !loadingPartner && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                      <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                    </Badge>
+                  )}
+                </Label>
+                <Select
+                  value={form.partner_id || ""}
+                  onValueChange={(v) => {
+                    set("partner_id", v);
+                    fetchPartnerContext(v);
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
+                  <SelectContent>
+                    {partners.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{p.name}</span>
+                          <span className="text-xs text-muted-foreground">({p.type})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Partner select with auto-fill */}
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                Partner *
-                {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-                {partnerContext && !loadingPartner && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                    <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
-                  </Badge>
-                )}
-              </Label>
-              <Select
-                value={form.partner_id || ""}
-                onValueChange={(v) => {
-                  set("partner_id", v);
-                  fetchPartnerContext(v);
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
-                <SelectContent>
-                  {partners.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{p.name}</span>
-                        <span className="text-xs text-muted-foreground">({p.type})</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Product (top-level) */}
+              <div className="space-y-1.5">
+                <Label>Product</Label>
+                <Select
+                  value={form.product_id || "__none__"}
+                  onValueChange={(v) => {
+                    if (v === "__none__") {
+                      set("product_id", null);
+                      set("product_name", null);
+                      return;
+                    }
+                    const p = productList.find((x) => x.id === v);
+                    if (p) {
+                      set("product_id", p.id);
+                      set("product_name", p.name);
+                      if (p.price) set("target_price", p.price);
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {productList.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{p.name}</span>
+                          <span className="text-xs text-muted-foreground font-mono">{p.sku}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Partner context panel */}
@@ -839,95 +960,172 @@ function DemandFormDialog({
                       <span className="text-muted-foreground">{selectedPartner.email}</span>
                     </div>
                   )}
-                  {selectedPartner.phone && (
-                    <div className="flex items-center gap-1.5">
-                      <Phone className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">{selectedPartner.phone}</span>
-                    </div>
-                  )}
                   {selectedPartner.preferred_currency && (
                     <div className="flex items-center gap-1.5">
+                      <Globe className="size-3 text-muted-foreground shrink-0" />
                       <span className="text-muted-foreground">Currency: {selectedPartner.preferred_currency}</span>
-                    </div>
-                  )}
-                  {selectedPartner.preferred_incoterm && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">Incoterm: {selectedPartner.preferred_incoterm}</span>
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Priority & Status row */}
+            {/* Quantity + Target Price row */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Priority</Label>
-                <Select value={form.priority || "medium"} onValueChange={(v) => set("priority", v as DemandPriority)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  value={form.items?.[0]?.quantity ?? 1}
+                  onChange={(e) => {
+                    const qty = Number(e.target.value);
+                    if ((form.items || []).length === 0) {
+                      setForm((f) => ({ ...f, items: [{ product_id: null, product_name: "", quantity: qty, unit: "pcs", target_price: null, notes: "" }] }));
+                    } else {
+                      setItem(0, { quantity: qty });
+                    }
+                  }}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={form.status || "open"} onValueChange={(v) => set("status", v as DemandStatus)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="quoted">Quoted</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Target Price</Label>
+                <Input
+                  type="number"
+                  value={form.target_price ?? form.items?.[0]?.target_price ?? ""}
+                  onChange={(e) => {
+                    const price = e.target.value === "" ? null : Number(e.target.value);
+                    set("target_price", price);
+                    if ((form.items || []).length > 0) {
+                      setItem(0, { target_price: price });
+                    }
+                  }}
+                  placeholder="0.00"
+                />
               </div>
             </div>
           </div>
 
-          {/* ─── Details Section (collapsible) ─── */}
-          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+          {/* ─── More Details Section (collapsible) ─── */}
+          <Collapsible open={moreDetailsOpen} onOpenChange={setMoreDetailsOpen}>
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-2 w-full text-left py-2 border-t border-border/60 hover:bg-muted/30 transition-colors rounded-md px-1"
+                className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors"
               >
-                {detailsOpen ? (
-                  <ChevronDown className="size-4 text-muted-foreground" />
+                {moreDetailsOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground shrink-0" />
                 ) : (
-                  <ChevronRight className="size-4 text-muted-foreground" />
+                  <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 )}
-                <span className="text-sm font-medium">Details</span>
-                {!detailsOpen && (
-                  <span className="text-xs text-muted-foreground">
-                    Currency, delivery date, notes
-                  </span>
-                )}
+                <span className="text-sm font-medium">More Details</span>
+                <span className="text-xs text-muted-foreground">Subject, currency, delivery, notes, items…</span>
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label>Currency</Label>
-                  <Select value={form.currency || "EUR"} onValueChange={(v) => set("currency", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.value}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Requested delivery</Label>
-                  <Input
-                    type="date"
-                    value={form.requested_delivery ? form.requested_delivery.slice(0, 10) : ""}
-                    onChange={(e) => set("requested_delivery", e.target.value ? new Date(e.target.value).toISOString() : null)}
-                  />
+              <div className="pt-3 space-y-4">
+                {/* Subject + Currency */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Subject</Label>
+                    <Input
+                      value={form.subject || ""}
+                      onChange={(e) => set("subject", e.target.value)}
+                      placeholder="Equipment inquiry"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Currency</Label>
+                    <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="md:col-span-2 space-y-1.5">
-                  <Label>Notes</Label>
+                {/* Priority + Status + Payment Terms */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Priority</Label>
+                    <Select value={form.priority || "medium"} onValueChange={(v) => set("priority", v as DemandPriority)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={form.status || "open"} onValueChange={(v) => set("status", v as DemandStatus)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="quoted">Quoted</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Payment Terms</Label>
+                    <Select value={form.payment_terms || "__none__"} onValueChange={(v) => set("payment_terms", v === "__none__" ? null : v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Trade fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Destination</Label>
+                    <Input value={form.destination || ""} onChange={(e) => set("destination", e.target.value)} placeholder="Delivery city/country" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Requested Delivery</Label>
+                    <Input
+                      type="date"
+                      value={form.requested_delivery ? form.requested_delivery.slice(0, 10) : ""}
+                      onChange={(e) => set("requested_delivery", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Needed By</Label>
+                    <Input
+                      type="date"
+                      value={form.needed_by ? form.needed_by.slice(0, 10) : ""}
+                      onChange={(e) => set("needed_by", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Buyer Bank</Label>
+                    <Input value={form.buyer_bank || ""} onChange={(e) => set("buyer_bank", e.target.value)} placeholder="Bank name · IBAN" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Source</Label>
+                    <Select value={form.source || "__none__"} onValueChange={(v) => set("source", v === "__none__" ? null : v)}>
+                      <SelectTrigger><SelectValue placeholder="Source" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        <SelectItem value="portal">Portal RFQ</SelectItem>
+                        <SelectItem value="manual">Manual</SelectItem>
+                        <SelectItem value="import">Import</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-1.5">
+                  <Label>Notes / Description</Label>
                   <Textarea
                     rows={2}
                     value={form.description || ""}
@@ -935,128 +1133,93 @@ function DemandFormDialog({
                     placeholder="Additional notes or requirements…"
                   />
                 </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
 
-          {/* ─── Items Section (collapsible) ─── */}
-          <Collapsible open={itemsOpen} onOpenChange={setItemsOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full text-left py-2 border-t border-border/60 hover:bg-muted/30 transition-colors rounded-md px-1"
-              >
-                {itemsOpen ? (
-                  <ChevronDown className="size-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="size-4 text-muted-foreground" />
-                )}
-                <span className="text-sm font-medium">Items</span>
-                {!itemsOpen && form.items?.length > 0 && (
-                  <Badge variant="outline" className="text-xs">{form.items.length} item{form.items.length !== 1 ? "s" : ""}</Badge>
-                )}
-                {!itemsOpen && (!form.items || form.items.length === 0) && (
-                  <span className="text-xs text-muted-foreground">Add products & quantities</span>
-                )}
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="pt-2">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-muted-foreground">Products & quantities</p>
-                  <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                    <Plus className="size-4 mr-1" /> Add item
-                  </Button>
-                </div>
-
-                {(form.items || []).length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4 border rounded-md border-dashed">
-                    No items yet. Click &ldquo;Add item&rdquo; to add products.
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
-                    {(form.items || []).map((it, idx) => (
-                      <div key={idx} className="rounded-md border border-border/60 p-2 grid grid-cols-12 gap-1.5 items-end">
-                        <div className="col-span-12 sm:col-span-5 space-y-1">
-                          <Label className="text-xs">Product</Label>
-                          <Select
-                            value={it.product_name ? "__selected__" : "__custom__"}
-                            onValueChange={(v) => {
-                              if (v === "__custom__") return;
-                              // Find product by name (workaround for non-id based items)
-                              const prod = productList.find((p) => p.name === v);
-                              if (prod) selectProductForItem(idx, prod.id);
-                            }}
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="Select product" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-48">
-                              <SelectItem value="__custom__">— Manual entry —</SelectItem>
-                              {productList.map((p) => (
-                                <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            className="h-9"
-                            value={it.product_name || ""}
-                            onChange={(e) => setItem(idx, { product_name: e.target.value })}
-                            placeholder="e.g. Laptop 16GB"
-                          />
-                        </div>
-                        <div className="col-span-4 sm:col-span-2 space-y-1">
-                          <Label className="text-xs">Quantity</Label>
-                          <Input
-                            type="number"
-                            className="h-9"
-                            value={it.quantity}
-                            onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
-                          />
-                        </div>
-                        <div className="col-span-4 sm:col-span-2 space-y-1">
-                          <Label className="text-xs">Unit</Label>
-                          <Select value={it.unit} onValueChange={(v) => setItem(idx, { unit: v })}>
-                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {UNIT_OPTIONS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="col-span-3 sm:col-span-2 space-y-1">
-                          <Label className="text-xs">Target price</Label>
-                          <Input
-                            type="number"
-                            className="h-9"
-                            value={it.target_price ?? ""}
-                            onChange={(e) => setItem(idx, { target_price: e.target.value === "" ? null : Number(e.target.value) })}
-                          />
-                        </div>
-                        <div className="col-span-1 flex justify-end">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="size-9 text-destructive"
-                            onClick={() => removeItem(idx)}
-                            title="Remove"
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </div>
-                        <div className="col-span-12 space-y-1">
-                          <Label className="text-xs">Notes</Label>
-                          <Input
-                            className="h-8 text-xs"
-                            value={it.notes || ""}
-                            onChange={(e) => setItem(idx, { notes: e.target.value })}
-                            placeholder="Additional requirements…"
-                          />
-                        </div>
-                      </div>
-                    ))}
+                {/* Items list (for multi-item demands) */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Line Items</Label>
+                    <Button type="button" size="sm" variant="outline" onClick={addItem}>
+                      <Plus className="size-4 mr-1" /> Add item
+                    </Button>
                   </div>
-                )}
+                  {(form.items || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4 border rounded-md border-dashed">
+                      No items yet. Click &ldquo;Add item&rdquo; to add products.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
+                      {(form.items || []).map((it, idx) => (
+                        <div key={idx} className="rounded-md border border-border/60 p-2 grid grid-cols-12 gap-1.5 items-end">
+                          <div className="col-span-12 sm:col-span-4 space-y-1">
+                            <Label className="text-xs">Product</Label>
+                            <Select
+                              value={it.product_id || "__custom__"}
+                              onValueChange={(v) => {
+                                if (v === "__custom__") return;
+                                selectProductForItem(idx, v);
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select product" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-48">
+                                <SelectItem value="__custom__">— Manual entry —</SelectItem>
+                                {productList.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              className="h-8 text-xs"
+                              value={it.product_name || ""}
+                              onChange={(e) => setItem(idx, { product_name: e.target.value })}
+                              placeholder="Product name"
+                            />
+                          </div>
+                          <div className="col-span-3 sm:col-span-2 space-y-1">
+                            <Label className="text-xs">Qty</Label>
+                            <Input
+                              type="number"
+                              className="h-8 text-xs"
+                              value={it.quantity}
+                              onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="col-span-3 sm:col-span-2 space-y-1">
+                            <Label className="text-xs">Unit</Label>
+                            <Select value={it.unit} onValueChange={(v) => setItem(idx, { unit: v })}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {UNIT_OPTIONS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-3 sm:col-span-2 space-y-1">
+                            <Label className="text-xs">Target price</Label>
+                            <Input
+                              type="number"
+                              className="h-8 text-xs"
+                              value={it.target_price ?? ""}
+                              onChange={(e) => setItem(idx, { target_price: e.target.value === "" ? null : Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="size-8 text-destructive"
+                              onClick={() => removeItem(idx)}
+                              title="Remove"
+                            >
+                              <X className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </CollapsibleContent>
           </Collapsible>
@@ -1066,7 +1229,19 @@ function DemandFormDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : demand ? "Save changes" : "Create demand"}
+            {saving ? (
+              <>
+                <Loader2 className="size-4 mr-1 animate-spin" />
+                Saving…
+              </>
+            ) : demand ? (
+              "Save changes"
+            ) : (
+              <>
+                <Plus className="size-4 mr-1" />
+                Create demand
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -30,6 +30,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
+  Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis,
+} from "@/components/ui/pagination";
+import {
   Plus, Search, Package, Pencil, Trash2, Eye, AlertTriangle, CheckCircle2,
   ChevronDown, ChevronRight, Wand2,
 } from "lucide-react";
@@ -40,7 +43,7 @@ import { fmtMoney, fmtNumber, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { Product } from "@/lib/supabase/types";
 import { CURRENCIES, PRODUCT_CATEGORIES_LOCAL, PRODUCT_UNITS } from "@/lib/data/reference";
 
-// Units and categories are now sourced from reference data
+const PAGE_SIZE = 20;
 
 type StockStatus = "ok" | "low" | "out";
 
@@ -50,21 +53,40 @@ function stockStatus(p: Product): StockStatus {
   return "ok";
 }
 
+// ---- Pagination helper ----
+function generatePageNumbers(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | "ellipsis")[] = [1];
+  if (current > 3) pages.push("ellipsis");
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+    pages.push(i);
+  }
+  if (current < total - 2) pages.push("ellipsis");
+  pages.push(total);
+  return pages;
+}
+
 export function ProductsView() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const handleSearchChange = useCallback((v: string) => { setSearch(v); setPage(1); }, []);
+  const handleCategoryChange = useCallback((v: string) => { setCategoryFilter(v); setPage(1); }, []);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["products", search, categoryFilter],
+    queryKey: ["products", search, categoryFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (categoryFilter !== "all") params.set("category", categoryFilter);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String((page - 1) * PAGE_SIZE));
       const r = await fetch(`/api/products?${params}`);
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
@@ -72,6 +94,8 @@ export function ProductsView() {
   });
 
   const items = data?.items || [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -102,7 +126,7 @@ export function ProductsView() {
     <div>
       <PageHeader
         title="Products"
-        description={`${data?.total ?? 0} total`}
+        description={`${total} total`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
             <Plus className="size-4 mr-1" /> New product
@@ -117,11 +141,11 @@ export function ProductsView() {
             <Input
               placeholder="Search by SKU or name…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
             />
           </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={categoryFilter} onValueChange={handleCategoryChange}>
             <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Category" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
@@ -145,78 +169,122 @@ export function ProductsView() {
               action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New product</Button>}
             />
           ) : (
-            <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card z-10">
-                  <TableRow>
-                    <TableHead className="w-28">SKU</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="hidden md:table-cell">Category</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Stock</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((p) => {
-                    const st = stockStatus(p);
-                    return (
-                      <TableRow
-                        key={p.id}
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => setDetailId(p.id)}
-                      >
-                        <TableCell className="font-mono text-xs tabular">{p.sku}</TableCell>
-                        <TableCell>
-                          <div className="font-medium">{p.name}</div>
-                          <div className="text-xs text-muted-foreground">{p.unit}</div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {p.category
-                            ? <Badge variant="outline">{p.category}</Badge>
-                            : <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className="text-right font-mono tabular">{fmtMoney(p.price, p.currency)}</TableCell>
-                        <TableCell className="text-right">
-                          {st === "out" ? (
-                            <span className="inline-flex items-center gap-1 text-destructive font-medium tabular">
-                              <AlertTriangle className="size-3.5" /> {fmtNumber(p.stock)}
-                            </span>
-                          ) : st === "low" ? (
-                            <span className="inline-flex items-center gap-1 text-amber-600 font-medium tabular">
-                              <AlertTriangle className="size-3.5" /> {fmtNumber(p.stock)}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-emerald-600 font-medium tabular">
-                              <CheckCircle2 className="size-3.5" /> {fmtNumber(p.stock)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {p.active
-                            ? <Badge>Active</Badge>
-                            : <Badge variant="secondary">Inactive</Badge>}
-                        </TableCell>
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title="View">
-                              <Eye className="size-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title="Edit">
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Delete">
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <>
+              <div className="max-h-[calc(100vh-340px)] overflow-y-auto custom-scroll">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card z-10">
+                    <TableRow>
+                      <TableHead className="w-28">SKU</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="hidden md:table-cell">Category</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Stock</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((p) => {
+                      const st = stockStatus(p);
+                      return (
+                        <TableRow
+                          key={p.id}
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => setDetailId(p.id)}
+                        >
+                          <TableCell className="font-mono text-xs tabular">{p.sku}</TableCell>
+                          <TableCell>
+                            <div className="font-medium">{p.name}</div>
+                            <div className="text-xs text-muted-foreground">{p.unit}</div>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {p.category
+                              ? <Badge variant="outline">{p.category}</Badge>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular">{fmtMoney(p.price, p.currency)}</TableCell>
+                          <TableCell className="text-right">
+                            {st === "out" ? (
+                              <span className="inline-flex items-center gap-1 text-destructive font-medium tabular">
+                                <AlertTriangle className="size-3.5" /> {fmtNumber(p.stock)}
+                              </span>
+                            ) : st === "low" ? (
+                              <span className="inline-flex items-center gap-1 text-amber-600 font-medium tabular">
+                                <AlertTriangle className="size-3.5" /> {fmtNumber(p.stock)}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-medium tabular">
+                                <CheckCircle2 className="size-3.5" /> {fmtNumber(p.stock)}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {p.active
+                              ? <Badge>Active</Badge>
+                              : <Badge variant="secondary">Inactive</Badge>}
+                          </TableCell>
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title="View">
+                                <Eye className="size-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title="Edit">
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Delete">
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t px-4 py-3">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+                  </p>
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      {generatePageNumbers(page, totalPages).map((p, i) =>
+                        p === "ellipsis" ? (
+                          <PaginationItem key={`ellipsis-${i}`}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        ) : (
+                          <PaginationItem key={p}>
+                            <PaginationLink
+                              isActive={page === p}
+                              onClick={() => setPage(p as number)}
+                              className="cursor-pointer"
+                            >
+                              {p}
+                            </PaginationLink>
+                          </PaginationItem>
+                        )
+                      )}
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -295,6 +363,23 @@ function ProductDetail({ product }: { product: Product }) {
     { label: "Reorder level", value: fmtNumber(product.reorder_level) },
   ].filter((x) => x.value);
 
+  // Known imported data keys that should be displayed with nice labels
+  const IMPORTED_KEY_LABELS: Record<string, string> = {
+    hs_code: "HS Code",
+    brand: "Brand",
+    shelf_life: "Shelf Life",
+    image_url: "Image URL",
+    logistics: "Logistics",
+    coa_params: "COA Parameters",
+    tags: "Tags",
+    inventory: "Inventory",
+  };
+
+  // Separate imported data fields from generic attributes
+  const attributes = product.attributes || {};
+  const importedEntries = Object.entries(attributes).filter(([k]) => k in IMPORTED_KEY_LABELS);
+  const otherEntries = Object.entries(attributes).filter(([k]) => !(k in IMPORTED_KEY_LABELS));
+
   return (
     <div className="px-4 pb-6 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -337,11 +422,59 @@ function ProductDetail({ product }: { product: Product }) {
         ))}
       </div>
 
-      {product.attributes && Object.keys(product.attributes).length > 0 && (
+      {/* Imported data fields (hs_code, brand, shelf_life, image_url, logistics, coa_params, tags, inventory) */}
+      {importedEntries.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Product Details</p>
+          <div className="grid grid-cols-2 gap-2">
+            {importedEntries.map(([k, v]) => (
+              <Card key={k} className="border-border/60 shadow-soft rounded-xl">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{IMPORTED_KEY_LABELS[k]}</p>
+                  <p className="text-sm font-medium mt-0.5 break-words">
+                    {k === "image_url" && typeof v === "string" ? (
+                      <a href={v} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{v}</a>
+                    ) : k === "tags" && Array.isArray(v) ? (
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {v.map((tag: string, i: number) => (
+                          <Badge key={i} variant="secondary" className="text-xs">{tag}</Badge>
+                        ))}
+                      </div>
+                    ) : k === "inventory" && typeof v === "object" && v !== null ? (
+                      <span className="font-mono text-xs">{JSON.stringify(v)}</span>
+                    ) : k === "coa_params" && typeof v === "object" && v !== null ? (
+                      <div className="space-y-0.5 mt-0.5">
+                        {Object.entries(v as Record<string, unknown>).map(([pk, pv]) => (
+                          <div key={pk} className="text-xs">
+                            <span className="text-muted-foreground">{pk}:</span> {String(pv)}
+                          </div>
+                        ))}
+                      </div>
+                    ) : k === "logistics" && typeof v === "object" && v !== null ? (
+                      <div className="space-y-0.5 mt-0.5">
+                        {Object.entries(v as Record<string, unknown>).map(([pk, pv]) => (
+                          <div key={pk} className="text-xs">
+                            <span className="text-muted-foreground">{pk}:</span> {String(pv)}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      String(v)
+                    )}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Other attributes */}
+      {otherEntries.length > 0 && (
         <div>
           <p className="text-xs text-muted-foreground mb-2">Attributes</p>
           <div className="flex flex-wrap gap-1.5">
-            {Object.entries(product.attributes).map(([k, v]) => (
+            {otherEntries.map(([k, v]) => (
               <Badge key={k} variant="secondary" className="font-mono text-xs">
                 {k}: {String(v)}
               </Badge>
@@ -380,14 +513,14 @@ function ProductFormDialog({
 }) {
   const [form, setForm] = useState<Partial<Product>>({});
   const [saving, setSaving] = useState(false);
-  const [pricingOpen, setPricingOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
-  useMemo(() => {
+  // FIX: Use useEffect instead of useMemo for side effects
+  useEffect(() => {
     if (open) {
       setForm(product ? { ...product } : {
         unit: "pcs",
-        currency: "EUR",
+        currency: "USD",
         stock: 0,
         reorder_level: 0,
         active: true,
@@ -395,9 +528,8 @@ function ProductFormDialog({
         cost: 0,
         attributes: null,
       });
-      // Open collapsibles when editing (so user can see all fields)
-      setPricingOpen(!!product);
-      setDetailsOpen(!!product);
+      // Open "More Details" when editing (so user can see all fields)
+      setMoreOpen(!!product);
     }
   }, [open, product]);
 
@@ -413,14 +545,12 @@ function ProductFormDialog({
   async function save() {
     if (!form.name) { toast.error("Name is required."); return; }
     // Auto-generate SKU if not provided
-    if (!form.sku && form.name) {
-      set("sku", generateSku(form.name));
-    }
+    const finalSku = form.sku || generateSku(form.name || "");
     setSaving(true);
     try {
       const method = product ? "PUT" : "POST";
       const url = product ? `/api/products/${product.id}` : "/api/products";
-      const body = { ...form, sku: form.sku || generateSku(form.name || "") };
+      const body = { ...form, sku: finalSku };
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -430,7 +560,7 @@ function ProductFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(product ? "Product updated." : "Product created.");
+      toast.success(product ? "Product updated." : "Product created successfully!");
       onSaved();
     } catch (e: any) {
       toast.error(e.message || "Saving failed.");
@@ -464,9 +594,9 @@ function ProductFormDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Price *</Label>
+                <Label>Price</Label>
                 <Input
                   type="number"
                   min={0}
@@ -478,126 +608,105 @@ function ProductFormDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>Unit</Label>
-                <Select value={form.unit} onValueChange={(v) => set("unit", v)}>
+                <Select value={form.unit || "pcs"} onValueChange={(v) => set("unit", v)}>
                   <SelectTrigger className="h-10"><SelectValue placeholder="Select unit" /></SelectTrigger>
                   <SelectContent>
                     {PRODUCT_UNITS.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select value={form.category || ""} onValueChange={(v) => set("category", v)}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {PRODUCT_CATEGORIES_LOCAL.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Prominent SKU auto-generate */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Label>SKU</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={handleAutoSku}
+                >
+                  <Wand2 className="size-3.5" /> Auto-generate
+                </Button>
+              </div>
+              <Input
+                value={form.sku || ""}
+                onChange={(e) => set("sku", e.target.value)}
+                placeholder="Auto-generated from name"
+                className="font-mono"
+              />
             </div>
           </div>
 
-          {/* ── Pricing & Inventory (collapsible) ── */}
-          <Collapsible open={pricingOpen} onOpenChange={setPricingOpen}>
+          {/* ── More Details (collapsible) ── */}
+          <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
             <CollapsibleTrigger asChild>
               <button
                 type="button"
                 className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
               >
-                {pricingOpen ? (
+                {moreOpen ? (
                   <ChevronDown className="size-4 transition-transform" />
                 ) : (
                   <ChevronRight className="size-4 transition-transform" />
                 )}
-                Pricing & Inventory
-                {!pricingOpen && (form.cost || form.stock || form.reorder_level) && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">filled</Badge>
-                )}
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 pb-2">
-                <div className="space-y-1.5">
-                  <Label>Cost</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.cost ?? 0}
-                    onChange={(e) => set("cost", Number(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Currency</Label>
-                  <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Stock</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.stock ?? 0}
-                    onChange={(e) => set("stock", Number(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Reorder level</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.reorder_level ?? 0}
-                    onChange={(e) => set("reorder_level", Number(e.target.value))}
-                  />
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* ── Details (collapsible) ── */}
-          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
-              >
-                {detailsOpen ? (
-                  <ChevronDown className="size-4 transition-transform" />
-                ) : (
-                  <ChevronRight className="size-4 transition-transform" />
-                )}
-                Details
-                {!detailsOpen && (form.sku || form.category || form.description) && (
+                More Details
+                {!moreOpen && (form.cost || form.description || form.currency !== "USD" || form.reorder_level) && (
                   <Badge variant="secondary" className="text-[10px] px-1.5 py-0">filled</Badge>
                 )}
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="space-y-3 pt-1 pb-2">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label>SKU</Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={handleAutoSku}
-                    >
-                      <Wand2 className="size-3" /> Auto
-                    </Button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Cost</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.cost ?? 0}
+                      onChange={(e) => set("cost", Number(e.target.value))}
+                    />
                   </div>
-                  <Input
-                    value={form.sku || ""}
-                    onChange={(e) => set("sku", e.target.value)}
-                    placeholder="Auto-generated from name"
-                    className="font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Category</Label>
-                  <Select value={form.category || ""} onValueChange={(v) => set("category", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      {PRODUCT_CATEGORIES_LOCAL.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-1.5">
+                    <Label>Currency</Label>
+                    <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
+                      <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Stock</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.stock ?? 0}
+                      onChange={(e) => set("stock", Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Reorder level</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.reorder_level ?? 0}
+                      onChange={(e) => set("reorder_level", Number(e.target.value))}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -626,7 +735,7 @@ function ProductFormDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : product ? "Update" : "Create product"}
           </Button>
         </DialogFooter>
       </DialogContent>

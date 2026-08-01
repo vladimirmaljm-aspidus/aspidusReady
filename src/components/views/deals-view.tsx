@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -36,9 +36,12 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
+  Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext,
+} from "@/components/ui/pagination";
+import {
   Plus, Search, Handshake, Pencil, Trash2, Eye, Calendar, User, TrendingUp, LayoutGrid, List,
   FileText, Loader2, MapPin, Mail, Phone, DollarSign, BarChart3, Target, CheckCircle2,
-  ChevronDown, ChevronUp, ArrowRight,
+  ChevronDown, ChevronUp, ArrowRight, Package, Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -135,6 +138,8 @@ function computePartnerQuickStats(ctx: PartnerContext | null): PartnerQuickStats
   return { totalDealsValue, totalDeals, wonDeals, winRate, avgDealSize, currency };
 }
 
+const PAGE_SIZE = 20;
+
 export function DealsView() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -145,6 +150,7 @@ export function DealsView() {
   const [showForm, setShowForm] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
     queryKey: ["deals", search, stageFilter, partnerId],
@@ -175,28 +181,25 @@ export function DealsView() {
     return map;
   }, [partners]);
 
-  const items = data?.items || [];
+  const allItems = data?.items || [];
+  const totalPages = Math.max(1, Math.ceil(allItems.length / PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages);
+  const items = allItems.slice((effectivePage - 1) * PAGE_SIZE, effectivePage * PAGE_SIZE);
 
-  const selected = useMemo(
-    () => items.find((d) => d.id === detailId) || null,
-    [items, detailId],
-  );
+  const selected = allItems.find((d) => d.id === detailId) || null;
 
-  const pipelineValue = useMemo(
-    () => items
-      .filter((d) => OPEN_STAGES.includes(d.stage))
-      .reduce((sum, d) => sum + (d.value || 0), 0),
-    [items],
-  );
+  const pipelineValue = allItems
+    .filter((d) => OPEN_STAGES.includes(d.stage))
+    .reduce((sum, d) => sum + (d.value || 0), 0);
 
-  const byStage = useMemo(() => {
+  const byStage = (() => {
     const map = new Map<DealStage, Deal[]>();
     STAGES.forEach((s) => map.set(s, []));
-    items.forEach((d) => {
+    allItems.forEach((d) => {
       if (map.has(d.stage)) map.get(d.stage)!.push(d);
     });
     return map;
-  }, [items]);
+  })();
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
@@ -296,7 +299,7 @@ export function DealsView() {
             {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
           </CardContent>
         </Card>
-      ) : items.length === 0 ? (
+      ) : allItems.length === 0 ? (
         <EmptyState
           icon={<Handshake className="size-6" />}
           title="No deals"
@@ -312,7 +315,7 @@ export function DealsView() {
       ) : (
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-0">
-            <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
+            <div className="overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
@@ -373,6 +376,40 @@ export function DealsView() {
         </Card>
       )}
 
+      {/* Pagination */}
+      {totalPages > 1 && layout === "table" && (
+        <div className="mt-4 flex justify-center">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <PaginationItem key={p}>
+                  <Button
+                    variant={p === page ? "default" : "outline"}
+                    size="icon"
+                    className="size-8"
+                    onClick={() => setPage(p)}
+                  >
+                    {p}
+                  </Button>
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+
       {/* Form dialog */}
       <DealFormDialog
         open={showForm}
@@ -400,6 +437,7 @@ export function DealsView() {
             <DealDetail
               deal={selected}
               partnerName={partnerName.get(selected.partner_id) || "—"}
+              partners={partners}
               onStageChange={(stage) => stageMut.mutate({ id: selected.id, stage })}
               onEdit={() => { setEditing(selected); setShowForm(true); setDetailId(null); }}
               onDelete={() => { setDeleteId(selected.id); setDetailId(null); }}
@@ -501,10 +539,11 @@ function PipelineView({
 
 // ---- Detail panel ----
 function DealDetail({
-  deal, partnerName, onStageChange, onEdit, onDelete, changing,
+  deal, partnerName, partners, onStageChange, onEdit, onDelete, changing,
 }: {
   deal: Deal;
   partnerName: string;
+  partners: Partner[];
   onStageChange: (s: DealStage) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -572,11 +611,22 @@ function DealDetail({
     },
   });
 
+  const profit = deal.value - (deal.buy_cost || 0);
+
+  // Core info cards
   const info = [
     { icon: User, label: "Partner", value: partnerName },
     { icon: TrendingUp, label: "Value", value: fmtMoney(deal.value, deal.currency) },
     { icon: Calendar, label: "Expected close", value: fmtDate(deal.expected_close) },
   ];
+
+  // Additional deal data
+  const additionalInfo: { icon: typeof DollarSign; label: string; value: string }[] = [];
+  if (deal.buy_cost) additionalInfo.push({ icon: DollarSign, label: "Buy Cost", value: fmtMoney(deal.buy_cost, deal.currency) });
+  if (deal.value && deal.buy_cost) additionalInfo.push({ icon: TrendingUp, label: "Profit", value: fmtMoney(profit, deal.currency) });
+  if (deal.quantity) additionalInfo.push({ icon: Package, label: "Quantity", value: `${deal.quantity} ${deal.unit || ""}` });
+  if (deal.unit && !deal.quantity) additionalInfo.push({ icon: Scale, label: "Unit", value: deal.unit });
+  if (deal.commission_agent_id) additionalInfo.push({ icon: User, label: "Commission Agent", value: deal.commission_agent_id });
 
   return (
     <div className="px-4 pb-6 space-y-4">
@@ -610,6 +660,7 @@ function DealDetail({
         </div>
       </div>
 
+      {/* Core info */}
       <div className="grid grid-cols-1 gap-2">
         {info.map((x) => {
           const Icon = x.icon;
@@ -626,6 +677,32 @@ function DealDetail({
           );
         })}
       </div>
+
+      {/* Additional deal data (cost tracking, commission, etc.) */}
+      {additionalInfo.length > 0 && (
+        <Card className="border-border/60 shadow-soft rounded-xl">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="size-4 text-primary" />
+              <p className="text-xs font-medium text-muted-foreground">Deal Details</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {additionalInfo.map((x) => {
+                const Icon = x.icon;
+                return (
+                  <div key={x.label} className="p-2 rounded bg-muted/50">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Icon className="size-3 text-muted-foreground" />
+                      <p className="text-[10px] text-muted-foreground">{x.label}</p>
+                    </div>
+                    <p className="text-xs font-medium font-mono tabular">{x.value}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Partner Quick Stats */}
       {ctxLoading ? (
@@ -753,36 +830,6 @@ function DealDetail({
         </div>
       )}
 
-      {/* Commission Info */}
-      {deal.commission_agent_id && (
-        <Card className="border-border/60 shadow-soft rounded-xl">
-          <CardContent className="p-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <DollarSign className="size-4 text-primary" />
-              <p className="text-xs font-medium">Commission Agent</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2 rounded bg-muted/50">
-                <p className="text-muted-foreground">Buy Cost</p>
-                <p className="font-medium font-mono tabular">{fmtMoney(deal.buy_cost || 0, deal.currency)}</p>
-              </div>
-              <div className="p-2 rounded bg-muted/50">
-                <p className="text-muted-foreground">Profit</p>
-                <p className="font-medium font-mono tabular">{fmtMoney(deal.value - (deal.buy_cost || 0), deal.currency)}</p>
-              </div>
-              <div className="p-2 rounded bg-muted/50">
-                <p className="text-muted-foreground">Quantity</p>
-                <p className="font-medium font-mono tabular">{deal.quantity || 0} {deal.unit || ""}</p>
-              </div>
-              <div className="p-2 rounded bg-muted/50">
-                <p className="text-muted-foreground">Agent ID</p>
-                <p className="font-medium truncate">{deal.commission_agent_id}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {deal.lost_reason && (
         <div>
           <p className="text-xs text-muted-foreground mb-1">Lost reason</p>
@@ -866,7 +913,7 @@ function DealFormDialog({
           deal_profit: (form.value || 0) - (form.buy_cost || 0),
           deal_quantity: form.quantity || 0,
           deal_unit: form.unit || "",
-          currency: form.currency || "EUR",
+          currency: form.currency || "USD",
         }),
       });
       if (!r.ok) return null;
@@ -888,12 +935,13 @@ function DealFormDialog({
 
   const quickStats = computePartnerQuickStats(partnerCtx ?? null);
 
-  useMemo(() => {
+  // Fix: useMemo → useEffect for form initialization side effects
+  useEffect(() => {
     if (open) {
       const initial = deal ? { ...deal } : {
-        stage: "lead" as DealStage,
+        stage: "qualified" as DealStage,
         value: 0,
-        currency: "EUR",
+        currency: "USD",
         probability: 20,
         partner_id: partners[0]?.id || "",
       };
@@ -1209,11 +1257,11 @@ function DealFormDialog({
             </Card>
           )}
 
-          {/* ===== Details (collapsible) ===== */}
+          {/* ===== More Details (collapsible) ===== */}
           <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
             <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
               <FileText className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium flex-1 text-left">Details</span>
+              <span className="text-sm font-medium flex-1 text-left">More Details</span>
               <span className="text-xs text-muted-foreground mr-1">Probability, close date, notes</span>
               {detailsOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
             </CollapsibleTrigger>
@@ -1275,7 +1323,7 @@ function DealFormDialog({
                   <Input type="number" min={0} step="0.01" value={form.buy_cost ?? 0} onChange={(e) => set("buy_cost", Number(e.target.value))} placeholder="0.00" />
                   {form.buy_cost && Number(form.buy_cost) > 0 && form.value && Number(form.value) > 0 && (
                     <p className="text-[10px] text-muted-foreground">
-                      Profit: {fmtMoney(Number(form.value) - Number(form.buy_cost), form.currency || "EUR")}
+                      Profit: {fmtMoney(Number(form.value) - Number(form.buy_cost), form.currency || "USD")}
                     </p>
                   )}
                 </div>
@@ -1328,8 +1376,8 @@ function DealFormDialog({
                       </div>
                       <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
                         <p>Type: {commissionPreview.breakdown?.formula}</p>
-                        <p>Deal Value: {fmtMoney(form.value || 0, form.currency || "EUR")}</p>
-                        <p>Deal Profit: {fmtMoney((form.value || 0) - (form.buy_cost || 0), form.currency || "EUR")}</p>
+                        <p>Deal Value: {fmtMoney(form.value || 0, form.currency || "USD")}</p>
+                        <p>Deal Profit: {fmtMoney((form.value || 0) - (form.buy_cost || 0), form.currency || "USD")}</p>
                         {commissionPreview.commission_type === "per_unit" && (
                           <p>Quantity: {form.quantity || 0} {form.unit || ""}</p>
                         )}

@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
         product_name: deal.title,
         sku: "",
         quantity: 1,
+        unit: "pcs",
         unit_price: deal.value,
         discount: 0,
         tax_rate: 0,

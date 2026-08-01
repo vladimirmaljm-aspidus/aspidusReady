@@ -20,10 +20,18 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-  const tid = auth.tenantId!;
     // only admins can list
     if (auth.user.role !== "admin" && !(auth.user.permissions || []).includes("*")) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+    }
+    // Super-admin with no tenant_id: list users from a specific tenant if requested
+    let tid = auth.tenantId;
+    if (auth.isSuperAdmin && !tid) {
+      const url = new URL(req.url);
+      tid = url.searchParams.get("tenant_id") || null;
+    }
+    if (!tid) {
+      return NextResponse.json({ items: [] });
     }
     const users = await auth.store.listUsers(tid);
     // strip hashes
@@ -44,11 +52,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // Enforce tenant on new user
-    body.tenant_id = auth.tenantId!;
+    // Super-admin can pick which tenant the user belongs to
+    // Regular admin can only create users in their own tenant
+    if (auth.isSuperAdmin && body.tenant_id) {
+      // super_admin explicitly chose a tenant — keep it
+    } else {
+      body.tenant_id = auth.tenantId!;
+    }
 
     // Prevent more than 2 admins per tenant
     if (body.role === "admin") {
-      const existingUsers = await auth.store.listUsers(auth.tenantId!);
+      const targetTenantId = body.tenant_id as string;
+      const existingUsers = await auth.store.listUsers(targetTenantId);
       const adminCount = existingUsers.filter(u => u.role === "admin" && u.active).length;
       if (adminCount >= 2) {
         return NextResponse.json({ error: "Maximum 2 admins allowed per company. Remove an existing admin first." }, { status: 400 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -29,19 +29,23 @@ import {
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Plus, Pencil, Trash2, Users as UsersIcon, ShieldAlert, ChevronDown, Wand2, Eye, EyeOff, Copy, Check } from "lucide-react";
+import {
+  Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext,
+} from "@/components/ui/pagination";
+import { Plus, Pencil, Trash2, Users as UsersIcon, ShieldAlert, ChevronDown, Wand2, Eye, EyeOff, Copy, Check, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtRelative } from "@/lib/utils/format";
-import { useAppStore, isAdmin, SafeUser } from "@/lib/store/app-store";
-import { UserRole } from "@/lib/supabase/types";
+import { useAppStore, isAdmin, isSuperAdmin, SafeUser } from "@/lib/store/app-store";
+import { UserRole, Tenant } from "@/lib/supabase/types";
 
 const ROLE_LABEL: Record<UserRole, string> = {
-  admin: "Admin", accountant: "Accountant", manager: "Manager", staff: "Staff", viewer: "Viewer",
+  super_admin: "Super Admin", admin: "Admin", accountant: "Accountant", manager: "Manager", staff: "Staff", viewer: "Viewer",
 };
 
 const ROLE_DESCRIPTION: Record<UserRole, string> = {
+  super_admin: "Platform administrator with access to all tenants",
   admin: "Full access to all features and user management",
   accountant: "Access to financial data, invoices, and ERP",
   manager: "Can manage deals, offers, and client relationships",
@@ -51,6 +55,7 @@ const ROLE_DESCRIPTION: Record<UserRole, string> = {
 
 // admin=default, manager=chart-4, staff=secondary, viewer=outline
 const ROLE_BADGE: Record<UserRole, string> = {
+  super_admin: "border-transparent bg-destructive text-destructive-foreground",
   admin: "border-transparent bg-primary text-primary-foreground",
   accountant: "border-transparent bg-chart-3 text-white",
   manager: "border-transparent bg-chart-4 text-white",
@@ -80,6 +85,8 @@ function generatePassword(): string {
   return pwd.split("").sort(() => Math.random() - 0.5).join("");
 }
 
+const PAGE_SIZE = 20;
+
 export function UsersView() {
   const qc = useQueryClient();
   const currentUser = useAppStore((s) => s.user);
@@ -87,6 +94,7 @@ export function UsersView() {
   const [editing, setEditing] = useState<SafeUser | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
     queryKey: ["users"],
@@ -100,6 +108,21 @@ export function UsersView() {
     },
     enabled: admin,
   });
+
+  // Fetch tenants for linking
+  const { data: tenantsData } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      const r = await fetch("/api/tenants");
+      if (!r.ok) throw new Error("Failed to load tenants");
+      return r.json() as Promise<{ items: Tenant[] }>;
+    },
+    enabled: admin,
+  });
+
+  const tenants = tenantsData?.items || [];
+  const tenantMap = new Map<string, string>();
+  tenants.forEach((t) => tenantMap.set(t.id, t.name));
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
@@ -117,7 +140,10 @@ export function UsersView() {
     onError: (e: any) => toast.error(e.message || "Failed to delete user."),
   });
 
-  const items = data?.items || [];
+  const allItems = data?.items || [];
+  const totalPages = Math.max(1, Math.ceil(allItems.length / PAGE_SIZE));
+  const effectivePage = Math.min(page, totalPages);
+  const items = allItems.slice((effectivePage - 1) * PAGE_SIZE, effectivePage * PAGE_SIZE);
 
   const handleToggleActive = async (userId: string, active: boolean) => {
     try {
@@ -138,7 +164,7 @@ export function UsersView() {
     <div>
       <PageHeader
         title="Users"
-        description={`${items.length} total`}
+        description={`${allItems.length} total`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }} disabled={!admin}>
             <Plus className="size-4 mr-1" /> New user
@@ -169,7 +195,7 @@ export function UsersView() {
               title="No access"
               description="An admin role is required to manage users."
             />
-          ) : items.length === 0 ? (
+          ) : allItems.length === 0 ? (
             <EmptyState
               icon={<UsersIcon className="size-6" />}
               title="No users"
@@ -177,12 +203,13 @@ export function UsersView() {
               action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New user</Button>}
             />
           ) : (
-            <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
+            <div className="overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead className="hidden md:table-cell">Email</TableHead>
+                    <TableHead>Tenant</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Active</TableHead>
                     <TableHead className="hidden lg:table-cell">Last login</TableHead>
@@ -206,8 +233,14 @@ export function UsersView() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-sm">{u.email || "—"}</TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+                            <span className="truncate">{u.tenant_id ? (tenantMap.get(u.tenant_id) || u.tenant_id.slice(0, 8)) : "—"}</span>
+                          </div>
+                        </TableCell>
                         <TableCell>
-                          <Badge variant={u.role === "viewer" ? "outline" : "default"} className={ROLE_BADGE[u.role as UserRole]}>
+                          <Badge variant={u.role === "viewer" ? "outline" : "default"} className={ROLE_BADGE[u.role as UserRole] || ""}>
                             {ROLE_LABEL[u.role as UserRole] || u.role}
                           </Badge>
                         </TableCell>
@@ -250,10 +283,45 @@ export function UsersView() {
         </CardContent>
       </Card>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-4 flex justify-center">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <PaginationItem key={p}>
+                  <Button
+                    variant={p === page ? "default" : "outline"}
+                    size="icon"
+                    className="size-8"
+                    onClick={() => setPage(p)}
+                  >
+                    {p}
+                  </Button>
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+
       <UserFormDialog
         open={showForm}
         onOpenChange={setShowForm}
         user={editing}
+        tenants={tenants}
         onSaved={() => {
           setShowForm(false);
           qc.invalidateQueries({ queryKey: ["users"] });
@@ -288,38 +356,50 @@ type UserForm = {
   email: string;
   full_name: string;
   role: UserRole;
+  tenant_id: string;
   password: string;
   active: boolean;
   permissions: string;
 };
 
 function UserFormDialog({
-  open, onOpenChange, user, onSaved,
+  open, onOpenChange, user, tenants, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   user: SafeUser | null;
+  tenants: Tenant[];
   onSaved: () => void;
 }) {
+  const currentUser = useAppStore((s) => s.user);
+  const isSA = isSuperAdmin(currentUser);
+
   const [form, setForm] = useState<UserForm>({
-    username: "", email: "", full_name: "", role: "staff", password: "", active: true, permissions: "",
+    username: "", email: "", full_name: "", role: "staff", tenant_id: "", password: "", active: true, permissions: "",
   });
   const [saving, setSaving] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState(false);
   const [usernameManuallyEdited, setUsernameManuallyEdited] = useState(false);
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null);
 
   // Whether the existing user has custom permissions (non-empty)
   const hasCustomPermissions = !!(user?.permissions && user.permissions.length > 0);
 
-  useMemo(() => {
+  // Fix: useMemo → useEffect for form initialization side effects
+  useEffect(() => {
     if (open) {
+      const defaultTenantId = isSA
+        ? (tenants[0]?.id || "")
+        : (currentUser?.tenant_id || "");
+
       setForm({
         username: user?.username || "",
         email: user?.email || "",
         full_name: user?.full_name || "",
         role: (user?.role as UserRole) || "staff",
+        tenant_id: user?.tenant_id || defaultTenantId,
         password: "",
         active: user?.active ?? true,
         permissions: (user?.permissions || []).join(", "),
@@ -328,8 +408,9 @@ function UserFormDialog({
       setShowPassword(false);
       setCopied(false);
       setUsernameManuallyEdited(false);
+      setCreatedPassword(null);
     }
-  }, [open, user]);
+  }, [open, user, tenants, isSA, currentUser?.tenant_id]);
 
   function set<K extends keyof UserForm>(k: K, v: UserForm[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -366,21 +447,21 @@ function UserFormDialog({
   }
 
   async function save() {
-    if (!form.username.trim()) { toast.error("Please enter a username."); return; }
+    if (!form.email.trim()) { toast.error("Please enter an email."); return; }
     if (!user && !form.password) { toast.error("Please enter or generate a password."); return; }
+    if (!form.tenant_id) { toast.error("Please select a tenant."); return; }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
-        username: form.username.trim(),
+        username: form.username.trim() || form.email.trim().split("@")[0],
         email: form.email.trim(),
         full_name: form.full_name.trim() || null,
         role: form.role,
+        tenant_id: form.tenant_id,
         active: form.active,
       };
 
       // Permissions: only send custom permissions if the user explicitly set them
-      // For new users, send null (use role defaults)
-      // For existing users, only send if they had custom permissions AND the field is non-empty
       if (hasCustomPermissions && form.permissions.trim()) {
         const perms = form.permissions.split(",").map((s) => s.trim()).filter(Boolean);
         body.permissions = perms.length ? perms : null;
@@ -405,11 +486,9 @@ function UserFormDialog({
       if (user) {
         toast.success("User updated.");
       } else {
-        // Show login details toast for new user creation
-        toast.success("User created successfully!", {
-          description: `Username: ${form.username.trim()}  |  Password: ${form.password}`,
-          duration: 8000,
-        });
+        // Show password in the dialog instead of toast
+        setCreatedPassword(form.password);
+        toast.success("User created successfully!");
       }
       onSaved();
     } catch (e: any) {
@@ -428,6 +507,34 @@ function UserFormDialog({
             {user ? "Update the user details below." : "Fill in the details to create a new user account."}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Show created password info after successful creation */}
+        {createdPassword && (
+          <div className="p-3 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 space-y-2">
+            <p className="text-sm font-medium text-green-800 dark:text-green-300">User created! Login credentials:</p>
+            <div className="space-y-1 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Username:</span>
+                <code className="font-mono">{form.username.trim()}</code>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Password:</span>
+                <code className="font-mono flex-1 break-all">{createdPassword}</code>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 shrink-0"
+                  onClick={() => copyToClipboard(createdPassword)}
+                  title="Copy password"
+                >
+                  {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5 text-muted-foreground" />}
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Make sure to copy the password — it won&apos;t be shown again.</p>
+          </div>
+        )}
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
           <div className="space-y-4 py-2">
@@ -461,7 +568,7 @@ function UserFormDialog({
               <Select value={form.role} onValueChange={(v) => set("role", v as UserRole)}>
                 <SelectTrigger id="role"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(["admin", "accountant", "manager", "staff", "viewer"] as UserRole[]).map((role) => (
+                  {(["super_admin", "admin", "accountant", "manager", "staff", "viewer"] as UserRole[]).filter((r) => isSA || r !== "super_admin").map((role) => (
                     <SelectItem key={role} value={role}>
                       <div className="flex flex-col">
                         <span className="font-medium">{ROLE_LABEL[role]}</span>
@@ -471,10 +578,34 @@ function UserFormDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTION[form.role]}</p>
+              <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTION[form.role as UserRole] || ""}</p>
             </div>
 
-            {/* Password — with auto-generate and visibility toggle */}
+            {/* Tenant — dropdown */}
+            <div className="space-y-1.5">
+              <Label htmlFor="tenant_id">Tenant</Label>
+              {isSA ? (
+                <Select value={form.tenant_id} onValueChange={(v) => set("tenant_id", v)}>
+                  <SelectTrigger id="tenant_id"><SelectValue placeholder="Select a tenant" /></SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={tenants.find((t) => t.id === form.tenant_id)?.name || form.tenant_id}
+                  disabled
+                  className="bg-muted"
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                {isSA ? "Select which tenant this user belongs to." : "Users are automatically assigned to your tenant."}
+              </p>
+            </div>
+
+            {/* Password — auto-generated with copy button */}
             {!user && (
               <div className="space-y-1.5">
                 <Label htmlFor="password">Password</Label>

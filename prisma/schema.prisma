@@ -273,6 +273,21 @@ model Offer {
   sent_at        DateTime?
   responded_at   DateTime?
   items          String    // JSON array of OfferLineItem
+
+  // Trade / import fields
+  offer_no       String?   // supplier's own reference number
+  bank_details   String?   // bank name & IBAN
+  pol            String?   // port of loading
+  pod            String?   // port of discharge
+  vessel         String?   // vessel name
+  container_no   String?   // container number
+  lead_time      String?   // e.g. "14 days"
+  packaging      String?   // e.g. "50 kg PP bags"
+  payment_terms  String?   // e.g. "net30", "LC at sight"
+  tax_clause     String?   // e.g. "VAT reverse charge"
+  incoterm       String?   // EXW, FOB, CIF, etc.
+  selling_price  Float?    // per-unit selling price
+
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
 
@@ -304,6 +319,19 @@ model Demand {
   requested_delivery   DateTime?
   currency             String   @default("EUR")
   items                String   // JSON array of DemandItem
+
+  // Trade / import fields
+  product_id           String?   // linked product
+  product_name         String?   // denormalized product name
+  target_price         Float?    // target price per unit
+  is_new_product       Boolean   @default(false)
+  source               String?   // e.g. "portal", "manual", "import"
+  auto_hints           String?   // JSON: auto-suggestions
+  buyer_bank           String?   // buyer's bank details
+  destination          String?   // delivery destination
+  needed_by            DateTime? // needed-by date
+  payment_terms        String?   // e.g. "net30", "LC at sight"
+
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
 

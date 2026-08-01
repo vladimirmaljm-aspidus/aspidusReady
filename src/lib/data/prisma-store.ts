@@ -107,6 +107,19 @@ function mapOfferRow(r: any): Offer {
     sent_at: dateToISO(r.sent_at),
     accepted_at: dateToISO(r.accepted_at),
     rejected_at: dateToISO(r.rejected_at),
+    // Trade / import fields (defaults for existing rows)
+    offer_no: r.offer_no ?? null,
+    bank_details: r.bank_details ?? null,
+    pol: r.pol ?? null,
+    pod: r.pod ?? null,
+    vessel: r.vessel ?? null,
+    container_no: r.container_no ?? null,
+    lead_time: r.lead_time ?? null,
+    packaging: r.packaging ?? null,
+    payment_terms: r.payment_terms ?? null,
+    tax_clause: r.tax_clause ?? null,
+    incoterm: r.incoterm ?? null,
+    selling_price: r.selling_price ?? null,
   };
 }
 
@@ -117,6 +130,17 @@ function mapDemandRow(r: any): Demand {
     created_at: dateToISOOrNow(r.created_at),
     updated_at: dateToISOOrNow(r.updated_at),
     closed_at: dateToISO(r.closed_at),
+    // Trade / import fields (defaults for existing rows)
+    product_id: r.product_id ?? null,
+    product_name: r.product_name ?? null,
+    target_price: r.target_price ?? null,
+    is_new_product: r.is_new_product ?? false,
+    source: r.source ?? null,
+    auto_hints: r.auto_hints ?? null,
+    buyer_bank: r.buyer_bank ?? null,
+    destination: r.destination ?? null,
+    needed_by: dateToISO(r.needed_by),
+    payment_terms: r.payment_terms ?? null,
   };
 }
 
@@ -532,6 +556,19 @@ export class PrismaStore implements Store {
       accepted_at: o.accepted_at ? new Date(o.accepted_at) : null,
       rejected_at: o.rejected_at ? new Date(o.rejected_at) : null,
       notes: o.notes ?? null,
+      // Trade / import fields
+      offer_no: o.offer_no ?? null,
+      bank_details: o.bank_details ?? null,
+      pol: o.pol ?? null,
+      pod: o.pod ?? null,
+      vessel: o.vessel ?? null,
+      container_no: o.container_no ?? null,
+      lead_time: o.lead_time ?? null,
+      packaging: o.packaging ?? null,
+      payment_terms: o.payment_terms ?? null,
+      tax_clause: o.tax_clause ?? null,
+      incoterm: o.incoterm ?? null,
+      selling_price: o.selling_price ?? null,
     };
     let r;
     if (o.id) {
@@ -584,6 +621,17 @@ export class PrismaStore implements Store {
       requested_delivery: d.requested_delivery ? new Date(d.requested_delivery) : null,
       currency: d.currency ?? "EUR",
       items: stringifyJSON(d.items) ?? "[]",
+      // Trade / import fields
+      product_id: d.product_id ?? null,
+      product_name: d.product_name ?? null,
+      target_price: d.target_price ?? null,
+      is_new_product: d.is_new_product ?? false,
+      source: d.source ?? null,
+      auto_hints: d.auto_hints ?? null,
+      buyer_bank: d.buyer_bank ?? null,
+      destination: d.destination ?? null,
+      needed_by: d.needed_by ? new Date(d.needed_by) : null,
+      payment_terms: d.payment_terms ?? null,
     };
     let r;
     if (d.id) {

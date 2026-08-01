@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperAdmin, audit } from "@/lib/api/helpers";
+import { requireAuth, requireSuperAdmin, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const auth = await requireSuperAdmin();
+    // Super-admin sees all tenants; regular admin sees only their own tenant
+    const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-    const tenants = await auth.store.listTenants();
-    return NextResponse.json({ items: tenants });
+    if (auth.isSuperAdmin) {
+      const tenants = await auth.store.listTenants();
+      return NextResponse.json({ items: tenants });
+    }
+    // Regular admin/staff: return only their own tenant
+    if (auth.tenantId) {
+      const tenant = await auth.store.getTenant(auth.tenantId);
+      return NextResponse.json({ items: tenant ? [tenant] : [] });
+    }
+    return NextResponse.json({ items: [] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
