@@ -167,7 +167,7 @@ export function getIp(req: NextRequest): string {
 
 export async function audit(
   store: AuthContext["store"],
-  user: SafeUser | { id: string; username: string },
+  user: SafeUser | { id: string; username: string; tenant_id?: string | null },
   req: NextRequest,
   action: string,
   entityType?: string,
@@ -178,6 +178,7 @@ export async function audit(
     await store.appendAudit({
       user_id: user.id,
       username: user.username,
+      tenant_id: user.tenant_id || null,
       action,
       entity_type: entityType || null,
       entity_id: entityId || null,

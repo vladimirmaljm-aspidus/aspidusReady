@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Build the proforma object
     const proformaData = {
+      tenant_id: tid,
       number: proformaNumber,
       offer_id: offer.id,
       partner_id: offer.partner_id,

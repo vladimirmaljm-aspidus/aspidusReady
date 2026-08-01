@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/collapsible";
 import {
   Plus, Pencil, Trash2, Building2, ShieldAlert, Users, Globe, CreditCard,
-  CheckCircle2, Layers, ChevronDown,
+  CheckCircle2, Layers, ChevronDown, ImageIcon, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -286,6 +286,8 @@ function TenantFormDialog({
   const [addressOpen, setAddressOpen] = useState(false);
   const [bankingOpen, setBankingOpen] = useState(false);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const isEditing = !!tenant;
 
@@ -300,6 +302,8 @@ function TenantFormDialog({
             bank_name: "", bank_iban: "", bank_swift: "",
             plan: "business", status: "active", max_users: 10, primary_color: "",
           } as Partial<Tenant>));
+      setLogoFile(null);
+      setLogoPreview(tenant?.logo_url || null);
       // When editing, expand sections that have data
       if (tenant) {
         const hasAddress = tenant.address_line || tenant.city || tenant.postal_code;
@@ -319,6 +323,20 @@ function TenantFormDialog({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  async function uploadLogo(tenantId: string, file: File) {
+    const formData = new FormData();
+    formData.append("logo", file);
+    const r = await fetch(`/api/tenants/${tenantId}/logo`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.error || "Logo upload failed");
+    }
+    return r.json();
+  }
+
   async function save() {
     if (!form.name) { toast.error("Name is required."); return; }
     setSaving(true);
@@ -334,6 +352,21 @@ function TenantFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
+      const result = await r.json();
+      const savedId = tenant?.id || result?.id;
+
+      // Upload logo if a new file was selected
+      if (logoFile && savedId) {
+        try {
+          await uploadLogo(savedId, logoFile);
+        } catch (uploadErr: unknown) {
+          toast.error(uploadErr instanceof Error ? uploadErr.message : "Logo upload failed.");
+          // Still consider the tenant saved, just the logo failed
+          onSaved();
+          return;
+        }
+      }
+
       toast.success(tenant ? "Tenant updated." : `"${form.name}" created successfully!`);
       onSaved();
     } catch (e: unknown) {
@@ -359,6 +392,51 @@ function TenantFormDialog({
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
           <div className="space-y-4 py-2">
+
+            {/* ── Logo ── */}
+            <div className="flex items-start gap-4">
+              <div className="shrink-0">
+                <div className="size-16 rounded-lg border border-border/60 bg-muted/30 flex items-center justify-center overflow-hidden">
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Logo" className="size-full object-contain" />
+                  ) : (
+                    <ImageIcon className="size-8 text-muted-foreground/40" />
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5 min-w-0">
+                <Label className="text-sm">Company Logo</Label>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="logo-upload" className="cursor-pointer">
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted/50 transition-colors">
+                      <Upload className="size-3.5" />
+                      Upload Logo
+                    </span>
+                    <input
+                      id="logo-upload"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setLogoFile(f);
+                          const reader = new FileReader();
+                          reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+                          reader.readAsDataURL(f);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                {logoFile && (
+                  <p className="text-xs text-muted-foreground truncate">{logoFile.name}</p>
+                )}
+                <p className="text-xs text-muted-foreground">PNG, JPEG, WebP or SVG. Max 2MB.</p>
+              </div>
+            </div>
+
+            <Separator />
 
             {/* ── Essential fields (always visible) ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

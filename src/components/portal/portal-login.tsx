@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const FIRM_NAME = "Aspidus";
 export function PortalLogin() {
   const setPortalAccess = useAppStore((s) => s.setPortalAccess);
   const setAppMode = useAppStore((s) => s.setAppMode);
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,6 +49,17 @@ export function PortalLogin() {
   const [accessId, setAccessId] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
+
+  // Pre-fill email from URL params
+  useEffect(() => {
+    const emailParam = searchParams.get("email");
+    if (emailParam) setEmail(emailParam);
+    const accessIdParam = searchParams.get("access_id");
+    if (accessIdParam) {
+      setAccessId(accessIdParam);
+      setSetupOpen(true);
+    }
+  }, [searchParams]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

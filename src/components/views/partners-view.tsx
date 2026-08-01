@@ -39,7 +39,7 @@ import {
   Building2, ShieldCheck, Star, Maximize2, DollarSign,
   ChevronDown, ChevronRight,
   ExternalLink, Send, Zap, CheckCircle2, Clock, AlertCircle, XCircle, KeyRound,
-  Loader2,
+  Loader2, Copy, Check, Link as LinkIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -499,6 +499,11 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
   const [portalTier, setPortalTier] = useState<PortalTier>("standard");
   const [creatingPortal, setCreatingPortal] = useState(false);
   const [sendingInvite, setSendingInvite] = useState(false);
+  const [testPassword, setTestPassword] = useState<string | null>(null);
+  const [settingTestPwd, setSettingTestPwd] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedPwd, setCopiedPwd] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   // Fetch portal access for this partner
   const portalQuery = useQuery({
@@ -596,6 +601,55 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       setSendingInvite(false);
     }
   };
+
+  // Generate a random test password
+  const generateTestPassword = () => {
+    const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let pwd = "";
+    for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
+    return pwd;
+  };
+
+  // Set a test password for the portal user
+  const handleSetTestPassword = async () => {
+    if (!portalAccess?.id) return;
+    setSettingTestPwd(true);
+    try {
+      const pwd = generateTestPassword();
+      const res = await fetch("/api/portal/setup-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_id: portalAccess.id, password: pwd }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to set test password");
+      }
+      setTestPassword(pwd);
+      qc.invalidateQueries({ queryKey: ["portal-access", partner.id] });
+      toast.success("Test password set successfully!");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to set test password.");
+    } finally {
+      setSettingTestPwd(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, type: "url" | "pwd" | "email") => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (type === "url") { setCopiedUrl(true); setTimeout(() => setCopiedUrl(false), 2000); }
+      if (type === "pwd") { setCopiedPwd(true); setTimeout(() => setCopiedPwd(false), 2000); }
+      if (type === "email") { setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 2000); }
+      toast.success("Copied to clipboard!");
+    } catch {
+      toast.error("Failed to copy to clipboard.");
+    }
+  };
+
+  const portalLoginUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/portal/login?email=${encodeURIComponent(portalAccess?.portal_email || "")}`
+    : "";
 
   return (
     <div className="px-4 pb-6">
@@ -928,7 +982,19 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                   <div className="p-3 rounded-md bg-muted/30 space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground">Portal Email</p>
-                      <p className="text-sm font-mono">{portalAccess.portal_email || "—"}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm font-mono">{portalAccess.portal_email || "—"}</p>
+                        {portalAccess.portal_email && (
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(portalAccess.portal_email!, "email")}
+                            className="text-muted-foreground hover:text-foreground smooth"
+                            title="Copy email"
+                          >
+                            {copiedEmail ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground">Status</p>
@@ -936,17 +1002,81 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                         {PORTAL_STATUS_LABELS[portalAccess.status]}
                       </Badge>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">Password Set</p>
+                      <p className="text-sm font-medium">{portalAccess.must_set_password ? "No" : "Yes"}</p>
+                    </div>
                   </div>
-                  <Button variant="outline" className="w-full" asChild>
-                    <a
-                      href={`/portal/login?email=${encodeURIComponent(portalAccess.portal_email || "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+
+                  {/* Test Password Section */}
+                  {testPassword && (
+                    <div className="p-3 rounded-lg border border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-800 space-y-2">
+                      <p className="text-xs font-medium text-green-800 dark:text-green-300">Test Credentials</p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">Email</p>
+                          <code className="text-xs font-mono">{portalAccess.portal_email}</code>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">Password</p>
+                          <div className="flex items-center gap-1">
+                            <code className="text-xs font-mono">{testPassword}</code>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(testPassword, "pwd")}
+                              className="text-muted-foreground hover:text-foreground smooth"
+                              title="Copy password"
+                            >
+                              {copiedPwd ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {/* Set Test Password */}
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleSetTestPassword}
+                      disabled={settingTestPwd}
                     >
-                      <ExternalLink className="size-4 mr-2" />
-                      Open Portal Login
-                    </a>
-                  </Button>
+                      {settingTestPwd ? (
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                      ) : (
+                        <KeyRound className="size-4 mr-2" />
+                      )}
+                      {testPassword ? "Reset Test Password" : "Set Test Password"}
+                    </Button>
+
+                    {/* Copy Portal Login URL */}
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => copyToClipboard(portalLoginUrl, "url")}
+                    >
+                      {copiedUrl ? (
+                        <Check className="size-4 mr-2 text-green-600" />
+                      ) : (
+                        <LinkIcon className="size-4 mr-2" />
+                      )}
+                      {copiedUrl ? "Copied!" : "Copy Portal Login URL"}
+                    </Button>
+
+                    {/* Open Portal Login */}
+                    <Button variant="outline" className="w-full" asChild>
+                      <a
+                        href={`/portal/login?email=${encodeURIComponent(portalAccess.portal_email || "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="size-4 mr-2" />
+                        Open Portal Login
+                      </a>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </>

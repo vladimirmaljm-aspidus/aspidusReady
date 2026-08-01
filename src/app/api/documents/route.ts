@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const body = await req.json();
+  body.tenant_id = auth.tenantId!;
   if (!body.uploaded_by) body.uploaded_by = auth.user.id;
   const created = await auth.store.upsertDocument(body);
   await audit(auth.store, auth.user, req, body.id ? "document.update" : "document.upload", "document", created.id, { filename: created.filename });

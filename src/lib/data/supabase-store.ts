@@ -39,6 +39,47 @@ export class SupabaseStore implements Store {
     return getSupabase();
   }
 
+  /**
+   * Smart upsert: uses INSERT when no id is provided, UPDATE when id exists.
+   * This avoids issues with Supabase's upsert() and auto-generated UUIDs.
+   */
+  private async smartUpsert<T>(
+    table: string,
+    data: Partial<T> & { id?: string },
+  ): Promise<T> {
+    const payload: SupaRow = { ...data };
+    if (data.id) {
+      // UPDATE existing record
+      const { id, ...fields } = payload;
+      const { data: updated, error } = await this.sb()
+        .from(table)
+        .update(fields)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      if (!updated) {
+        // Row doesn't exist — fall back to insert
+        const { data: inserted, error: insErr } = await this.sb()
+          .from(table)
+          .insert(payload)
+          .select()
+          .single();
+        if (insErr) throw insErr;
+        return inserted as T;
+      }
+      return updated as T;
+    }
+    // INSERT new record (database auto-generates id)
+    const { data: inserted, error } = await this.sb()
+      .from(table)
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw error;
+    return inserted as T;
+  }
+
   // ---- auth ----
   async getUserByUsername(username: string): Promise<User | null> {
     const { data, error } = await this.sb()
@@ -132,11 +173,7 @@ export class SupabaseStore implements Store {
     return (data as Partner) || null;
   }
   async upsertPartner(p: Partial<Partner> & { id?: string }): Promise<Partner> {
-    const payload: SupaRow = { ...p };
-    if (p.id) payload.id = p.id;
-    const { data, error } = await this.sb().from("partners").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Partner;
+    return this.smartUpsert<Partner>("partners", p);
   }
   async deletePartner(id: string): Promise<void> {
     const { error } = await this.sb().from("partners").delete().eq("id", id);
@@ -159,11 +196,7 @@ export class SupabaseStore implements Store {
     return (data as Product) || null;
   }
   async upsertProduct(p: Partial<Product> & { id?: string }): Promise<Product> {
-    const payload: SupaRow = { ...p };
-    if (p.id) payload.id = p.id;
-    const { data, error } = await this.sb().from("products").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Product;
+    return this.smartUpsert<Product>("products", p);
   }
   async deleteProduct(id: string): Promise<void> {
     const { error } = await this.sb().from("products").delete().eq("id", id);
@@ -187,11 +220,7 @@ export class SupabaseStore implements Store {
     return (data as Deal) || null;
   }
   async upsertDeal(d: Partial<Deal> & { id?: string }): Promise<Deal> {
-    const payload: SupaRow = { ...d };
-    if (d.id) payload.id = d.id;
-    const { data, error } = await this.sb().from("deals").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Deal;
+    return this.smartUpsert<Deal>("deals", d);
   }
   async deleteDeal(id: string): Promise<void> {
     const { error } = await this.sb().from("deals").delete().eq("id", id);
@@ -215,11 +244,7 @@ export class SupabaseStore implements Store {
     return (data as Offer) || null;
   }
   async upsertOffer(o: Partial<Offer> & { id?: string }): Promise<Offer> {
-    const payload: SupaRow = { ...o };
-    if (o.id) payload.id = o.id;
-    const { data, error } = await this.sb().from("offers").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Offer;
+    return this.smartUpsert<Offer>("offers", o);
   }
   async deleteOffer(id: string): Promise<void> {
     const { error } = await this.sb().from("offers").delete().eq("id", id);
@@ -243,11 +268,7 @@ export class SupabaseStore implements Store {
     return (data as Demand) || null;
   }
   async upsertDemand(d: Partial<Demand> & { id?: string }): Promise<Demand> {
-    const payload: SupaRow = { ...d };
-    if (d.id) payload.id = d.id;
-    const { data, error } = await this.sb().from("demands").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Demand;
+    return this.smartUpsert<Demand>("demands", d);
   }
   async deleteDemand(id: string): Promise<void> {
     const { error } = await this.sb().from("demands").delete().eq("id", id);
@@ -265,11 +286,7 @@ export class SupabaseStore implements Store {
     return paginate((data as SharedDocument[]) || [], params);
   }
   async upsertDocument(d: Partial<SharedDocument> & { id?: string }): Promise<SharedDocument> {
-    const payload: SupaRow = { ...d };
-    if (d.id) payload.id = d.id;
-    const { data, error } = await this.sb().from("shared_documents").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as SharedDocument;
+    return this.smartUpsert<SharedDocument>("shared_documents", d);
   }
   async deleteDocument(id: string): Promise<void> {
     const { error } = await this.sb().from("shared_documents").delete().eq("id", id);
@@ -323,11 +340,7 @@ export class SupabaseStore implements Store {
     return (data as UserTask[]) || [];
   }
   async upsertTask(t: Partial<UserTask> & { id?: string }): Promise<UserTask> {
-    const payload: SupaRow = { ...t };
-    if (t.id) payload.id = t.id;
-    const { data, error } = await this.sb().from("user_tasks").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as UserTask;
+    return this.smartUpsert<UserTask>("user_tasks", t);
   }
   async deleteTask(id: string): Promise<void> {
     const { error } = await this.sb().from("user_tasks").delete().eq("id", id);
@@ -347,11 +360,7 @@ export class SupabaseStore implements Store {
     return (data as EntityNote[]) || [];
   }
   async upsertNote(n: Partial<EntityNote> & { id?: string }): Promise<EntityNote> {
-    const payload: SupaRow = { ...n };
-    if (n.id) payload.id = n.id;
-    const { data, error } = await this.sb().from("entity_notes").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as EntityNote;
+    return this.smartUpsert<EntityNote>("entity_notes", n);
   }
   async deleteNote(id: string): Promise<void> {
     const { error } = await this.sb().from("entity_notes").delete().eq("id", id);
@@ -507,11 +516,7 @@ export class SupabaseStore implements Store {
     return (data as Invoice) || null;
   }
   async upsertInvoice(i: Partial<Invoice> & { id?: string }): Promise<Invoice> {
-    const payload: SupaRow = { ...i };
-    if (i.id) payload.id = i.id;
-    const { data, error } = await this.sb().from("invoices").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Invoice;
+    return this.smartUpsert<Invoice>("invoices", i);
   }
   async deleteInvoice(id: string): Promise<void> {
     const { error } = await this.sb().from("invoices").delete().eq("id", id);
@@ -535,11 +540,7 @@ export class SupabaseStore implements Store {
     return (data as Proforma) || null;
   }
   async upsertProforma(p: Partial<Proforma> & { id?: string }): Promise<Proforma> {
-    const payload: SupaRow = { ...p };
-    if (p.id) payload.id = p.id;
-    const { data, error } = await this.sb().from("proformas").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Proforma;
+    return this.smartUpsert<Proforma>("proformas", p);
   }
   async deleteProforma(id: string): Promise<void> {
     const { error } = await this.sb().from("proformas").delete().eq("id", id);
@@ -559,11 +560,7 @@ export class SupabaseStore implements Store {
     return paginate((data as DocumentRegisterEntry[]) || [], params);
   }
   async upsertDocumentRegisterEntry(e: Partial<DocumentRegisterEntry> & { id?: string }): Promise<DocumentRegisterEntry> {
-    const payload: SupaRow = { ...e };
-    if (e.id) payload.id = e.id;
-    const { data, error } = await this.sb().from("document_register").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as DocumentRegisterEntry;
+    return this.smartUpsert<DocumentRegisterEntry>("document_register", e);
   }
   async listDocumentRevisions(tenantId: string, documentId: string): Promise<DocumentRevision[]> {
     const { data, error } = await this.sb()
@@ -599,11 +596,7 @@ export class SupabaseStore implements Store {
     return paginate((data as VaultSecret[]) || [], params);
   }
   async upsertVaultSecret(s: Partial<VaultSecret> & { id?: string }): Promise<VaultSecret> {
-    const payload: SupaRow = { ...s };
-    if (s.id) payload.id = s.id;
-    const { data, error } = await this.sb().from("vault_secrets").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as VaultSecret;
+    return this.smartUpsert<VaultSecret>("vault_secrets", s);
   }
   async deleteVaultSecret(id: string): Promise<void> {
     const { error } = await this.sb().from("vault_secrets").delete().eq("id", id);
@@ -617,11 +610,7 @@ export class SupabaseStore implements Store {
     return (data as ApiKey[]) || [];
   }
   async upsertApiKey(k: Partial<ApiKey> & { id?: string }): Promise<ApiKey> {
-    const payload: SupaRow = { ...k };
-    if (k.id) payload.id = k.id;
-    const { data, error } = await this.sb().from("api_keys").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as ApiKey;
+    return this.smartUpsert<ApiKey>("api_keys", k);
   }
   async deleteApiKey(id: string): Promise<void> {
     const { error } = await this.sb().from("api_keys").delete().eq("id", id);
@@ -659,11 +648,7 @@ export class SupabaseStore implements Store {
     return (data as Webhook[]) || [];
   }
   async upsertWebhook(w: Partial<Webhook> & { id?: string }): Promise<Webhook> {
-    const payload: SupaRow = { ...w };
-    if (w.id) payload.id = w.id;
-    const { data, error } = await this.sb().from("webhooks").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Webhook;
+    return this.smartUpsert<Webhook>("webhooks", w);
   }
   async deleteWebhook(id: string): Promise<void> {
     const { error } = await this.sb().from("webhooks").delete().eq("id", id);
@@ -732,11 +717,7 @@ export class SupabaseStore implements Store {
     return paginate((data as MailQueueEntry[]) || [], params);
   }
   async upsertMailQueueEntry(m: Partial<MailQueueEntry> & { id?: string }): Promise<MailQueueEntry> {
-    const payload: SupaRow = { ...m };
-    if (m.id) payload.id = m.id;
-    const { data, error } = await this.sb().from("mail_queue").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as MailQueueEntry;
+    return this.smartUpsert<MailQueueEntry>("mail_queue", m);
   }
   async deleteMailQueueEntry(id: string): Promise<void> {
     const { error } = await this.sb().from("mail_queue").delete().eq("id", id);
@@ -770,11 +751,7 @@ export class SupabaseStore implements Store {
     return (data as Tenant) || null;
   }
   async upsertTenant(t: Partial<Tenant> & { id?: string }): Promise<Tenant> {
-    const payload: SupaRow = { ...t };
-    if (t.id) payload.id = t.id;
-    const { data, error } = await this.sb().from("tenants").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as Tenant;
+    return this.smartUpsert<Tenant>("tenants", t);
   }
   async deleteTenant(id: string): Promise<void> {
     const { error } = await this.sb().from("tenants").delete().eq("id", id);
@@ -798,11 +775,7 @@ export class SupabaseStore implements Store {
     return (data as ProductCatalogEntry) || null;
   }
   async upsertProductCatalogEntry(p: Partial<ProductCatalogEntry> & { id?: string }): Promise<ProductCatalogEntry> {
-    const payload: SupaRow = { ...p };
-    if (p.id) payload.id = p.id;
-    const { data, error } = await this.sb().from("product_catalog").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as ProductCatalogEntry;
+    return this.smartUpsert<ProductCatalogEntry>("product_catalog", p);
   }
   async deleteProductCatalogEntry(id: string): Promise<void> {
     const { error } = await this.sb().from("product_catalog").delete().eq("id", id);
@@ -827,11 +800,7 @@ export class SupabaseStore implements Store {
     return (data as SupplierOffer) || null;
   }
   async upsertSupplierOffer(s: Partial<SupplierOffer> & { id?: string }): Promise<SupplierOffer> {
-    const payload: SupaRow = { ...s };
-    if (s.id) payload.id = s.id;
-    const { data, error } = await this.sb().from("supplier_offers").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as SupplierOffer;
+    return this.smartUpsert<SupplierOffer>("supplier_offers", s);
   }
   async deleteSupplierOffer(id: string): Promise<void> {
     const { error } = await this.sb().from("supplier_offers").delete().eq("id", id);
@@ -856,11 +825,7 @@ export class SupabaseStore implements Store {
     return (data as TradeCalculation) || null;
   }
   async upsertTradeCalculation(t: Partial<TradeCalculation> & { id?: string }): Promise<TradeCalculation> {
-    const payload: SupaRow = { ...t };
-    if (t.id) payload.id = t.id;
-    const { data, error } = await this.sb().from("trade_calculations").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as TradeCalculation;
+    return this.smartUpsert<TradeCalculation>("trade_calculations", t);
   }
   async deleteTradeCalculation(id: string): Promise<void> {
     const { error } = await this.sb().from("trade_calculations").delete().eq("id", id);
@@ -941,6 +906,15 @@ export class SupabaseStore implements Store {
     return pa;
   }
 
+  async verifyPortalCredentialsByEmail(email: string, password: string): Promise<PortalAccess | null> {
+    const { data, error } = await this.sb().from("portal_access").select("*").eq("portal_email", email).maybeSingle();
+    if (error || !data) return null;
+    const pa = data as PortalAccess;
+    if (!pa.password_hash || pa.status !== "active") return null;
+    const valid = await verifyPassword(password, pa.password_hash);
+    return valid ? pa : null;
+  }
+
   // ---- document templates ----
   async listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]> {
     const { data, error } = await this.sb().from("document_templates").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false });
@@ -958,11 +932,7 @@ export class SupabaseStore implements Store {
     return (data as DocumentTemplate) || null;
   }
   async upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate> {
-    const payload: SupaRow = { ...t };
-    if (t.id) payload.id = t.id;
-    const { data, error } = await this.sb().from("document_templates").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as DocumentTemplate;
+    return this.smartUpsert<DocumentTemplate>("document_templates", t);
   }
   async deleteDocumentTemplate(id: string): Promise<void> {
     const { error } = await this.sb().from("document_templates").delete().eq("id", id);
@@ -1052,11 +1022,7 @@ export class SupabaseStore implements Store {
     return ((data as KycSubmission[]) || [])[0] || null;
   }
   async upsertKycSubmission(s: Partial<KycSubmission> & { id?: string }): Promise<KycSubmission> {
-    const payload: SupaRow = { ...s };
-    if (s.id) payload.id = s.id;
-    const { data, error } = await this.sb().from("kyc_submissions").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as KycSubmission;
+    return this.smartUpsert<KycSubmission>("kyc_submissions", s);
   }
   async deleteKycSubmission(id: string): Promise<void> {
     const { error } = await this.sb().from("kyc_submissions").delete().eq("id", id);
@@ -1152,11 +1118,7 @@ export class SupabaseStore implements Store {
     return (data as PortalRfq) || null;
   }
   async upsertPortalRfq(r: Partial<PortalRfq> & { id?: string }): Promise<PortalRfq> {
-    const payload: SupaRow = { ...r };
-    if (r.id) payload.id = r.id;
-    const { data, error } = await this.sb().from("portal_rfqs").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as PortalRfq;
+    return this.smartUpsert<PortalRfq>("portal_rfqs", r);
   }
   async deletePortalRfq(id: string): Promise<void> {
     const { error } = await this.sb().from("portal_rfqs").delete().eq("id", id);
@@ -1230,11 +1192,7 @@ export class SupabaseStore implements Store {
     return (data as CommissionAgent) || null;
   }
   async upsertCommissionAgent(a: Partial<CommissionAgent> & { id?: string }): Promise<CommissionAgent> {
-    const payload: SupaRow = { ...a };
-    if (a.id) payload.id = a.id;
-    const { data, error } = await this.sb().from("commission_agents").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as CommissionAgent;
+    return this.smartUpsert<CommissionAgent>("commission_agents", a);
   }
   async deleteCommissionAgent(id: string): Promise<void> {
     const { error } = await this.sb().from("commission_agents").delete().eq("id", id);
@@ -1266,11 +1224,7 @@ export class SupabaseStore implements Store {
     return (data as DealCommission) || null;
   }
   async upsertDealCommission(c: Partial<DealCommission> & { id?: string }): Promise<DealCommission> {
-    const payload: SupaRow = { ...c };
-    if (c.id) payload.id = c.id;
-    const { data, error } = await this.sb().from("deal_commissions").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as DealCommission;
+    return this.smartUpsert<DealCommission>("deal_commissions", c);
   }
   async deleteDealCommission(id: string): Promise<void> {
     const { error } = await this.sb().from("deal_commissions").delete().eq("id", id);
@@ -1318,11 +1272,7 @@ export class SupabaseStore implements Store {
     return (data as CommissionPayout) || null;
   }
   async upsertCommissionPayout(p: Partial<CommissionPayout> & { id?: string }): Promise<CommissionPayout> {
-    const payload: SupaRow = { ...p };
-    if (p.id) payload.id = p.id;
-    const { data, error } = await this.sb().from("commission_payouts").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as CommissionPayout;
+    return this.smartUpsert<CommissionPayout>("commission_payouts", p);
   }
   async deleteCommissionPayout(id: string): Promise<void> {
     const { error } = await this.sb().from("commission_payouts").delete().eq("id", id);
@@ -1413,11 +1363,7 @@ export class SupabaseStore implements Store {
   }
 
   async upsertFiscalPeriod(p: Partial<FiscalPeriod> & { id?: string }): Promise<FiscalPeriod> {
-    const payload: SupaRow = { ...p };
-    if (p.id) payload.id = p.id;
-    const { data, error } = await this.sb().from("fiscal_periods").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as FiscalPeriod;
+    return this.smartUpsert<FiscalPeriod>("fiscal_periods", p);
   }
 
   async closeFiscalPeriod(id: string, closedBy: string): Promise<FiscalPeriod> {
@@ -1629,11 +1575,7 @@ export class SupabaseStore implements Store {
   }
 
   async upsertErpBankAccount(b: Partial<ErpBankAccount> & { id?: string }): Promise<ErpBankAccount> {
-    const payload: SupaRow = { ...b };
-    if (b.id) payload.id = b.id;
-    const { data, error } = await this.sb().from("erp_bank_accounts").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
-    return data as ErpBankAccount;
+    return this.smartUpsert<ErpBankAccount>("erp_bank_accounts", b);
   }
 
   async deleteErpBankAccount(id: string): Promise<void> {
@@ -1655,11 +1597,37 @@ export class SupabaseStore implements Store {
 
   async upsertErpBankTransaction(t: Partial<ErpBankTransaction> & { id?: string }): Promise<ErpBankTransaction> {
     const payload: SupaRow = { ...t };
-    if (t.id) payload.id = t.id;
-    const { data, error } = await this.sb().from("erp_bank_transactions").upsert(payload, { onConflict: "id" }).select().single();
-    if (error) throw error;
+    let txn: ErpBankTransaction;
+    if (t.id) {
+      const { id, ...fields } = payload;
+      const { data, error } = await this.sb()
+        .from("erp_bank_transactions")
+        .update(fields)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      if (!data) {
+        const { data: inserted, error: insErr } = await this.sb()
+          .from("erp_bank_transactions")
+          .insert(payload)
+          .select()
+          .single();
+        if (insErr) throw insErr;
+        txn = inserted as ErpBankTransaction;
+      } else {
+        txn = data as ErpBankTransaction;
+      }
+    } else {
+      const { data, error } = await this.sb()
+        .from("erp_bank_transactions")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) throw error;
+      txn = data as ErpBankTransaction;
+    }
     // Update bank account balance
-    const txn = data as ErpBankTransaction;
     if (txn.bank_account_id) {
       const { data: ba } = await this.sb().from("erp_bank_accounts").select("balance").eq("id", txn.bank_account_id).maybeSingle();
       if (ba) {

@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
 
     // 6. Build the invoice object
     const invoiceData = {
+      tenant_id: tid,
       number: invoiceNumber,
       offer_id: offer.id,
       partner_id: offer.partner_id,

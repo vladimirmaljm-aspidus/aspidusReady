@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Build the demand object
     const demandData = {
+      tenant_id: tid,
       number: demandNumber,
       partner_id: rfq.partner_id,
       status: "open" as const,

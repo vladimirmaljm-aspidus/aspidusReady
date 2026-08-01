@@ -16,13 +16,10 @@ export async function POST(req: NextRequest) {
     if (!access) {
       return NextResponse.json({ error: "Invalid access link." }, { status: 404 });
     }
-    if (access.status !== "invited" && access.status !== "active") {
+    if (access.status !== "invited" && access.status !== "active" && access.status !== "approved") {
       return NextResponse.json({ error: "Account is not in setup state." }, { status: 400 });
     }
-    const { isSupabaseConfigured } = await import("@/lib/supabase/client");
-    const passwordHash = isSupabaseConfigured()
-      ? await hashPassword(password)
-      : `mock$${Buffer.from(password).toString("base64")}`;
+    const passwordHash = await hashPassword(password);
     await store.upsertPortalAccess({
       id: access_id, password_hash: passwordHash, must_set_password: false, status: "active",
     });

@@ -187,6 +187,7 @@ export interface Store {
   upsertPortalAccess(p: Partial<PortalAccess> & { id?: string }): Promise<PortalAccess>;
   deletePortalAccess(id: string): Promise<void>;
   verifyPortalCredentials(tenantId: string, email: string, password: string): Promise<PortalAccess | null>;
+  verifyPortalCredentialsByEmail(email: string, password: string): Promise<PortalAccess | null>;
 
   // ---- document templates ----
   listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]>;

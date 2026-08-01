@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
 
     // 7. Build the offer object
     const offerData = {
+      tenant_id: tid,
       number: offerNumber,
       deal_id: deal.id,
       partner_id: deal.partner_id,

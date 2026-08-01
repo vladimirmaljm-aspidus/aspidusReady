@@ -1447,7 +1447,7 @@ export class PrismaStore implements Store {
   }
 
   async getPortalAccessByEmail(tenantId: string, email: string): Promise<PortalAccess | null> {
-    const r = await db.portalAccess.findFirst({ where: { tenant_id: tenantId, email } });
+    const r = await db.portalAccess.findFirst({ where: { tenant_id: tenantId, portal_email: email } });
     return r ? mapPortalAccessRow(r) : null;
   }
 
@@ -1468,17 +1468,46 @@ export class PrismaStore implements Store {
     const data: any = {
       tenant_id: p.tenant_id ?? "",
       partner_id: p.partner_id ?? "",
-      email: p.email ?? "",
-      password_hash: p.password_hash ?? "",
-      level: p.level ?? "viewer",
-      status: p.status ?? "active",
-      invited_by: p.invited_by ?? null,
+      tier: p.tier ?? "standard",
+      // Feature flags
+      can_view_offers: p.can_view_offers ?? false,
+      can_view_documents: p.can_view_documents ?? false,
+      can_view_catalog: p.can_view_catalog ?? false,
+      can_view_invoices: p.can_view_invoices ?? false,
+      can_view_profile: p.can_view_profile ?? true,
+      can_view_company_info: p.can_view_company_info ?? false,
+      can_submit_rfq: p.can_submit_rfq ?? false,
+      can_download_pdf: p.can_download_pdf ?? false,
+      // Compliance exemptions
+      exempt_kyc: p.exempt_kyc ?? false,
+      exempt_document_upload: p.exempt_document_upload ?? false,
+      exempt_location_share: p.exempt_location_share ?? false,
+      // Onboarding status
+      status: p.status ?? "pending_approval",
+      approved_by: p.approved_by ?? null,
+      approved_at: p.approved_at ? new Date(p.approved_at) : null,
       invited_at: p.invited_at ? new Date(p.invited_at) : null,
-      last_login: p.last_login ? new Date(p.last_login) : null,
+      welcome_email_sent: p.welcome_email_sent ?? false,
+      // Access credentials
+      portal_email: p.portal_email ?? null,
+      password_hash: p.password_hash ?? null,
+      must_set_password: p.must_set_password ?? true,
+      // Last login
+      last_login_at: p.last_login_at ? new Date(p.last_login_at) : null,
+      last_login_ip: p.last_login_ip ?? null,
+      // Security
+      locked_until: p.locked_until ? new Date(p.locked_until) : null,
+      failed_attempts: p.failed_attempts ?? 0,
+      token_version: p.token_version ?? 1,
     };
     let r;
     if (p.id) {
-      r = await db.portalAccess.update({ where: { id: p.id }, data });
+      // Only update fields that are explicitly provided (not undefined)
+      const cleanData: any = {};
+      for (const [k, v] of Object.entries(data)) {
+        if ((p as any)[k] !== undefined) cleanData[k] = v;
+      }
+      r = await db.portalAccess.update({ where: { id: p.id }, data: cleanData });
     } else {
       r = await db.portalAccess.create({ data });
     }
@@ -1490,10 +1519,19 @@ export class PrismaStore implements Store {
   }
 
   async verifyPortalCredentials(tenantId: string, email: string, password: string): Promise<PortalAccess | null> {
-    const r = await db.portalAccess.findFirst({ where: { tenant_id: tenantId, email } });
+    const r = await db.portalAccess.findFirst({ where: { tenant_id: tenantId, portal_email: email } });
     if (!r) return null;
-    // Simple hash check — in production, use bcrypt
-    const { hashPassword } = await import("@/lib/auth/password");
+    if (!r.password_hash) return null;
+    const { verifyPassword } = await import("@/lib/auth/password");
+    const ok = await verifyPassword(password, r.password_hash);
+    return ok ? mapPortalAccessRow(r) : null;
+  }
+
+  async verifyPortalCredentialsByEmail(email: string, password: string): Promise<PortalAccess | null> {
+    const r = await db.portalAccess.findFirst({ where: { portal_email: email } });
+    if (!r) return null;
+    if (!r.password_hash) return null;
+    if (r.status !== "active") return null;
     const { verifyPassword } = await import("@/lib/auth/password");
     const ok = await verifyPassword(password, r.password_hash);
     return ok ? mapPortalAccessRow(r) : null;

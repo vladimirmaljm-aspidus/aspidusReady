@@ -883,6 +883,17 @@ export class MockStore implements Store {
     return null;
   }
 
+  async verifyPortalCredentialsByEmail(email: string, password: string): Promise<PortalAccess | null> {
+    const pa = mock.portalAccess.find((p) => p.portal_email === email && p.password_hash);
+    if (!pa) return null;
+    if (pa.status !== "active") return null;
+    if (pa.password_hash === mock.mockHash(password)) {
+      pa.last_login_at = new Date().toISOString();
+      return pa;
+    }
+    return null;
+  }
+
   // ---- document templates ----
   async listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]> {
     return mock.documentTemplates.filter((t) => t.tenant_id === tenantId);
