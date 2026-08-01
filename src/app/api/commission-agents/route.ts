@@ -34,6 +34,31 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     body.tenant_id = tenantId;
 
+    // Normalize field names — the DB schema uses commission_* prefixed
+    // columns (commission_rate, commission_currency, commission_per_unit,
+    // commission_custom_formula) but the UI sometimes sends short names
+    // (rate, currency). Map both directions so either works.
+    if (body.rate !== undefined && body.commission_rate === undefined) {
+      body.commission_rate = body.rate;
+    }
+    if (body.currency !== undefined && body.commission_currency === undefined) {
+      body.commission_currency = body.currency;
+    }
+    if (body.per_unit !== undefined && body.commission_per_unit === undefined) {
+      body.commission_per_unit = body.per_unit;
+    }
+    if (body.custom_formula !== undefined && body.commission_custom_formula === undefined) {
+      body.commission_custom_formula = body.custom_formula;
+    }
+    // Default currency if none provided
+    if (!body.commission_currency) body.commission_currency = "USD";
+    // Default type
+    if (!body.commission_type) body.commission_type = "profit_percent";
+    // Default active flag
+    if (body.active === undefined && body.is_active !== undefined) {
+      body.active = body.is_active;
+    }
+
     const created = await auth.store.upsertCommissionAgent(body);
     await audit(auth.store, auth.user, req, "commission_agent.create", "commission_agent", created.id, { partner_id: created.partner_id });
 

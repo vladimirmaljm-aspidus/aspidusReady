@@ -545,7 +545,10 @@ export interface ProductCatalogEntry {
   hs_code: string | null; // Harmonized System code
   description: string | null;
   base_unit: string; // see UNITS_OF_MEASURE
-  specifications: Record<string, string> | null; // e.g. { icumsa: "45", moisture: "0.10%", color: "white" }
+  // Specifications can be either an array of {name,value} pairs (current
+  // Supabase data) or a Record<string,string> (legacy). UI code must
+  // normalize both shapes — see portal-catalog.tsx for the helper pattern.
+  specifications: Array<{ name: string; value: string }> | Record<string, string> | null;
   origin_country: string | null; // ISO alpha-2
   images: string[] | null;
   active: boolean;

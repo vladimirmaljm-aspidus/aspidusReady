@@ -46,15 +46,40 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     body.tenant_id = tenantId;
 
+    // Normalize field names (same as commission-agents route)
+    if (body.rate !== undefined && body.commission_rate === undefined) {
+      body.commission_rate = body.rate;
+    }
+    if (body.currency !== undefined && body.commission_currency === undefined) {
+      body.commission_currency = body.currency;
+    }
+    if (body.per_unit !== undefined && body.commission_per_unit === undefined) {
+      body.commission_per_unit = body.per_unit;
+    }
+    if (body.custom_formula !== undefined && body.commission_custom_formula === undefined) {
+      body.commission_custom_formula = body.custom_formula;
+    }
+    if (!body.commission_currency) body.commission_currency = "USD";
+    if (!body.commission_type) body.commission_type = "profit_percent";
+
+    // Validate required fields
+    if (!body.deal_id) return NextResponse.json({ error: "deal_id is required." }, { status: 400 });
+    if (!body.agent_id) return NextResponse.json({ error: "agent_id is required." }, { status: 400 });
+    if (!body.partner_id) {
+      // Try to resolve partner_id from the agent
+      const agent = await auth.store.getCommissionAgent(body.agent_id);
+      if (agent) body.partner_id = agent.partner_id;
+    }
+
     // Auto-calculate commission if agent_id is provided
     if (body.agent_id && !body.calculated_commission) {
       const agent = await auth.store.getCommissionAgent(body.agent_id);
       if (agent) {
-        body.commission_type = agent.commission_type;
-        body.commission_rate = agent.commission_rate;
-        body.commission_per_unit = agent.commission_per_unit;
-        body.commission_custom_formula = agent.commission_custom_formula;
-        body.commission_currency = agent.commission_currency;
+        body.commission_type = body.commission_type || agent.commission_type;
+        body.commission_rate = body.commission_rate ?? agent.commission_rate;
+        body.commission_per_unit = body.commission_per_unit ?? agent.commission_per_unit;
+        body.commission_custom_formula = body.commission_custom_formula ?? agent.commission_custom_formula;
+        body.commission_currency = body.commission_currency || agent.commission_currency;
         body.calculated_commission = await auth.store.calculateCommission(
           agent.id,
           body.deal_value || 0,

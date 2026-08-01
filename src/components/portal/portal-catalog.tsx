@@ -149,8 +149,17 @@ export function PortalCatalog() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll pr-1">
           {filtered.map((p) => {
-            const specs = p.specifications || {};
-            const specEntries = Object.entries(specs).slice(0, 2);
+            // Specifications can be either an array of {name,value} pairs
+            // (current Supabase data) or a Record<string,string> (legacy).
+            // Normalize both into [{name, value}].
+            const rawSpecs = p.specifications as unknown;
+            const specEntries: { name: string; value: string }[] = Array.isArray(rawSpecs)
+              ? (rawSpecs as { name: string; value: string }[]).slice(0, 2)
+              : typeof rawSpecs === "object" && rawSpecs !== null
+                ? Object.entries(rawSpecs as Record<string, string>)
+                    .slice(0, 2)
+                    .map(([name, value]) => ({ name, value: String(value) }))
+                : [];
             return (
               <div
                 key={p.id}
@@ -184,12 +193,12 @@ export function PortalCatalog() {
                   </div>
                   {specEntries.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-3">
-                      {specEntries.map(([k, v]) => (
+                      {specEntries.map((s) => (
                         <span
-                          key={k}
+                          key={s.name}
                           className="text-[10px] px-1.5 py-0.5 rounded bg-muted/70 text-muted-foreground"
                         >
-                          <span className="font-medium">{k}:</span> {v}
+                          <span className="font-medium">{s.name}:</span> {s.value}
                         </span>
                       ))}
                     </div>
@@ -226,8 +235,13 @@ function EmptyCatalog() {
 }
 
 function CatalogDetail({ product }: { product: ProductCatalogEntry }) {
-  const specs = product.specifications || {};
-  const specEntries = Object.entries(specs);
+  // Normalize specifications — array of {name,value} OR Record<string,string>
+  const rawSpecs = product.specifications as unknown;
+  const specEntries: { name: string; value: string }[] = Array.isArray(rawSpecs)
+    ? (rawSpecs as { name: string; value: string }[])
+    : typeof rawSpecs === "object" && rawSpecs !== null
+      ? Object.entries(rawSpecs as Record<string, string>).map(([name, value]) => ({ name, value: String(value) }))
+      : [];
 
   return (
     <>
@@ -286,15 +300,15 @@ function CatalogDetail({ product }: { product: ProductCatalogEntry }) {
             </h3>
             <div className="rounded-xl border border-border/60 overflow-hidden shadow-soft bg-card">
               <dl className="divide-y divide-border/60">
-                {specEntries.map(([k, v]) => (
+                {specEntries.map((s) => (
                   <div
-                    key={k}
+                    key={s.name}
                     className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 smooth"
                   >
                     <dt className="text-sm text-muted-foreground capitalize">
-                      {k.replace(/_/g, " ")}
+                      {s.name.replace(/_/g, " ")}
                     </dt>
-                    <dd className="text-sm font-medium tabular">{v}</dd>
+                    <dd className="text-sm font-medium tabular">{s.value}</dd>
                   </div>
                 ))}
               </dl>
