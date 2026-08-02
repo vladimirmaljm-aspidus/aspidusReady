@@ -604,7 +604,7 @@ function RfqDetailSheet({
                           const res = await fetch(`/api/automation/create-offer-from-deal`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ dealId: rfq?.deal_id ?? rfq?.id }),
+                            body: JSON.stringify({ dealId: rfq?.linked_demand_id ?? rfq?.id }),
                           });
                           if (!res.ok) throw new Error("Failed to create offer");
                           const data = await res.json();

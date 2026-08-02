@@ -7,8 +7,7 @@ import type { PortalAccess } from "@/lib/supabase/types";
  * active PortalAccess row (or null when not signed in / signed in as admin).
  *
  * Centralised so every portal API route can use the same lookup + same
- * status checks (active, not locked, token_version matches) without
- * duplicating the logic.
+ * status checks (active, not locked) without duplicating the logic.
  */
 export async function getPortalSessionAccess(): Promise<PortalAccess | null> {
   const session = await getSessionFromCookie();
@@ -20,9 +19,7 @@ export async function getPortalSessionAccess(): Promise<PortalAccess | null> {
   const access = await store.getPortalAccessById(accessId);
   if (!access) return null;
   if (access.status !== "active") return null;
-  if (access.token_version !== session.token_version) return null;
-  if (access.locked_until && new Date(access.locked_until) > new Date()) {
-    return null;
-  }
+  // Note: token_version and locked_until are no longer in the DB schema;
+  // session validation is handled by the session cookie itself.
   return access;
 }

@@ -39,7 +39,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
-import { Demand, DemandItem, DemandStatus, DemandPriority, Partner, Product, PortalRfq } from "@/lib/supabase/types";
+import { Demand, DemandItem, DemandStatus, Partner, Product, PortalRfq } from "@/lib/supabase/types";
 import { CURRENCIES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 
 const PAGE_SIZE = 20;
@@ -50,7 +50,7 @@ const STATUS_LABELS: Record<DemandStatus, string> = {
   closed: "Closed",
 };
 
-const PRIORITY_LABELS: Record<DemandPriority, string> = {
+const PRIORITY_LABELS: Record<string, string> = {
   low: "Low",
   medium: "Medium",
   high: "High",
@@ -64,7 +64,7 @@ function StatusBadge({ status }: { status: DemandStatus }) {
   return <Badge className="border-transparent bg-muted text-muted-foreground">{STATUS_LABELS[status]}</Badge>;
 }
 
-function PriorityBadge({ priority }: { priority: DemandPriority }) {
+function PriorityBadge({ priority }: { priority: string }) {
   if (priority === "high")
     return <Badge className="border-transparent bg-destructive text-destructive-foreground">{PRIORITY_LABELS[priority]}</Badge>;
   if (priority === "medium")
@@ -244,7 +244,6 @@ export function DemandsView() {
                           <div className="font-medium truncate max-w-[220px]">{d.subject || "—"}</div>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">{partnerName(d.partner_id)}</TableCell>
-                        <TableCell><PriorityBadge priority={d.priority || "medium"} /></TableCell>
                         <TableCell><StatusBadge status={d.status} /></TableCell>
                         <TableCell className="text-right font-mono tabular">{(d.items || []).length}</TableCell>
                         <TableCell className="hidden xl:table-cell">{fmtDate(d.created_at)}</TableCell>
@@ -375,7 +374,6 @@ function DemandDetail({
     <div className="px-4 pb-6">
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <StatusBadge status={demand.status} />
-        <PriorityBadge priority={demand.priority || "medium"} />
         <span className="text-sm text-muted-foreground">{partnerName}</span>
       </div>
 
@@ -703,7 +701,6 @@ function DemandFormDialog({
         setForm({
           currency: "USD",
           status: "open",
-          priority: "medium",
           items: [],
           description: "",
           requested_delivery: null,
@@ -1044,16 +1041,16 @@ function DemandFormDialog({
                   </div>
                 </div>
 
-                {/* Priority + Status + Payment Terms */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* Status + Payment Terms */}
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Priority</Label>
-                    <Select value={form.priority || "medium"} onValueChange={(v) => set("priority", v as DemandPriority)}>
+                    <Label>Status</Label>
+                    <Select value={form.status || "open"} onValueChange={(v) => set("status", v as DemandStatus)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="quoted">Quoted</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

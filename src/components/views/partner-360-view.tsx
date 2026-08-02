@@ -1021,7 +1021,7 @@ function DocumentsTab({
                       {d.visible_to_partner ? "Visible" : "Hidden"}
                     </Badge>
                     <div className="ml-auto flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="size-7" onClick={() => { if (d.file_path) { window.open(`/api/documents/${d.id}`, "_blank"); } else { toast.info("No file available for preview"); } }}>
+                      <Button size="icon" variant="ghost" className="size-7" onClick={() => { if (d.storage_path) { window.open(`/api/documents/${d.id}`, "_blank"); } else { toast.info("No file available for preview"); } }}>
                         <Eye className="size-3.5" />
                       </Button>
                       {canAdmin && (

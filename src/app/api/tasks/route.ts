@@ -35,11 +35,11 @@ export async function GET(req: NextRequest) {
   // Apply filters
   if (mine) {
     tasks = tasks.filter(
-      (t) => t.user_id === auth.user.id || t.assigned_to === auth.user.id
+      (t) => t.user_id === auth.user.id
     );
   }
   if (assigned) {
-    tasks = tasks.filter((t) => t.assigned_to === auth.user.id);
+    tasks = tasks.filter((t) => t.user_id === auth.user.id);
   }
   if (status) {
     tasks = tasks.filter((t) => (t as any).status === status || (t.done && status === "done"));
@@ -49,17 +49,17 @@ export async function GET(req: NextRequest) {
   }
   if (partnerId) {
     tasks = tasks.filter(
-      (t) => t.partner_id === partnerId || (t.entity_type === "partner" && t.entity_id === partnerId)
+      (t) => t.entity_type === "partner" && t.entity_id === partnerId
     );
   }
   if (productId) {
     tasks = tasks.filter(
-      (t) => t.product_id === productId || (t.entity_type === "product" && t.entity_id === productId)
+      (t) => t.entity_type === "product" && t.entity_id === productId
     );
   }
   if (dealId) {
     tasks = tasks.filter(
-      (t) => t.deal_id === dealId || (t.entity_type === "deal" && t.entity_id === dealId)
+      (t) => t.entity_type === "deal" && t.entity_id === dealId
     );
   }
 
@@ -96,15 +96,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Default status
-  if (!body.status) body.status = "todo";
-  if (body.status === "done") body.done = true;
-  if (body.done && !body.completed_at) body.completed_at = new Date().toISOString();
+  // Default done flag
+  if (body.done) body.done = true;
 
   const created = await auth.store.upsertTask(body);
   await audit(auth.store, auth.user, req, body.id ? "task.update" : "task.create", "task", created.id, {
     title: created.title,
-    assigned_to: (created as any).assigned_to,
   });
   return NextResponse.json(created);
 }

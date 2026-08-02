@@ -61,7 +61,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
   // Resolve font family — default Helvetica. Templates can specify a custom
   // font family name that has been registered via Font.register.
   const fontFamily = tpl?.body_font_family || "Helvetica";
-  const headingFontFamily = tpl?.heading_font_family || "Helvetica-Bold";
+  const headingFontFamily = tpl?.body_font_family ? `${tpl.body_font_family}-Bold` : "Helvetica-Bold";
 
   const styles = StyleSheet.create({
     page: {

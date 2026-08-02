@@ -6,7 +6,6 @@ export type PartnerType = "supplier" | "buyer" | "both" | "agent" | "logistics" 
 export type DealStage = "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
 export type OfferStatus = "draft" | "sent" | "accepted" | "rejected" | "expired";
 export type DemandStatus = "open" | "quoted" | "closed";
-export type DemandPriority = "low" | "medium" | "high";
 export type KycStatus = "not_submitted" | "pending" | "approved" | "rejected";
 
 export interface User {
@@ -80,6 +79,17 @@ export interface Partner {
   kyc_data: Record<string, unknown> | null;
   kyc_reviewed_by: string | null;
   kyc_reviewed_at: string | null;
+  // Additional DB fields
+  activities?: Record<string, unknown> | null;
+  industry?: string | null;
+  lead_source?: string | null;
+  linked_company_id?: string | null;
+  old_id?: string | null;
+  portal_permissions?: Record<string, unknown> | null;
+  portal_visible_products?: string[] | null;
+  rating?: number | null;
+  social?: Record<string, unknown> | null;
+  whatsapp?: string | null;
   // Meta
   created_at: string;
   updated_at: string;
@@ -87,6 +97,7 @@ export interface Partner {
 
 export interface Product {
   id: string;
+  tenant_id?: string | null;
   sku: string;
   name: string;
   description: string | null;
@@ -99,6 +110,16 @@ export interface Product {
   reorder_level: number;
   active: boolean;
   attributes: Record<string, unknown> | null;
+  brand?: string | null;
+  coa_params?: Record<string, unknown> | null;
+  detailed_spec?: string | null;
+  hs_code?: string | null;
+  image_url?: string | null;
+  inventory?: Record<string, unknown> | null;
+  logistics?: Record<string, unknown> | null;
+  old_id?: string | null;
+  shelf_life?: string | null;
+  tags?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -122,6 +143,29 @@ export interface Deal {
   buy_cost: number; // total cost of goods for this deal
   quantity: number; // quantity sold
   unit: string; // unit of measure
+  // Additional DB fields
+  associates?: string[] | null;
+  bank_costs?: Record<string, unknown> | null;
+  buyer_id?: string | null;
+  buyer_paid_on?: string | null;
+  contract_id?: string | null;
+  costs?: Record<string, unknown> | null;
+  delivery_date?: string | null;
+  delivery_location?: string | null;
+  documents?: string[] | null;
+  exchange_rate?: number | null;
+  incoterm?: string | null;
+  old_id?: string | null;
+  payment_account_id?: string | null;
+  payment_dates?: Record<string, unknown> | null;
+  product_id?: string | null;
+  purchase_currency?: string | null;
+  purchase_price?: number | null;
+  selling_currency?: string | null;
+  selling_price?: number | null;
+  supplier_bank_details?: Record<string, unknown> | null;
+  supplier_id?: string | null;
+  supplier_paid_on?: string | null;
   // Meta
   created_at: string;
   updated_at: string;
@@ -172,6 +216,20 @@ export interface Offer {
   tax_clause: string | null;
   incoterm: string | null;
   selling_price: number | null;
+  // Additional DB fields
+  admin_reviewed_by_client?: boolean | null;
+  client_accepted_at?: string | null;
+  client_note?: string | null;
+  client_signature?: string | null;
+  document_id?: string | null;
+  old_id?: string | null;
+  payment_bank_idx?: number | null;
+  pdf_file_url?: string | null;
+  pdf_generated_at?: string | null;
+  product_id?: string | null;
+  quantity?: number | null;
+  services?: Record<string, unknown> | null;
+  unit?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -191,7 +249,6 @@ export interface Demand {
   number: string;
   partner_id: string;
   status: DemandStatus;
-  priority: DemandPriority;
   subject: string;
   description: string | null;
   requested_delivery: string | null;
@@ -208,6 +265,12 @@ export interface Demand {
   destination: string | null;
   needed_by: string | null;
   payment_terms: string | null;
+  buyer_id: string | null;
+  end_buyer: string | null;
+  logistics_agent: string | null;
+  logistics_agent_contact: string | null;
+  old_id: string | null;
+  requestor: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -223,12 +286,6 @@ export interface SharedDocument {
   category: "contract" | "invoice" | "spec" | "other";
   uploaded_by: string | null;
   visible_to_partner: boolean;
-  description: string | null;
-  file_type: string | null;
-  file_size: number | null;
-  file_path: string | null;
-  url: string | null;
-  visibility: string | null;
   created_at: string;
 }
 
@@ -247,6 +304,7 @@ export interface AuditLog {
 }
 
 export interface Setting {
+  tenant_id?: string | null;
   key: string;
   value: unknown;
   updated_at: string;
@@ -254,6 +312,7 @@ export interface Setting {
 
 export interface Session {
   id: string;
+  tenant_id?: string | null;
   user_id: string;
   token: string;
   ip: string | null;
@@ -267,33 +326,19 @@ export interface Session {
 export interface UserTask {
   id: string;
   tenant_id: string;
-  user_id: string; // creator / owner
-  assigned_to: string | null; // who is responsible (null = unassigned)
+  user_id: string;
   title: string;
-  description: string | null;
   done: boolean;
-  status: "todo" | "in_progress" | "done" | "blocked" | "cancelled";
-  priority: "low" | "medium" | "high" | "urgent";
   due_date: string | null;
-  completed_at: string | null;
-  // Links to other entities
-  entity_type: string | null; // partner | product | deal | offer | invoice | demand
+  entity_type: string | null;
   entity_id: string | null;
-  partner_id: string | null;
-  product_id: string | null;
-  deal_id: string | null;
-  // Instructions / notes for the assignee
-  instructions: string | null;
-  // Tracking
-  estimated_hours: number | null;
-  actual_hours: number | null;
-  tags: string[] | null;
+  priority: "low" | "medium" | "high" | "urgent";
   created_at: string;
-  updated_at: string;
 }
 
 export interface InventoryMovement {
   id: string;
+  tenant_id?: string | null;
   partner_id: string;
   product_id: string;
   delta: number;
@@ -304,6 +349,7 @@ export interface InventoryMovement {
 
 export interface EntityNote {
   id: string;
+  tenant_id?: string | null;
   entity_type: string;
   entity_id: string;
   content: string;
@@ -354,8 +400,6 @@ export interface Invoice {
   paid_at: string | null;
   notes: string | null;
   items: OfferLineItem[];
-  // Optional UI-only field
-  payment_terms?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -380,7 +424,6 @@ export interface Proforma {
   valid_until: string;
   sent_at: string | null;
   paid_at: string | null;
-  payment_terms: string | null;
   notes: string | null;
   items: OfferLineItem[];
   created_at: string;
@@ -392,6 +435,7 @@ export type DocumentType = "offer" | "invoice" | "proforma" | "contract" | "spec
 
 export interface DocumentRegisterEntry {
   id: string;
+  tenant_id?: string | null;
   number: string; // e.g. OF-2026-001-V2
   type: DocumentType;
   version: number; // 1, 2, 3...
@@ -407,12 +451,10 @@ export interface DocumentRegisterEntry {
 
 export interface DocumentRevision {
   id: string;
-  tenant_id?: string;
+  tenant_id: string;
   document_id: string;
   version: number;
   change_note: string;
-  file_url?: string | null;
-  change_summary?: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -420,6 +462,7 @@ export interface DocumentRevision {
 // ---------- Vault (encrypted secrets) ----------
 export interface VaultSecret {
   id: string;
+  tenant_id?: string | null;
   key: string;
   description: string | null;
   encrypted_value: string;
@@ -447,6 +490,7 @@ export interface ApiKey {
 // ---------- Webhooks ----------
 export interface Webhook {
   id: string;
+  tenant_id?: string | null;
   name: string;
   url: string;
   events: string[]; // e.g. ["offer.sent", "deal.won"]
@@ -460,7 +504,9 @@ export interface Webhook {
 // ---------- Security (sessions, login history, IPs, devices) ----------
 export interface SecuritySession {
   id: string;
+  tenant_id?: string | null;
   user_id: string;
+  token?: string | null;
   ip: string | null;
   user_agent: string | null;
   country: string | null;
@@ -473,6 +519,7 @@ export interface SecuritySession {
 
 export interface LoginHistoryEntry {
   id: string;
+  tenant_id?: string | null;
   user_id: string;
   username: string;
   ip: string | null;
@@ -485,6 +532,7 @@ export interface LoginHistoryEntry {
 
 export interface KnownIp {
   id: string;
+  tenant_id?: string | null;
   user_id: string;
   ip: string;
   country: string | null;
@@ -495,6 +543,7 @@ export interface KnownIp {
 
 export interface TrustedDevice {
   id: string;
+  tenant_id?: string | null;
   user_id: string;
   device_name: string;
   fingerprint: string;
@@ -509,6 +558,7 @@ export type MailStatus = "queued" | "sending" | "sent" | "failed";
 
 export interface MailQueueEntry {
   id: string;
+  tenant_id?: string | null;
   to_email: string;
   subject: string;
   body: string;
@@ -540,7 +590,7 @@ export interface Tenant {
   website: string | null;
   // Bank details (for invoices)
   bank_name: string | null;
-  bank_account: string | null;
+  bank_accounts: string | null;
   bank_iban: string | null;
   bank_swift: string | null;
   // Branding
@@ -573,6 +623,17 @@ export interface ProductCatalogEntry {
   origin_country: string | null; // ISO alpha-2
   images: string[] | null;
   active: boolean;
+  // Additional DB fields
+  brand?: string | null;
+  coa_params?: Record<string, unknown> | null;
+  detailed_spec?: string | null;
+  image_url?: string | null;
+  inventory?: Record<string, unknown> | null;
+  logistics?: Record<string, unknown> | null;
+  old_id?: string | null;
+  shelf_life?: string | null;
+  sku?: string | null;
+  tags?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -736,10 +797,6 @@ export interface PortalAccess {
   must_set_password: boolean;
   last_login_at: string | null;
   last_login_ip: string | null;
-  // Security: lockout & token version
-  locked_until: string | null;
-  failed_attempts: number;
-  token_version: number;
   created_at: string;
   updated_at: string;
 }
@@ -777,7 +834,6 @@ export interface DocumentTemplate {
   body_font_family: string;
   body_font_size: number;
   body_line_height: number;
-  heading_font_family: string;
   primary_color: string; // hex
   accent_color: string;
   // Table styling
@@ -958,7 +1014,6 @@ export interface PortalRfq {
   // Admin response
   linked_offer_id: string | null;
   linked_demand_id: string | null;
-  deal_id?: string | null;
   admin_notes: string | null;
 
   // Meta
@@ -1173,8 +1228,8 @@ export interface ErpAccount {
   created_at: string;
   updated_at: string;
   // computed
-  children?: ErpAccount[];
-  parent?: ErpAccount;
+  children?: ErpAccount[]; // virtual (joined)
+  parent?: ErpAccount; // virtual (joined)
 }
 
 export interface FiscalPeriod {
@@ -1213,12 +1268,13 @@ export interface ErpJournalEntry {
   posted_at: string | null;
   created_at: string;
   updated_at: string;
-  // relations
+  // virtual (joined)
   lines?: ErpJournalLine[];
 }
 
 export interface ErpJournalLine {
   id: string;
+  tenant_id?: string | null;
   journal_entry_id: string;
   account_id: string;
   line_number: number;
@@ -1229,7 +1285,7 @@ export interface ErpJournalLine {
   partner_id: string | null;
   cost_center_id: string | null;
   created_at: string;
-  // relations
+  // virtual (joined)
   account?: ErpAccount;
   partner?: Partner;
 }
@@ -1244,8 +1300,8 @@ export interface ErpCostCenter {
   description: string | null;
   created_at: string;
   updated_at: string;
-  children?: ErpCostCenter[];
-  parent?: ErpCostCenter;
+  children?: ErpCostCenter[]; // virtual (joined)
+  parent?: ErpCostCenter; // virtual (joined)
 }
 
 export interface ErpBankAccount {
@@ -1259,9 +1315,12 @@ export interface ErpBankAccount {
   currency: string;
   balance: number;
   is_active: boolean;
+  // Additional DB fields
+  linked_company_bank_idx?: number | null;
+  old_id?: string | null;
   created_at: string;
   updated_at: string;
-  // relations
+  // virtual (joined)
   account?: ErpAccount;
   transactions?: ErpBankTransaction[];
 }
@@ -1280,8 +1339,15 @@ export interface ErpBankTransaction {
   is_reconciled: boolean;
   reconciled_with: string | null;
   journal_entry_id: string | null;
+  // Additional DB fields
+  category?: string | null;
+  deal_id?: string | null;
+  invoice_number?: string | null;
+  is_auto_generated?: boolean | null;
+  old_id?: string | null;
+  updated_at?: string;
   created_at: string;
-  // relations
+  // virtual (joined)
   bank_account?: ErpBankAccount;
   journal_entry?: ErpJournalEntry;
 }
@@ -1383,5 +1449,38 @@ export interface UserPreference {
   user_id: string;
   preference_key: string;
   preference_value: string;
+  updated_at: string;
+}
+
+// ============================================================
+// Partner Connections (graph edges between partners)
+// ============================================================
+export interface PartnerConnection {
+  id: string;
+  tenant_id: string;
+  source_id: string;
+  target_id: string;
+  relation_type: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+// ============================================================
+// Recurring Expenses
+// ============================================================
+export interface RecurringExpense {
+  id: string;
+  tenant_id: string;
+  account_id: string;
+  description: string;
+  category: string | null;
+  amount: number;
+  currency: string;
+  day_of_month: number;
+  start_date: string | null;
+  last_applied: string | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
   updated_at: string;
 }

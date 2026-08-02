@@ -860,7 +860,6 @@ function InvoiceFormDialog({
         setForm({
           ...invoice,
           items: (invoice.items || []).map((i) => ({ ...i })),
-          payment_terms: invoice.payment_terms || "Net 30",
         });
         // When editing, expand all sections
         setLineItemsOpen(true);

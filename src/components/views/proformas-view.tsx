@@ -722,7 +722,6 @@ function ProformaFormDialog({
         items: (proforma.items || []).map((i) => ({ ...i })),
       } : {
         currency: "EUR",
-        payment_terms: "net30",
         issue_date: now.toISOString(),
         valid_until: validUntil.toISOString(),
         notes: "",
@@ -921,18 +920,7 @@ function ProformaFormDialog({
                   </Select>
                 </div>
 
-                {/* Payment terms */}
-                <div className="space-y-1.5">
-                  <Label>Payment terms</Label>
-                  <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_TERMS_LOCAL.map((pt) => (
-                        <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Payment terms - removed, not in DB schema */}
 
                 {/* Subject (optional, smaller) */}
                 <div className="space-y-1.5">
