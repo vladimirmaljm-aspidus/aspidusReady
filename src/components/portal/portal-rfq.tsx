@@ -102,7 +102,7 @@ interface RfqFormState {
   product_name: string;
   product_description: string;
   category: string;
-  quantity: string; // string for input handling
+  quantity: string;
   unit: string;
   target_price: string;
   currency: string;
@@ -112,6 +112,15 @@ interface RfqFormState {
   incoterm: string;
   specifications: string;
   notes: string;
+  // Third-party delivery (when requesting for another company)
+  is_third_party: boolean;
+  third_party_company_name: string;
+  third_party_country: string;
+  third_party_address: string;
+  third_party_contact_name: string;
+  third_party_contact_email: string;
+  third_party_contact_phone: string;
+  third_party_tax_id: string;
 }
 
 const EMPTY_FORM: RfqFormState = {
@@ -128,6 +137,14 @@ const EMPTY_FORM: RfqFormState = {
   incoterm: "",
   specifications: "",
   notes: "",
+  is_third_party: false,
+  third_party_company_name: "",
+  third_party_country: "",
+  third_party_address: "",
+  third_party_contact_name: "",
+  third_party_contact_email: "",
+  third_party_contact_phone: "",
+  third_party_tax_id: "",
 };
 
 // ============================================================
@@ -188,6 +205,21 @@ export function PortalRfq() {
       toast.error("Please select a unit of measure.");
       return;
     }
+    // Validate third-party company info if enabled
+    if (form.is_third_party) {
+      if (!form.third_party_company_name.trim()) {
+        toast.error("Please enter the third-party company name.");
+        return;
+      }
+      if (!form.third_party_country) {
+        toast.error("Please select the third-party company country.");
+        return;
+      }
+      if (!form.third_party_contact_email.trim()) {
+        toast.error("Please enter a contact email for the third-party company.");
+        return;
+      }
+    }
     createMut.mutate({
       product_name: form.product_name.trim(),
       product_description: form.product_description.trim() || null,
@@ -202,6 +234,21 @@ export function PortalRfq() {
       incoterm: form.incoterm || null,
       specifications: form.specifications.trim() || null,
       notes: form.notes.trim() || null,
+      // Third-party company info (stored in notes if not supported by schema)
+      ...(form.is_third_party ? {
+        notes: [
+          form.notes.trim(),
+          "",
+          "=== THIRD-PARTY DELIVERY ===",
+          `Company: ${form.third_party_company_name}`,
+          `Country: ${form.third_party_country}`,
+          form.third_party_address ? `Address: ${form.third_party_address}` : "",
+          form.third_party_contact_name ? `Contact: ${form.third_party_contact_name}` : "",
+          `Email: ${form.third_party_contact_email}`,
+          form.third_party_contact_phone ? `Phone: ${form.third_party_contact_phone}` : "",
+          form.third_party_tax_id ? `Tax ID: ${form.third_party_tax_id}` : "",
+        ].filter(Boolean).join("\n"),
+      } : {}),
     });
   }
 
@@ -403,6 +450,64 @@ export function PortalRfq() {
                       placeholder="Any additional context for our sourcing team."
                       rows={2}
                     />
+                  </div>
+                </FormSection>
+
+                {/* Third-party delivery option */}
+                <FormSection title="Delivery Destination" description="Optionally deliver to a different company" icon={Globe2}>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.is_third_party}
+                        onChange={(e) => update("is_third_party", e.target.checked)}
+                        className="size-4 rounded border-border"
+                      />
+                      <span className="text-sm">Deliver to a different company (third-party)</span>
+                    </label>
+                    {form.is_third_party && (
+                      <div className="space-y-3 p-3 rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+                        <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                          <AlertCircle className="size-3.5" />
+                          We need the delivery company's details to verify the shipment destination.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Company Name *</Label>
+                            <Input value={form.third_party_company_name} onChange={(e) => update("third_party_company_name", e.target.value)} placeholder="ABC Trading LLC" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Country *</Label>
+                            <Select value={form.third_party_country} onValueChange={(v) => update("third_party_country", v)}>
+                              <SelectTrigger className="h-10"><SelectValue placeholder="Select country" /></SelectTrigger>
+                              <SelectContent className="max-h-60">
+                                {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Address</Label>
+                            <Input value={form.third_party_address} onChange={(e) => update("third_party_address", e.target.value)} placeholder="Street, city, postal code" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Tax ID / VAT</Label>
+                            <Input value={form.third_party_tax_id} onChange={(e) => update("third_party_tax_id", e.target.value)} placeholder="Tax registration number" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Contact Name</Label>
+                            <Input value={form.third_party_contact_name} onChange={(e) => update("third_party_contact_name", e.target.value)} placeholder="John Smith" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Contact Email *</Label>
+                            <Input type="email" value={form.third_party_contact_email} onChange={(e) => update("third_party_contact_email", e.target.value)} placeholder="contact@company.com" />
+                          </div>
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label className="text-xs text-muted-foreground">Contact Phone</Label>
+                            <Input value={form.third_party_contact_phone} onChange={(e) => update("third_party_contact_phone", e.target.value)} placeholder="+971 50 123 4567" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </FormSection>
               </CardContent>

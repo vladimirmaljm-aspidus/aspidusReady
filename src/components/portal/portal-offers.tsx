@@ -111,11 +111,13 @@ export function PortalOffers() {
   const canDownloadPdf = !!portalAccess?.can_download_pdf;
   const tier = portalAccess?.tier as PortalTier | undefined;
 
-  function handleDownloadPdf() {
-    // Portal session uses a separate JWT (sub = portal:<accessId>) that the
-    // admin /api/offers/[id]/pdf endpoint cannot authenticate. PDF download
-    // remains available in the admin CRM view.
-    toast.info("PDF download available in admin view.");
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
+
+  function handleDownloadPdf(offerId: string) {
+    setPdfLoading(offerId);
+    // Open PDF in new tab using portal-specific endpoint
+    window.open(`/api/portal/offers/${offerId}/pdf`, "_blank");
+    setTimeout(() => setPdfLoading(null), 2000);
   }
 
   return (
@@ -215,7 +217,7 @@ export function PortalOffers() {
                               className="size-8 smooth hover:bg-accent hover:text-primary"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDownloadPdf();
+                                handleDownloadPdf(o.id);
                               }}
                               aria-label="Download PDF"
                             >
@@ -266,7 +268,7 @@ export function PortalOffers() {
               offer={detailQ.data}
               canDownloadPdf={canDownloadPdf}
               tier={tier}
-              onDownload={handleDownloadPdf}
+              onDownload={() => handleDownloadPdf(detailQ.data.id)}
             />
           ) : null}
         </SheetContent>
