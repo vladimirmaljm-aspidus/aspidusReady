@@ -119,27 +119,13 @@ export async function GET(req: NextRequest) {
   // If country is specified, get tariff info from WITS
   let tariffInfo: any = null;
   if (country) {
-    try {
-      const witsRes = await fetch(
-        `http://localhost:3000/api/integrations/wits?reporter=${country}`,
-        { signal: AbortSignal.timeout(5_000) }
-      );
-      if (witsRes.ok) {
-        const witsData = await witsRes.json();
-        tariffInfo = {
-          country,
-          mfnRate: witsData.tariff?.mfnRate || null,
-          vat: witsData.tariff?.vat || null,
-          vatName: witsData.tariff?.vatName || null,
-          notes: witsData.tariff?.notes || null,
-          foodExemptions: witsData.tariff?.foodExemptions || null,
-          freeTradeAgreements: witsData.freeTradeAgreements || [],
-          requiredDocuments: witsData.requiredDocuments || [],
-        };
-      }
-    } catch {
-      // WITS not available — just return HS codes
-    }
+    // Note: WITS tariff info is available via the Trade Advisor component
+    // which calls /api/integrations/wits directly. Here we just return
+    // a reference so the frontend knows to fetch it separately.
+    tariffInfo = {
+      country,
+      note: "Use the Trade Advisor (/api/integrations/wits?reporter=" + country + ") for detailed tariff info.",
+    };
   }
 
   return NextResponse.json({
