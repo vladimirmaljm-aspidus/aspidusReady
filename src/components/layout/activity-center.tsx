@@ -16,6 +16,7 @@ import {
   Mail,
   ListChecks,
   Info,
+  MessageSquare,
   UserPlus,
   CheckCheck,
 } from "lucide-react";
@@ -40,7 +41,8 @@ type IconColor =
   | "muted"
   | "chart-1"
   | "chart-2"
-  | "chart-4";
+  | "chart-4"
+  | "primary";
 
 interface IconSpec {
   Icon: React.ComponentType<{ className?: string }>;
@@ -67,6 +69,7 @@ const NOTIF_ICON_MAP: Record<NotificationType, IconSpec> = {
   task_due_soon: { Icon: Clock, color: "amber" },
   low_stock_alert: { Icon: Package, color: "amber" },
   system_message: { Icon: Info, color: "muted" },
+  portal_message: { Icon: MessageSquare, color: "primary" },
 };
 
 const ICON_COLOR_CLASS: Record<IconColor, string> = {
@@ -77,6 +80,7 @@ const ICON_COLOR_CLASS: Record<IconColor, string> = {
   "chart-1": "text-chart-1",
   "chart-2": "text-chart-2",
   "chart-4": "text-chart-4",
+  primary: "text-primary",
 };
 
 // Map notification.entity_type → CRM view key for click navigation.

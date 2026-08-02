@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, audit } from "@/lib/api/helpers";
+
+export const runtime = "nodejs";
+
+/**
+ * PUT /api/portal-access/[id]/permissions
+ *
+ * Admin updates portal access permissions for a client.
+ * Body: {
+ *   can_view_offers, can_view_documents, can_view_catalog,
+ *   can_view_invoices, can_view_profile, can_view_company_info,
+ *   can_submit_rfq, can_download_pdf,
+ *   exempt_kyc, exempt_document_upload, exempt_location_share,
+ *   tier, status
+ * }
+ */
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+  if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const body = await req.json();
+
+  // Whitelist permission fields
+  const allowedFields = [
+    "can_view_offers", "can_view_documents", "can_view_catalog",
+    "can_view_invoices", "can_view_profile", "can_view_company_info",
+    "can_submit_rfq", "can_download_pdf",
+    "exempt_kyc", "exempt_document_upload", "exempt_location_share",
+    "tier", "status", "portal_email", "portal_level",
+  ];
+
+  const update: Record<string, unknown> = {};
+  for (const field of allowedFields) {
+    if (body[field] !== undefined) {
+      update[field] = body[field];
+    }
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
+  }
+
+  try {
+    const updated = await auth.store.upsertPortalAccess({ id, ...update });
+    await audit(auth.store, auth.user, req, "portal_access.permissions_update", "portal_access", id, update);
+
+    return NextResponse.json({ ...updated, password_hash: undefined });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

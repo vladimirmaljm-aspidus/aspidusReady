@@ -55,7 +55,8 @@ export type ViewKey =
   | "portal-catalog"
   | "portal-profile"
   | "portal-kyc"
-  | "portal-rfq";
+  | "portal-rfq"
+  | "portal-messages";
 
 export interface SafeUser {
   id: string;

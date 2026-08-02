@@ -21,6 +21,7 @@ import {
   X,
   MapPin,
   ShieldAlert,
+  MessageSquare,
 } from "lucide-react";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,10 @@ const PortalRfq = dynamic(
   () => import("@/components/portal/portal-rfq").then((m) => m.PortalRfq),
   { ssr: false }
 );
+const PortalMessages = dynamic(
+  () => import("@/components/portal/portal-messages").then((m) => m.PortalMessages),
+  { ssr: false }
+);
 
 interface NavItem {
   key: ViewKey;
@@ -72,6 +77,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { key: "portal-dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "portal-offers", label: "My Offers", icon: FileText, gate: "can_view_offers" },
+  { key: "portal-messages", label: "Messages", icon: MessageSquare },
   { key: "portal-documents", label: "My Documents", icon: FolderOpen, gate: "can_view_documents" },
   { key: "portal-catalog", label: "Product Catalog", icon: Package, gate: "can_view_catalog" },
   { key: "portal-rfq", label: "Request a Quote", icon: ShoppingCart, gate: "can_submit_rfq" },
@@ -331,6 +337,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
           {view === "portal-catalog" && <PortalCatalog />}
           {view === "portal-kyc" && <PortalKyc />}
           {view === "portal-rfq" && <PortalRfq />}
+          {view === "portal-messages" && <PortalMessages />}
           {view === "portal-profile" && <PortalProfile />}
         </main>
       </div>

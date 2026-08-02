@@ -1020,7 +1020,8 @@ export type NotificationType =
   | "task_assigned"
   | "task_due_soon"
   | "low_stock_alert"
-  | "system_message";
+  | "system_message"
+  | "portal_message";
 
 export interface Notification {
   id: string;
