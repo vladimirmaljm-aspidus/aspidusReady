@@ -229,7 +229,8 @@ export function DashboardView() {
   ).length;
 
   const userName = user?.full_name || user?.username || "there";
-  const tenantName = user?.tenant_id || "Aspidus";
+  const activeTenantName = useAppStore((s) => s.activeTenantName);
+  const tenantName = activeTenantName || user?.tenant_id || "Aspidus";
 
   const lowStockCount = k.low_stock_count || 0;
   const marginTone =
