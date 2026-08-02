@@ -39,6 +39,7 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Proforma, ProformaStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const STATUS_LABELS: Record<ProformaStatus, string> = {
   draft: "Draft",
@@ -99,6 +100,9 @@ interface PartnerContext {
 }
 
 export function ProformasView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -110,13 +114,13 @@ export function ProformasView() {
   const [showFromOffer, setShowFromOffer] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["proformas", search, statusFilter, partnerFilter],
+    queryKey: ["proformas", tenantKey, search, statusFilter, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
-      const r = await fetch(`/api/proformas?${params}`);
+      const r = await fetch(api(`/api/proformas?${params}`));
       if (!r.ok) throw new Error("Failed to load proformas");
       return r.json() as Promise<{ items: Proforma[]; total: number }>;
     },
@@ -124,27 +128,27 @@ export function ProformasView() {
 
   // Unfiltered list for KPI rollups
   const kpiQuery = useQuery({
-    queryKey: ["proformas", "kpi"],
+    queryKey: ["proformas", tenantKey, "kpi"],
     queryFn: async () => {
-      const r = await fetch(`/api/proformas?limit=500`);
+      const r = await fetch(api(`/api/proformas?limit=500`));
       if (!r.ok) throw new Error("Failed to load KPI data");
       return r.json() as Promise<{ items: Proforma[]; total: number }>;
     },
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
   });
 
   const detail = useQuery({
-    queryKey: ["proforma", detailId],
+    queryKey: ["proforma", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/proformas/${detailId}`);
+      const r = await fetch(api(`/api/proformas/${detailId}`));
       if (!r.ok) throw new Error("Failed to load proforma");
       return r.json() as Promise<Proforma>;
     },
@@ -153,7 +157,7 @@ export function ProformasView() {
 
   const markPaidMut = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const r = await fetch(`/api/proformas/${id}`, {
+      const r = await fetch(api(`/api/proformas/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "paid", paid_at: new Date().toISOString() }),
@@ -163,22 +167,22 @@ export function ProformasView() {
     },
     onSuccess: () => {
       toast.success("Proforma marked as paid.");
-      qc.invalidateQueries({ queryKey: ["proformas"] });
-      if (detailId) qc.invalidateQueries({ queryKey: ["proforma", detailId] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["proformas", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["proforma", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: () => toast.error("Could not update proforma."),
   });
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/proformas/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/proformas/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete proforma");
     },
     onSuccess: () => {
       toast.success("Proforma deleted.");
-      qc.invalidateQueries({ queryKey: ["proformas"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["proformas", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -357,8 +361,8 @@ export function ProformasView() {
         partners={partnerList}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["proformas"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["proformas", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -368,8 +372,8 @@ export function ProformasView() {
         onOpenChange={setShowFromOffer}
         onCreated={() => {
           setShowFromOffer(false);
-          qc.invalidateQueries({ queryKey: ["proformas"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["proformas", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -556,12 +560,15 @@ function CreateFromOfferDialog({
   onOpenChange: (o: boolean) => void;
   onCreated: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [creating, setCreating] = useState<string | null>(null);
 
   const offers = useQuery({
-    queryKey: ["offers", "for-proforma"],
+    queryKey: ["offers", tenantKey, "for-proforma"],
     queryFn: async () => {
-      const r = await fetch(`/api/offers?limit=100`);
+      const r = await fetch(api(`/api/offers?limit=100`));
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json() as Promise<{ items: Offer[]; total: number }>;
     },
@@ -569,9 +576,9 @@ function CreateFromOfferDialog({
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
@@ -585,7 +592,7 @@ function CreateFromOfferDialog({
   async function createFromOffer(offerId: string) {
     setCreating(offerId);
     try {
-      const r = await fetch("/api/automation/create-proforma-from-offer", {
+      const r = await fetch(api("/api/automation/create-proforma-from-offer"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offer_id: offerId }),
@@ -679,6 +686,9 @@ function ProformaFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const isEditing = !!proforma;
 
   const [form, setForm] = useState<Partial<Proforma> & { items: OfferLineItem[] }>({ items: [] });
@@ -691,9 +701,9 @@ function ProformaFormDialog({
   const [notesOpen, setNotesOpen] = useState(false);
 
   const offers = useQuery({
-    queryKey: ["offers", "list", "100"],
+    queryKey: ["offers", tenantKey, "list", "100"],
     queryFn: async () => {
-      const r = await fetch(`/api/offers?limit=100`);
+      const r = await fetch(api(`/api/offers?limit=100`));
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json() as Promise<{ items: Offer[]; total: number }>;
     },
@@ -701,9 +711,9 @@ function ProformaFormDialog({
   });
 
   const products = useQuery({
-    queryKey: ["products", "list", "200"],
+    queryKey: ["products", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/products?limit=200`);
+      const r = await fetch(api(`/api/products?limit=200`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
@@ -792,7 +802,7 @@ function ProformaFormDialog({
     }
     setLoadingPartner(true);
     try {
-      const r = await fetch(`/api/automation/partner-context?partner_id=${partnerId}`);
+      const r = await fetch(api(`/api/automation/partner-context?partner_id=${partnerId}`));
       if (!r.ok) throw new Error("Failed to load partner context");
       const ctx: PartnerContext = await r.json();
       setPartnerContext(ctx);
@@ -823,7 +833,7 @@ function ProformaFormDialog({
     setSaving(true);
     try {
       const method = proforma ? "PUT" : "POST";
-      const url = proforma ? `/api/proformas/${proforma.id}` : "/api/proformas";
+      const url = proforma ? api(`/api/proformas/${proforma.id}`) : api("/api/proformas");
       const body = {
         ...form,
         subject: form.subject || `Proforma for ${selectedPartner?.name || "partner"}`,

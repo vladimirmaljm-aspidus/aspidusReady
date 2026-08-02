@@ -44,6 +44,7 @@ import {
   TRADE_COST_TYPES, INCOTERMS, CURRENCIES, UNITS_OF_MEASURE,
   CONTAINER_TYPES, TRANSPORT_MODES,
 } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // Cost types available for the user to add (BUY_PRICE and SELL_PRICE are implicit
 // — derived from buy_price_per_unit / sell_price_per_unit).
@@ -165,6 +166,9 @@ function computeTotals(form: Partial<TradeCalculation>) {
 }
 
 export function TradeCalculatorView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TradeCalculation | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -172,34 +176,34 @@ export function TradeCalculatorView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["trade-calculator"],
+    queryKey: ["trade-calculator", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/trade-calculator");
+      const r = await fetch(api("/api/trade-calculator"));
       if (!r.ok) throw new Error("Failed to load trade calculations");
       return r.json() as Promise<{ items: TradeCalculation[]; total: number }>;
     },
   });
 
   const catalog = useQuery({
-    queryKey: ["product-catalog", "all"],
+    queryKey: ["product-catalog", tenantKey, "all"],
     queryFn: async () => {
-      const r = await fetch("/api/product-catalog?limit=500");
+      const r = await fetch(api("/api/product-catalog?limit=500"));
       if (!r.ok) throw new Error("Failed to load product catalog");
       return r.json() as Promise<{ items: ProductCatalogEntry[] }>;
     },
   });
   const offers = useQuery({
-    queryKey: ["supplier-offers", "all"],
+    queryKey: ["supplier-offers", tenantKey, "all"],
     queryFn: async () => {
-      const r = await fetch("/api/supplier-offers?limit=500");
+      const r = await fetch(api("/api/supplier-offers?limit=500"));
       if (!r.ok) throw new Error("Failed to load supplier offers");
       return r.json() as Promise<{ items: SupplierOffer[] }>;
     },
   });
   const partners = useQuery({
-    queryKey: ["partners", "all"],
+    queryKey: ["partners", tenantKey, "all"],
     queryFn: async () => {
-      const r = await fetch("/api/partners?limit=500");
+      const r = await fetch(api("/api/partners?limit=500"));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[] }>;
     },
@@ -210,9 +214,9 @@ export function TradeCalculatorView() {
   const partnerMap = new Map((partners.data?.items || []).map((p) => [p.id, p]));
 
   const detail = useQuery({
-    queryKey: ["trade-calc", detailId],
+    queryKey: ["trade-calc", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/trade-calculator/${detailId}`);
+      const r = await fetch(api(`/api/trade-calculator/${detailId}`));
       if (!r.ok) throw new Error("Failed to load calculation");
       return r.json() as Promise<TradeCalculation>;
     },
@@ -221,12 +225,12 @@ export function TradeCalculatorView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/trade-calculator/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/trade-calculator/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Calculation deleted.");
-      qc.invalidateQueries({ queryKey: ["trade-calculator"] });
+      qc.invalidateQueries({ queryKey: ["trade-calculator", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -343,7 +347,7 @@ export function TradeCalculatorView() {
         partners={partners.data?.items || []}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["trade-calculator"] });
+          qc.invalidateQueries({ queryKey: ["trade-calculator", tenantKey] });
         }}
       />
 
@@ -375,7 +379,7 @@ export function TradeCalculatorView() {
               <Button
                 onClick={async () => {
                   try {
-                    const r = await fetch(`/api/trade-calculator/${detail.data!.id}/create-offer`, {
+                    const r = await fetch(api(`/api/trade-calculator/${detail.data!.id}/create-offer`), {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({}),
@@ -618,6 +622,9 @@ function CalcFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<TradeCalculation>>({});
   const [lines, setLines] = useState<TradeCostLine[]>([]);
   const [saving, setSaving] = useState(false);
@@ -670,7 +677,7 @@ function CalcFormDialog({
     }
     setLoadingSupplier(true);
     try {
-      const r = await fetch(`/api/automation/partner-context?partner_id=${supplierId}`);
+      const r = await fetch(api(`/api/automation/partner-context?partner_id=${supplierId}`));
       if (!r.ok) throw new Error("Failed to load supplier context");
       const ctx: PartnerContext = await r.json();
       setSupplierContext(ctx);
@@ -713,7 +720,7 @@ function CalcFormDialog({
     // Fetch product context for richer data
     if (productId) {
       setLoadingProduct(true);
-      fetch(`/api/automation/product-context?catalog_entry_id=${productId}`)
+      fetch(api(`/api/automation/product-context?catalog_entry_id=${productId}`))
         .then((r) => {
           if (!r.ok) throw new Error("Failed to load product context");
           return r.json() as Promise<ProductContext>;
@@ -841,7 +848,7 @@ function CalcFormDialog({
     try {
       const payload = { ...form, cost_lines: lines };
       const method = calc ? "PUT" : "POST";
-      const url = calc ? `/api/trade-calculator/${calc.id}` : "/api/trade-calculator";
+      const url = calc ? api(`/api/trade-calculator/${calc.id}`) : api("/api/trade-calculator");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

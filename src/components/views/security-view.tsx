@@ -26,6 +26,7 @@ import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type {
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
 } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 function AdminRequired() {
   return (
@@ -56,41 +57,44 @@ function parseUa(ua: string | null): { icon: typeof Monitor; label: string } {
 }
 
 export function SecurityView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
   const [tab, setTab] = useState("sessions");
 
   const sessionsQ = useQuery({
-    queryKey: ["security", "sessions"],
+    queryKey: ["security", tenantKey, "sessions"],
     queryFn: async () => {
-      const r = await fetch("/api/security/sessions");
+      const r = await fetch(api("/api/security/sessions"));
       if (!r.ok) throw new Error("Failed to load sessions");
       return r.json() as Promise<{ items: SecuritySession[] }>;
     },
     enabled: admin,
   });
   const loginQ = useQuery({
-    queryKey: ["security", "login-history"],
+    queryKey: ["security", tenantKey, "login-history"],
     queryFn: async () => {
-      const r = await fetch("/api/security/login-history?limit=200");
+      const r = await fetch(api("/api/security/login-history?limit=200"));
       if (!r.ok) throw new Error("Failed to load login history");
       return r.json() as Promise<{ items: LoginHistoryEntry[] }>;
     },
     enabled: admin,
   });
   const ipsQ = useQuery({
-    queryKey: ["security", "known-ips"],
+    queryKey: ["security", tenantKey, "known-ips"],
     queryFn: async () => {
-      const r = await fetch("/api/security/known-ips");
+      const r = await fetch(api("/api/security/known-ips"));
       if (!r.ok) throw new Error("Failed to load known IPs");
       return r.json() as Promise<{ items: KnownIp[] }>;
     },
     enabled: admin,
   });
   const devicesQ = useQuery({
-    queryKey: ["security", "trusted-devices"],
+    queryKey: ["security", tenantKey, "trusted-devices"],
     queryFn: async () => {
-      const r = await fetch("/api/security/trusted-devices");
+      const r = await fetch(api("/api/security/trusted-devices"));
       if (!r.ok) throw new Error("Failed to load trusted devices");
       return r.json() as Promise<{ items: TrustedDevice[] }>;
     },
@@ -185,15 +189,18 @@ export function SecurityView() {
 
 // ---------- Sessions tab ----------
 function SessionsTab({ items, loading }: { items: SecuritySession[]; loading: boolean }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const revokeMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/security/sessions/${id}`, { method: "POST" });
+      const r = await fetch(api(`/api/security/sessions/${id}`), { method: "POST" });
       if (!r.ok) throw new Error("Failed to revoke session");
     },
     onSuccess: () => {
       toast.success("Session revoked.");
-      qc.invalidateQueries({ queryKey: ["security", "sessions"] });
+      qc.invalidateQueries({ queryKey: ["security", tenantKey, "sessions"] });
     },
     onError: () => toast.error("Failed to revoke session."),
   });
@@ -361,10 +368,13 @@ function LoginHistoryTab({ items, loading }: { items: LoginHistoryEntry[]; loadi
 
 // ---------- Known IPs tab ----------
 function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const trustMut = useMutation({
     mutationFn: async ({ id, trusted }: { id: string; trusted: boolean }) => {
-      const r = await fetch(`/api/security/known-ips/${id}`, {
+      const r = await fetch(api(`/api/security/known-ips/${id}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ trusted }),
@@ -373,18 +383,18 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
     },
     onSuccess: (_v, vars) => {
       toast.success(vars.trusted ? "IP marked as trusted." : "IP untrusted.");
-      qc.invalidateQueries({ queryKey: ["security", "known-ips"] });
+      qc.invalidateQueries({ queryKey: ["security", tenantKey, "known-ips"] });
     },
     onError: () => toast.error("Failed to update IP."),
   });
   const forgetMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/security/known-ips/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/security/known-ips/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to forget IP");
     },
     onSuccess: () => {
       toast.success("IP forgotten.");
-      qc.invalidateQueries({ queryKey: ["security", "known-ips"] });
+      qc.invalidateQueries({ queryKey: ["security", tenantKey, "known-ips"] });
     },
     onError: () => toast.error("Failed to forget IP."),
   });
@@ -461,15 +471,18 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
 
 // ---------- Trusted Devices tab ----------
 function TrustedDevicesTab({ items, loading }: { items: TrustedDevice[]; loading: boolean }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const revokeMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/security/trusted-devices/${id}`, { method: "POST" });
+      const r = await fetch(api(`/api/security/trusted-devices/${id}`), { method: "POST" });
       if (!r.ok) throw new Error("Failed to revoke device");
     },
     onSuccess: () => {
       toast.success("Device revoked.");
-      qc.invalidateQueries({ queryKey: ["security", "trusted-devices"] });
+      qc.invalidateQueries({ queryKey: ["security", tenantKey, "trusted-devices"] });
     },
     onError: () => toast.error("Failed to revoke device."),
   });

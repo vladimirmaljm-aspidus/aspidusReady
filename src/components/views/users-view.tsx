@@ -40,6 +40,7 @@ import { PermissionTree } from "@/components/common/permission-tree";
 import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin, isSuperAdmin, SafeUser } from "@/lib/store/app-store";
 import { UserRole, Tenant } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const ROLE_LABEL: Record<UserRole, string> = {
   super_admin: "Super Admin", admin: "Admin", accountant: "Accountant", manager: "Manager", staff: "Staff", viewer: "Viewer",
@@ -89,6 +90,9 @@ function generatePassword(): string {
 const PAGE_SIZE = 20;
 
 export function UsersView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const currentUser = useAppStore((s) => s.user);
   const admin = isAdmin(currentUser);
@@ -98,9 +102,9 @@ export function UsersView() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["users"],
+    queryKey: ["users", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/users");
+      const r = await fetch(api("/api/users"));
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Failed to load users");
@@ -112,9 +116,9 @@ export function UsersView() {
 
   // Fetch tenants for linking
   const { data: tenantsData } = useQuery({
-    queryKey: ["tenants"],
+    queryKey: ["tenants", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/tenants");
+      const r = await fetch(api("/api/tenants"));
       if (!r.ok) throw new Error("Failed to load tenants");
       return r.json() as Promise<{ items: Tenant[] }>;
     },
@@ -127,7 +131,7 @@ export function UsersView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/users/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/users/${id}`), { method: "DELETE" });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Failed to delete user");
@@ -135,7 +139,7 @@ export function UsersView() {
     },
     onSuccess: () => {
       toast.success("User deleted.");
-      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["users", tenantKey] });
       setDeleteId(null);
     },
     onError: (e: any) => toast.error(e.message || "Failed to delete user."),
@@ -148,14 +152,14 @@ export function UsersView() {
 
   const handleToggleActive = async (userId: string, active: boolean) => {
     try {
-      const res = await fetch(`/api/users/${userId}`, {
+      const res = await fetch(api(`/api/users/${userId}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active }),
       });
       if (!res.ok) throw new Error("Failed to update");
       toast.success(active ? "User activated" : "User deactivated");
-      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["users", tenantKey] });
     } catch {
       toast.error("Failed to update user status");
     }
@@ -325,7 +329,7 @@ export function UsersView() {
         tenants={tenants}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["users"] });
+          qc.invalidateQueries({ queryKey: ["users", tenantKey] });
         }}
       />
 
@@ -372,6 +376,9 @@ function UserFormDialog({
   tenants: Tenant[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const currentUser = useAppStore((s) => s.user);
   const isSA = isSuperAdmin(currentUser);
 
@@ -469,7 +476,7 @@ function UserFormDialog({
       if (form.password) body.password = form.password;
 
       const method = user ? "PUT" : "POST";
-      const url = user ? `/api/users/${user.id}` : "/api/users";
+      const url = user ? api(`/api/users/${user.id}`) : api("/api/users");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { Webhook as WebhookType } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const EVENT_COLORS = [
   "bg-[var(--chart-1)] text-white",
@@ -74,6 +75,9 @@ function AdminRequired() {
 }
 
 export function WebhooksView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
   const qc = useQueryClient();
@@ -82,9 +86,9 @@ export function WebhooksView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["webhooks"],
+    queryKey: ["webhooks", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/webhooks");
+      const r = await fetch(api("/api/webhooks"));
       if (!r.ok) throw new Error("Failed to load webhooks");
       return r.json() as Promise<{ items: WebhookType[] }>;
     },
@@ -93,7 +97,7 @@ export function WebhooksView() {
 
   const toggleMut = useMutation({
     mutationFn: async (wh: WebhookType) => {
-      const r = await fetch("/api/webhooks", {
+      const r = await fetch(api("/api/webhooks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...wh, active: !wh.active }),
@@ -102,19 +106,19 @@ export function WebhooksView() {
     },
     onSuccess: (_v, vars) => {
       toast.success(vars.active ? "Webhook disabled." : "Webhook enabled.");
-      qc.invalidateQueries({ queryKey: ["webhooks"] });
+      qc.invalidateQueries({ queryKey: ["webhooks", tenantKey] });
     },
     onError: () => toast.error("Failed to update webhook."),
   });
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/webhooks/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/webhooks/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete webhook");
     },
     onSuccess: () => {
       toast.success("Webhook deleted.");
-      qc.invalidateQueries({ queryKey: ["webhooks"] });
+      qc.invalidateQueries({ queryKey: ["webhooks", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Failed to delete webhook."),
@@ -254,7 +258,7 @@ export function WebhooksView() {
         webhook={editing}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["webhooks"] });
+          qc.invalidateQueries({ queryKey: ["webhooks", tenantKey] });
         }}
       />
 
@@ -290,6 +294,9 @@ function WebhookFormDialog({
   webhook: WebhookType | null;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState("");
@@ -325,7 +332,7 @@ function WebhookFormDialog({
         active,
       };
       if (webhook) body.id = webhook.id;
-      const r = await fetch("/api/webhooks", {
+      const r = await fetch(api("/api/webhooks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

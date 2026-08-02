@@ -46,6 +46,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 import type { Tenant, TenantFeatureFlags } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // ---------------------------------------------------------------
 // Module catalog — the 13 togglable modules
@@ -168,6 +169,9 @@ type EditableFlags = Omit<TenantFeatureFlags, "id" | "updated_by" | "updated_at"
 // Main view
 // ---------------------------------------------------------------
 export function FeatureFlagsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const qc = useQueryClient();
 
@@ -180,9 +184,9 @@ export function FeatureFlagsView() {
 
   // ---- Load tenants list ----
   const tenantsQ = useQuery<{ items: Tenant[] }>({
-    queryKey: ["tenants", "list"],
+    queryKey: ["tenants", tenantKey, "list"],
     queryFn: async () => {
-      const r = await fetch("/api/tenants");
+      const r = await fetch(api("/api/tenants"));
       if (!r.ok) throw new Error("Failed to load tenants");
       return r.json();
     },
@@ -201,10 +205,10 @@ export function FeatureFlagsView() {
 
   // ---- Load flags for selected tenant ----
   const flagsQ = useQuery<TenantFeatureFlags | null>({
-    queryKey: ["feature-flags", selectedTenantId],
+    queryKey: ["feature-flags", tenantKey, selectedTenantId],
     queryFn: async () => {
       if (!selectedTenantId) return null;
-      const r = await fetch(`/api/feature-flags?tenant_id=${encodeURIComponent(selectedTenantId)}`);
+      const r = await fetch(api(`/api/feature-flags?tenant_id=${encodeURIComponent(selectedTenantId)}`));
       if (!r.ok) {
         if (r.status === 404) return null;
         throw new Error("Failed to load feature flags");
@@ -261,7 +265,7 @@ export function FeatureFlagsView() {
   // ---- Save mutation (single source of truth) ----
   const saveMut = useMutation({
     mutationFn: async (body: Partial<EditableFlags> & { tenant_id: string }) => {
-      const r = await fetch("/api/feature-flags", {
+      const r = await fetch(api("/api/feature-flags"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -273,8 +277,8 @@ export function FeatureFlagsView() {
       return r.json() as Promise<TenantFeatureFlags>;
     },
     onSuccess: (data) => {
-      qc.setQueryData(["feature-flags", selectedTenantId], data);
-      qc.invalidateQueries({ queryKey: ["feature-flags", selectedTenantId] });
+      qc.setQueryData(["feature-flags", tenantKey, selectedTenantId], data);
+      qc.invalidateQueries({ queryKey: ["feature-flags", tenantKey, selectedTenantId] });
     },
     onError: (e: Error) => toast.error(e.message || "Update failed."),
   });

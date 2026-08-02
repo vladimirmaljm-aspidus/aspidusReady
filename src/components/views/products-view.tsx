@@ -42,6 +42,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtNumber, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { Product } from "@/lib/supabase/types";
 import { CURRENCIES, PRODUCT_CATEGORIES_LOCAL, PRODUCT_UNITS } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const PAGE_SIZE = 20;
 
@@ -67,6 +68,9 @@ function generatePageNumbers(current: number, total: number): (number | "ellipsi
 }
 
 export function ProductsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -80,14 +84,14 @@ export function ProductsView() {
   const handleCategoryChange = useCallback((v: string) => { setCategoryFilter(v); setPage(1); }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["products", search, categoryFilter, page],
+    queryKey: ["products", tenantKey, search, categoryFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (categoryFilter !== "all") params.set("category", categoryFilter);
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String((page - 1) * PAGE_SIZE));
-      const r = await fetch(`/api/products?${params}`);
+      const r = await fetch(api(`/api/products?${params}`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
@@ -110,13 +114,13 @@ export function ProductsView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/products/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/products/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Product deleted.");
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -301,8 +305,8 @@ export function ProductsView() {
         product={editing}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["products"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -516,6 +520,9 @@ function ProductFormDialog({
   product: Product | null;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<Product>>({});
   const [saving, setSaving] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -554,7 +561,7 @@ function ProductFormDialog({
     setSaving(true);
     try {
       const method = product ? "PUT" : "POST";
-      const url = product ? `/api/products/${product.id}` : "/api/products";
+      const url = product ? api(`/api/products/${product.id}`) : api("/api/products");
       const body = { ...form, sku: finalSku };
       const r = await fetch(url, {
         method,

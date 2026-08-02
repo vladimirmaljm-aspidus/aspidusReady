@@ -19,6 +19,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle, Zap, AlertTriangle, Globe, Info } from "lucide-react";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import { CURRENCIES } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type CompanyForm = {
   name: string;
@@ -108,8 +109,8 @@ function resolveLogoUrlForDisplay(logoUrl: string | null): string | null {
   return null;
 }
 
-async function fetchSetting<T>(key: string, fallback: T): Promise<T> {
-  const r = await fetch(`/api/settings?key=${key}`);
+async function fetchSetting<T>(key: string, fallback: T, api: (path: string) => string): Promise<T> {
+  const r = await fetch(api(`/api/settings?key=${key}`));
   if (!r.ok) throw new Error("Failed to load setting");
   const data = await r.json();
   return { ...fallback, ...(data.value || {}) } as T;
@@ -168,6 +169,9 @@ export function SettingsView() {
 }
 
 function useSettingLoader<T>(key: string, fallback: T) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [value, setValue] = useState<T>(fallback);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -175,7 +179,7 @@ function useSettingLoader<T>(key: string, fallback: T) {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetchSetting<T>(key, fallback)
+    fetchSetting<T>(key, fallback, api)
       .then((v) => { if (active) setValue(v); })
       .catch(() => toast.error("Failed to load settings."))
       .finally(() => { if (active) setLoading(false); });
@@ -186,7 +190,7 @@ function useSettingLoader<T>(key: string, fallback: T) {
   async function save(next: T) {
     setSaving(true);
     try {
-      const r = await fetch("/api/settings", {
+      const r = await fetch(api("/api/settings"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key, value: next }),
@@ -304,6 +308,9 @@ function CompanyTab() {
 }
 
 function LogoUpload() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -311,10 +318,10 @@ function LogoUpload() {
 
   useEffect(() => {
     // Fetch tenant to get current logo
-    fetch("/api/auth/me").then(r => r.json()).then(data => {
+    fetch(api("/api/auth/me")).then(r => r.json()).then(data => {
       if (data.user?.tenant_id) {
         setTenantId(data.user.tenant_id);
-        fetch(`/api/tenants`).then(r => r.json()).then(tenants => {
+        fetch(api(`/api/tenants`)).then(r => r.json()).then(tenants => {
           const t = tenants.items?.find((x: any) => x.id === data.user.tenant_id);
           if (t?.logo_url) setLogoUrl(t.logo_url);
         });
@@ -327,13 +334,13 @@ function LogoUpload() {
     if (!file) return;
     setUploading(true);
     try {
-      const me = await fetch("/api/auth/me").then(r => r.json());
+      const me = await fetch(api("/api/auth/me")).then(r => r.json());
       const tid = me.user?.tenant_id;
       if (!tid) { toast.error("No tenant context."); return; }
       setTenantId(tid);
       const formData = new FormData();
       formData.append("logo", file);
-      const res = await fetch(`/api/tenants/${tid}/logo`, { method: "POST", body: formData });
+      const res = await fetch(api(`/api/tenants/${tid}/logo`), { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || "Upload failed."); return; }
       setLogoUrl(data.url);
@@ -352,7 +359,7 @@ function LogoUpload() {
     setUploading(true);
     try {
       // Update tenant to clear logo_url
-      const res = await fetch(`/api/tenants`, {
+      const res = await fetch(api(`/api/tenants`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: tenantId, logo_url: null }),
@@ -502,6 +509,9 @@ function SecurityTab() {
 }
 
 function CommsTab() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const { value, setValue, loading, saving, save } = useSettingLoader<CommsForm>("comms", DEFAULT_COMMS);
 
   function set<K extends keyof CommsForm>(k: K, v: CommsForm[K]) {
@@ -780,6 +790,9 @@ function ProviderCard({
  * provider. Lets the admin verify the config BEFORE saving.
  */
 function EmailTestSection({ value }: { value: CommsForm }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [testEmail, setTestEmail] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<
@@ -796,7 +809,7 @@ function EmailTestSection({ value }: { value: CommsForm }) {
     setTesting(true);
     setResult(null);
     try {
-      const res = await fetch("/api/settings/test-email", {
+      const res = await fetch(api("/api/settings/test-email"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1177,6 +1190,9 @@ function ApiIntegrationCard({
   testLabel: string;
   note?: string;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [showSteps, setShowSteps] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -1325,6 +1341,9 @@ const PREF_DEFAULTS: Record<string, string> = {
 };
 
 function PreferencesTab() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [prefs, setPrefs] = useState<Record<string, string>>(PREF_DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1332,7 +1351,7 @@ function PreferencesTab() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch("/api/user-preferences")
+    fetch(api("/api/user-preferences"))
       .then((r) => r.json())
       .then((data) => {
         if (active && data.map) {
@@ -1353,7 +1372,7 @@ function PreferencesTab() {
   async function savePref(key: string, value: string) {
     setSaving(true);
     try {
-      const r = await fetch("/api/user-preferences", {
+      const r = await fetch(api("/api/user-preferences"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key, value }),
@@ -1377,7 +1396,7 @@ function PreferencesTab() {
       const entries = Object.entries(prefs);
       await Promise.all(
         entries.map(([key, value]) =>
-          fetch("/api/user-preferences", {
+          fetch(api("/api/user-preferences"), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ key, value }),

@@ -37,6 +37,7 @@ import { fmtDate, fmtDateTime } from "@/lib/utils/format";
 import {
   DocumentRegisterEntry, DocumentRevision, DocumentType, Partner,
 } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type DocStatus = "current" | "superseded" | "archived";
 
@@ -106,6 +107,9 @@ function nextSeqForType(entries: DocumentRegisterEntry[], type: DocumentType): s
 }
 
 export function DocumentRegisterView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -116,31 +120,31 @@ export function DocumentRegisterView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["document-register", search, typeFilter, statusFilter],
+    queryKey: ["document-register", tenantKey, search, typeFilter, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (statusFilter !== "all") params.set("status", statusFilter);
-      const r = await fetch(`/api/document-register?${params}`);
+      const r = await fetch(api(`/api/document-register?${params}`));
       if (!r.ok) throw new Error("Failed to load document register");
       return r.json() as Promise<{ items: DocumentRegisterEntry[]; total: number }>;
     },
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
   });
 
   const detail = useQuery({
-    queryKey: ["document-register", detailId],
+    queryKey: ["document-register", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/document-register/${detailId}`);
+      const r = await fetch(api(`/api/document-register/${detailId}`));
       if (!r.ok) throw new Error("Failed to load document");
       return r.json() as Promise<{ items: DocumentRevision[] }>;
     },
@@ -149,13 +153,13 @@ export function DocumentRegisterView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/document-register/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/document-register/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete entry");
     },
     onSuccess: () => {
       toast.success("Document entry deleted.");
-      qc.invalidateQueries({ queryKey: ["document-register"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["document-register", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -300,8 +304,8 @@ export function DocumentRegisterView() {
         onSaved={() => {
           setShowForm(false);
           setFormParent(null);
-          qc.invalidateQueries({ queryKey: ["document-register"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["document-register", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -455,6 +459,9 @@ function DocumentFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const isVersion = !!parent;
   const [form, setForm] = useState<{
     type: DocumentType;
@@ -522,7 +529,7 @@ function DocumentFormDialog({
       };
 
       // 1) Create the new entry
-      const createR = await fetch(`/api/document-register`, {
+      const createR = await fetch(api(`/api/document-register`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(basePayload),
@@ -534,7 +541,7 @@ function DocumentFormDialog({
 
       // 2) If new version, mark parent as superseded
       if (parent) {
-        const supR = await fetch(`/api/document-register`, {
+        const supR = await fetch(api(`/api/document-register`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

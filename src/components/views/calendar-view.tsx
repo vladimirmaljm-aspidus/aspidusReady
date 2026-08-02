@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { cn } from "@/lib/utils";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 interface CalendarEvent {
   id: string;
@@ -40,6 +41,9 @@ const TYPE_LABEL = {
 };
 
 export function CalendarView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // Calculate month range
@@ -51,9 +55,9 @@ export function CalendarView() {
   const to = lastDay.toISOString().split("T")[0];
 
   const { data, isLoading } = useQuery<{ items: CalendarEvent[] }>({
-    queryKey: ["calendar", from, to],
+    queryKey: ["calendar", tenantKey, from, to],
     queryFn: async () => {
-      const r = await fetch(`/api/calendar?from=${from}&to=${to}`);
+      const r = await fetch(api(`/api/calendar?from=${from}&to=${to}`));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },

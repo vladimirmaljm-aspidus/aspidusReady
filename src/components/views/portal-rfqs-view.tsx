@@ -40,6 +40,7 @@ import {
 import {
   COUNTRIES, INCOTERMS, PRODUCT_CATEGORIES, UNITS_OF_MEASURE, getCountry, getIncoterm,
 } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // ---------- static lookups ----------
 
@@ -89,6 +90,9 @@ function countryLabel(code: string | null): string {
 // ---------- main view ----------
 
 export function PortalRfqsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -97,13 +101,13 @@ export function PortalRfqsView() {
 
   // RFQ list
   const { data, isLoading } = useQuery({
-    queryKey: ["portal-rfqs", search, statusFilter, partnerFilter],
+    queryKey: ["portal-rfqs", tenantKey, search, statusFilter, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
-      const r = await fetch(`/api/portal-rfqs?${params}`);
+      const r = await fetch(api(`/api/portal-rfqs?${params}`));
       if (!r.ok) throw new Error("Failed to load client requests");
       return r.json() as Promise<{ items: PortalRfq[]; total: number }>;
     },
@@ -111,9 +115,9 @@ export function PortalRfqsView() {
 
   // Partners lookup
   const partnersQ = useQuery({
-    queryKey: ["partners", "lookup", "rfqs"],
+    queryKey: ["partners", tenantKey, "lookup", "rfqs"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=500`);
+      const r = await fetch(api(`/api/partners?limit=500`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
@@ -318,7 +322,7 @@ export function PortalRfqsView() {
         onOpenChange={(o) => !o && setDetailId(null)}
         partnerMap={partnerMap}
         onSaved={() => {
-          qc.invalidateQueries({ queryKey: ["portal-rfqs"] });
+          qc.invalidateQueries({ queryKey: ["portal-rfqs", tenantKey] });
         }}
       />
     </div>
@@ -336,6 +340,9 @@ function RfqDetailSheet({
   partnerMap: Map<string, Partner>;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [status, setStatus] = useState<PortalRfqStatus | "">("");
   const [adminNotes, setAdminNotes] = useState("");
   const [linkedOfferId, setLinkedOfferId] = useState("");
@@ -346,10 +353,10 @@ function RfqDetailSheet({
 
   // Load full RFQ
   const q = useQuery({
-    queryKey: ["portal-rfq", id],
+    queryKey: ["portal-rfq", tenantKey, id],
     queryFn: async () => {
       // The list route already returns full records; refetch for safety / freshness
-      const r = await fetch(`/api/portal-rfqs?search=&status=&partner_id=`);
+      const r = await fetch(api(`/api/portal-rfqs?search=&status=&partner_id=`));
       if (!r.ok) throw new Error("Failed to load");
       const data = await r.json() as { items: PortalRfq[] };
       return data.items.find((x) => x.id === id) || null;
@@ -373,7 +380,7 @@ function RfqDetailSheet({
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const r = await fetch(`/api/portal-rfqs/${id}`, {
+      const r = await fetch(api(`/api/portal-rfqs/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -580,7 +587,7 @@ function RfqDetailSheet({
                       variant="outline"
                       onClick={async () => {
                         try {
-                          const res = await fetch(`/api/automation/create-demand-from-portal-rfq`, {
+                          const res = await fetch(api(`/api/automation/create-demand-from-portal-rfq`), {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ portalRfqId: rfq?.id }),
@@ -601,7 +608,7 @@ function RfqDetailSheet({
                       variant="outline"
                       onClick={async () => {
                         try {
-                          const res = await fetch(`/api/automation/create-offer-from-deal`, {
+                          const res = await fetch(api(`/api/automation/create-offer-from-deal`), {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ dealId: rfq?.linked_demand_id ?? rfq?.id }),

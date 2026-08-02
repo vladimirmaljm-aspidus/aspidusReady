@@ -50,6 +50,7 @@ import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { Deal, DealStage, Partner, Offer, CommissionAgent } from "@/lib/supabase/types";
 import { useAppStore } from "@/lib/store/app-store";
 import { CURRENCIES, DEAL_STAGES, COUNTRIES } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
 
@@ -141,6 +142,9 @@ function computePartnerQuickStats(ctx: PartnerContext | null): PartnerQuickStats
 const PAGE_SIZE = 20;
 
 export function DealsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -153,22 +157,22 @@ export function DealsView() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["deals", search, stageFilter, partnerId],
+    queryKey: ["deals", tenantKey, search, stageFilter, partnerId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (stageFilter !== "all") params.set("stage", stageFilter);
       if (partnerId !== "all") params.set("partner_id", partnerId);
-      const r = await fetch(`/api/deals?${params}`);
+      const r = await fetch(api(`/api/deals?${params}`));
       if (!r.ok) throw new Error("Failed to load deals");
       return r.json() as Promise<{ items: Deal[]; total: number }>;
     },
   });
 
   const { data: partnersData } = useQuery({
-    queryKey: ["partners", "list", 200],
+    queryKey: ["partners", tenantKey, "list", 200],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
@@ -203,13 +207,13 @@ export function DealsView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/deals/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/deals/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Deal deleted.");
-      qc.invalidateQueries({ queryKey: ["deals"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["deals", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -217,7 +221,7 @@ export function DealsView() {
 
   const stageMut = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: DealStage }) => {
-      const r = await fetch(`/api/deals/${id}`, {
+      const r = await fetch(api(`/api/deals/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage }),
@@ -227,8 +231,8 @@ export function DealsView() {
     },
     onSuccess: (_data, variables) => {
       toast.success(`Stage changed to ${STAGE_LABELS[variables.stage]}.`);
-      qc.invalidateQueries({ queryKey: ["deals"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["deals", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: () => toast.error("Stage change failed."),
   });
@@ -418,8 +422,8 @@ export function DealsView() {
         partners={partners}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["deals"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["deals", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -549,14 +553,17 @@ function DealDetail({
   onDelete: () => void;
   changing: boolean;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const setView = useAppStore((s) => s.setView);
   const setSelectedId = useAppStore((s) => s.setSelectedId);
 
   // Fetch partner context for quick stats
   const { data: partnerCtx, isLoading: ctxLoading } = useQuery({
-    queryKey: ["partner-context", deal.partner_id],
+    queryKey: ["partner-context", tenantKey, deal.partner_id],
     queryFn: async () => {
-      const r = await fetch(`/api/automation/partner-context?partner_id=${deal.partner_id}`);
+      const r = await fetch(api(`/api/automation/partner-context?partner_id=${deal.partner_id}`));
       if (!r.ok) throw new Error("Failed to load partner context");
       return r.json() as Promise<PartnerContext>;
     },
@@ -566,9 +573,9 @@ function DealDetail({
 
   // Check if this deal already has an associated offer
   const { data: dealOffers } = useQuery({
-    queryKey: ["offers-for-deal", deal.id],
+    queryKey: ["offers-for-deal", tenantKey, deal.id],
     queryFn: async () => {
-      const r = await fetch(`/api/offers?limit=100`);
+      const r = await fetch(api(`/api/offers?limit=100`));
       if (!r.ok) throw new Error("Failed to load offers");
       const result = await r.json() as { items: Offer[]; total: number };
       return result.items.filter((o) => o.deal_id === deal.id);
@@ -583,7 +590,7 @@ function DealDetail({
   // Create offer from deal mutation
   const createOfferMut = useMutation({
     mutationFn: async () => {
-      const r = await fetch("/api/automation/create-offer-from-deal", {
+      const r = await fetch(api("/api/automation/create-offer-from-deal"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deal_id: deal.id }),
@@ -874,6 +881,9 @@ function DealFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const isEditing = !!deal;
   const [form, setForm] = useState<Partial<Deal>>({});
   const [saving, setSaving] = useState(false);
@@ -889,9 +899,9 @@ function DealFormDialog({
 
   // Commission agents
   const { data: agentsData } = useQuery({
-    queryKey: ["commission-agents"],
+    queryKey: ["commission-agents", tenantKey],
     queryFn: async () => {
-      const r = await fetch(`/api/commission-agents?limit=200`);
+      const r = await fetch(api(`/api/commission-agents?limit=200`));
       if (!r.ok) throw new Error("Failed to load commission agents");
       return r.json() as Promise<{ items: CommissionAgent[]; total: number }>;
     },
@@ -901,10 +911,10 @@ function DealFormDialog({
 
   // Commission preview
   const { data: commissionPreview } = useQuery({
-    queryKey: ["commission-preview", form.commission_agent_id, form.value, form.buy_cost, form.quantity],
+    queryKey: ["commission-preview", tenantKey, form.commission_agent_id, form.value, form.buy_cost, form.quantity],
     queryFn: async () => {
       if (!form.commission_agent_id) return null;
-      const r = await fetch(`/api/commission-calculate`, {
+      const r = await fetch(api(`/api/commission-calculate`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -923,9 +933,9 @@ function DealFormDialog({
   });
 
   const { data: partnerCtx, isLoading: ctxLoading } = useQuery({
-    queryKey: ["partner-context", selectedPartnerId],
+    queryKey: ["partner-context", tenantKey, selectedPartnerId],
     queryFn: async () => {
-      const r = await fetch(`/api/automation/partner-context?partner_id=${selectedPartnerId}`);
+      const r = await fetch(api(`/api/automation/partner-context?partner_id=${selectedPartnerId}`));
       if (!r.ok) throw new Error("Failed to load partner context");
       return r.json() as Promise<PartnerContext>;
     },
@@ -1042,7 +1052,7 @@ function DealFormDialog({
     setSaving(true);
     try {
       const method = deal ? "PUT" : "POST";
-      const url = deal ? `/api/deals/${deal.id}` : "/api/deals";
+      const url = deal ? api(`/api/deals/${deal.id}`) : api("/api/deals");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

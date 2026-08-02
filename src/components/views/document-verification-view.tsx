@@ -27,6 +27,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtDate, fmtDateTime, fmtBytes, fmtRelative } from "@/lib/utils/format";
 import { DocumentVerification, Offer, Invoice, Proforma } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type DocType = "offer" | "invoice" | "proforma";
 
@@ -101,13 +102,16 @@ interface VerifyResult {
 }
 
 function VerifyByCodeTab() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [code, setCode] = useState("");
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["verify-code", submittedCode],
+    queryKey: ["verify-code", tenantKey, submittedCode],
     queryFn: async () => {
-      const r = await fetch(`/api/verify/${submittedCode}`);
+      const r = await fetch(api(`/api/verify/${submittedCode}`));
       const json = await r.json();
       if (!r.ok && !json.result) throw new Error("Verification failed");
       return json as VerifyResult;
@@ -262,14 +266,17 @@ function DetailField({ icon: Icon, label, value, mono }: { icon: any; label: str
 // Tab 2: Verify by document
 // ============================================================
 function VerifyByDocTab() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [docType, setDocType] = useState<DocType>("offer");
   const [docId, setDocId] = useState<string>("");
 
   // Fetch document list based on type
   const docsQuery = useQuery({
-    queryKey: ["docs-for-verify", docType],
+    queryKey: ["docs-for-verify", tenantKey, docType],
     queryFn: async () => {
-      const endpoint = docType === "offer" ? "/api/offers" : docType === "invoice" ? "/api/invoices" : "/api/proformas";
+      const endpoint = docType === "offer" ? api("/api/offers") : docType === "invoice" ? api("/api/invoices") : api("/api/proformas");
       const r = await fetch(endpoint);
       if (!r.ok) throw new Error("Failed to load documents");
       const data = await r.json();
@@ -278,9 +285,9 @@ function VerifyByDocTab() {
   });
 
   const verQuery = useQuery({
-    queryKey: ["doc-verify-by-doc", docType, docId],
+    queryKey: ["doc-verify-by-doc", tenantKey, docType, docId],
     queryFn: async () => {
-      const r = await fetch(`/api/document-verify/by-doc?doc_type=${docType}&doc_id=${docId}`);
+      const r = await fetch(api(`/api/document-verify/by-doc?doc_type=${docType}&doc_id=${docId}`));
       if (!r.ok) throw new Error("Lookup failed");
       const data = await r.json();
       return data as { verification: DocumentVerification | null };
@@ -463,6 +470,9 @@ interface ForensicResult {
 }
 
 function ForensicTab() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [code, setCode] = useState("");
   const [hash, setHash] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -501,7 +511,7 @@ function ForensicTab() {
     setSubmitting(true);
     setResult(null);
     try {
-      const r = await fetch("/api/document-verify/forensic", {
+      const r = await fetch(api("/api/document-verify/forensic"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

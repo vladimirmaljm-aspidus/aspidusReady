@@ -39,6 +39,7 @@ import { fmtDate } from "@/lib/utils/format";
 import { Tenant } from "@/lib/supabase/types";
 import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 import { COUNTRIES, CURRENCIES } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // ---- helpers ----
 function flagEmoji(countryCode: string | null | undefined): string {
@@ -79,6 +80,9 @@ const STATUS_BADGE: Record<TenantStatus, string> = {
 };
 
 export function TenantsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const user = useAppStore((s) => s.user);
   const [editing, setEditing] = useState<Tenant | null>(null);
@@ -88,9 +92,9 @@ export function TenantsView() {
   const isSuper = isSuperAdmin(user);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["tenants"],
+    queryKey: ["tenants", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/tenants");
+      const r = await fetch(api("/api/tenants"));
       if (!r.ok) throw new Error("Failed to load tenants");
       return r.json() as Promise<{ items: Tenant[] }>;
     },
@@ -99,12 +103,12 @@ export function TenantsView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/tenants/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/tenants/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Tenant deleted.");
-      qc.invalidateQueries({ queryKey: ["tenants"] });
+      qc.invalidateQueries({ queryKey: ["tenants", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -245,7 +249,7 @@ export function TenantsView() {
         tenant={editing}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["tenants"] });
+          qc.invalidateQueries({ queryKey: ["tenants", tenantKey] });
         }}
       />
 
@@ -281,6 +285,9 @@ function TenantFormDialog({
   tenant: Tenant | null;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<Tenant>>({});
   const [saving, setSaving] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
@@ -326,7 +333,7 @@ function TenantFormDialog({
   async function uploadLogo(tenantId: string, file: File) {
     const formData = new FormData();
     formData.append("logo", file);
-    const r = await fetch(`/api/tenants/${tenantId}/logo`, {
+    const r = await fetch(api(`/api/tenants/${tenantId}/logo`), {
       method: "POST",
       body: formData,
     });
@@ -342,7 +349,7 @@ function TenantFormDialog({
     setSaving(true);
     try {
       const method = tenant ? "PUT" : "POST";
-      const url = tenant ? `/api/tenants/${tenant.id}` : "/api/tenants";
+      const url = tenant ? api(`/api/tenants/${tenant.id}`) : api("/api/tenants");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

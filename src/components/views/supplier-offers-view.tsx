@@ -44,6 +44,7 @@ import {
   INCOTERMS, CURRENCIES, COUNTRIES, PAYMENT_TERMS,
   getCountry, getCurrency, getIncoterm,
 } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 function flagEmoji(countryCode: string | null | undefined): string {
   if (!countryCode || countryCode.length !== 2) return "";
@@ -76,6 +77,9 @@ function incotermLabel(code: string): string {
 }
 
 export function SupplierOffersView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState<string>("all");
@@ -87,14 +91,14 @@ export function SupplierOffersView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["supplier-offers", search, productFilter, supplierFilter, statusFilter],
+    queryKey: ["supplier-offers", tenantKey, search, productFilter, supplierFilter, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (productFilter !== "all") params.set("product_id", productFilter);
       if (supplierFilter !== "all") params.set("supplier_id", supplierFilter);
       if (statusFilter !== "all") params.set("status", statusFilter);
-      const r = await fetch(`/api/supplier-offers?${params}`);
+      const r = await fetch(api(`/api/supplier-offers?${params}`));
       if (!r.ok) throw new Error("Failed to load supplier offers");
       return r.json() as Promise<{ items: SupplierOffer[]; total: number }>;
     },
@@ -102,17 +106,17 @@ export function SupplierOffersView() {
 
   // Catalog & partners for dropdowns + lookups
   const catalog = useQuery({
-    queryKey: ["product-catalog", "all"],
+    queryKey: ["product-catalog", tenantKey, "all"],
     queryFn: async () => {
-      const r = await fetch("/api/product-catalog?limit=500");
+      const r = await fetch(api("/api/product-catalog?limit=500"));
       if (!r.ok) throw new Error("Failed to load product catalog");
       return r.json() as Promise<{ items: ProductCatalogEntry[] }>;
     },
   });
   const partners = useQuery({
-    queryKey: ["partners", "all"],
+    queryKey: ["partners", tenantKey, "all"],
     queryFn: async () => {
-      const r = await fetch("/api/partners?limit=500");
+      const r = await fetch(api("/api/partners?limit=500"));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[] }>;
     },
@@ -124,9 +128,9 @@ export function SupplierOffersView() {
   const supplierPartners = (partners.data?.items || []).filter((p) => p.type === "supplier" || p.type === "both");
 
   const detail = useQuery({
-    queryKey: ["supplier-offer", detailId],
+    queryKey: ["supplier-offer", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/supplier-offers/${detailId}`);
+      const r = await fetch(api(`/api/supplier-offers/${detailId}`));
       if (!r.ok) throw new Error("Failed to load offer");
       return r.json() as Promise<SupplierOffer>;
     },
@@ -135,9 +139,9 @@ export function SupplierOffersView() {
 
   // Other offers for the same product (for comparison)
   const comparison = useQuery({
-    queryKey: ["supplier-offers", "compare", detail.data?.product_id],
+    queryKey: ["supplier-offers", tenantKey, "compare", detail.data?.product_id],
     queryFn: async () => {
-      const r = await fetch(`/api/supplier-offers?product_id=${detail.data?.product_id}`);
+      const r = await fetch(api(`/api/supplier-offers?product_id=${detail.data?.product_id}`));
       if (!r.ok) throw new Error("Failed to load comparison offers");
       return r.json() as Promise<{ items: SupplierOffer[] }>;
     },
@@ -146,12 +150,12 @@ export function SupplierOffersView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/supplier-offers/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/supplier-offers/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Offer deleted.");
-      qc.invalidateQueries({ queryKey: ["supplier-offers"] });
+      qc.invalidateQueries({ queryKey: ["supplier-offers", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -314,7 +318,7 @@ export function SupplierOffersView() {
         supplierPartners={supplierPartners}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["supplier-offers"] });
+          qc.invalidateQueries({ queryKey: ["supplier-offers", tenantKey] });
         }}
       />
 
@@ -523,6 +527,9 @@ function OfferFormDialog({
   supplierPartners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<SupplierOffer>>({});
   const [saving, setSaving] = useState(false);
 
@@ -550,7 +557,7 @@ function OfferFormDialog({
     setSaving(true);
     try {
       const method = offer ? "PUT" : "POST";
-      const url = offer ? `/api/supplier-offers/${offer.id}` : "/api/supplier-offers";
+      const url = offer ? api(`/api/supplier-offers/${offer.id}`) : api("/api/supplier-offers");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

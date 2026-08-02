@@ -44,6 +44,7 @@ import {
   DocumentTemplate, TenantLetterhead, TenantSeal, Tenant,
 } from "@/lib/supabase/types";
 import { useAppStore, isAdmin, isSuperAdmin } from "@/lib/store/app-store";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // ============================================================
 // Constants
@@ -291,6 +292,9 @@ function defaultTemplate(name = "Untitled template"): TemplateFormState {
 // ============================================================
 
 export function DocumentTemplatesView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
   const superAdmin = isSuperAdmin(user);
@@ -300,9 +304,9 @@ export function DocumentTemplatesView() {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(user?.tenant_id ?? null);
 
   const tenantsQ = useQuery<{ items: Tenant[] }>({
-    queryKey: ["tenants", "list"],
+    queryKey: ["tenants", tenantKey, "list"],
     queryFn: async () => {
-      const r = await fetch("/api/tenants");
+      const r = await fetch(api("/api/tenants"));
       if (!r.ok) throw new Error("Failed to load tenants");
       return r.json();
     },
@@ -415,6 +419,9 @@ export function DocumentTemplatesView() {
 // ============================================================
 
 function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TenantLetterhead | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -422,9 +429,9 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
   const [duplicating, setDuplicating] = useState<TenantLetterhead | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["letterheads", tenantQuery],
+    queryKey: ["letterheads", tenantKey, tenantQuery],
     queryFn: async () => {
-      const r = await fetch(`/api/letterheads${tenantQuery}`);
+      const r = await fetch(api(`/api/letterheads${tenantQuery}`));
       if (!r.ok) throw new Error("Failed to load letterheads");
       return r.json() as Promise<{ items: TenantLetterhead[] }>;
     },
@@ -432,12 +439,12 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/letterheads/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/letterheads/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Letterhead deleted.");
-      qc.invalidateQueries({ queryKey: ["letterheads", tenantQuery] });
+      qc.invalidateQueries({ queryKey: ["letterheads", tenantKey, tenantQuery] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -447,7 +454,7 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
     mutationFn: async (l: TenantLetterhead) => {
       const { id, tenant_id, created_by, created_at, updated_at, ...rest } = l;
       const copy = { ...rest, name: l.name + " (copy)", is_default: false };
-      const r = await fetch(`/api/letterheads${tenantQuery}`, {
+      const r = await fetch(api(`/api/letterheads${tenantQuery}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(copy),
@@ -457,7 +464,7 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
     },
     onSuccess: () => {
       toast.success("Letterhead duplicated.");
-      qc.invalidateQueries({ queryKey: ["letterheads", tenantQuery] });
+      qc.invalidateQueries({ queryKey: ["letterheads", tenantKey, tenantQuery] });
       setDuplicating(null);
     },
     onError: () => toast.error("Duplicate failed."),
@@ -552,7 +559,7 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
         tenantQuery={tenantQuery}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["letterheads", tenantQuery] });
+          qc.invalidateQueries({ queryKey: ["letterheads", tenantKey, tenantQuery] });
         }}
       />
 
@@ -601,6 +608,9 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
 // ============================================================
 
 function SealsTab({ tenantQuery }: { tenantQuery: string }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TenantSeal | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -608,9 +618,9 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
   const [duplicating, setDuplicating] = useState<TenantSeal | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["seals", tenantQuery],
+    queryKey: ["seals", tenantKey, tenantQuery],
     queryFn: async () => {
-      const r = await fetch(`/api/seals${tenantQuery}`);
+      const r = await fetch(api(`/api/seals${tenantQuery}`));
       if (!r.ok) throw new Error("Failed to load seals");
       return r.json() as Promise<{ items: TenantSeal[] }>;
     },
@@ -618,12 +628,12 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/seals/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/seals/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Seal deleted.");
-      qc.invalidateQueries({ queryKey: ["seals", tenantQuery] });
+      qc.invalidateQueries({ queryKey: ["seals", tenantKey, tenantQuery] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -633,7 +643,7 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
     mutationFn: async (s: TenantSeal) => {
       const { id, tenant_id, created_by, created_at, updated_at, ...rest } = s;
       const copy = { ...rest, name: s.name + " (copy)", is_default: false };
-      const r = await fetch(`/api/seals${tenantQuery}`, {
+      const r = await fetch(api(`/api/seals${tenantQuery}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(copy),
@@ -643,7 +653,7 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
     },
     onSuccess: () => {
       toast.success("Seal duplicated.");
-      qc.invalidateQueries({ queryKey: ["seals", tenantQuery] });
+      qc.invalidateQueries({ queryKey: ["seals", tenantKey, tenantQuery] });
       setDuplicating(null);
     },
     onError: () => toast.error("Duplicate failed."),
@@ -751,7 +761,7 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
         tenantQuery={tenantQuery}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["seals", tenantQuery] });
+          qc.invalidateQueries({ queryKey: ["seals", tenantKey, tenantQuery] });
         }}
       />
 
@@ -800,6 +810,9 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
 // ============================================================
 
 function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [editing, setEditing] = useState<DocumentTemplate | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -807,9 +820,9 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
   const [duplicating, setDuplicating] = useState<DocumentTemplate | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["document-templates", tenantQuery],
+    queryKey: ["document-templates", tenantKey, tenantQuery],
     queryFn: async () => {
-      const r = await fetch(`/api/document-templates${tenantQuery}`);
+      const r = await fetch(api(`/api/document-templates${tenantQuery}`));
       if (!r.ok) throw new Error("Failed to load templates");
       return r.json() as Promise<{ items: DocumentTemplate[] }>;
     },
@@ -817,17 +830,17 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
 
   // Load letterheads + seals so we can show their names on the cards
   const letterheadsQ = useQuery({
-    queryKey: ["letterheads", tenantQuery],
+    queryKey: ["letterheads", tenantKey, tenantQuery],
     queryFn: async () => {
-      const r = await fetch(`/api/letterheads${tenantQuery}`);
+      const r = await fetch(api(`/api/letterheads${tenantQuery}`));
       if (!r.ok) throw new Error("Failed to load letterheads");
       return r.json() as Promise<{ items: TenantLetterhead[] }>;
     },
   });
   const sealsQ = useQuery({
-    queryKey: ["seals", tenantQuery],
+    queryKey: ["seals", tenantKey, tenantQuery],
     queryFn: async () => {
-      const r = await fetch(`/api/seals${tenantQuery}`);
+      const r = await fetch(api(`/api/seals${tenantQuery}`));
       if (!r.ok) throw new Error("Failed to load seals");
       return r.json() as Promise<{ items: TenantSeal[] }>;
     },
@@ -838,12 +851,12 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/document-templates/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/document-templates/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Template deleted.");
-      qc.invalidateQueries({ queryKey: ["document-templates", tenantQuery] });
+      qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -851,7 +864,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
 
   const setDefaultMut = useMutation({
     mutationFn: async (t: DocumentTemplate) => {
-      const r = await fetch(`/api/document-templates/${t.id}`, {
+      const r = await fetch(api(`/api/document-templates/${t.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...t, is_default: true }),
@@ -861,7 +874,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
     },
     onSuccess: () => {
       toast.success("Default template updated.");
-      qc.invalidateQueries({ queryKey: ["document-templates", tenantQuery] });
+      qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
     },
     onError: () => toast.error("Failed to set default."),
   });
@@ -870,7 +883,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
     mutationFn: async (t: DocumentTemplate) => {
       const { id, tenant_id, created_by, created_at, updated_at, letterhead, seal, ...rest } = t;
       const copy = { ...rest, name: t.name + " (copy)", is_default: false };
-      const r = await fetch(`/api/document-templates${tenantQuery}`, {
+      const r = await fetch(api(`/api/document-templates${tenantQuery}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(copy),
@@ -880,7 +893,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
     },
     onSuccess: () => {
       toast.success("Template duplicated.");
-      qc.invalidateQueries({ queryKey: ["document-templates", tenantQuery] });
+      qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
       setDuplicating(null);
     },
     onError: () => toast.error("Duplicate failed."),
@@ -1005,7 +1018,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
         seals={seals}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["document-templates", tenantQuery] });
+          qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
         }}
       />
 
@@ -1062,6 +1075,9 @@ function LetterheadEditorDialog({
   tenantQuery: string;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<LetterheadFormState>(defaultLetterhead());
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1098,7 +1114,7 @@ function LetterheadEditorDialog({
     setSaving(true);
     try {
       const method = letterhead ? "PUT" : "POST";
-      const url = letterhead ? `/api/letterheads/${letterhead.id}` : `/api/letterheads${tenantQuery}`;
+      const url = letterhead ? api(`/api/letterheads/${letterhead.id}`) : api(`/api/letterheads${tenantQuery}`);
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -1628,6 +1644,9 @@ function SealEditorDialog({
   tenantQuery: string;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<SealFormState>(defaultSeal());
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1670,7 +1689,7 @@ function SealEditorDialog({
     setSaving(true);
     try {
       const method = seal ? "PUT" : "POST";
-      const url = seal ? `/api/seals/${seal.id}` : `/api/seals${tenantQuery}`;
+      const url = seal ? api(`/api/seals/${seal.id}`) : api(`/api/seals${tenantQuery}`);
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -2001,6 +2020,9 @@ function TemplateEditorDialog({
   seals: TenantSeal[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<TemplateFormState>(defaultTemplate());
   const [saving, setSaving] = useState(false);
 
@@ -2022,7 +2044,7 @@ function TemplateEditorDialog({
     setSaving(true);
     try {
       const method = template ? "PUT" : "POST";
-      const url = template ? `/api/document-templates/${template.id}` : `/api/document-templates${tenantQuery}`;
+      const url = template ? api(`/api/document-templates/${template.id}`) : api(`/api/document-templates${tenantQuery}`);
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

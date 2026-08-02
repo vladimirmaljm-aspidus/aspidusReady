@@ -47,6 +47,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const PAGE_SIZE = 20;
 
@@ -122,6 +123,9 @@ function thirtyDaysFromNow(): string {
 }
 
 export function OffersView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -134,7 +138,7 @@ export function OffersView() {
   const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["offers", search, statusFilter, partnerFilter, page],
+    queryKey: ["offers", tenantKey, search, statusFilter, partnerFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -142,25 +146,25 @@ export function OffersView() {
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(page * PAGE_SIZE));
-      const r = await fetch(`/api/offers?${params}`);
+      const r = await fetch(api(`/api/offers?${params}`));
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json() as Promise<{ items: Offer[]; total: number }>;
     },
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
   });
 
   const detail = useQuery({
-    queryKey: ["offer", detailId],
+    queryKey: ["offer", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/offers/${detailId}`);
+      const r = await fetch(api(`/api/offers/${detailId}`));
       if (!r.ok) throw new Error("Failed to load offer");
       return r.json() as Promise<Offer>;
     },
@@ -169,7 +173,7 @@ export function OffersView() {
 
   const statusMut = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: OfferStatus }) => {
-      const r = await fetch(`/api/offers/${id}`, {
+      const r = await fetch(api(`/api/offers/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -179,22 +183,22 @@ export function OffersView() {
     },
     onSuccess: () => {
       toast.success("Status updated.");
-      qc.invalidateQueries({ queryKey: ["offers"] });
-      if (detailId) qc.invalidateQueries({ queryKey: ["offer", detailId] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["offer", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: () => toast.error("Status change failed."),
   });
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/offers/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/offers/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Offer deleted.");
-      qc.invalidateQueries({ queryKey: ["offers"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -203,7 +207,7 @@ export function OffersView() {
   // ─── Create Offer from Deal ───
   const createFromDealMut = useMutation({
     mutationFn: async (deal_id: string) => {
-      const r = await fetch("/api/automation/create-offer-from-deal", {
+      const r = await fetch(api("/api/automation/create-offer-from-deal"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deal_id }),
@@ -216,8 +220,8 @@ export function OffersView() {
     },
     onSuccess: () => {
       toast.success("Offer created from deal successfully!");
-      qc.invalidateQueries({ queryKey: ["offers"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setShowDealPicker(false);
     },
     onError: (e: any) => toast.error(e.message || "Failed to create offer from deal."),
@@ -226,7 +230,7 @@ export function OffersView() {
   // ─── Create Invoice from Offer ───
   const createInvoiceMut = useMutation({
     mutationFn: async (offer_id: string) => {
-      const r = await fetch("/api/automation/create-invoice-from-offer", {
+      const r = await fetch(api("/api/automation/create-invoice-from-offer"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offer_id }),
@@ -239,8 +243,8 @@ export function OffersView() {
     },
     onSuccess: () => {
       toast.success("Invoice created from offer!");
-      qc.invalidateQueries({ queryKey: ["offers"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: (e: any) => toast.error(e.message || "Failed to create invoice."),
   });
@@ -248,7 +252,7 @@ export function OffersView() {
   // ─── Create Proforma from Offer ───
   const createProformaMut = useMutation({
     mutationFn: async (offer_id: string) => {
-      const r = await fetch("/api/automation/create-proforma-from-offer", {
+      const r = await fetch(api("/api/automation/create-proforma-from-offer"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offer_id }),
@@ -261,8 +265,8 @@ export function OffersView() {
     },
     onSuccess: () => {
       toast.success("Proforma created from offer!");
-      qc.invalidateQueries({ queryKey: ["offers"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: (e: any) => toast.error(e.message || "Failed to create proforma."),
   });
@@ -419,8 +423,8 @@ export function OffersView() {
         partners={partnerList}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["offers"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -494,12 +498,15 @@ function DealPickerDialog({
   onSelect: (dealId: string) => void;
   isCreating: boolean;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [dealSearch, setDealSearch] = useState("");
 
   const deals = useQuery({
-    queryKey: ["deals", "list", "100"],
+    queryKey: ["deals", tenantKey, "list", "100"],
     queryFn: async () => {
-      const r = await fetch(`/api/deals?limit=100`);
+      const r = await fetch(api(`/api/deals?limit=100`));
       if (!r.ok) throw new Error("Failed to load deals");
       return r.json() as Promise<{ items: Deal[]; total: number }>;
     },
@@ -585,6 +592,9 @@ function OfferDetail({
   isCreatingInvoice: boolean;
   isCreatingProforma: boolean;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const statuses: OfferStatus[] = ["draft", "sent", "accepted", "rejected", "expired"];
   const totals = computeTotals(offer.items || []);
@@ -595,10 +605,10 @@ function OfferDetail({
   const [savingVersion, setSavingVersion] = useState(false);
 
   const revisions = useQuery({
-    queryKey: ["document-revisions", offer.id],
+    queryKey: ["document-revisions", tenantKey, offer.id],
     queryFn: async () => {
       try {
-        const r = await fetch(`/api/document-register/${offer.id}`);
+        const r = await fetch(api(`/api/document-register/${offer.id}`));
         if (!r.ok) return [];
         const data = await r.json();
         return (data.items || []) as DocumentRevision[];
@@ -619,7 +629,7 @@ function OfferDetail({
     setSavingVersion(true);
     try {
       // 1. Find existing register entries for this offer to determine next version
-      const regRes = await fetch(`/api/document-register?reference_id=${offer.id}&type=offer`);
+      const regRes = await fetch(api(`/api/document-register?reference_id=${offer.id}&type=offer`));
       const regData = await regRes.json().catch(() => ({ items: [] }));
       const existingEntries = regData.items || [];
       const maxVersion = existingEntries.reduce((max: number, e: any) => Math.max(max, e.version || 0), 0);
@@ -628,7 +638,7 @@ function OfferDetail({
       // 2. Mark previous entries as superseded
       for (const entry of existingEntries) {
         if (entry.status === "current") {
-          await fetch(`/api/document-register`, {
+          await fetch(api(`/api/document-register`), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...entry, status: "superseded" }),
@@ -652,7 +662,7 @@ function OfferDetail({
           items_count: offer.items?.length || 0,
         },
       };
-      const regRes2 = await fetch(`/api/document-register`, {
+      const regRes2 = await fetch(api(`/api/document-register`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registerEntry),
@@ -664,7 +674,7 @@ function OfferDetail({
       const regEntry = await regRes2.json();
 
       // 4. Create revision record
-      const revRes = await fetch(`/api/document-revisions`, {
+      const revRes = await fetch(api(`/api/document-revisions`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -681,7 +691,7 @@ function OfferDetail({
       toast.success("Version saved!", { description: `Version ${nextVersion} saved successfully.` });
       setChangeNote("");
       setShowVersionDialog(false);
-      qc.invalidateQueries({ queryKey: ["document-revisions", offer.id] });
+      qc.invalidateQueries({ queryKey: ["document-revisions", tenantKey, offer.id] });
     } catch (e: any) {
       toast.error(e.message || "Failed to save version.");
     } finally {
@@ -1079,6 +1089,9 @@ function OfferFormDialog({
   partners: Partner[];
   onSaved: (offerNumber?: string) => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const isEditing = !!offer;
 
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
@@ -1090,9 +1103,9 @@ function OfferFormDialog({
   const [loadingProductIdx, setLoadingProductIdx] = useState<number | null>(null);
 
   const deals = useQuery({
-    queryKey: ["deals", "list", "100"],
+    queryKey: ["deals", tenantKey, "list", "100"],
     queryFn: async () => {
-      const r = await fetch(`/api/deals?limit=100`);
+      const r = await fetch(api(`/api/deals?limit=100`));
       if (!r.ok) throw new Error("Failed to load deals");
       return r.json() as Promise<{ items: Deal[]; total: number }>;
     },
@@ -1100,9 +1113,9 @@ function OfferFormDialog({
   });
 
   const products = useQuery({
-    queryKey: ["products", "list", "200"],
+    queryKey: ["products", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/products?limit=200`);
+      const r = await fetch(api(`/api/products?limit=200`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
@@ -1155,7 +1168,7 @@ function OfferFormDialog({
     }
     setLoadingPartner(true);
     try {
-      const r = await fetch(`/api/automation/partner-context?partner_id=${partnerId}`);
+      const r = await fetch(api(`/api/automation/partner-context?partner_id=${partnerId}`));
       if (!r.ok) throw new Error("Failed to load partner context");
       const ctx: PartnerContext = await r.json();
       setPartnerContext(ctx);
@@ -1192,7 +1205,7 @@ function OfferFormDialog({
 
     setLoadingProductIdx(idx);
     try {
-      const r = await fetch(`/api/automation/product-context?product_id=${productId}`);
+      const r = await fetch(api(`/api/automation/product-context?product_id=${productId}`));
       if (!r.ok) throw new Error("Failed to load product context");
       const ctx: ProductContext = await r.json();
       setProductContextMap((prev) => ({ ...prev, [idx]: ctx }));
@@ -1238,7 +1251,7 @@ function OfferFormDialog({
     setSaving(true);
     try {
       const method = offer ? "PUT" : "POST";
-      const url = offer ? `/api/offers/${offer.id}` : "/api/offers";
+      const url = offer ? api(`/api/offers/${offer.id}`) : api("/api/offers");
       const body = {
         ...form,
         status: form.status || "draft",

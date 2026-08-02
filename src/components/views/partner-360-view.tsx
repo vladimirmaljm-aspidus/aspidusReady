@@ -43,6 +43,7 @@ import {
   Partner, Deal, DealStage, Offer, Invoice, SharedDocument,
   KycSubmission, PortalRfq, PortalAccess,
 } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // Local KYC status union (pre-existing duplicate KycStatus export collapses
 // the imported symbol — same workaround used in kyc-review-view.tsx).
@@ -201,6 +202,9 @@ function Partner360Content({
   onBack: () => void;
   canAdmin: boolean;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const setView = useAppStore((s) => s.setView);
   const [tab, setTab] = useState("overview");
@@ -208,72 +212,72 @@ function Partner360Content({
 
   // ---------- parallel queries ----------
   const partnerQ = useQuery<Partner>({
-    queryKey: ["partner", partnerId],
+    queryKey: ["partner", tenantKey, partnerId],
     queryFn: async () => {
-      const r = await fetch(`/api/partners/${partnerId}`);
+      const r = await fetch(api(`/api/partners/${partnerId}`));
       if (!r.ok) throw new Error("Failed to load partner");
       return r.json();
     },
   });
 
   const dealsQ = useQuery<{ items: Deal[] }>({
-    queryKey: ["deals", "partner360", partnerId],
+    queryKey: ["deals", tenantKey, "partner360", partnerId],
     queryFn: async () => {
-      const r = await fetch(`/api/deals?partner_id=${partnerId}&limit=500`);
+      const r = await fetch(api(`/api/deals?partner_id=${partnerId}&limit=500`));
       if (!r.ok) throw new Error("Failed to load deals");
       return r.json();
     },
   });
 
   const offersQ = useQuery<{ items: Offer[] }>({
-    queryKey: ["offers", "partner360", partnerId],
+    queryKey: ["offers", tenantKey, "partner360", partnerId],
     queryFn: async () => {
-      const r = await fetch(`/api/offers?partner_id=${partnerId}&limit=500`);
+      const r = await fetch(api(`/api/offers?partner_id=${partnerId}&limit=500`));
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json();
     },
   });
 
   const invoicesQ = useQuery<{ items: Invoice[] }>({
-    queryKey: ["invoices", "partner360", partnerId],
+    queryKey: ["invoices", tenantKey, "partner360", partnerId],
     queryFn: async () => {
-      const r = await fetch(`/api/invoices?partner_id=${partnerId}&limit=500`);
+      const r = await fetch(api(`/api/invoices?partner_id=${partnerId}&limit=500`));
       if (!r.ok) throw new Error("Failed to load invoices");
       return r.json();
     },
   });
 
   const documentsQ = useQuery<{ items: SharedDocument[] }>({
-    queryKey: ["documents", "partner360", partnerId],
+    queryKey: ["documents", tenantKey, "partner360", partnerId],
     queryFn: async () => {
-      const r = await fetch(`/api/documents?partner_id=${partnerId}&limit=500`);
+      const r = await fetch(api(`/api/documents?partner_id=${partnerId}&limit=500`));
       if (!r.ok) throw new Error("Failed to load documents");
       return r.json();
     },
   });
 
   const kycQ = useQuery<{ items: KycSubmission[] }>({
-    queryKey: ["kyc", "partner360", partnerId],
+    queryKey: ["kyc", tenantKey, "partner360", partnerId],
     queryFn: async () => {
-      const r = await fetch("/api/kyc");
+      const r = await fetch(api("/api/kyc"));
       if (!r.ok) throw new Error("Failed to load KYC");
       return r.json();
     },
   });
 
   const rfqsQ = useQuery<{ items: PortalRfq[] }>({
-    queryKey: ["portal-rfqs", "partner360", partnerId],
+    queryKey: ["portal-rfqs", tenantKey, "partner360", partnerId],
     queryFn: async () => {
-      const r = await fetch(`/api/portal-rfqs?partner_id=${partnerId}`);
+      const r = await fetch(api(`/api/portal-rfqs?partner_id=${partnerId}`));
       if (!r.ok) throw new Error("Failed to load RFQs");
       return r.json();
     },
   });
 
   const portalAccessQ = useQuery<{ items: PortalAccess[] }>({
-    queryKey: ["portal-access", "partner360", partnerId],
+    queryKey: ["portal-access", tenantKey, "partner360", partnerId],
     queryFn: async () => {
-      const r = await fetch("/api/portal-access");
+      const r = await fetch(api("/api/portal-access"));
       if (!r.ok) throw new Error("Failed to load portal access");
       return r.json();
     },
@@ -699,7 +703,7 @@ function Partner360Content({
             documents={documents}
             canAdmin={canAdmin}
             onUploaded={() => {
-              qc.invalidateQueries({ queryKey: ["documents", "partner360", partnerId] });
+              qc.invalidateQueries({ queryKey: ["documents", tenantKey, "partner360", partnerId] });
             }}
           />
         </TabsContent>
@@ -734,7 +738,7 @@ function Partner360Content({
           partner={partner}
           onSaved={() => {
             setEditOpen(false);
-            qc.invalidateQueries({ queryKey: ["partner", partnerId] });
+            qc.invalidateQueries({ queryKey: ["partner", tenantKey, partnerId] });
           }}
         />
       )}
@@ -944,6 +948,9 @@ function DocumentsTab({
   canAdmin: boolean;
   onUploaded: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const qc = useQueryClient();
@@ -964,13 +971,13 @@ function DocumentsTab({
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/documents/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete");
     },
     onSuccess: () => {
       toast.success("Document deleted.");
       setDeleteId(null);
-      qc.invalidateQueries({ queryKey: ["documents", "partner360", partnerId] });
+      qc.invalidateQueries({ queryKey: ["documents", tenantKey, "partner360", partnerId] });
     },
     onError: () => toast.error("Delete failed."),
   });
@@ -1332,13 +1339,16 @@ function PortalTab({
   rfqs: PortalRfq[];
   canAdmin: boolean;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [inviteSending, setInviteSending] = useState(false);
 
   const inviteMut = useMutation({
     mutationFn: async () => {
       if (!portalAccess) throw new Error("No portal access record");
-      const r = await fetch(`/api/portal-access/${portalAccess.id}/invite`, { method: "POST" });
+      const r = await fetch(api(`/api/portal-access/${portalAccess.id}/invite`), { method: "POST" });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Invite failed");
@@ -1347,7 +1357,7 @@ function PortalTab({
     },
     onSuccess: () => {
       toast.success("Portal invite sent.");
-      qc.invalidateQueries({ queryKey: ["portal-access", "partner360", partnerId] });
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
     },
     onError: (e: Error) => toast.error(e.message),
     onSettled: () => setInviteSending(false),
@@ -1356,7 +1366,7 @@ function PortalTab({
   const setStatusMut = useMutation({
     mutationFn: async (status: "suspended" | "revoked" | "active") => {
       if (!portalAccess) throw new Error("No portal access");
-      const r = await fetch("/api/portal-access", {
+      const r = await fetch(api("/api/portal-access"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: portalAccess.id, status }),
@@ -1369,7 +1379,7 @@ function PortalTab({
     },
     onSuccess: (_data, status) => {
       toast.success(`Portal access ${status}.`);
-      qc.invalidateQueries({ queryKey: ["portal-access", "partner360", partnerId] });
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1377,7 +1387,7 @@ function PortalTab({
   // Create portal access (initial)
   const createMut = useMutation({
     mutationFn: async () => {
-      const r = await fetch("/api/portal-access", {
+      const r = await fetch(api("/api/portal-access"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1394,7 +1404,7 @@ function PortalTab({
     },
     onSuccess: () => {
       toast.success("Portal access created.");
-      qc.invalidateQueries({ queryKey: ["portal-access", "partner360", partnerId] });
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1581,6 +1591,9 @@ function UploadDialog({
   partnerId: string;
   onUploaded: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [filename, setFilename] = useState("");
   const [category, setCategory] = useState<string>("other");
   const [visible, setVisible] = useState(true);
@@ -1593,7 +1606,7 @@ function UploadDialog({
     }
     setSaving(true);
     try {
-      const r = await fetch("/api/documents", {
+      const r = await fetch(api("/api/documents"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1718,6 +1731,9 @@ function QuickEditDialog({
   partner: Partner;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<Partner>>({ ...partner });
   const [saving, setSaving] = useState(false);
 
@@ -1732,7 +1748,7 @@ function QuickEditDialog({
     }
     setSaving(true);
     try {
-      const r = await fetch(`/api/partners/${partner.id}`, {
+      const r = await fetch(api(`/api/partners/${partner.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

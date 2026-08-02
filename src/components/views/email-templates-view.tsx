@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { useI18nStore } from "@/lib/i18n/store";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 // Locale type no longer needed
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -166,6 +167,9 @@ function highlightVariables(text: string) {
 /* ─── Main Component ─────────────────────────────────────────────────────── */
 
 export function EmailTemplatesView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
   const t = (key: string) => LABELS[key] || key;
 
@@ -178,9 +182,9 @@ export function EmailTemplatesView() {
 
   // Fetch templates
   const { data, isLoading } = useQuery({
-    queryKey: ["email-templates"],
+    queryKey: ["email-templates", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/email-templates");
+      const r = await fetch(api("/api/email-templates"));
       if (!r.ok) throw new Error("Failed to load email templates");
       return r.json() as Promise<{ templates: EmailTemplate[] }>;
     },
@@ -409,7 +413,7 @@ export function EmailTemplatesView() {
         onCreated={(id) => {
           setShowNewDialog(false);
           setSelectedId(id);
-          qc.invalidateQueries({ queryKey: ["email-templates"] });
+          qc.invalidateQueries({ queryKey: ["email-templates", tenantKey] });
         }}
       />
     </div>
@@ -431,6 +435,9 @@ function TemplateEditorPanel({
   t: (key: string) => string;
   onEditLangChange: (l: string) => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [previewMode, setPreviewMode] = useState<"visual" | "code">("visual");
 
@@ -449,7 +456,7 @@ function TemplateEditorPanel({
   // Save mutation
   const saveMut = useMutation({
     mutationFn: async (payload: Partial<EmailTemplate> & { id?: string }) => {
-      const r = await fetch("/api/email-templates", {
+      const r = await fetch(api("/api/email-templates"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -459,7 +466,7 @@ function TemplateEditorPanel({
     },
     onSuccess: () => {
       toast.success(t("saved"));
-      qc.invalidateQueries({ queryKey: ["email-templates"] });
+      qc.invalidateQueries({ queryKey: ["email-templates", tenantKey] });
     },
     onError: () => toast.error("Failed to save template."),
   });
@@ -467,7 +474,7 @@ function TemplateEditorPanel({
   // Test send mutation
   const testSendMut = useMutation({
     mutationFn: async () => {
-      const r = await fetch("/api/email-templates", {
+      const r = await fetch(api("/api/email-templates"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -755,6 +762,9 @@ function NewTemplateDialog({
   t: (key: string) => string;
   onCreated: (id: string) => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState<EmailCategory>("transactional");
@@ -777,7 +787,7 @@ function NewTemplateDialog({
     }
     setSaving(true);
     try {
-      const r = await fetch("/api/email-templates", {
+      const r = await fetch(api("/api/email-templates"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

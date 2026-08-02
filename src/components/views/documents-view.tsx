@@ -32,6 +32,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { SharedDocument, Partner } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type DocCategory = SharedDocument["category"];
 
@@ -59,6 +60,9 @@ function fmtSize(size: number | null | undefined): string {
 }
 
 export function DocumentsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
@@ -68,21 +72,21 @@ export function DocumentsView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["documents", search, partnerFilter],
+    queryKey: ["documents", tenantKey, search, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
-      const r = await fetch(`/api/documents?${params}`);
+      const r = await fetch(api(`/api/documents?${params}`));
       if (!r.ok) throw new Error("Failed to load documents");
       return r.json() as Promise<{ items: SharedDocument[]; total: number }>;
     },
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
@@ -90,13 +94,13 @@ export function DocumentsView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/documents/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete document");
     },
     onSuccess: () => {
       toast.success("Document deleted.");
-      qc.invalidateQueries({ queryKey: ["documents"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["documents", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Failed to delete document."),
@@ -213,8 +217,8 @@ export function DocumentsView() {
         partners={partnerList}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["documents"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["documents", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -359,6 +363,9 @@ function DocumentFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<SharedDocument>>({});
   const [saving, setSaving] = useState(false);
 
@@ -385,7 +392,7 @@ function DocumentFormDialog({
     if (!form.partner_id) { toast.error("Please select a partner."); return; }
     setSaving(true);
     try {
-      const r = await fetch("/api/documents", {
+      const r = await fetch(api("/api/documents"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

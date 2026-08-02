@@ -42,6 +42,7 @@ import { fmtMoney, fmtDate } from "@/lib/utils/format";
 import { CURRENCIES as REF_CURRENCIES } from "@/lib/data/reference";
 
 import type { CommissionAgent, DealCommission, CommissionPayout, CommissionSummary, CommissionType, CommissionStatus } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 /* ─── Constants ───────────────────────────────────────────────────────────── */
 
@@ -92,15 +93,18 @@ function statusLabel(status: CommissionStatus) {
 /* ─── Main Component ──────────────────────────────────────────────────────── */
 
 export function CommissionsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const locale = useLocale();
   const [tab, setTab] = useState("agents");
 
   /* ── Queries ──────────────────────────────────────────────────────── */
   const agentsQ = useQuery({
-    queryKey: ["commission-agents"],
+    queryKey: ["commission-agents", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/commission-agents");
+      const r = await fetch(api("/api/commission-agents"));
       if (!r.ok) throw new Error("Failed to load agents");
       const data = await r.json();
       return (data.items || data || []) as CommissionAgent[];
@@ -108,9 +112,9 @@ export function CommissionsView() {
   });
 
   const dealsQ = useQuery({
-    queryKey: ["deal-commissions"],
+    queryKey: ["deal-commissions", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/deal-commissions");
+      const r = await fetch(api("/api/deal-commissions"));
       if (!r.ok) throw new Error("Failed to load deal commissions");
       const data = await r.json();
       return (data.items || data || []) as DealCommission[];
@@ -118,9 +122,9 @@ export function CommissionsView() {
   });
 
   const payoutsQ = useQuery({
-    queryKey: ["commission-payouts"],
+    queryKey: ["commission-payouts", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/commission-payouts");
+      const r = await fetch(api("/api/commission-payouts"));
       if (!r.ok) throw new Error("Failed to load payouts");
       const data = await r.json();
       return (data.items || data || []) as CommissionPayout[];
@@ -128,9 +132,9 @@ export function CommissionsView() {
   });
 
   const summariesQ = useQuery({
-    queryKey: ["commission-summaries"],
+    queryKey: ["commission-summaries", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/commission-summaries");
+      const r = await fetch(api("/api/commission-summaries"));
       if (!r.ok) throw new Error("Failed to load summaries");
       const data = await r.json();
       return (Array.isArray(data) ? data : data.items || []) as CommissionSummary[];
@@ -138,9 +142,9 @@ export function CommissionsView() {
   });
 
   const partnersQ = useQuery({
-    queryKey: ["partners-list"],
+    queryKey: ["partners-list", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/partners?limit=200");
+      const r = await fetch(api("/api/partners?limit=200"));
       if (!r.ok) throw new Error("Failed to load partners");
       const data = await r.json();
       return (data.items || data) as { id: string; name: string }[];
@@ -148,9 +152,9 @@ export function CommissionsView() {
   });
 
   const dealsListQ = useQuery({
-    queryKey: ["deals-list"],
+    queryKey: ["deals-list", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/deals?limit=200");
+      const r = await fetch(api("/api/deals?limit=200"));
       if (!r.ok) throw new Error("Failed to load deals");
       const data = await r.json();
       return (data.items || data) as { id: string; title: string; value: number; profit: number; quantity: number; unit: string; currency: string }[];
@@ -233,7 +237,7 @@ export function CommissionsView() {
             partnerMap={partnerMap}
             locale={locale}
             isLoading={agentsQ.isLoading}
-            onRefresh={() => qc.invalidateQueries({ queryKey: ["commission-agents"] })}
+            onRefresh={() => qc.invalidateQueries({ queryKey: ["commission-agents", tenantKey] })}
           />
         </TabsContent>
 
@@ -247,8 +251,8 @@ export function CommissionsView() {
             locale={locale}
             isLoading={dealsQ.isLoading}
             onRefresh={() => {
-              qc.invalidateQueries({ queryKey: ["deal-commissions"] });
-              qc.invalidateQueries({ queryKey: ["commission-summaries"] });
+              qc.invalidateQueries({ queryKey: ["deal-commissions", tenantKey] });
+              qc.invalidateQueries({ queryKey: ["commission-summaries", tenantKey] });
             }}
           />
         </TabsContent>
@@ -262,9 +266,9 @@ export function CommissionsView() {
             locale={locale}
             isLoading={payoutsQ.isLoading}
             onRefresh={() => {
-              qc.invalidateQueries({ queryKey: ["commission-payouts"] });
-              qc.invalidateQueries({ queryKey: ["commission-summaries"] });
-              qc.invalidateQueries({ queryKey: ["deal-commissions"] });
+              qc.invalidateQueries({ queryKey: ["commission-payouts", tenantKey] });
+              qc.invalidateQueries({ queryKey: ["commission-summaries", tenantKey] });
+              qc.invalidateQueries({ queryKey: ["deal-commissions", tenantKey] });
             }}
           />
         </TabsContent>
@@ -287,6 +291,9 @@ function AgentsTab({
   isLoading: boolean;
   onRefresh: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<CommissionAgent | null>(null);
@@ -427,7 +434,7 @@ function AgentsTab({
               onClick={async () => {
                 if (!deleteId) return;
                 try {
-                  const r = await fetch(`/api/commission-agents/${deleteId}`, { method: "DELETE" });
+                  const r = await fetch(api(`/api/commission-agents/${deleteId}`), { method: "DELETE" });
                   if (!r.ok) throw new Error();
                   toast.success("Agent deleted.");
                   onRefresh();
@@ -458,6 +465,9 @@ function AgentFormDialog({
   locale?: string;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<CommissionAgent>>({});
   const [saving, setSaving] = useState(false);
 
@@ -492,7 +502,7 @@ function AgentFormDialog({
     setSaving(true);
     try {
       const method = agent ? "PUT" : "POST";
-      const url = agent ? `/api/commission-agents/${agent.id}` : "/api/commission-agents";
+      const url = agent ? api(`/api/commission-agents/${agent.id}`) : api("/api/commission-agents");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -658,6 +668,9 @@ function DealCommissionsTab({
   isLoading: boolean;
   onRefresh: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
@@ -783,12 +796,12 @@ function DealCommissionsTab({
                             <Eye className="size-4" />
                           </Button>
                           {c.status === "pending" && (
-                            <Button size="icon" variant="ghost" className="size-8 text-blue-600" onClick={() => approveCommission(c.id, onRefresh)} title="Approve">
+                            <Button size="icon" variant="ghost" className="size-8 text-blue-600" onClick={() => approveCommission(c.id, onRefresh, api)} title="Approve">
                               <CheckCircle2 className="size-4" />
                             </Button>
                           )}
                           {c.status === "approved" && (
-                            <Button size="icon" variant="ghost" className="size-8 text-emerald-600" onClick={() => markPaidCommission(c.id, onRefresh)} title="Mark as Paid">
+                            <Button size="icon" variant="ghost" className="size-8 text-emerald-600" onClick={() => markPaidCommission(c.id, onRefresh, api)} title="Mark as Paid">
                               <DollarSign className="size-4" />
                             </Button>
                           )}
@@ -922,6 +935,9 @@ function AddCommissionDialog({
   locale?: string;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<DealCommission>>({});
   const [saving, setSaving] = useState(false);
 
@@ -1009,7 +1025,7 @@ function AddCommissionDialog({
     setSaving(true);
     try {
       const payload = { ...form, calculated_commission: preview };
-      const r = await fetch("/api/deal-commissions", {
+      const r = await fetch(api("/api/deal-commissions"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1167,9 +1183,9 @@ function AddCommissionDialog({
 
 /* ── Approve / Mark Paid helpers ──────────────────────────────────────────── */
 
-async function approveCommission(id: string, onRefresh: () => void) {
+async function approveCommission(id: string, onRefresh: () => void, api: (path: string) => string) {
   try {
-    const r = await fetch(`/api/deal-commissions/${id}`, {
+    const r = await fetch(api(`/api/deal-commissions/${id}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "approve" }),
@@ -1182,9 +1198,9 @@ async function approveCommission(id: string, onRefresh: () => void) {
   }
 }
 
-async function markPaidCommission(id: string, onRefresh: () => void) {
+async function markPaidCommission(id: string, onRefresh: () => void, api: (path: string) => string) {
   try {
-    const r = await fetch(`/api/deal-commissions/${id}`, {
+    const r = await fetch(api(`/api/deal-commissions/${id}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "mark_paid" }),
@@ -1332,6 +1348,9 @@ function CreatePayoutDialog({
   locale?: string;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedCommissionIds, setSelectedCommissionIds] = useState<Set<string>>(new Set());
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -1410,7 +1429,7 @@ function CreatePayoutDialog({
         payment_reference: paymentReference || null,
         notes: notes || null,
       };
-      const r = await fetch("/api/commission-payouts", {
+      const r = await fetch(api("/api/commission-payouts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -43,6 +43,7 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Invoice, InvoiceStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, INVOICE_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const STATUS_LABELS: Record<InvoiceStatus, string> = {
   draft: "Draft",
@@ -117,6 +118,9 @@ function calculateDueDate(paymentTerms: string): Date {
 }
 
 export function InvoicesView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -128,13 +132,13 @@ export function InvoicesView() {
   const [showOfferPicker, setShowOfferPicker] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["invoices", search, statusFilter, partnerFilter],
+    queryKey: ["invoices", tenantKey, search, statusFilter, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
-      const r = await fetch(`/api/invoices?${params}`);
+      const r = await fetch(api(`/api/invoices?${params}`));
       if (!r.ok) throw new Error("Failed to load invoices");
       return r.json() as Promise<{ items: Invoice[]; total: number }>;
     },
@@ -142,27 +146,27 @@ export function InvoicesView() {
 
   // Unfiltered list for KPI rollups
   const kpiQuery = useQuery({
-    queryKey: ["invoices", "kpi"],
+    queryKey: ["invoices", tenantKey, "kpi"],
     queryFn: async () => {
-      const r = await fetch(`/api/invoices?limit=500`);
+      const r = await fetch(api(`/api/invoices?limit=500`));
       if (!r.ok) throw new Error("Failed to load KPI data");
       return r.json() as Promise<{ items: Invoice[]; total: number }>;
     },
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
   });
 
   const detail = useQuery({
-    queryKey: ["invoice", detailId],
+    queryKey: ["invoice", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/invoices/${detailId}`);
+      const r = await fetch(api(`/api/invoices/${detailId}`));
       if (!r.ok) throw new Error("Failed to load invoice");
       return r.json() as Promise<Invoice>;
     },
@@ -172,7 +176,7 @@ export function InvoicesView() {
   // Mark as sent mutation
   const markSentMut = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const r = await fetch(`/api/invoices/${id}`, {
+      const r = await fetch(api(`/api/invoices/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "sent", sent_at: new Date().toISOString() }),
@@ -182,16 +186,16 @@ export function InvoicesView() {
     },
     onSuccess: () => {
       toast.success("Invoice marked as sent.");
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      if (detailId) qc.invalidateQueries({ queryKey: ["invoice", detailId] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["invoice", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: () => toast.error("Could not update invoice."),
   });
 
   const markPaidMut = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const r = await fetch(`/api/invoices/${id}`, {
+      const r = await fetch(api(`/api/invoices/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "paid", paid_at: new Date().toISOString() }),
@@ -201,22 +205,22 @@ export function InvoicesView() {
     },
     onSuccess: () => {
       toast.success("Invoice marked as paid.");
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      if (detailId) qc.invalidateQueries({ queryKey: ["invoice", detailId] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["invoice", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: () => toast.error("Could not update invoice."),
   });
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/invoices/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete invoice");
     },
     onSuccess: () => {
       toast.success("Invoice deleted.");
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -225,7 +229,7 @@ export function InvoicesView() {
   // Create invoice from offer mutation
   const createFromOfferMut = useMutation({
     mutationFn: async ({ offer_id }: { offer_id: string }) => {
-      const r = await fetch(`/api/automation/create-invoice-from-offer`, {
+      const r = await fetch(api(`/api/automation/create-invoice-from-offer`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offer_id }),
@@ -238,8 +242,8 @@ export function InvoicesView() {
     },
     onSuccess: (created) => {
       toast.success(`Invoice ${created.number} created from offer.`);
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setShowOfferPicker(false);
       // Open the newly created invoice for editing
       setEditing(created);
@@ -470,8 +474,8 @@ export function InvoicesView() {
         partners={partnerList}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["invoices"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -544,12 +548,15 @@ function CreateFromOfferDialog({
   onCreateFromOffer: (offerId: string) => void;
   isCreating: boolean;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [searchOffer, setSearchOffer] = useState("");
 
   const { data: offersData, isLoading: offersLoading } = useQuery({
-    queryKey: ["offers", "accepted-sent"],
+    queryKey: ["offers", tenantKey, "accepted-sent"],
     queryFn: async () => {
-      const r = await fetch(`/api/offers?limit=100`);
+      const r = await fetch(api(`/api/offers?limit=100`));
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json() as Promise<{ items: Offer[]; total: number }>;
     },
@@ -816,6 +823,9 @@ function InvoiceFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string }>({ items: [] });
   const [saving, setSaving] = useState(false);
   const [partnerContextLoading, setPartnerContextLoading] = useState(false);
@@ -833,9 +843,9 @@ function InvoiceFormDialog({
   const [notesOpen, setNotesOpen] = useState(false);
 
   const offers = useQuery({
-    queryKey: ["offers", "list", "100"],
+    queryKey: ["offers", tenantKey, "list", "100"],
     queryFn: async () => {
-      const r = await fetch(`/api/offers?limit=100`);
+      const r = await fetch(api(`/api/offers?limit=100`));
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json() as Promise<{ items: Offer[]; total: number }>;
     },
@@ -843,9 +853,9 @@ function InvoiceFormDialog({
   });
 
   const products = useQuery({
-    queryKey: ["products", "list", "200"],
+    queryKey: ["products", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/products?limit=200`);
+      const r = await fetch(api(`/api/products?limit=200`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
@@ -886,7 +896,7 @@ function InvoiceFormDialog({
     if (!partnerId) return;
     setPartnerContextLoading(true);
     try {
-      const r = await fetch(`/api/automation/partner-context?partner_id=${partnerId}`);
+      const r = await fetch(api(`/api/automation/partner-context?partner_id=${partnerId}`));
       if (!r.ok) throw new Error("Failed to load partner context");
       const data = await r.json();
       setPartnerContext(data);
@@ -981,7 +991,7 @@ function InvoiceFormDialog({
 
     // Fetch the offer data
     try {
-      const r = await fetch(`/api/offers/${offerId}`);
+      const r = await fetch(api(`/api/offers/${offerId}`));
       if (!r.ok) throw new Error("Failed to load offer");
       const offer: Offer = await r.json();
 
@@ -1069,7 +1079,7 @@ function InvoiceFormDialog({
     setSaving(true);
     try {
       const method = invoice ? "PUT" : "POST";
-      const url = invoice ? `/api/invoices/${invoice.id}` : "/api/invoices";
+      const url = invoice ? api(`/api/invoices/${invoice.id}`) : api("/api/invoices");
       const computed = computeTotals(form.items || []);
       const body = {
         ...form,

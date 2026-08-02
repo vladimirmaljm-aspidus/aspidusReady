@@ -27,6 +27,7 @@ import {
   ComposedChart, Area, Line, BarChart, Bar, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // ---------- stage lookups ----------
 const STAGE_LABELS: Record<DealStage, string> = {
@@ -102,14 +103,17 @@ function actionTone(action: string | null | undefined): string {
 // Main view
 // ============================================================
 export function DashboardView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const setView = useAppStore((s) => s.setView);
 
   // Primary dashboard data
   const dashQ = useQuery<DashboardInsights>({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/dashboard");
+      const r = await fetch(api("/api/dashboard"));
       if (!r.ok) throw new Error("Failed to load dashboard");
       return r.json();
     },
@@ -117,36 +121,36 @@ export function DashboardView() {
 
   // Trade-specific supplementary data (parallel)
   const dealsQ = useQuery<{ items: Deal[] }>({
-    queryKey: ["deals", "dashboard", "200"],
+    queryKey: ["deals", tenantKey, "dashboard", "200"],
     queryFn: async () => {
-      const r = await fetch("/api/deals?limit=200");
+      const r = await fetch(api("/api/deals?limit=200"));
       if (!r.ok) throw new Error("Failed to load deals");
       return r.json();
     },
   });
 
   const offersSupplierQ = useQuery<{ items: SupplierOffer[] }>({
-    queryKey: ["supplier-offers", "dashboard", "active"],
+    queryKey: ["supplier-offers", tenantKey, "dashboard", "active"],
     queryFn: async () => {
-      const r = await fetch("/api/supplier-offers?status=active");
+      const r = await fetch(api("/api/supplier-offers?status=active"));
       if (!r.ok) throw new Error("Failed to load supplier offers");
       return r.json();
     },
   });
 
   const rfqsQ = useQuery<{ items: PortalRfq[] }>({
-    queryKey: ["portal-rfqs", "dashboard", "pending"],
+    queryKey: ["portal-rfqs", tenantKey, "dashboard", "pending"],
     queryFn: async () => {
-      const r = await fetch("/api/portal-rfqs?status=pending");
+      const r = await fetch(api("/api/portal-rfqs?status=pending"));
       if (!r.ok) throw new Error("Failed to load RFQs");
       return r.json();
     },
   });
 
   const tradeQ = useQuery<{ items: TradeCalculation[] }>({
-    queryKey: ["trade-calculator", "dashboard"],
+    queryKey: ["trade-calculator", tenantKey, "dashboard"],
     queryFn: async () => {
-      const r = await fetch("/api/trade-calculator");
+      const r = await fetch(api("/api/trade-calculator"));
       if (!r.ok) throw new Error("Failed to load trade calculations");
       return r.json();
     },

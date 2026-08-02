@@ -70,6 +70,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useI18nStore, useT } from "@/lib/i18n/store";
 import { fmtRelative, fmtDateTime } from "@/lib/utils/format";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
 
@@ -309,6 +310,9 @@ function impactLevelBadge(impact: "high" | "medium" | "low") {
 /* ─── Main Component ──────────────────────────────────────────────────────── */
 
 export function ApiIntegrationsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const { locale } = useI18nStore();
   const t = useT();
 
@@ -318,27 +322,27 @@ export function ApiIntegrationsView() {
 
   // ── Data Queries ────────────────────────────────────────────────────────
   const customsQuery = useQuery<CustomsResponse>({
-    queryKey: ["customs"],
+    queryKey: ["customs", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/customs");
+      const r = await fetch(api("/api/customs"));
       if (!r.ok) throw new Error("Failed to fetch customs data");
       return r.json();
     },
   });
 
   const logisticsQuery = useQuery<LogisticsResponse>({
-    queryKey: ["logistics"],
+    queryKey: ["logistics", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/logistics");
+      const r = await fetch(api("/api/logistics"));
       if (!r.ok) throw new Error("Failed to fetch logistics data");
       return r.json();
     },
   });
 
   const marketQuery = useQuery<MarketNewsResponse>({
-    queryKey: ["market-news"],
+    queryKey: ["market-news", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/market-news");
+      const r = await fetch(api("/api/market-news"));
       if (!r.ok) throw new Error("Failed to fetch market news");
       return r.json();
     },
@@ -493,26 +497,29 @@ function CustomsTab({
   query: ReturnType<typeof useQuery<CustomsResponse>>;
   locale: string;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [search, setSearch] = useState("");
   const [regionFilter, setRegionFilter] = useState<string>("all");
 
   const { data, isLoading, error, refetch } = useQuery<CustomsResponse>({
-    queryKey: ["customs", search, regionFilter],
+    queryKey: ["customs", tenantKey, search, regionFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("q", search);
       if (regionFilter !== "all") params.set("region", regionFilter);
       params.set("type", "hs");
-      const r = await fetch(`/api/customs?${params.toString()}`);
+      const r = await fetch(api(`/api/customs?${params.toString()}`));
       if (!r.ok) throw new Error("Failed to fetch customs data");
       return r.json();
     },
   });
 
   const regulationsQuery = useQuery<CustomsResponse>({
-    queryKey: ["customs-regulations"],
+    queryKey: ["customs-regulations", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/customs?type=regulations");
+      const r = await fetch(api("/api/customs?type=regulations"));
       if (!r.ok) throw new Error("Failed to fetch regulations");
       return r.json();
     },
@@ -713,14 +720,17 @@ function LogisticsTab({
 }: {
   query: ReturnType<typeof useQuery<LogisticsResponse>>;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data, isLoading, refetch } = useQuery<LogisticsResponse>({
-    queryKey: ["logistics", statusFilter],
+    queryKey: ["logistics", tenantKey, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
-      const r = await fetch(`/api/logistics?${params.toString()}`);
+      const r = await fetch(api(`/api/logistics?${params.toString()}`));
       if (!r.ok) throw new Error("Failed to fetch logistics data");
       return r.json();
     },
@@ -933,6 +943,9 @@ function MarketNewsTab({
 }: {
   query: ReturnType<typeof useQuery<MarketNewsResponse>>;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const { data, isLoading, error, refetch } = query;
 
   if (error) {

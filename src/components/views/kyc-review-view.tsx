@@ -44,6 +44,7 @@ import {
   KycSubmission, KycDocumentType, Partner, PartnerEntityType,
 } from "@/lib/supabase/types";
 import { getCountry } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // Local copy of the KycSubmission.status union — there is a pre-existing
 // duplicate `KycStatus` export in supabase/types.ts (Partner.kyc_status uses a
@@ -133,6 +134,9 @@ function entityBadgeClass(et: PartnerEntityType): string {
 // ---------- main view ----------
 
 export function KycReviewView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -141,12 +145,12 @@ export function KycReviewView() {
 
   // KYC list
   const { data, isLoading } = useQuery({
-    queryKey: ["kyc", search, statusFilter],
+    queryKey: ["kyc", tenantKey, search, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
-      const r = await fetch(`/api/kyc?${params}`);
+      const r = await fetch(api(`/api/kyc?${params}`));
       if (!r.ok) throw new Error("Failed to load KYC submissions");
       return r.json() as Promise<{ items: KycSubmission[]; total: number }>;
     },
@@ -154,9 +158,9 @@ export function KycReviewView() {
 
   // Partners lookup (for partner names + portal info)
   const partnersQ = useQuery({
-    queryKey: ["partners", "lookup", "kyc"],
+    queryKey: ["partners", tenantKey, "lookup", "kyc"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=500`);
+      const r = await fetch(api(`/api/partners?limit=500`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
@@ -164,9 +168,9 @@ export function KycReviewView() {
 
   // Users lookup (to resolve reviewer name)
   const usersQ = useQuery({
-    queryKey: ["users", "lookup"],
+    queryKey: ["users", tenantKey, "lookup"],
     queryFn: async () => {
-      const r = await fetch(`/api/users`);
+      const r = await fetch(api(`/api/users`));
       if (!r.ok) throw new Error("Failed to load users");
       return r.json() as Promise<{ items: any[] }>;
     },
@@ -373,10 +377,10 @@ export function KycReviewView() {
         userMap={userMap}
         onReject={(id) => setRejectId(id)}
         onApproved={() => {
-          qc.invalidateQueries({ queryKey: ["kyc"] });
-          qc.invalidateQueries({ queryKey: ["partners"] });
+          qc.invalidateQueries({ queryKey: ["kyc", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
         }}
-        onNotesChanged={() => qc.invalidateQueries({ queryKey: ["kyc"] })}
+        onNotesChanged={() => qc.invalidateQueries({ queryKey: ["kyc", tenantKey] })}
       />
 
       {/* Reject dialog */}
@@ -385,7 +389,7 @@ export function KycReviewView() {
         open={!!rejectId}
         onOpenChange={(o) => !o && setRejectId(null)}
         onDone={() => {
-          qc.invalidateQueries({ queryKey: ["kyc"] });
+          qc.invalidateQueries({ queryKey: ["kyc", tenantKey] });
         }}
       />
     </div>
@@ -493,6 +497,9 @@ function ReviewDialog({
   onApproved: () => void;
   onNotesChanged: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [tab, setTab] = useState("business");
   const [notes, setNotes] = useState("");
   const [approvedResult, setApprovedResult] = useState<{ partner: Partner; submission: KycSubmission } | null>(null);
@@ -503,9 +510,9 @@ function ReviewDialog({
 
   // Load full submission
   const q = useQuery({
-    queryKey: ["kyc", id],
+    queryKey: ["kyc", tenantKey, id],
     queryFn: async () => {
-      const r = await fetch(`/api/kyc/${id}`);
+      const r = await fetch(api(`/api/kyc/${id}`));
       if (!r.ok) throw new Error("Failed to load submission");
       return r.json() as Promise<KycSubmission>;
     },
@@ -535,7 +542,7 @@ function ReviewDialog({
   // Save notes (auto-save on blur if dirty)
   const saveNotesMut = useMutation({
     mutationFn: async (newNotes: string) => {
-      const r = await fetch(`/api/kyc/${id}`, {
+      const r = await fetch(api(`/api/kyc/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ review_notes: newNotes }),
@@ -553,7 +560,7 @@ function ReviewDialog({
   // Approve + transfer
   const approveMut = useMutation({
     mutationFn: async () => {
-      const r = await fetch(`/api/kyc/${id}/approve`, {
+      const r = await fetch(api(`/api/kyc/${id}/approve`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -579,7 +586,7 @@ function ReviewDialog({
   // Request resubmission (admin asks client for more info)
   const resubmitMut = useMutation({
     mutationFn: async (note: string) => {
-      const r = await fetch(`/api/kyc/${id}/resubmit`, {
+      const r = await fetch(api(`/api/kyc/${id}/resubmit`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ note }),
@@ -1063,6 +1070,9 @@ function RejectDialog({
   onOpenChange: (o: boolean) => void;
   onDone: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [reason, setReason] = useState("");
   // Reset the reason field whenever a different submission is opened for rejection.
   const [lastRejectId, setLastRejectId] = useState<string | null>(null);
@@ -1076,7 +1086,7 @@ function RejectDialog({
 
   const mut = useMutation({
     mutationFn: async () => {
-      const r = await fetch(`/api/kyc/${id}/reject`, {
+      const r = await fetch(api(`/api/kyc/${id}/reject`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),

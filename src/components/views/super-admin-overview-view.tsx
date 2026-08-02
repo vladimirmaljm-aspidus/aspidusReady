@@ -35,6 +35,7 @@ import { Tenant, AuditLog } from "@/lib/supabase/types";
 import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 import { CURRENCIES, COUNTRIES } from "@/lib/data/reference";
 import { toast } from "sonner";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type Plan = Tenant["plan"];
 type TenantStatus = Tenant["status"];
@@ -219,10 +220,13 @@ function ViewUsersDialog({
   tenantId: string;
   tenantName: string;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const { data: users, isLoading } = useQuery({
-    queryKey: ["tenant-users", tenantId],
+    queryKey: ["tenant-users", tenantKey, tenantId],
     queryFn: async () => {
-      const r = await fetch(`/api/users?tenant_id=${tenantId}`);
+      const r = await fetch(api(`/api/users?tenant_id=${tenantId}`));
       if (!r.ok) throw new Error("Failed to load users");
       const d = await r.json();
       return (d.items || []) as Array<{ id: string; username: string; email: string; full_name: string | null; role: string; active: boolean }>;
@@ -291,13 +295,16 @@ function AssignAdminDialog({
   tenantName: string;
   onAssigned: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [userId, setUserId] = useState("");
   const [saving, setSaving] = useState(false);
 
   const { data: users } = useQuery({
-    queryKey: ["all-users-for-assign"],
+    queryKey: ["all-users-for-assign", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/super-admin/overview");
+      const r = await fetch(api("/api/super-admin/overview"));
       if (!r.ok) throw new Error("Failed");
       // We just need the users list — use the users endpoint instead
       return [] as Array<{ id: string; username: string; email: string; full_name: string | null; role: string; tenant_id: string | null }>;
@@ -307,9 +314,9 @@ function AssignAdminDialog({
 
   // Fetch all users for assignment
   const { data: allUsers } = useQuery({
-    queryKey: ["super-admin-all-users"],
+    queryKey: ["super-admin-all-users", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/super-admin/users");
+      const r = await fetch(api("/api/super-admin/users"));
       if (!r.ok) return [];
       const d = await r.json();
       return (d.items || []) as Array<{ id: string; username: string; email: string; full_name: string | null; role: string; tenant_id: string | null }>;
@@ -327,7 +334,7 @@ function AssignAdminDialog({
     if (!userId) { toast.error("Select a user."); return; }
     setSaving(true);
     try {
-      const r = await fetch("/api/users", {
+      const r = await fetch(api("/api/users"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: userId, tenant_id: tenantId, role: "admin" }),
@@ -383,6 +390,9 @@ function AssignAdminDialog({
 // ─── Main Component ─────────────────────────────────────────────────────
 
 export function SuperAdminOverviewView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const setView = useAppStore((s) => s.setView);
   const isSuper = isSuperAdmin(user);
@@ -396,9 +406,9 @@ export function SuperAdminOverviewView() {
   const [assignAdminTenant, setAssignAdminTenant] = useState<TenantStats | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["super-admin-overview"],
+    queryKey: ["super-admin-overview", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/super-admin/overview");
+      const r = await fetch(api("/api/super-admin/overview"));
       if (!r.ok) throw new Error("Failed to load overview");
       return r.json() as Promise<OverviewData>;
     },
@@ -426,7 +436,7 @@ export function SuperAdminOverviewView() {
   }, [data]);
 
   async function handleCreateCompany(form: CompanyForm) {
-    const r = await fetch("/api/tenants", {
+    const r = await fetch(api("/api/tenants"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
@@ -436,12 +446,12 @@ export function SuperAdminOverviewView() {
       throw new Error(e.error || "Failed to create tenant");
     }
     toast.success("Company created.");
-    queryClient.invalidateQueries({ queryKey: ["super-admin-overview"] });
+    queryClient.invalidateQueries({ queryKey: ["super-admin-overview", tenantKey] });
   }
 
   async function handleEditCompany(form: CompanyForm) {
     if (!editTenant) return;
-    const r = await fetch(`/api/tenants/${editTenant.tenant.id}`, {
+    const r = await fetch(api(`/api/tenants/${editTenant.tenant.id}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...form, id: editTenant.tenant.id }),
@@ -452,19 +462,19 @@ export function SuperAdminOverviewView() {
     }
     toast.success("Company updated.");
     setEditTenant(null);
-    queryClient.invalidateQueries({ queryKey: ["super-admin-overview"] });
+    queryClient.invalidateQueries({ queryKey: ["super-admin-overview", tenantKey] });
   }
 
   async function handleDeleteTenant() {
     if (!deleteTenant) return;
-    const r = await fetch(`/api/tenants/${deleteTenant.tenant.id}`, { method: "DELETE" });
+    const r = await fetch(api(`/api/tenants/${deleteTenant.tenant.id}`), { method: "DELETE" });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
       throw new Error(e.error || "Failed to delete tenant");
     }
     toast.success("Company deleted.");
     setDeleteTenant(null);
-    queryClient.invalidateQueries({ queryKey: ["super-admin-overview"] });
+    queryClient.invalidateQueries({ queryKey: ["super-admin-overview", tenantKey] });
   }
 
   function handleSwitchTenant(t: Tenant) {
@@ -599,7 +609,7 @@ export function SuperAdminOverviewView() {
           onOpenChange={(v) => { if (!v) setAssignAdminTenant(null); }}
           tenantId={assignAdminTenant.tenant.id}
           tenantName={assignAdminTenant.tenant.name}
-          onAssigned={() => queryClient.invalidateQueries({ queryKey: ["super-admin-overview"] })}
+          onAssigned={() => queryClient.invalidateQueries({ queryKey: ["super-admin-overview", tenantKey] })}
         />
       )}
 

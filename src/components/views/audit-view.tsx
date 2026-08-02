@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtDateTime } from "@/lib/utils/format";
 import { AuditLog } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 function initials(name?: string | null): string {
   if (!name) return "?";
@@ -48,14 +49,17 @@ function actionColor(action: string): string {
 }
 
 export function AuditView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["audit", search],
+    queryKey: ["audit", tenantKey, search],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
-      const r = await fetch(`/api/audit?${params}`);
+      const r = await fetch(api(`/api/audit?${params}`));
       if (!r.ok) throw new Error("Failed to load audit log");
       return r.json() as Promise<{ items: AuditLog[]; total: number }>;
     },

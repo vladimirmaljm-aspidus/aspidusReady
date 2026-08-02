@@ -41,6 +41,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Demand, DemandItem, DemandStatus, Partner, Product, PortalRfq } from "@/lib/supabase/types";
 import { CURRENCIES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const PAGE_SIZE = 20;
 
@@ -100,6 +101,9 @@ interface ProductContext {
 }
 
 export function DemandsView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -111,32 +115,32 @@ export function DemandsView() {
   const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["demands", search, statusFilter, page],
+    queryKey: ["demands", tenantKey, search, statusFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(page * PAGE_SIZE));
-      const r = await fetch(`/api/demands?${params}`);
+      const r = await fetch(api(`/api/demands?${params}`));
       if (!r.ok) throw new Error("Failed to load demands");
       return r.json() as Promise<{ items: Demand[]; total: number }>;
     },
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
   });
 
   const detail = useQuery({
-    queryKey: ["demand", detailId],
+    queryKey: ["demand", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/demands/${detailId}`);
+      const r = await fetch(api(`/api/demands/${detailId}`));
       if (!r.ok) throw new Error("Failed to load demand");
       return r.json() as Promise<Demand>;
     },
@@ -145,13 +149,13 @@ export function DemandsView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/demands/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/demands/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Demand deleted.");
-      qc.invalidateQueries({ queryKey: ["demands"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["demands", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -296,8 +300,8 @@ export function DemandsView() {
         partners={partnerList}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["demands"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["demands", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -307,8 +311,8 @@ export function DemandsView() {
         onOpenChange={setShowRfqPicker}
         onCreated={() => {
           setShowRfqPicker(false);
-          qc.invalidateQueries({ queryKey: ["demands"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["demands", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -367,6 +371,9 @@ function DemandDetail({
   demand: Demand;
   partnerName: string;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   // Check if any trade fields have data
   const hasTradeData = !!(demand.product_id || demand.product_name || demand.target_price != null || demand.is_new_product || demand.source || demand.auto_hints || demand.buyer_bank || demand.destination || demand.needed_by || demand.payment_terms);
 
@@ -503,7 +510,7 @@ function DemandDetail({
           size="sm"
           onClick={async () => {
             try {
-              const res = await fetch(`/api/automation/create-offer-from-deal`, {
+              const res = await fetch(api(`/api/automation/create-offer-from-deal`), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ demandId: demand.id }),
@@ -531,12 +538,15 @@ function PortalRfqPickerDialog({
   onOpenChange: (o: boolean) => void;
   onCreated: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [creating, setCreating] = useState<string | null>(null);
 
   const rfqs = useQuery({
-    queryKey: ["portal-rfqs", "pending"],
+    queryKey: ["portal-rfqs", tenantKey, "pending"],
     queryFn: async () => {
-      const r = await fetch(`/api/portal-rfqs?status=pending`);
+      const r = await fetch(api(`/api/portal-rfqs?status=pending`));
       if (!r.ok) throw new Error("Failed to load portal RFQs");
       return r.json() as Promise<{ items: PortalRfq[]; total: number }>;
     },
@@ -544,9 +554,9 @@ function PortalRfqPickerDialog({
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
@@ -559,7 +569,7 @@ function PortalRfqPickerDialog({
   async function createFromRfq(rfq: PortalRfq) {
     setCreating(rfq.id);
     try {
-      const r = await fetch("/api/automation/create-demand-from-portal-rfq", {
+      const r = await fetch(api("/api/automation/create-demand-from-portal-rfq"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rfq_id: rfq.id }),
@@ -655,6 +665,9 @@ function DemandFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const isEditing = !!demand;
 
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
@@ -665,9 +678,9 @@ function DemandFormDialog({
   const [autoNumber, setAutoNumber] = useState<string | null>(null);
 
   const products = useQuery({
-    queryKey: ["products", "list", "200"],
+    queryKey: ["products", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/products?limit=200`);
+      const r = await fetch(api(`/api/products?limit=200`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
@@ -747,7 +760,7 @@ function DemandFormDialog({
     }
     setLoadingPartner(true);
     try {
-      const r = await fetch(`/api/automation/partner-context?partner_id=${partnerId}`);
+      const r = await fetch(api(`/api/automation/partner-context?partner_id=${partnerId}`));
       if (!r.ok) throw new Error("Failed to load partner context");
       const ctx: PartnerContext = await r.json();
       setPartnerContext(ctx);
@@ -781,7 +794,7 @@ function DemandFormDialog({
     });
 
     try {
-      const r = await fetch(`/api/automation/product-context?product_id=${productId}`);
+      const r = await fetch(api(`/api/automation/product-context?product_id=${productId}`));
       if (!r.ok) throw new Error("Failed to load product context");
       const ctx: ProductContext = await r.json();
 
@@ -802,7 +815,7 @@ function DemandFormDialog({
     setSaving(true);
     try {
       const method = demand ? "PUT" : "POST";
-      const url = demand ? `/api/demands/${demand.id}` : "/api/demands";
+      const url = demand ? api(`/api/demands/${demand.id}`) : api("/api/demands");
       const body = {
         ...form,
         number: form.number || autoNumber || undefined,

@@ -37,6 +37,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtRelative, fmtDateTime } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { MailQueueEntry, MailStatus } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const STATUS_META: Record<MailStatus, { label: string; className: string; icon: typeof Clock }> = {
   queued: { label: "Queued", className: "bg-[var(--chart-4)] text-black", icon: Clock },
@@ -62,6 +63,9 @@ function AdminRequired() {
 }
 
 export function MailQueueView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
   const qc = useQueryClient();
@@ -72,12 +76,12 @@ export function MailQueueView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["mail-queue", search, status],
+    queryKey: ["mail-queue", tenantKey, search, status],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (status !== "all") params.set("status", status);
-      const r = await fetch(`/api/mail-queue?${params}`);
+      const r = await fetch(api(`/api/mail-queue?${params}`));
       if (!r.ok) throw new Error("Failed to load mail queue");
       return r.json() as Promise<{ items: MailQueueEntry[]; total: number }>;
     },
@@ -86,7 +90,7 @@ export function MailQueueView() {
 
   const retryMut = useMutation({
     mutationFn: async (entry: MailQueueEntry) => {
-      const r = await fetch("/api/mail-queue", {
+      const r = await fetch(api("/api/mail-queue"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -100,19 +104,19 @@ export function MailQueueView() {
     },
     onSuccess: () => {
       toast.success("Email queued for retry.");
-      qc.invalidateQueries({ queryKey: ["mail-queue"] });
+      qc.invalidateQueries({ queryKey: ["mail-queue", tenantKey] });
     },
     onError: () => toast.error("Retry failed."),
   });
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/mail-queue/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/mail-queue/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete email");
     },
     onSuccess: () => {
       toast.success("Email deleted.");
-      qc.invalidateQueries({ queryKey: ["mail-queue"] });
+      qc.invalidateQueries({ queryKey: ["mail-queue", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Failed to delete email."),
@@ -312,7 +316,7 @@ export function MailQueueView() {
         onOpenChange={setShowCompose}
         onSaved={() => {
           setShowCompose(false);
-          qc.invalidateQueries({ queryKey: ["mail-queue"] });
+          qc.invalidateQueries({ queryKey: ["mail-queue", tenantKey] });
         }}
       />
 
@@ -420,6 +424,9 @@ function ComposeDialog({
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -439,7 +446,7 @@ function ComposeDialog({
     if (!subject.trim()) { toast.error("Subject is required."); return; }
     setSaving(true);
     try {
-      const r = await fetch("/api/mail-queue", {
+      const r = await fetch(api("/api/mail-queue"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

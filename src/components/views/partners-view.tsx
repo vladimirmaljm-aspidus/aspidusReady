@@ -51,6 +51,7 @@ import { useAppStore } from "@/lib/store/app-store";
 import { CURRENCIES, ENTITY_TYPES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { getCountriesForSelect, getCitiesForSelect, getCountry } from "@/lib/data/geo/countries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const PAGE_SIZE = 20;
 
@@ -180,6 +181,9 @@ function generatePartnerCode(name: string): string {
 }
 
 export function PartnersView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const setView = useAppStore((s) => s.setView);
   const setSelectedId = useAppStore((s) => s.setSelectedId);
@@ -198,7 +202,7 @@ export function PartnersView() {
   const handleTypeFilterChange = useCallback((v: string) => { setTypeFilter(v); setPage(1); }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["partners", search, statusFilter, typeFilter, page],
+    queryKey: ["partners", tenantKey, search, statusFilter, typeFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -206,16 +210,16 @@ export function PartnersView() {
       if (typeFilter !== "all") params.set("type", typeFilter);
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String((page - 1) * PAGE_SIZE));
-      const r = await fetch(`/api/partners?${params}`);
+      const r = await fetch(api(`/api/partners?${params}`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
   });
 
   const detail = useQuery({
-    queryKey: ["partner", detailId],
+    queryKey: ["partner", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/partners/${detailId}`);
+      const r = await fetch(api(`/api/partners/${detailId}`));
       if (!r.ok) throw new Error("Failed to load partner");
       return r.json() as Promise<Partner>;
     },
@@ -223,9 +227,9 @@ export function PartnersView() {
   });
 
   const partnerDeals = useQuery({
-    queryKey: ["deals", "partner", detailId],
+    queryKey: ["deals", tenantKey, "partner", detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/deals?partner_id=${detailId}`);
+      const r = await fetch(api(`/api/deals?partner_id=${detailId}`));
       if (!r.ok) throw new Error("Failed to load deals");
       return r.json() as Promise<{ items: any[] }>;
     },
@@ -234,13 +238,13 @@ export function PartnersView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/partners/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/partners/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Partner deleted.");
-      qc.invalidateQueries({ queryKey: ["partners"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -465,8 +469,8 @@ export function PartnersView() {
         partner={editing}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["partners"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
 
@@ -530,6 +534,9 @@ function generatePageNumbers(current: number, total: number): (number | "ellipsi
 
 // ---- Detail panel ----
 function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const contactInfo = [
     { icon: Mail, label: "Email", value: partner.email },
@@ -556,9 +563,9 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
   // Fetch portal access for this partner
   const portalQuery = useQuery({
-    queryKey: ["portal-access", partner.id],
+    queryKey: ["portal-access", tenantKey, partner.id],
     queryFn: async () => {
-      const r = await fetch(`/api/portal-access?partner_id=${partner.id}`);
+      const r = await fetch(api(`/api/portal-access?partner_id=${partner.id}`));
       if (!r.ok) throw new Error("Failed to load portal access");
       const data = await r.json();
       // API returns { items: PortalAccess[] }, find the one for this partner
@@ -573,7 +580,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
   // Create portal access mutation
   const createPortalMut = useMutation({
     mutationFn: async (data: { partner_id: string; portal_email: string; tier: PortalTier }) => {
-      const r = await fetch("/api/portal-access", {
+      const r = await fetch(api("/api/portal-access"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -603,8 +610,8 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
     },
     onSuccess: () => {
       toast.success("Portal access activated!");
-      qc.invalidateQueries({ queryKey: ["portal-access", partner.id] });
-      qc.invalidateQueries({ queryKey: ["partners"] });
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, partner.id] });
+      qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
       setShowActivateDialog(false);
     },
     onError: (e: any) => toast.error(e.message || "Failed to activate portal."),
@@ -614,7 +621,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
   const sendInviteMut = useMutation({
     mutationFn: async () => {
       if (!portalAccess?.id) throw new Error("No portal access found");
-      const r = await fetch(`/api/portal-access/${portalAccess.id}/invite`, {
+      const r = await fetch(api(`/api/portal-access/${portalAccess.id}/invite`), {
         method: "POST",
       });
       if (!r.ok) {
@@ -625,7 +632,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
     },
     onSuccess: () => {
       toast.success("Invite email sent!");
-      qc.invalidateQueries({ queryKey: ["portal-access", partner.id] });
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, partner.id] });
     },
     onError: (e: any) => toast.error(e.message || "Failed to send invite."),
   });
@@ -665,7 +672,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
     setSettingTestPwd(true);
     try {
       const pwd = generateTestPassword();
-      const res = await fetch("/api/portal/setup-password", {
+      const res = await fetch(api("/api/portal/setup-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_id: portalAccess.id, password: pwd }),
@@ -675,7 +682,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
         throw new Error(e.error || "Failed to set test password");
       }
       setTestPassword(pwd);
-      qc.invalidateQueries({ queryKey: ["portal-access", partner.id] });
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, partner.id] });
       toast.success("Test password set successfully!");
     } catch (e: any) {
       toast.error(e.message || "Failed to set test password.");
@@ -1154,7 +1161,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                         if (!adminMessage.trim() || !portalAccess.id) return;
                         setSendingMessage(true);
                         try {
-                          const r = await fetch(`/api/portal-access/${portalAccess.id}/message`, {
+                          const r = await fetch(api(`/api/portal-access/${portalAccess.id}/message`), {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ message: adminMessage.trim(), send_email: false }),
@@ -1319,6 +1326,9 @@ function PartnerFormDialog({
   partner: Partner | null;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<Partner>>({});
   const [saving, setSaving] = useState(false);
   const [showOtherTypes, setShowOtherTypes] = useState(false);
@@ -1375,7 +1385,7 @@ function PartnerFormDialog({
     setSaving(true);
     try {
       const method = partner ? "PUT" : "POST";
-      const url = partner ? `/api/partners/${partner.id}` : "/api/partners";
+      const url = partner ? api(`/api/partners/${partner.id}`) : api("/api/partners");
       const payload = { ...form, risk_score: form.risk_score ?? 0, name: form.name.trim() };
       const r = await fetch(url, {
         method,
@@ -1826,6 +1836,9 @@ function PortalMessageThread({
   tenantId: string;
   refreshKey?: number;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1833,7 +1846,7 @@ function PortalMessageThread({
     let mounted = true;
     // Use a microtask to avoid calling setState synchronously in the effect body
     queueMicrotask(() => { if (mounted) setLoading(true); });
-    fetch(`/api/audit?limit=100&entity_type=portal_access`)
+    fetch(api(`/api/audit?limit=100&entity_type=portal_access`))
       .then((r) => r.json())
       .then((data) => {
         if (!mounted) return;

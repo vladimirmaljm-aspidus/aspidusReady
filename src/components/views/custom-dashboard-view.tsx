@@ -87,6 +87,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 // ─── Widget Types ──────────────────────────────────────────────────────────
 
@@ -272,12 +273,15 @@ function SortableWidget({
 // ─── Individual Widget Content ─────────────────────────────────────────────
 
 function KpiWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   const { data, isLoading } = useQuery<DashboardInsights>({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/dashboard");
+      const r = await fetch(api("/api/dashboard"));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -362,12 +366,15 @@ function KpiWidgetContent() {
 }
 
 function RevenueChartWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   const { data, isLoading } = useQuery<DashboardInsights>({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/dashboard");
+      const r = await fetch(api("/api/dashboard"));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -431,12 +438,15 @@ function RevenueChartWidgetContent() {
 }
 
 function RecentActivityWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   const { data, isLoading } = useQuery<DashboardInsights>({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/dashboard");
+      const r = await fetch(api("/api/dashboard"));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -543,12 +553,15 @@ function QuickActionsWidgetContent() {
 }
 
 function PipelineWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   const { data, isLoading } = useQuery<DashboardInsights>({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/dashboard");
+      const r = await fetch(api("/api/dashboard"));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -614,13 +627,16 @@ function PipelineWidgetContent() {
 }
 
 function TasksWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   // Fetch real tasks from /api/tasks
   const { data: tasksData, isLoading } = useQuery({
-    queryKey: ["dashboard-tasks"],
+    queryKey: ["dashboard-tasks", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/tasks");
+      const r = await fetch(api("/api/tasks"));
       if (!r.ok) throw new Error("Failed");
       const d = await r.json();
       return (d.items || d || []) as Array<{ id: string; done: boolean; priority: string; due_date: string | null }>;
@@ -678,15 +694,18 @@ function TasksWidgetContent() {
 }
 
 function MarketNewsWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   const { data, isLoading } = useQuery<{
     articles: MarketArticle[];
     commodities: { name: string; price: number; change: number; trend: string }[];
   }>({
-    queryKey: ["market-news"],
+    queryKey: ["market-news", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/market-news");
+      const r = await fetch(api("/api/market-news"));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -743,15 +762,18 @@ function MarketNewsWidgetContent() {
 }
 
 function CustomsWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   const { data, isLoading } = useQuery<{
     hsCodes: HSCategory[];
     regulations: CustomsRegulation[];
   }>({
-    queryKey: ["customs"],
+    queryKey: ["customs", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/customs");
+      const r = await fetch(api("/api/customs"));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -837,15 +859,18 @@ function CustomsWidgetContent() {
 }
 
 function LogisticsWidgetContent() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const locale = useI18nStore((s) => s.locale);
 
   const { data, isLoading } = useQuery<{
     shipments: Shipment[];
     summary: Record<string, number>;
   }>({
-    queryKey: ["logistics"],
+    queryKey: ["logistics", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/logistics");
+      const r = await fetch(api("/api/logistics"));
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },

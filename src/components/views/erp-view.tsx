@@ -47,6 +47,7 @@ import type {
   ProfitAndLoss, GeneralLedger, TrialBalanceItem, BalanceSheetItem,
   GeneralLedgerEntry,
 } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 /* ─── i18n helpers ─────────────────────────────────────────────────────── */
 
@@ -384,30 +385,33 @@ export function ErpView() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function ErpDashboard() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const lbl = useErpLabel();
   const qc = useQueryClient();
 
   const accountsQ = useQuery({
-    queryKey: ["erp-accounts"],
-    queryFn: () => fetch("/api/erp/accounts").then((r) => r.json()),
+    queryKey: ["erp-accounts", tenantKey],
+    queryFn: () => fetch(api("/api/erp/accounts")).then((r) => r.json()),
   });
 
   const entriesQ = useQuery({
-    queryKey: ["erp-journal-entries"],
-    queryFn: () => fetch("/api/erp/journal-entries").then((r) => r.json()),
+    queryKey: ["erp-journal-entries", tenantKey],
+    queryFn: () => fetch(api("/api/erp/journal-entries")).then((r) => r.json()),
   });
 
   const initMutation = useMutation({
     mutationFn: (standard: string) =>
-      fetch("/api/erp/initialize", {
+      fetch(api("/api/erp/initialize"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ standard }),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Chart of accounts initialized");
-      qc.invalidateQueries({ queryKey: ["erp-accounts"] });
-      qc.invalidateQueries({ queryKey: ["erp-settings"] });
+      qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["erp-settings", tenantKey] });
     },
     onError: () => toast.error("Failed to initialize chart of accounts"),
   });
@@ -556,6 +560,9 @@ function ErpDashboard() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function ChartOfAccounts() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const lbl = useErpLabel();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -567,12 +574,12 @@ function ChartOfAccounts() {
   const [form, setForm] = useState<AccountForm>(emptyAccount);
 
   const accountsQ = useQuery({
-    queryKey: ["erp-accounts", filterType],
+    queryKey: ["erp-accounts", tenantKey, filterType],
     queryFn: () => {
       const params = new URLSearchParams();
       if (filterType !== "all") params.set("account_type", filterType);
       if (search) params.set("search", search);
-      return fetch(`/api/erp/accounts?${params}`).then((r) => r.json());
+      return fetch(api(`/api/erp/accounts?${params}`)).then((r) => r.json());
     },
   });
 
@@ -580,14 +587,14 @@ function ChartOfAccounts() {
 
   const saveMutation = useMutation({
     mutationFn: (data: AccountForm) =>
-      fetch("/api/erp/accounts", {
+      fetch(api("/api/erp/accounts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success(editAccount ? "Account updated" : "Account created");
-      qc.invalidateQueries({ queryKey: ["erp-accounts"] });
+      qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
       setShowAddDialog(false);
       setEditAccount(null);
       setForm(emptyAccount);
@@ -597,10 +604,10 @@ function ChartOfAccounts() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/erp/accounts/${id}`, { method: "DELETE" }).then((r) => r.json()),
+      fetch(api(`/api/erp/accounts/${id}`), { method: "DELETE" }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Account deleted");
-      qc.invalidateQueries({ queryKey: ["erp-accounts"] });
+      qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
       setDeleteTarget(null);
     },
     onError: () => toast.error("Failed to delete account"),
@@ -608,14 +615,14 @@ function ChartOfAccounts() {
 
   const initMutation = useMutation({
     mutationFn: (standard: string) =>
-      fetch("/api/erp/initialize", {
+      fetch(api("/api/erp/initialize"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ standard }),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Chart of accounts initialized");
-      qc.invalidateQueries({ queryKey: ["erp-accounts"] });
+      qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
       setShowInitDialog(false);
     },
     onError: () => toast.error("Failed to initialize"),
@@ -877,6 +884,9 @@ function ChartOfAccounts() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function JournalEntries() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const lbl = useErpLabel();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -887,18 +897,18 @@ function JournalEntries() {
   const [form, setForm] = useState<JournalEntryForm>(emptyJournalEntry);
 
   const accountsQ = useQuery({
-    queryKey: ["erp-accounts"],
-    queryFn: () => fetch("/api/erp/accounts").then((r) => r.json()),
+    queryKey: ["erp-accounts", tenantKey],
+    queryFn: () => fetch(api("/api/erp/accounts")).then((r) => r.json()),
   });
   const accounts: ErpAccount[] = accountsQ.data?.items ?? accountsQ.data ?? [];
 
   const entriesQ = useQuery({
-    queryKey: ["erp-journal-entries", filterStatus],
+    queryKey: ["erp-journal-entries", tenantKey, filterStatus],
     queryFn: () => {
       const params = new URLSearchParams();
       if (filterStatus !== "all") params.set("status", filterStatus);
       if (search) params.set("search", search);
-      return fetch(`/api/erp/journal-entries?${params}`).then((r) => r.json());
+      return fetch(api(`/api/erp/journal-entries?${params}`)).then((r) => r.json());
     },
   });
 
@@ -906,7 +916,7 @@ function JournalEntries() {
 
   const saveMutation = useMutation({
     mutationFn: (data: JournalEntryForm & { id?: string }) =>
-      fetch("/api/erp/journal-entries", {
+      fetch(api("/api/erp/journal-entries"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -916,7 +926,7 @@ function JournalEntries() {
       }),
     onSuccess: () => {
       toast.success(editEntry ? "Entry updated" : "Entry created");
-      qc.invalidateQueries({ queryKey: ["erp-journal-entries"] });
+      qc.invalidateQueries({ queryKey: ["erp-journal-entries", tenantKey] });
       setShowAddDialog(false);
       setEditEntry(null);
       setForm(emptyJournalEntry);
@@ -926,28 +936,28 @@ function JournalEntries() {
 
   const postMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/erp/journal-entries/${id}/post`, {
+      fetch(api(`/api/erp/journal-entries/${id}/post`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Entry posted");
-      qc.invalidateQueries({ queryKey: ["erp-journal-entries"] });
+      qc.invalidateQueries({ queryKey: ["erp-journal-entries", tenantKey] });
     },
     onError: () => toast.error("Failed to post entry"),
   });
 
   const reverseMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/erp/journal-entries/${id}/reverse`, {
+      fetch(api(`/api/erp/journal-entries/${id}/reverse`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Entry reversed");
-      qc.invalidateQueries({ queryKey: ["erp-journal-entries"] });
+      qc.invalidateQueries({ queryKey: ["erp-journal-entries", tenantKey] });
     },
     onError: () => toast.error("Failed to reverse entry"),
   });
@@ -1278,19 +1288,22 @@ function JournalEntries() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function GeneralLedger() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const lbl = useErpLabel();
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
   const accountsQ = useQuery({
-    queryKey: ["erp-accounts"],
-    queryFn: () => fetch("/api/erp/accounts").then((r) => r.json()),
+    queryKey: ["erp-accounts", tenantKey],
+    queryFn: () => fetch(api("/api/erp/accounts")).then((r) => r.json()),
   });
   const accounts: ErpAccount[] = accountsQ.data?.items ?? accountsQ.data ?? [];
 
   const ledgerQ = useQuery({
-    queryKey: ["erp-general-ledger", selectedAccountId, dateFrom, dateTo],
+    queryKey: ["erp-general-ledger", tenantKey, selectedAccountId, dateFrom, dateTo],
     queryFn: () => {
       const params = new URLSearchParams({
         type: "general_ledger",
@@ -1298,7 +1311,7 @@ function GeneralLedger() {
       });
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
-      return fetch(`/api/erp/reports?${params}`).then((r) => r.json());
+      return fetch(api(`/api/erp/reports?${params}`)).then((r) => r.json());
     },
     enabled: !!selectedAccountId,
   });
@@ -1396,6 +1409,9 @@ function GeneralLedger() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function BankAccounts() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const lbl = useErpLabel();
   const qc = useQueryClient();
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -1407,23 +1423,23 @@ function BankAccounts() {
   const [form, setForm] = useState<BankAccountForm>(emptyBankAccount);
 
   const accountsQ = useQuery({
-    queryKey: ["erp-accounts"],
-    queryFn: () => fetch("/api/erp/accounts").then((r) => r.json()),
+    queryKey: ["erp-accounts", tenantKey],
+    queryFn: () => fetch(api("/api/erp/accounts")).then((r) => r.json()),
   });
   const chartAccounts: ErpAccount[] = accountsQ.data?.items ?? accountsQ.data ?? [];
 
   const bankAccountsQ = useQuery({
-    queryKey: ["erp-bank-accounts"],
-    queryFn: () => fetch("/api/erp/bank-accounts").then((r) => r.json()),
+    queryKey: ["erp-bank-accounts", tenantKey],
+    queryFn: () => fetch(api("/api/erp/bank-accounts")).then((r) => r.json()),
   });
   const bankAccounts: ErpBankAccount[] = bankAccountsQ.data?.items ?? bankAccountsQ.data ?? [];
 
   const transactionsQ = useQuery({
-    queryKey: ["erp-bank-transactions", selectedBankAccount?.id],
+    queryKey: ["erp-bank-transactions", tenantKey, selectedBankAccount?.id],
     queryFn: () => {
       const params = new URLSearchParams();
       if (selectedBankAccount?.id) params.set("bank_account_id", selectedBankAccount.id);
-      return fetch(`/api/erp/bank-transactions?${params}`).then((r) => r.json());
+      return fetch(api(`/api/erp/bank-transactions?${params}`)).then((r) => r.json());
     },
     enabled: !!selectedBankAccount,
   });
@@ -1431,14 +1447,14 @@ function BankAccounts() {
 
   const saveMutation = useMutation({
     mutationFn: (data: BankAccountForm) =>
-      fetch("/api/erp/bank-accounts", {
+      fetch(api("/api/erp/bank-accounts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Bank account saved");
-      qc.invalidateQueries({ queryKey: ["erp-bank-accounts"] });
+      qc.invalidateQueries({ queryKey: ["erp-bank-accounts", tenantKey] });
       setShowAddDialog(false);
       setEditBankAccount(null);
       setForm(emptyBankAccount);
@@ -1448,10 +1464,10 @@ function BankAccounts() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/erp/bank-accounts/${id}`, { method: "DELETE" }).then((r) => r.json()),
+      fetch(api(`/api/erp/bank-accounts/${id}`), { method: "DELETE" }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Bank account deleted");
-      qc.invalidateQueries({ queryKey: ["erp-bank-accounts"] });
+      qc.invalidateQueries({ queryKey: ["erp-bank-accounts", tenantKey] });
       setDeleteTarget(null);
       if (selectedBankAccount?.id === deleteTarget?.id) setSelectedBankAccount(null);
     },
@@ -1460,14 +1476,14 @@ function BankAccounts() {
 
   const saveTxMutation = useMutation({
     mutationFn: (data: BankTransactionForm) =>
-      fetch("/api/erp/bank-transactions", {
+      fetch(api("/api/erp/bank-transactions"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Transaction created");
-      qc.invalidateQueries({ queryKey: ["erp-bank-transactions"] });
+      qc.invalidateQueries({ queryKey: ["erp-bank-transactions", tenantKey] });
       setShowTransactionDialog(false);
       setTxForm(emptyBankTransaction);
     },
@@ -1739,6 +1755,9 @@ function BankAccounts() {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function ErpReports() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const lbl = useErpLabel();
   const [reportTab, setReportTab] = useState("trial_balance");
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split("T")[0]);
@@ -1746,20 +1765,20 @@ function ErpReports() {
   const [periodEnd, setPeriodEnd] = useState(new Date().toISOString().split("T")[0]);
 
   const trialBalanceQ = useQuery({
-    queryKey: ["erp-report-trial-balance", asOfDate],
-    queryFn: () => fetch(`/api/erp/reports?type=trial_balance&as_of_date=${asOfDate}`).then((r) => r.json()),
+    queryKey: ["erp-report-trial-balance", tenantKey, asOfDate],
+    queryFn: () => fetch(api(`/api/erp/reports?type=trial_balance&as_of_date=${asOfDate}`)).then((r) => r.json()),
     enabled: reportTab === "trial_balance",
   });
 
   const balanceSheetQ = useQuery({
-    queryKey: ["erp-report-balance-sheet", asOfDate],
-    queryFn: () => fetch(`/api/erp/reports?type=balance_sheet&as_of_date=${asOfDate}`).then((r) => r.json()),
+    queryKey: ["erp-report-balance-sheet", tenantKey, asOfDate],
+    queryFn: () => fetch(api(`/api/erp/reports?type=balance_sheet&as_of_date=${asOfDate}`)).then((r) => r.json()),
     enabled: reportTab === "balance_sheet",
   });
 
   const profitAndLossQ = useQuery({
-    queryKey: ["erp-report-profit-and-loss", periodStart, periodEnd],
-    queryFn: () => fetch(`/api/erp/reports?type=profit_and_loss&period_start=${periodStart}&period_end=${periodEnd}`).then((r) => r.json()),
+    queryKey: ["erp-report-profit-and-loss", tenantKey, periodStart, periodEnd],
+    queryFn: () => fetch(api(`/api/erp/reports?type=profit_and_loss&period_start=${periodStart}&period_end=${periodEnd}`)).then((r) => r.json()),
     enabled: reportTab === "profit_and_loss",
   });
 
@@ -1970,18 +1989,21 @@ function BalanceSheetTable({ items }: { items: BalanceSheetItem[] }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function ErpSettings() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const lbl = useErpLabel();
   const qc = useQueryClient();
 
   const accountsQ = useQuery({
-    queryKey: ["erp-accounts"],
-    queryFn: () => fetch("/api/erp/accounts").then((r) => r.json()),
+    queryKey: ["erp-accounts", tenantKey],
+    queryFn: () => fetch(api("/api/erp/accounts")).then((r) => r.json()),
   });
   const accounts: ErpAccount[] = accountsQ.data?.items ?? accountsQ.data ?? [];
 
   const settingsQ = useQuery({
-    queryKey: ["erp-settings"],
-    queryFn: () => fetch("/api/erp/settings").then((r) => r.json()),
+    queryKey: ["erp-settings", tenantKey],
+    queryFn: () => fetch(api("/api/erp/settings")).then((r) => r.json()),
   });
 
   const settings: ErpSetting | null = settingsQ.data?.id ? settingsQ.data : null;
@@ -2015,14 +2037,14 @@ function ErpSettings() {
 
   const saveMutation = useMutation({
     mutationFn: (data: SettingsForm) =>
-      fetch("/api/erp/settings", {
+      fetch(api("/api/erp/settings"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
       toast.success("Settings saved");
-      qc.invalidateQueries({ queryKey: ["erp-settings"] });
+      qc.invalidateQueries({ queryKey: ["erp-settings", tenantKey] });
     },
     onError: () => toast.error("Failed to save settings"),
   });

@@ -26,36 +26,40 @@ import { EmptyState } from "@/components/common/empty-state";
 import { KpiCard } from "@/components/common/kpi-card";
 import { fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { InventoryMovement, Partner, Product } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 export function InventoryView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["inventory", "all", partnerFilter],
+    queryKey: ["inventory", tenantKey, "all", partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
-      const r = await fetch(`/api/inventory?${params}`);
+      const r = await fetch(api(`/api/inventory?${params}`));
       if (!r.ok) throw new Error("Failed to load inventory");
       return r.json() as Promise<{ items: InventoryMovement[]; total: number }>;
     },
   });
 
   const partners = useQuery({
-    queryKey: ["partners", "list", "200"],
+    queryKey: ["partners", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/partners?limit=200`);
+      const r = await fetch(api(`/api/partners?limit=200`));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[]; total: number }>;
     },
   });
 
   const products = useQuery({
-    queryKey: ["products", "list", "200"],
+    queryKey: ["products", tenantKey, "list", "200"],
     queryFn: async () => {
-      const r = await fetch(`/api/products?limit=200`);
+      const r = await fetch(api(`/api/products?limit=200`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },

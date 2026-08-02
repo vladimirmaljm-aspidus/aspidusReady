@@ -33,6 +33,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { VaultSecret } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type SecretCategory = VaultSecret["category"];
 type SafeSecret = Omit<VaultSecret, "encrypted_value">;
@@ -62,6 +63,9 @@ function AdminRequired() {
 }
 
 export function VaultView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
   const qc = useQueryClient();
@@ -72,12 +76,12 @@ export function VaultView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["vault", search, category],
+    queryKey: ["vault", tenantKey, search, category],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (category !== "all") params.set("category", category);
-      const r = await fetch(`/api/vault?${params}`);
+      const r = await fetch(api(`/api/vault?${params}`));
       if (!r.ok) throw new Error("Failed to load vault");
       return r.json() as Promise<{ items: SafeSecret[]; total: number }>;
     },
@@ -86,12 +90,12 @@ export function VaultView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/vault/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/vault/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete secret");
     },
     onSuccess: () => {
       toast.success("Secret deleted.");
-      qc.invalidateQueries({ queryKey: ["vault"] });
+      qc.invalidateQueries({ queryKey: ["vault", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Failed to delete secret."),
@@ -235,7 +239,7 @@ export function VaultView() {
         secret={editing}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["vault"] });
+          qc.invalidateQueries({ queryKey: ["vault", tenantKey] });
         }}
       />
 
@@ -271,6 +275,9 @@ function VaultFormDialog({
   secret: SafeSecret | null;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [key, setKey] = useState("");
   const [description, setDescription] = useState("");
   const [cat, setCat] = useState<SecretCategory>("api");
@@ -304,7 +311,7 @@ function VaultFormDialog({
       };
       if (secret) body.id = secret.id;
       if (value) body.encrypted_value = value;
-      const r = await fetch("/api/vault", {
+      const r = await fetch(api("/api/vault"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

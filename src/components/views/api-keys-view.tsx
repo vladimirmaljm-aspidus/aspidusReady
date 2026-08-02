@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtRelative, fmtDate } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { ApiKey } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type SafeApiKey = Omit<ApiKey, "key_hash">;
 
@@ -102,6 +103,9 @@ function AdminRequired() {
 }
 
 export function ApiKeysView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
   const qc = useQueryClient();
@@ -110,9 +114,9 @@ export function ApiKeysView() {
   const [newKey, setNewKey] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["api-keys"],
+    queryKey: ["api-keys", tenantKey],
     queryFn: async () => {
-      const r = await fetch("/api/api-keys");
+      const r = await fetch(api("/api/api-keys"));
       if (!r.ok) throw new Error("Neuspešno učitavanje API ključeva");
       return r.json() as Promise<{ items: SafeApiKey[] }>;
     },
@@ -121,12 +125,12 @@ export function ApiKeysView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/api-keys/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Neuspešno brisanje ključa");
     },
     onSuccess: () => {
       toast.success("API ključ je opozvan.");
-      qc.invalidateQueries({ queryKey: ["api-keys"] });
+      qc.invalidateQueries({ queryKey: ["api-keys", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Neuspešno brisanje ključa."),
@@ -253,7 +257,7 @@ export function ApiKeysView() {
         onCreated={(fullKey) => {
           setShowForm(false);
           setNewKey(fullKey);
-          qc.invalidateQueries({ queryKey: ["api-keys"] });
+          qc.invalidateQueries({ queryKey: ["api-keys", tenantKey] });
         }}
       />
 
@@ -293,6 +297,9 @@ function CreateKeyDialog({
   onOpenChange: (o: boolean) => void;
   onCreated: (fullKey: string) => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [name, setName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -322,7 +329,7 @@ function CreateKeyDialog({
         active: true,
       };
       if (expiresAt) body.expires_at = new Date(expiresAt).toISOString();
-      const r = await fetch("/api/api-keys", {
+      const r = await fetch(api("/api/api-keys"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

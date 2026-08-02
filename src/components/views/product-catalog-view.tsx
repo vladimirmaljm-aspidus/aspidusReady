@@ -45,6 +45,7 @@ import { ProductCatalogEntry, SupplierOffer, Partner } from "@/lib/supabase/type
 import {
   PRODUCT_CATEGORIES, UNITS_OF_MEASURE, COUNTRIES, getCountry,
 } from "@/lib/data/reference";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const PAGE_SIZE = 20;
 
@@ -116,6 +117,9 @@ const CATEGORY_BADGE: Record<string, string> = {
 };
 
 export function ProductCatalogView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("all");
@@ -129,23 +133,23 @@ export function ProductCatalogView() {
   const handleCategoryChange = useCallback((v: string) => { setCategory(v); setPage(1); }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["product-catalog", search, category, page],
+    queryKey: ["product-catalog", tenantKey, search, category, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (category !== "all") params.set("category", category);
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String((page - 1) * PAGE_SIZE));
-      const r = await fetch(`/api/product-catalog?${params}`);
+      const r = await fetch(api(`/api/product-catalog?${params}`));
       if (!r.ok) throw new Error("Failed to load product catalog");
       return r.json() as Promise<{ items: ProductCatalogEntry[]; total: number }>;
     },
   });
 
   const detail = useQuery({
-    queryKey: ["product-catalog", detailId],
+    queryKey: ["product-catalog", tenantKey, detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/product-catalog/${detailId}`);
+      const r = await fetch(api(`/api/product-catalog/${detailId}`));
       if (!r.ok) throw new Error("Failed to load product");
       return r.json() as Promise<ProductCatalogEntry>;
     },
@@ -154,9 +158,9 @@ export function ProductCatalogView() {
 
   // Linked supplier offers for the product shown in the detail sheet
   const linkedOffers = useQuery({
-    queryKey: ["supplier-offers", "by-product", detailId],
+    queryKey: ["supplier-offers", tenantKey, "by-product", detailId],
     queryFn: async () => {
-      const r = await fetch(`/api/supplier-offers?product_id=${detailId}`);
+      const r = await fetch(api(`/api/supplier-offers?product_id=${detailId}`));
       if (!r.ok) throw new Error("Failed to load offers");
       return r.json() as Promise<{ items: SupplierOffer[] }>;
     },
@@ -165,9 +169,9 @@ export function ProductCatalogView() {
 
   // Partners lookup for supplier names
   const partners = useQuery({
-    queryKey: ["partners", "all"],
+    queryKey: ["partners", tenantKey, "all"],
     queryFn: async () => {
-      const r = await fetch("/api/partners?limit=500");
+      const r = await fetch(api("/api/partners?limit=500"));
       if (!r.ok) throw new Error("Failed to load partners");
       return r.json() as Promise<{ items: Partner[] }>;
     },
@@ -177,12 +181,12 @@ export function ProductCatalogView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/product-catalog/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/product-catalog/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
       toast.success("Product deleted.");
-      qc.invalidateQueries({ queryKey: ["product-catalog"] });
+      qc.invalidateQueries({ queryKey: ["product-catalog", tenantKey] });
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
@@ -368,7 +372,7 @@ export function ProductCatalogView() {
         product={editing}
         onSaved={() => {
           setShowForm(false);
-          qc.invalidateQueries({ queryKey: ["product-catalog"] });
+          qc.invalidateQueries({ queryKey: ["product-catalog", tenantKey] });
         }}
       />
 
@@ -598,6 +602,9 @@ function ProductFormDialog({
   product: ProductCatalogEntry | null;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [form, setForm] = useState<Partial<ProductCatalogEntry>>({});
   const [specs, setSpecs] = useState<{ key: string; value: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -645,7 +652,7 @@ function ProductFormDialog({
       });
       const payload = { ...form, specifications: Object.keys(specObj).length ? specObj : null };
       const method = product ? "PUT" : "POST";
-      const url = product ? `/api/product-catalog/${product.id}` : "/api/product-catalog";
+      const url = product ? api(`/api/product-catalog/${product.id}`) : api("/api/product-catalog");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

@@ -28,6 +28,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtDate, fmtRelative } from "@/lib/utils/format";
 import { UserTask } from "@/lib/supabase/types";
+import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 type Priority = "low" | "medium" | "high";
 
@@ -57,18 +58,21 @@ function toInputDate(iso: string | null): string {
 }
 
 export function TasksView() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const qc = useQueryClient();
   const [mine, setMine] = useState(true);
   const [editing, setEditing] = useState<UserTask | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const queryKey = useMemo(() => ["tasks", mine] as const, [mine]);
+  const queryKey = useMemo(() => ["tasks", tenantKey, mine] as const, [mine, tenantKey]);
 
   const { data, isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
-      const url = mine ? "/api/tasks?mine=true" : "/api/tasks";
+      const url = mine ? api("/api/tasks?mine=true") : api("/api/tasks");
       const r = await fetch(url);
       if (!r.ok) throw new Error("Failed to load tasks");
       return r.json() as Promise<{ items: UserTask[] }>;
@@ -81,7 +85,7 @@ export function TasksView() {
 
   const toggleMut = useMutation({
     mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
-      const r = await fetch(`/api/tasks/${id}`, {
+      const r = await fetch(api(`/api/tasks/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ done }),
@@ -108,7 +112,7 @@ export function TasksView() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
-      const r = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+      const r = await fetch(api(`/api/tasks/${id}`), { method: "DELETE" });
       if (!r.ok) throw new Error("Failed to delete task");
     },
     onSuccess: () => {
@@ -297,6 +301,9 @@ function TaskFormDialog({
   task: UserTask | null;
   onSaved: () => void;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [dueDate, setDueDate] = useState("");
@@ -329,7 +336,7 @@ function TaskFormDialog({
       if (task?.entity_id) body.entity_id = task.entity_id;
 
       const method = task ? "PUT" : "POST";
-      const url = task ? `/api/tasks/${task.id}` : "/api/tasks";
+      const url = task ? api(`/api/tasks/${task.id}`) : api("/api/tasks");
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
