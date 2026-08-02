@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import React from "react";
 
 export type ViewKey =
   // Core CRM
@@ -114,8 +115,6 @@ function loadActiveTenant(): { id: string | null; name: string | null } {
   }
 }
 
-const initialTenant = loadActiveTenant();
-
 export const useAppStore = create<AppState>((set) => ({
   user: null,
   setUser: (u) => set({ user: u }),
@@ -137,8 +136,10 @@ export const useAppStore = create<AppState>((set) => ({
   loading: false,
   setLoading: (b) => set({ loading: b }),
 
-  activeTenantId: initialTenant.id,
-  activeTenantName: initialTenant.name,
+  // Always initialize as null to avoid SSR hydration mismatch.
+  // The TenantContextSwitcher loads from localStorage on mount.
+  activeTenantId: null,
+  activeTenantName: null,
   setActiveTenant: (id, name) => {
     set({ activeTenantId: id, activeTenantName: name });
     if (typeof window !== "undefined") {
@@ -150,6 +151,20 @@ export const useAppStore = create<AppState>((set) => ({
     }
   },
 }));
+
+/**
+ * Call this in a client component's useEffect to hydrate the active tenant
+ * from localStorage after mount. This avoids SSR hydration mismatch.
+ */
+export function useHydrateActiveTenant() {
+  const setActiveTenant = useAppStore((s) => s.setActiveTenant);
+  React.useEffect(() => {
+    const t = loadActiveTenant();
+    if (t.id) {
+      setActiveTenant(t.id, t.name);
+    }
+  }, [setActiveTenant]);
+}
 
 /**
  * Returns the effective tenant ID for the current session.

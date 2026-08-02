@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
+import { useAppStore, isSuperAdmin, useHydrateActiveTenant } from "@/lib/store/app-store";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -39,6 +39,9 @@ export function TenantContextSwitcher() {
   const setActiveTenant = useAppStore((s) => s.setActiveTenant);
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
+
+  // Hydrate active tenant from localStorage on mount (avoids SSR mismatch)
+  useHydrateActiveTenant();
 
   // Fetch tenants list (super-admin only)
   const tenantsQ = useQuery({
