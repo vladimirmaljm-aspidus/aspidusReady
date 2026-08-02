@@ -160,7 +160,7 @@ interface CurrencyRate {
 }
 
 interface MarketNewsResponse {
-  articles: MarketArticle[];
+  articles?: MarketArticle[];
   commodities: CommodityPrice[];
   currencies: CurrencyRate[];
   lastUpdated: string;

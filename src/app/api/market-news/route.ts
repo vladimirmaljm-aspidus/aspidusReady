@@ -1,129 +1,39 @@
 /**
  * API Route — World Market News
- * Serves reference commodity prices, currency rates, and trade news.
- * Data is static reference data for informational purposes.
- * Authenticated access only. In future, commodity/currency data can
- * be configured from settings or connected to live market feeds.
+ * Serves REAL commodity prices and currency rates from our API integrations.
+ * No hardcoded/fake data — everything comes from live or cached sources.
+ *
+ * Sources:
+ *   - Commodity prices: Alpha Vantage API (cached 12h)
+ *   - Currency rates: Frankfurter ECB API (cached 6h)
+ *   - Articles: removed (no free news API available without key)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api/helpers";
+import { getStore } from "@/lib/data/store";
 
 export const runtime = "nodejs";
 
-interface MarketArticle {
-  id: string;
-  title: string;
-  summary: string;
-  source: string;
-  category: "commodities" | "currency" | "regulations" | "logistics" | "macro";
-  timestamp: string;
-  impact: "positive" | "negative" | "neutral";
-  relevantTo: string[];
-}
+let commodityCache: { data: any[]; fetchedAt: number } | null = null;
+let currencyCache: { data: any[]; fetchedAt: number } | null = null;
+const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
-const ARTICLES: MarketArticle[] = [
-  {
-    id: "mkt-001",
-    title: "Copper prices surge 3.2% on China demand optimism",
-    summary: "London Metal Exchange copper rose to $9,845/tonne as Chinese manufacturing data exceeded expectations, boosting demand outlook for industrial metals.",
-    source: "Reuters Commodities",
-    category: "commodities",
-    timestamp: new Date(Date.now() - 2 * 3600000).toISOString(),
-    impact: "positive",
-    relevantTo: ["metals", "manufacturing"],
-  },
-  {
-    id: "mkt-002",
-    title: "EU announces new tariffs on steel imports",
-    summary: "The European Commission will impose provisional anti-dumping duties of 17.2-28.5% on certain steel products from third countries, effective next month.",
-    source: "EU Trade Policy",
-    category: "regulations",
-    timestamp: new Date(Date.now() - 5 * 3600000).toISOString(),
-    impact: "negative",
-    relevantTo: ["steel", "tariffs", "EU"],
-  },
-  {
-    id: "mkt-003",
-    title: "Shipping rates drop 5% on Pacific routes",
-    summary: "Container rates from Shanghai to Los Angeles fell to $2,180/FEU as vessel capacity normalizes after the Red Sea disruption period.",
-    source: "FreightWaves",
-    category: "logistics",
-    timestamp: new Date(Date.now() - 8 * 3600000).toISOString(),
-    impact: "positive",
-    relevantTo: ["shipping", "logistics", "Pacific"],
-  },
-  {
-    id: "mkt-004",
-    title: "Emerging market currencies stable against EUR this quarter",
-    summary: "Several emerging market currencies held steady against the euro, supported by central bank interventions and stable foreign reserves.",
-    source: "Reuters FX",
-    category: "currency",
-    timestamp: new Date(Date.now() - 12 * 3600000).toISOString(),
-    impact: "neutral",
-    relevantTo: ["currency", "EUR", "emerging markets"],
-  },
-  {
-    id: "mkt-005",
-    title: "WTO reports 2.1% growth in global trade volume",
-    summary: "World merchandise trade volume grew 2.1% in Q1 2026, with Asia leading at 3.8% and Europe at 1.2%. The WTO forecasts 3.0% growth for the full year.",
-    source: "WTO Statistics",
-    category: "macro",
-    timestamp: new Date(Date.now() - 24 * 3600000).toISOString(),
-    impact: "positive",
-    relevantTo: ["trade", "macro", "global"],
-  },
-  {
-    id: "mkt-006",
-    title: "New customs code HS8471.30 update effective next month",
-    summary: "The WCO has updated HS code 8471.30 to include new categories for AI computing hardware. Importers should update their customs declarations by March 1.",
-    source: "WCO Customs",
-    category: "regulations",
-    timestamp: new Date(Date.now() - 36 * 3600000).toISOString(),
-    impact: "neutral",
-    relevantTo: ["customs", "HS codes", "technology"],
-  },
-  {
-    id: "mkt-007",
-    title: "Baltic Dry Index rises 4.8% — shipping demand up",
-    summary: "The BDI climbed to 1,842 points, driven by increased capesize vessel demand for iron ore shipments from Brazil to China.",
-    source: "Baltic Exchange",
-    category: "logistics",
-    timestamp: new Date(Date.now() - 48 * 3600000).toISOString(),
-    impact: "negative",
-    relevantTo: ["shipping", "dry bulk", "commodities"],
-  },
-  {
-    id: "mkt-008",
-    title: "Wheat futures climb on Black Sea supply concerns",
-    summary: "CBOT wheat futures rose 2.8% to $6.42/bushel as weather concerns in Ukraine and Russia raised supply uncertainty for the 2026 harvest.",
-    source: "Chicago Board of Trade",
-    category: "commodities",
-    timestamp: new Date(Date.now() - 52 * 3600000).toISOString(),
-    impact: "negative",
-    relevantTo: ["agriculture", "wheat", "Black Sea"],
-  },
+const COMMODITY_SYMBOLS = [
+  { symbol: "SUGAR", name: "Sugar", unit: "USD/lb" },
+  { symbol: "COFFEE", name: "Coffee", unit: "USD/lb" },
+  { symbol: "CORN", name: "Corn", unit: "USD/bushel" },
+  { symbol: "WHEAT", name: "Wheat", unit: "USD/bushel" },
+  { symbol: "COTTON", name: "Cotton", unit: "USD/lb" },
+  { symbol: "COPPER", name: "Copper", unit: "USD/lb" },
 ];
 
-// Commodity prices — static reference data
-const COMMODITY_PRICES = [
-  { name: "Copper", price: 9845, unit: "USD/t", change: 3.2, trend: "up" },
-  { name: "Crude Oil (Brent)", price: 82.45, unit: "USD/bbl", change: -0.8, trend: "down" },
-  { name: "Steel (HRC)", price: 685, unit: "USD/t", change: 1.1, trend: "up" },
-  { name: "Wheat", price: 242, unit: "USD/t", change: 2.8, trend: "up" },
-  { name: "Natural Gas", price: 2.85, unit: "USD/MMBtu", change: -1.2, trend: "down" },
-  { name: "Aluminum", price: 2412, unit: "USD/t", change: 0.5, trend: "up" },
-  { name: "Coffee", price: 4250, unit: "USD/t", change: -2.1, trend: "down" },
-  { name: "Soybeans", price: 485, unit: "USD/t", change: 0.3, trend: "up" },
-];
-
-// Currency rates — static reference data
-const CURRENCY_RATES = [
-  { from: "EUR", to: "USD", rate: 1.0845, change: 0.12 },
-  { from: "USD", to: "CNY", rate: 7.245, change: -0.08 },
-  { from: "GBP", to: "EUR", rate: 1.168, change: 0.05 },
-  { from: "EUR", to: "TRY", rate: 36.42, change: -0.15 },
-  { from: "USD", to: "AED", rate: 3.6725, change: 0.0 },
-  { from: "USD", to: "JPY", rate: 149.85, change: -0.22 },
+const CURRENCY_PAIRS = [
+  { from: "USD", to: "EUR" },
+  { from: "USD", to: "GBP" },
+  { from: "USD", to: "CNY" },
+  { from: "USD", to: "JPY" },
+  { from: "EUR", to: "GBP" },
+  { from: "EUR", to: "CHF" },
 ];
 
 export async function GET(req: NextRequest) {
@@ -131,37 +41,89 @@ export async function GET(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    // Attempt to load commodity/currency data from settings if available,
-    // otherwise fall back to static reference data.
-    let commodities = COMMODITY_PRICES;
-    let currencies = CURRENCY_RATES;
+    // ── Fetch commodity prices from Alpha Vantage ──────────────────────
+    let commodities: any[] = [];
 
-    try {
-      const customCommodities = await auth.store.getSetting("market_commodities");
-      if (customCommodities && Array.isArray(customCommodities)) {
-        commodities = customCommodities;
+    // Check cache first
+    if (commodityCache && Date.now() - commodityCache.fetchedAt < CACHE_TTL) {
+      commodities = commodityCache.data;
+    } else {
+      const store = await getStore();
+      const integrationSettings = await store.getSetting<any>("integrations");
+      const apiKey = process.env.ALPHAVANTAGE_API_KEY || integrationSettings?.alphavantage_api_key;
+
+      if (apiKey) {
+        // Fetch commodities (limit to 3 per request to conserve API calls)
+        for (const c of COMMODITY_SYMBOLS.slice(0, 3)) {
+          try {
+            const res = await fetch(
+              `https://www.alphavantage.co/query?function=${c.symbol}&interval=monthly&apikey=${apiKey}`,
+              { signal: AbortSignal.timeout(10_000) }
+            );
+            if (res.ok) {
+              const data = await res.json();
+              const entries = data.data || [];
+              if (entries.length > 0) {
+                const latest = entries[0];
+                const prev = entries[1];
+                const price = parseFloat(latest.value || "0");
+                const prevPrice = prev ? parseFloat(prev.value || "0") : 0;
+                const change = prevPrice > 0 ? price - prevPrice : 0;
+                const changePct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0;
+                commodities.push({
+                  name: c.name,
+                  price: Math.round(price * 100) / 100,
+                  unit: c.unit,
+                  change: Math.round(changePct * 100) / 100,
+                  trend: change >= 0 ? "up" : "down",
+                  date: latest.date || "",
+                  source: "Alpha Vantage",
+                });
+              }
+            }
+          } catch { /* skip on error */ }
+        }
+        commodityCache = { data: commodities, fetchedAt: Date.now() };
       }
-    } catch {
-      // Settings not available — use static data
     }
 
-    try {
-      const customCurrencies = await auth.store.getSetting("market_currencies");
-      if (customCurrencies && Array.isArray(customCurrencies)) {
-        currencies = customCurrencies;
+    // ── Fetch currency rates from Frankfurter (ECB) ────────────────────
+    let currencies: any[] = [];
+
+    if (currencyCache && Date.now() - currencyCache.fetchedAt < CACHE_TTL) {
+      currencies = currencyCache.data;
+    } else {
+      for (const pair of CURRENCY_PAIRS) {
+        try {
+          const res = await fetch(
+            `https://api.frankfurter.app/latest?from=${pair.from}&to=${pair.to}`,
+            { signal: AbortSignal.timeout(8_000) }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const rate = data.rates?.[pair.to];
+            if (rate) {
+              currencies.push({
+                from: pair.from,
+                to: pair.to,
+                rate: Math.round(rate * 10000) / 10000,
+                date: data.date || "",
+                source: "ECB (Frankfurter)",
+              });
+            }
+          }
+        } catch { /* skip on error */ }
       }
-    } catch {
-      // Settings not available — use static data
+      currencyCache = { data: currencies, fetchedAt: Date.now() };
     }
 
     return NextResponse.json({
-      articles: ARTICLES,
       commodities,
       currencies,
       lastUpdated: new Date().toISOString(),
-      source: "aspidus-reference",
+      source: "live-integrations",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[market-news] Error:", error);
     return NextResponse.json(
       { error: "Failed to fetch market data." },
