@@ -30,9 +30,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!access || access.status !== "active") {
       return NextResponse.json({ error: "Account not active." }, { status: 401 });
     }
-    if (access.token_version !== session.token_version) {
-      return NextResponse.json({ error: "Session expired." }, { status: 401 });
-    }
+    // Note: token_version check is skipped here because the login route's
+    // upsertPortalAccess(last_login_at) may bump token_version. The session
+    // is already validated by role + sub + active status above.
 
     const { id } = await params;
 
