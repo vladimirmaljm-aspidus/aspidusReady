@@ -78,15 +78,16 @@ interface HSCategory {
   description: string;
   dutyRate: string;
   vatRate: string;
-  restrictions: string[];
+  restrictions?: string[];
   region: string;
 }
 
 interface CustomsResponse {
   hsCodes: HSCategory[];
-  regulations: CustomsRegulation[];
-  totalHS: number;
-  totalRegulations: number;
+  regulations?: CustomsRegulation[];
+  totalCodes?: number;
+  tariffInfo?: any;
+  source?: string;
 }
 
 interface CustomsRegulation {
@@ -627,7 +628,7 @@ function CustomsTab({
                         </TableCell>
                         <TableCell className="text-xs hidden md:table-cell">
                           <div className="flex flex-wrap gap-1 max-w-[220px]">
-                            {hs.restrictions.map((r, i) => (
+                            {(hs.restrictions || []).map((r, i) => (
                               <Badge
                                 key={i}
                                 variant="secondary"
@@ -1114,7 +1115,7 @@ function MarketNewsTab({
                 <Skeleton key={i} className="h-20 w-full" />
               ))}
             </div>
-          ) : (
+          ) : articles.length > 0 ? (
             <ScrollArea className="max-h-[400px]">
               <div className="divide-y divide-border/60">
                 {articles.map((article) => (
@@ -1163,6 +1164,12 @@ function MarketNewsTab({
                 ))}
               </div>
             </ScrollArea>
+          ) : (
+            <div className="p-8 text-center">
+              <Newspaper className="size-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">No news articles available.</p>
+              <p className="text-xs text-muted-foreground mt-1">Commodity prices and currency rates are shown above.</p>
+            </div>
           )}
         </CardContent>
       </Card>

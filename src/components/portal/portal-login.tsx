@@ -50,7 +50,18 @@ export function PortalLogin() {
   const [newPassword, setNewPassword] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
 
-  // Pre-fill email from URL params
+  // Forgot password state
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotResult, setForgotResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Reset password state
+  const [resetToken, setResetToken] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetResult, setResetResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Pre-fill email from URL params + check for reset token
   useEffect(() => {
     const emailParam = searchParams.get("email");
     if (emailParam) setEmail(emailParam);
@@ -59,7 +70,64 @@ export function PortalLogin() {
       setAccessId(accessIdParam);
       setSetupOpen(true);
     }
+    const resetTokenParam = searchParams.get("reset_token");
+    if (resetTokenParam) {
+      setResetToken(resetTokenParam);
+      setNewPassword(""); // clear for new entry
+    }
   }, [searchParams]);
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!forgotEmail) return;
+    setForgotLoading(true);
+    setForgotResult(null);
+    try {
+      const res = await fetch("/api/portal/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const data = await res.json();
+      setForgotResult({ ok: true, message: data.message || "Reset link sent." });
+    } catch {
+      setForgotResult({ ok: false, message: "Network error. Please try again." });
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetToken || !newPassword) return;
+    if (newPassword.length < 8) {
+      setResetResult({ ok: false, message: "Password must be at least 8 characters." });
+      return;
+    }
+    setResetLoading(true);
+    setResetResult(null);
+    try {
+      const res = await fetch("/api/portal/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset_token: resetToken, password: newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResetResult({ ok: true, message: data.message || "Password reset successfully!" });
+        setTimeout(() => {
+          setResetToken("");
+          window.history.replaceState({}, "", "/portal/login");
+        }, 2000);
+      } else {
+        setResetResult({ ok: false, message: data.error || "Reset failed." });
+      }
+    } catch {
+      setResetResult({ ok: false, message: "Network error. Please try again." });
+    } finally {
+      setResetLoading(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -274,6 +342,96 @@ export function PortalLogin() {
                 </Dialog>
               </form>
 
+              {/* Forgot password link */}
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setForgotOpen(true)}
+                  className="text-xs text-muted-foreground hover:text-primary underline underline-offset-4 smooth"
+                >
+                  Forgot your password?
+                </button>
+              </div>
+
+              {/* Forgot password dialog */}
+              <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <KeyRound className="size-4 text-primary" />
+                      Reset Your Password
+                    </DialogTitle>
+                    <DialogDescription>
+                      Enter your email address and we'll send you a link to reset your password.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="forgot-email">Email address</Label>
+                      <Input
+                        id="forgot-email"
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="you@company.com"
+                        disabled={forgotLoading}
+                        required
+                      />
+                    </div>
+                    {forgotResult && (
+                      <div className={`p-3 rounded-lg text-sm ${forgotResult.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-destructive/10 text-destructive"}`}>
+                        {forgotResult.message}
+                      </div>
+                    )}
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Close</Button>
+                      <Button type="submit" disabled={forgotLoading || !forgotEmail}>
+                        {forgotLoading ? <Loader2 className="size-4 animate-spin" /> : "Send Reset Link"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              {/* Reset password dialog (triggered by URL param) */}
+              <Dialog open={!!resetToken} onOpenChange={(o) => { if (!o) { setResetToken(""); window.history.replaceState({}, "", "/portal/login"); } }}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <KeyRound className="size-4 text-primary" />
+                      Set New Password
+                    </DialogTitle>
+                    <DialogDescription>
+                      Enter your new password (minimum 8 characters).
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleResetPassword} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password-reset">New password</Label>
+                      <Input
+                        id="new-password-reset"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        disabled={resetLoading}
+                        required
+                        minLength={8}
+                      />
+                    </div>
+                    {resetResult && (
+                      <div className={`p-3 rounded-lg text-sm ${resetResult.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-destructive/10 text-destructive"}`}>
+                        {resetResult.message}
+                      </div>
+                    )}
+                    <DialogFooter>
+                      <Button type="submit" disabled={resetLoading || !newPassword}>
+                        {resetLoading ? <Loader2 className="size-4 animate-spin" /> : "Set New Password"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
 
             </div>
           </div>
