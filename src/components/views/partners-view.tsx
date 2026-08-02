@@ -39,7 +39,7 @@ import {
   Building2, ShieldCheck, Star, Maximize2, DollarSign,
   ChevronDown, ChevronRight,
   ExternalLink, Send, Zap, CheckCircle2, Clock, AlertCircle, XCircle, KeyRound,
-  Loader2, Copy, Check, Link as LinkIcon, Download,
+  Loader2, Copy, Check, Link as LinkIcon, Download, MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -550,6 +550,9 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedPwd, setCopiedPwd] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [adminMessage, setAdminMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageRefreshKey, setMessageRefreshKey] = useState(0);
 
   // Fetch portal access for this partner
   const portalQuery = useQuery({
@@ -1121,6 +1124,58 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                         <ExternalLink className="size-4 mr-2" />
                         Open Portal Login
                       </a>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Admin → Portal Messaging */}
+              <Card className="border-border/60 shadow-soft rounded-xl">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="size-4 text-primary" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Messages</p>
+                  </div>
+
+                  {/* Message history */}
+                  <PortalMessageThread accessId={portalAccess.id} partnerId={partner.id} tenantId={partner.tenant_id} />
+
+                  {/* Send message */}
+                  <div className="flex gap-2">
+                    <Input
+                      value={adminMessage}
+                      onChange={(e) => setAdminMessage(e.target.value)}
+                      placeholder="Type a message to the client…"
+                      disabled={sendingMessage}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!adminMessage.trim() || !portalAccess.id) return;
+                        setSendingMessage(true);
+                        try {
+                          const r = await fetch(`/api/portal-access/${portalAccess.id}/message`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ message: adminMessage.trim(), send_email: false }),
+                          });
+                          if (!r.ok) {
+                            const e = await r.json().catch(() => ({}));
+                            throw new Error(e.error || "Failed");
+                          }
+                          toast.success("Message sent to portal client.");
+                          setAdminMessage("");
+                          // Refresh message thread
+                          setMessageRefreshKey(k => k + 1);
+                        } catch (e: any) {
+                          toast.error(e.message || "Failed to send message.");
+                        } finally {
+                          setSendingMessage(false);
+                        }
+                      }}
+                      disabled={sendingMessage || !adminMessage.trim()}
+                    >
+                      {sendingMessage ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                     </Button>
                   </div>
                 </CardContent>
@@ -1755,5 +1810,90 @@ function PartnerFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Portal Message Thread (admin side) ───────────────────────────────
+
+function PortalMessageThread({
+  accessId,
+  partnerId,
+  tenantId,
+  refreshKey,
+}: {
+  accessId: string;
+  partnerId: string;
+  tenantId: string;
+  refreshKey?: number;
+}) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    fetch(`/api/audit?limit=100&entity_type=portal_access`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!mounted) return;
+        const items = (data.items || []).filter(
+          (a: any) =>
+            (a.action === "portal.message" || a.action === "admin.message") &&
+            (a.entity_id === accessId ||
+              a.details?.partner_id === partnerId ||
+              a.details?.access_id === accessId)
+        );
+        const mapped = items
+          .map((a: any) => ({
+            id: a.id,
+            direction: a.action === "portal.message" ? "incoming" : "outgoing",
+            message: a.details?.message || "",
+            sender: a.username || "System",
+            timestamp: a.created_at,
+          }))
+          .sort((a: any, b: any) => a.timestamp.localeCompare(b.timestamp));
+        setMessages(mapped);
+      })
+      .catch(() => {
+        if (mounted) setMessages([]);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [accessId, partnerId, refreshKey]);
+
+  if (loading) {
+    return <Skeleton className="h-32 w-full rounded-lg" />;
+  }
+
+  if (messages.length === 0) {
+    return (
+      <div className="text-center py-4 text-xs text-muted-foreground">
+        No messages yet. Send a message below to start a conversation.
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+      {messages.map((msg) => (
+        <div
+          key={msg.id}
+          className={`flex flex-col max-w-[85%] rounded-lg p-2 text-xs ${
+            msg.direction === "outgoing"
+              ? "ml-auto bg-primary text-primary-foreground"
+              : "mr-auto bg-muted"
+          }`}
+        >
+          <p className="leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+          <p className={`text-[9px] mt-1 ${msg.direction === "outgoing" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+            {msg.sender} · {fmtRelative(msg.timestamp)}
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
