@@ -21,6 +21,19 @@ import {
   ShoppingCart,
   ShieldCheck,
   ShieldAlert,
+  Bell,
+  Receipt,
+  FileCheck,
+  Activity,
+  Mail,
+  MailOpen,
+  ExternalLink,
+  MessageSquare,
+  CreditCard,
+  Info,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
 import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
@@ -32,6 +45,12 @@ import type {
   SharedDocument,
   Partner,
   OfferStatus,
+  Invoice,
+  Proforma,
+  InvoiceStatus,
+  ProformaStatus,
+  Notification,
+  NotificationType,
 } from "@/lib/supabase/types";
 
 const TIER_META: Record<
@@ -73,11 +92,51 @@ const STATUS_STYLES: Record<OfferStatus, string> = {
   expired: "bg-muted text-muted-foreground",
 };
 
+const INVOICE_STATUS_STYLES: Record<InvoiceStatus, string> = {
+  draft: "bg-secondary text-secondary-foreground",
+  sent: "border-transparent bg-chart-1 text-white",
+  paid: "border-transparent bg-emerald-600 text-white",
+  overdue: "border-transparent bg-destructive text-destructive-foreground",
+  cancelled: "bg-muted text-muted-foreground",
+};
+
+const PROFORMA_STATUS_STYLES: Record<ProformaStatus, string> = {
+  draft: "bg-secondary text-secondary-foreground",
+  sent: "border-transparent bg-chart-1 text-white",
+  paid: "border-transparent bg-emerald-600 text-white",
+  expired: "border-transparent bg-destructive text-destructive-foreground",
+};
+
 const DOC_CATEGORY_STYLES: Record<string, string> = {
   contract: "border-transparent bg-chart-1 text-white",
   invoice: "border-transparent bg-chart-4 text-white",
   spec: "border-transparent bg-chart-2 text-white",
   other: "bg-secondary text-secondary-foreground",
+};
+
+/** Map notification type to a visual category */
+function getNotifCategory(type: NotificationType): "info" | "warning" | "success" | "error" {
+  if (type.startsWith("kyc_rejected") || type === "invoice_overdue" || type === "low_stock_alert") return "error";
+  if (type.startsWith("kyc_submitted") || type === "rfq_received" || type === "task_due_soon") return "warning";
+  if (
+    type.startsWith("kyc_approved") ||
+    type === "invoice_paid" ||
+    type === "offer_accepted" ||
+    type === "rfq_quoted" ||
+    type === "portal_access_approved"
+  )
+    return "success";
+  return "info";
+}
+
+const NOTIF_CATEGORY_CONFIG: Record<
+  string,
+  { icon: React.ComponentType<{ className?: string }>; color: string; bg: string }
+> = {
+  info: { icon: Info, color: "text-primary", bg: "bg-primary/10" },
+  warning: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-500/10" },
+  success: { icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-500/10" },
+  error: { icon: XCircle, color: "text-destructive", bg: "bg-destructive/10" },
 };
 
 export function PortalDashboard() {
@@ -124,6 +183,36 @@ export function PortalDashboard() {
     enabled: !!portalAccess?.can_view_catalog,
   });
 
+  const invoicesQ = useQuery<{ items: Invoice[]; total: number }>({
+    queryKey: ["portal-invoices"],
+    queryFn: async () => {
+      const r = await fetch("/api/portal/invoices");
+      if (!r.ok) throw new Error("Failed to load invoices");
+      return r.json();
+    },
+    enabled: !!portalAccess?.can_view_invoices,
+  });
+
+  const proformasQ = useQuery<{ items: Proforma[]; total: number }>({
+    queryKey: ["portal-proformas"],
+    queryFn: async () => {
+      const r = await fetch("/api/portal/proformas");
+      if (!r.ok) throw new Error("Failed to load proformas");
+      return r.json();
+    },
+    enabled: !!portalAccess?.can_view_invoices,
+  });
+
+  const notifsQ = useQuery<{ items: Notification[]; total: number }>({
+    queryKey: ["portal-notifications"],
+    queryFn: async () => {
+      const r = await fetch("/api/portal/notifications");
+      if (!r.ok) throw new Error("Failed to load notifications");
+      return r.json();
+    },
+    refetchInterval: 30_000,
+  });
+
   if (!portalAccess) return null;
 
   const tier = portalAccess.tier;
@@ -134,9 +223,28 @@ export function PortalDashboard() {
 
   const recentOffers = (offersQ.data?.items || []).slice(0, 5);
   const recentDocs = (docsQ.data?.items || []).slice(0, 5);
+  const recentInvoices = (invoicesQ.data?.items || []).slice(0, 5);
+  const recentProformas = (proformasQ.data?.items || []).slice(0, 5);
+  const recentNotifications = (notifsQ.data?.items || []).slice(0, 5);
+
   const activeOffersCount =
     offersQ.data?.items?.filter((o) => o.status === "sent" || o.status === "draft")
       .length ?? 0;
+
+  const unreadNotifCount = notifsQ.data?.items?.filter((n) => !n.read).length ?? 0;
+  const overdueInvoicesCount =
+    invoicesQ.data?.items?.filter((i) => i.status === "overdue").length ?? 0;
+  const unpaidInvoicesCount =
+    invoicesQ.data?.items?.filter((i) => i.status === "sent" || i.status === "overdue")
+      .length ?? 0;
+
+  // Build activity timeline from notifications
+  const activityItems = buildActivityTimeline(
+    recentNotifications,
+    recentInvoices,
+    recentProformas,
+    recentOffers
+  );
 
   // KYC alert visibility — show if not exempt and partner KYC is pending/not submitted
   const kycPending =
@@ -184,6 +292,15 @@ export function PortalDashboard() {
                       <Clock className="size-3" />
                       Last login {fmtRelative(portalAccess.last_login_at)}
                     </span>
+                  )}
+                  {unreadNotifCount > 0 && (
+                    <Badge
+                      className="gap-1 border-transparent bg-primary/15 text-primary cursor-pointer smooth hover:bg-primary/25"
+                      onClick={() => setView("portal-notifications")}
+                    >
+                      <Bell className="size-3" />
+                      {unreadNotifCount} unread
+                    </Badge>
                   )}
                 </div>
               </div>
@@ -245,8 +362,37 @@ export function PortalDashboard() {
         </div>
       )}
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Overdue invoices alert */}
+      {overdueInvoicesCount > 0 && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/[0.06] p-4 sm:p-5 shadow-soft">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="size-10 rounded-xl bg-destructive/15 text-destructive flex items-center justify-center shrink-0">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">
+                  You have {overdueInvoicesCount} overdue invoice{overdueInvoicesCount > 1 ? "s" : ""}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Please review and settle any outstanding invoices to avoid service disruption.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setView("portal-invoices")}
+              className="border-destructive/30 text-destructive hover:bg-destructive/10 shrink-0 smooth"
+            >
+              <Receipt className="size-4 mr-1" /> View invoices
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* KPI cards — expanded to 6 with invoice, proforma, and notification counts */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {portalAccess.can_view_offers ? (
           <KpiPremium
             label="Active Offers"
@@ -258,26 +404,47 @@ export function PortalDashboard() {
           <LockedKpi label="Active Offers" icon={FileText} />
         )}
 
+        {portalAccess.can_view_invoices ? (
+          <KpiPremium
+            label="Invoices"
+            value={invoicesQ.isLoading ? "—" : invoicesQ.data?.total ?? 0}
+            sub={unpaidInvoicesCount > 0 ? `${unpaidInvoicesCount} unpaid` : "All settled"}
+            icon={Receipt}
+            accent={unpaidInvoicesCount > 0 ? "text-destructive" : undefined}
+          />
+        ) : (
+          <LockedKpi label="Invoices" icon={Receipt} />
+        )}
+
+        {portalAccess.can_view_invoices ? (
+          <KpiPremium
+            label="Proformas"
+            value={proformasQ.isLoading ? "—" : proformasQ.data?.total ?? 0}
+            sub="Estimates & quotes"
+            icon={FileCheck}
+          />
+        ) : (
+          <LockedKpi label="Proformas" icon={FileCheck} />
+        )}
+
+        <KpiPremium
+          label="Notifications"
+          value={notifsQ.isLoading ? "—" : unreadNotifCount}
+          sub={`${notifsQ.data?.total ?? 0} total`}
+          icon={Bell}
+          accent={unreadNotifCount > 0 ? "text-primary" : undefined}
+          onClick={() => setView("portal-notifications")}
+        />
+
         {portalAccess.can_view_documents ? (
           <KpiPremium
-            label="Documents Available"
+            label="Documents"
             value={docsQ.isLoading ? "—" : docsQ.data?.total ?? 0}
             sub="Shared with you"
             icon={FolderOpen}
           />
         ) : (
-          <LockedKpi label="Documents Available" icon={FolderOpen} />
-        )}
-
-        {portalAccess.can_view_catalog ? (
-          <KpiPremium
-            label="Catalog Items"
-            value={catalogQ.isLoading ? "—" : catalogQ.data?.total ?? 0}
-            sub="Products available"
-            icon={Package}
-          />
-        ) : (
-          <LockedKpi label="Catalog Items" icon={Package} />
+          <LockedKpi label="Documents" icon={FolderOpen} />
         )}
 
         <KpiPremium
@@ -423,46 +590,419 @@ export function PortalDashboard() {
         </div>
       </div>
 
-      {/* Quick action cards with gradient backgrounds */}
-      <div>
-        <h3 className="text-sm font-semibold tracking-tight text-muted-foreground mb-3 px-1">
-          Quick actions
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <QuickAction
-            title="Browse Catalog"
-            desc="Explore products"
-            icon={Package}
-            onClick={() => setView("portal-catalog")}
-            locked={!portalAccess.can_view_catalog}
-          />
-          <QuickAction
-            title="Request a Quote"
-            desc="Send us your needs"
-            icon={ShoppingCart}
-            onClick={() => setView("portal-rfq")}
-            locked={!portalAccess.can_submit_rfq}
-          />
-          <QuickAction
-            title="View Documents"
-            desc="Contracts & invoices"
-            icon={FolderOpen}
-            onClick={() => setView("portal-documents")}
-            locked={!portalAccess.can_view_documents}
-          />
-          <QuickAction
-            title="Complete KYC"
-            desc="Unlock all features"
-            icon={ShieldCheck}
-            onClick={() => setView("portal-kyc")}
-            locked={portalAccess.exempt_kyc}
-            highlight={kycPending}
-          />
+      {/* Recent invoices + proformas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent invoices */}
+        <div className="card-premium">
+          <div className="flex flex-row items-center justify-between p-5 pb-3">
+            <div>
+              <h3 className="text-base font-semibold tracking-tight">Recent Invoices</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your billing summary
+              </p>
+            </div>
+            {portalAccess.can_view_invoices && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setView("portal-invoices")}
+                className="text-primary"
+              >
+                View all <ArrowRight className="size-3.5 ml-1" />
+              </Button>
+            )}
+          </div>
+          <div className="px-2 pb-2">
+            {!portalAccess.can_view_invoices ? (
+              <LockedNotice />
+            ) : invoicesQ.isLoading ? (
+              <LoadingRow />
+            ) : recentInvoices.length === 0 ? (
+              <EmptyRow
+                icon={Receipt}
+                title="No invoices yet"
+                desc="Your account manager will send invoices here."
+              />
+            ) : (
+              <div className="space-y-1 max-h-80 overflow-y-auto custom-scroll">
+                {recentInvoices.map((inv) => (
+                  <button
+                    key={inv.id}
+                    onClick={() => setView("portal-invoices")}
+                    className="w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-accent smooth"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground shrink-0 tabular">
+                          {inv.number}
+                        </span>
+                        <Badge
+                          className={cn(
+                            "text-[10px] px-1.5 py-0 capitalize",
+                            INVOICE_STATUS_STYLES[inv.status]
+                          )}
+                        >
+                          {inv.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium truncate mt-0.5">{inv.subject}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold tabular">
+                        {fmtMoney(inv.total, inv.currency)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground tabular">
+                        Due {fmtDate(inv.due_date)}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recent proformas */}
+        <div className="card-premium">
+          <div className="flex flex-row items-center justify-between p-5 pb-3">
+            <div>
+              <h3 className="text-base font-semibold tracking-tight">Recent Proformas</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Estimates & advance invoices
+              </p>
+            </div>
+            {portalAccess.can_view_invoices && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setView("portal-proformas")}
+                className="text-primary"
+              >
+                View all <ArrowRight className="size-3.5 ml-1" />
+              </Button>
+            )}
+          </div>
+          <div className="px-2 pb-2">
+            {!portalAccess.can_view_invoices ? (
+              <LockedNotice />
+            ) : proformasQ.isLoading ? (
+              <LoadingRow />
+            ) : recentProformas.length === 0 ? (
+              <EmptyRow
+                icon={FileCheck}
+                title="No proformas yet"
+                desc="Proforma invoices will appear here."
+              />
+            ) : (
+              <div className="space-y-1 max-h-80 overflow-y-auto custom-scroll">
+                {recentProformas.map((pro) => (
+                  <button
+                    key={pro.id}
+                    onClick={() => setView("portal-proformas")}
+                    className="w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-accent smooth"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground shrink-0 tabular">
+                          {pro.number}
+                        </span>
+                        <Badge
+                          className={cn(
+                            "text-[10px] px-1.5 py-0 capitalize",
+                            PROFORMA_STATUS_STYLES[pro.status]
+                          )}
+                        >
+                          {pro.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium truncate mt-0.5">{pro.subject}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold tabular">
+                        {fmtMoney(pro.total, pro.currency)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground tabular">
+                        {fmtDate(pro.issue_date)}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Activity timeline + Quick actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Activity timeline */}
+        <div className="card-premium">
+          <div className="flex flex-row items-center justify-between p-5 pb-3">
+            <div>
+              <h3 className="text-base font-semibold tracking-tight">Recent Activity</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your latest account events
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setView("portal-notifications")}
+              className="text-primary"
+            >
+              View all <ArrowRight className="size-3.5 ml-1" />
+            </Button>
+          </div>
+          <div className="px-2 pb-2">
+            {activityItems.length === 0 ? (
+              <EmptyRow
+                icon={Activity}
+                title="No recent activity"
+                desc="Account events will appear here as you interact with the portal."
+              />
+            ) : (
+              <div className="space-y-0 max-h-80 overflow-y-auto custom-scroll">
+                {activityItems.slice(0, 8).map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-3 px-3 py-2.5 hover:bg-accent/50 smooth rounded-lg"
+                    >
+                      <div className={cn("size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5", item.bg)}>
+                        <Icon className={cn("size-3.5", item.color)} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug">{item.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 tabular">
+                          {fmtRelative(item.date)}
+                        </p>
+                      </div>
+                      {item.action && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-primary shrink-0 h-7 px-2"
+                          onClick={() => setView(item.action!)}
+                        >
+                          View
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Quick links */}
+        <div className="card-premium">
+          <div className="p-5 pb-3">
+            <h3 className="text-base font-semibold tracking-tight">Quick Links</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Jump to key actions
+            </p>
+          </div>
+          <div className="px-2 pb-2">
+            <div className="grid grid-cols-2 gap-2">
+              <QuickLink
+                title="View Offers"
+                desc="Browse proposals"
+                icon={FileText}
+                onClick={() => setView("portal-offers")}
+                locked={!portalAccess.can_view_offers}
+              />
+              <QuickLink
+                title="Submit RFQ"
+                desc="Request a quote"
+                icon={ShoppingCart}
+                onClick={() => setView("portal-rfq")}
+                locked={!portalAccess.can_submit_rfq}
+              />
+              <QuickLink
+                title="View Documents"
+                desc="Contracts & files"
+                icon={FolderOpen}
+                onClick={() => setView("portal-documents")}
+                locked={!portalAccess.can_view_documents}
+              />
+              <QuickLink
+                title="Browse Catalog"
+                desc="Products & pricing"
+                icon={Package}
+                onClick={() => setView("portal-catalog")}
+                locked={!portalAccess.can_view_catalog}
+              />
+              <QuickLink
+                title="Invoices"
+                desc="Billing & payments"
+                icon={CreditCard}
+                onClick={() => setView("portal-invoices")}
+                locked={!portalAccess.can_view_invoices}
+              />
+              <QuickLink
+                title="Proformas"
+                desc="Estimates & quotes"
+                icon={FileCheck}
+                onClick={() => setView("portal-proformas")}
+                locked={!portalAccess.can_view_invoices}
+              />
+              <QuickLink
+                title="Notifications"
+                desc={`${unreadNotifCount} unread`}
+                icon={Bell}
+                onClick={() => setView("portal-notifications")}
+                highlight={unreadNotifCount > 0}
+              />
+              <QuickLink
+                title="Messages"
+                desc="Contact your manager"
+                icon={MessageSquare}
+                onClick={() => setView("portal-messages")}
+              />
+              <QuickLink
+                title="My Profile"
+                desc="Account settings"
+                icon={User}
+                onClick={() => setView("portal-profile")}
+              />
+              <QuickLink
+                title="Complete KYC"
+                desc="Verify your account"
+                icon={ShieldCheck}
+                onClick={() => setView("portal-kyc")}
+                locked={portalAccess.exempt_kyc}
+                highlight={kycPending}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// ─── Activity timeline builder ────────────────────────────────────────────────
+
+interface ActivityItem {
+  title: string;
+  date: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bg: string;
+  action?: ViewKey;
+}
+
+function buildActivityTimeline(
+  notifications: Notification[],
+  invoices: Invoice[],
+  proformas: Proforma[],
+  offers: Offer[]
+): ActivityItem[] {
+  const items: ActivityItem[] = [];
+
+  // From notifications
+  for (const n of notifications) {
+    const cat = getNotifCategory(n.type);
+    const cfg = NOTIF_CATEGORY_CONFIG[cat];
+    items.push({
+      title: n.title,
+      date: n.created_at,
+      icon: cfg.icon,
+      color: cfg.color,
+      bg: cfg.bg,
+      action: inferActionFromNotif(n),
+    });
+  }
+
+  // From invoices (recent status changes)
+  for (const inv of invoices) {
+    if (inv.status === "overdue") {
+      items.push({
+        title: `Invoice ${inv.number} is overdue`,
+        date: inv.due_date,
+        icon: AlertTriangle,
+        color: "text-destructive",
+        bg: "bg-destructive/10",
+        action: "portal-invoices",
+      });
+    } else if (inv.status === "paid") {
+      items.push({
+        title: `Invoice ${inv.number} has been paid`,
+        date: inv.paid_at || inv.updated_at,
+        icon: CheckCircle2,
+        color: "text-emerald-600",
+        bg: "bg-emerald-500/10",
+        action: "portal-invoices",
+      });
+    }
+  }
+
+  // From proformas
+  for (const pro of proformas) {
+    if (pro.status === "sent") {
+      items.push({
+        title: `Proforma ${pro.number} sent for review`,
+        date: pro.sent_at || pro.created_at,
+        icon: FileCheck,
+        color: "text-primary",
+        bg: "bg-primary/10",
+        action: "portal-proformas",
+      });
+    }
+  }
+
+  // From offers
+  for (const o of offers) {
+    if (o.status === "sent") {
+      items.push({
+        title: `Offer ${o.number} is ready for review`,
+        date: o.updated_at,
+        icon: FileText,
+        color: "text-primary",
+        bg: "bg-primary/10",
+        action: "portal-offers",
+      });
+    } else if (o.status === "accepted") {
+      items.push({
+        title: `Offer ${o.number} was accepted`,
+        date: o.updated_at,
+        icon: CheckCircle2,
+        color: "text-emerald-600",
+        bg: "bg-emerald-500/10",
+        action: "portal-offers",
+      });
+    }
+  }
+
+  // Sort by date descending
+  items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Deduplicate by title
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.title)) return false;
+    seen.add(item.title);
+    return true;
+  });
+}
+
+function inferActionFromNotif(n: Notification): ViewKey | undefined {
+  const type = n.type;
+  if (type.startsWith("offer_")) return "portal-offers";
+  if (type.startsWith("invoice_")) return "portal-invoices";
+  if (type.startsWith("kyc_")) return "portal-kyc";
+  if (type.startsWith("rfq_")) return "portal-rfq";
+  if (type === "document_shared") return "portal-documents";
+  if (type.startsWith("portal_")) return "portal-notifications";
+  if (type === "portal_message") return "portal-messages";
+  if (type === "low_stock_alert") return "portal-catalog";
+  if (type.startsWith("task_")) return "portal-notifications";
+  return "portal-notifications";
+}
+
+// ─── KPI card components ──────────────────────────────────────────────────────
 
 function KpiPremium({
   label,
@@ -470,15 +1010,23 @@ function KpiPremium({
   sub,
   icon: Icon,
   accent,
+  onClick,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   icon: React.ComponentType<{ className?: string }>;
   accent?: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className="card-premium p-5 group">
+    <div
+      className={cn(
+        "card-premium p-5 group",
+        onClick && "cursor-pointer hover:border-primary/30 smooth hover:shadow-soft-md"
+      )}
+      onClick={onClick}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-muted-foreground truncate">{label}</p>
@@ -567,7 +1115,7 @@ function EmptyRow({
   );
 }
 
-function QuickAction({
+function QuickLink({
   title,
   desc,
   icon: Icon,
@@ -587,7 +1135,7 @@ function QuickAction({
       onClick={onClick}
       disabled={locked}
       className={cn(
-        "group relative text-left rounded-xl p-5 smooth overflow-hidden border",
+        "group relative text-left rounded-xl p-4 smooth overflow-hidden border",
         locked
           ? "border-dashed border-border/60 bg-muted/30 opacity-70 cursor-not-allowed"
           : highlight
@@ -598,10 +1146,10 @@ function QuickAction({
       {!locked && (
         <div className="absolute top-0 right-0 h-20 w-20 bg-primary/[0.06] blur-2xl rounded-full opacity-0 group-hover:opacity-100 smooth" />
       )}
-      <div className="relative flex items-start gap-3">
+      <div className="relative flex items-center gap-3">
         <div
           className={cn(
-            "size-11 rounded-xl flex items-center justify-center shrink-0 smooth group-hover:scale-105",
+            "size-9 rounded-lg flex items-center justify-center shrink-0 smooth group-hover:scale-105",
             locked
               ? "bg-muted text-muted-foreground"
               : highlight
@@ -609,16 +1157,16 @@ function QuickAction({
                 : "bg-gradient-to-br from-primary/15 to-primary/5 text-primary"
           )}
         >
-          {locked ? <Lock className="size-5" /> : <Icon className="size-5" />}
+          {locked ? <Lock className="size-4" /> : <Icon className="size-4" />}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate">{title}</p>
-          <p className="text-xs text-muted-foreground truncate mt-0.5">{desc}</p>
+          <p className="text-[11px] text-muted-foreground truncate mt-0.5">{desc}</p>
         </div>
-        {!locked && (
-          <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-1 group-hover:text-primary group-hover:translate-x-0.5 smooth" />
-        )}
       </div>
     </button>
   );
 }
+
+// Type import for ViewKey used in the activity builder
+import type { ViewKey } from "@/lib/store/app-store";

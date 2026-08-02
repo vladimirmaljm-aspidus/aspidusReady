@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { hashPassword } from "@/lib/auth/password";
+import { validatePassword } from "@/lib/auth/password-policy";
 
 export const runtime = "nodejs";
 
@@ -8,9 +9,15 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   try {
     const { access_id, password } = await req.json();
-    if (!access_id || !password || password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+    if (!access_id || !password) {
+      return NextResponse.json({ error: "Access ID and password are required." }, { status: 400 });
     }
+
+    const validation = validatePassword(password);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
+    }
+
     const store = await getStore();
     const access = await store.getPortalAccessById(access_id);
     if (!access) {

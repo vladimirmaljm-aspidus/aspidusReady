@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { hashPassword } from "@/lib/auth/password";
+import { validatePassword } from "@/lib/auth/password-policy";
 
 export const runtime = "nodejs";
 
@@ -19,8 +20,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Reset token and password are required." }, { status: 400 });
     }
 
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+    const validation = validatePassword(password);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
     }
 
     const store = await getStore();
