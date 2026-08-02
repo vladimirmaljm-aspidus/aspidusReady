@@ -66,6 +66,10 @@ const PortalMessages = dynamic(
   () => import("@/components/portal/portal-messages").then((m) => m.PortalMessages),
   { ssr: false }
 );
+const PortalInvoices = dynamic(
+  () => import("@/components/portal/portal-invoices").then((m) => m.PortalInvoices),
+  { ssr: false }
+);
 
 interface NavItem {
   key: ViewKey;
@@ -77,6 +81,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { key: "portal-dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "portal-offers", label: "My Offers", icon: FileText, gate: "can_view_offers" },
+  { key: "portal-invoices", label: "My Invoices", icon: FileText, gate: "can_view_invoices" },
   { key: "portal-messages", label: "Messages", icon: MessageSquare },
   { key: "portal-documents", label: "My Documents", icon: FolderOpen, gate: "can_view_documents" },
   { key: "portal-catalog", label: "Product Catalog", icon: Package, gate: "can_view_catalog" },
@@ -120,6 +125,7 @@ const TIER_META: Record<
 const VIEW_TITLES: Record<string, string> = {
   "portal-dashboard": "Dashboard",
   "portal-offers": "My Offers",
+  "portal-invoices": "My Invoices",
   "portal-documents": "My Documents",
   "portal-catalog": "Product Catalog",
   "portal-rfq": "Request a Quote",
@@ -333,6 +339,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-x-hidden">
           {view === "portal-dashboard" && <PortalDashboard />}
           {view === "portal-offers" && <PortalOffers />}
+          {view === "portal-invoices" && <PortalInvoices />}
           {view === "portal-documents" && <PortalDocuments />}
           {view === "portal-catalog" && <PortalCatalog />}
           {view === "portal-kyc" && <PortalKyc />}

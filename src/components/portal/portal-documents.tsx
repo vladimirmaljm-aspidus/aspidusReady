@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   Search,
   Download,
   FolderOpen,
@@ -21,6 +28,9 @@ import {
   Receipt,
   FileSignature,
   File as FileIcon,
+  Eye,
+  AlertCircle,
+  FileText,
 } from "lucide-react";
 import { fmtDate, fmtBytes } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
@@ -69,9 +79,24 @@ const CATEGORY_META: Record<
   },
 };
 
+/** MIME types that can be previewed inline in the browser */
+const PREVIEWABLE_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+]);
+
+function isPreviewable(mimeType: string): boolean {
+  return PREVIEWABLE_TYPES.has(mimeType);
+}
+
 export function PortalDocuments() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [previewDoc, setPreviewDoc] = useState<SharedDocument | null>(null);
 
   const docsQ = useQuery<{ items: SharedDocument[]; total: number }>({
     queryKey: ["portal-documents"],
@@ -103,12 +128,23 @@ export function PortalDocuments() {
     return items;
   }, [allItems, categoryFilter, search]);
 
-  function handleDownload(filename: string) {
+  const handleDownload = useCallback((doc: SharedDocument) => {
     const link = document.createElement("a");
-    link.href = `/api/documents/${filename}`;
-    link.download = filename;
+    link.href = `/api/portal/documents/${doc.id}/download`;
+    link.download = doc.filename;
+    document.body.appendChild(link);
     link.click();
-  }
+    document.body.removeChild(link);
+  }, []);
+
+  const handlePreview = useCallback((doc: SharedDocument) => {
+    if (!isPreviewable(doc.mime_type)) {
+      toast.info("Preview is not available for this file type. Downloading instead.");
+      handleDownload(doc);
+      return;
+    }
+    setPreviewDoc(doc);
+  }, [handleDownload]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -161,6 +197,7 @@ export function PortalDocuments() {
           {filtered.map((doc) => {
             const meta = CATEGORY_META[doc.category];
             const Icon = meta.icon;
+            const canPreview = isPreviewable(doc.mime_type);
             return (
               <div
                 key={doc.id}
@@ -198,23 +235,176 @@ export function PortalDocuments() {
                   <span className="text-[11px] text-muted-foreground tabular">
                     Uploaded {fmtDate(doc.created_at)}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload(doc.filename)}
-                    className="h-8 smooth opacity-80 group-hover:opacity-100 hover:shadow-soft"
-                  >
-                    <Download className="size-3.5 mr-1" /> Download
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    {canPreview && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreview(doc);
+                        }}
+                        className="h-8 smooth opacity-80 group-hover:opacity-100 hover:shadow-soft"
+                      >
+                        <Eye className="size-3.5 mr-1" /> View
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(doc);
+                      }}
+                      className="h-8 smooth opacity-80 group-hover:opacity-100 hover:shadow-soft"
+                    >
+                      <Download className="size-3.5 mr-1" /> Download
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Document Preview Dialog */}
+      <DocumentPreviewDialog
+        open={!!previewDoc}
+        onOpenChange={(open) => {
+          if (!open) setPreviewDoc(null);
+        }}
+        document={previewDoc}
+      />
     </div>
   );
 }
+
+// ─── Document Preview Dialog ────────────────────────────────────────────────
+
+function DocumentPreviewDialog({
+  open,
+  onOpenChange,
+  document: doc,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  document: SharedDocument | null;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  // Reset state when dialog opens
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen) {
+        setLoading(true);
+        setError(false);
+      }
+      onOpenChange(nextOpen);
+    },
+    [onOpenChange]
+  );
+
+  if (!doc) return null;
+
+  const previewUrl = `/api/portal/documents/${doc.id}/download?mode=inline`;
+  const downloadUrl = `/api/portal/documents/${doc.id}/download`;
+  const isPdf = doc.mime_type === "application/pdf";
+  const isImage = doc.mime_type?.startsWith("image/");
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent size="xl" className="max-h-[90vh] flex flex-col p-0 gap-0">
+        {/* Header */}
+        <DialogHeader className="p-4 pb-3 border-b flex-row items-center justify-between space-y-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText className="size-5 text-primary shrink-0" />
+            <DialogTitle className="text-base truncate">{doc.filename}</DialogTitle>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-muted-foreground tabular">
+              {fmtBytes(doc.size)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => {
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = doc.filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+            >
+              <Download className="size-3.5 mr-1" /> Download
+            </Button>
+          </div>
+        </DialogHeader>
+        <DialogDescription className="sr-only">
+          Preview of {doc.filename}
+        </DialogDescription>
+
+        {/* Body */}
+        <div className="flex-1 min-h-0 relative bg-muted/30">
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {error && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+              <AlertCircle className="size-10 text-destructive" />
+              <p className="text-sm text-muted-foreground">Failed to load preview</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setError(false);
+                  setLoading(true);
+                }}
+              >
+                Try again
+              </Button>
+            </div>
+          )}
+
+          {isPdf && (
+            <iframe
+              src={previewUrl}
+              className="w-full h-[75vh] border-0"
+              title={`Preview of ${doc.filename}`}
+              onLoad={() => setLoading(false)}
+              onError={() => {
+                setLoading(false);
+                setError(true);
+              }}
+            />
+          )}
+
+          {isImage && (
+            <div className="flex items-center justify-center p-4 h-[75vh]">
+              <img
+                src={previewUrl}
+                alt={doc.filename}
+                className="max-w-full max-h-full object-contain"
+                onLoad={() => setLoading(false)}
+                onError={() => {
+                  setLoading(false);
+                  setError(true);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Empty State ────────────────────────────────────────────────────────────
 
 function EmptyDocuments() {
   return (

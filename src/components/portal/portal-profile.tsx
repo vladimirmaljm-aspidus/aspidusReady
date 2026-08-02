@@ -25,6 +25,11 @@ import {
   Lock,
   Clock,
   ArrowRight,
+  Eye,
+  EyeOff,
+  Check,
+  X,
+  ShieldCheck,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
 import { fmtDate, fmtRelative } from "@/lib/utils/format";
@@ -104,6 +109,9 @@ export function PortalProfile() {
           <LockedCard label="Company Info" />
         )}
       </div>
+
+      {/* Security / Change Password section */}
+      <SecuritySection />
     </div>
   );
 }
@@ -585,6 +593,211 @@ function LockedCard({ label }: { label: string }) {
       <p className="text-xs text-muted-foreground mt-1 max-w-sm">
         Upgrade your access tier to unlock this section.
       </p>
+    </div>
+  );
+}
+
+// ---------------- Security / Change Password section ----------------
+function SecuritySection() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // Password strength checks
+  const hasMinLength = newPassword.length >= 8;
+  const hasUppercase = /[A-Z]/.test(newPassword);
+  const hasLowercase = /[a-z]/.test(newPassword);
+  const hasNumber = /[0-9]/.test(newPassword);
+  const allRulesMet = hasMinLength && hasUppercase && hasLowercase && hasNumber;
+  const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
+  const canSubmit = currentPassword.length > 0 && allRulesMet && passwordsMatch;
+
+  // Strength bar calculation
+  const rulesPassed = [hasMinLength, hasUppercase, hasLowercase, hasNumber].filter(Boolean).length;
+  const strengthPercent = (rulesPassed / 4) * 100;
+  const strengthColor =
+    rulesPassed <= 1 ? "bg-red-500" :
+    rulesPassed === 2 ? "bg-amber-500" :
+    rulesPassed === 3 ? "bg-yellow-500" :
+    "bg-emerald-500";
+  const strengthLabel =
+    rulesPassed <= 1 ? "Weak" :
+    rulesPassed === 2 ? "Fair" :
+    rulesPassed === 3 ? "Good" :
+    "Strong";
+
+  const changePwMut = useMutation({
+    mutationFn: async () => {
+      const r = await fetch("/api/portal/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+          confirm_password: confirmPassword,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        throw new Error(data.error || "Failed to change password");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Password changed successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    changePwMut.mutate();
+  }
+
+  return (
+    <div className="card-premium p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+          <ShieldCheck className="size-4 text-primary" />
+        </div>
+        <h3 className="text-base font-semibold">Security</h3>
+      </div>
+      <p className="text-xs text-muted-foreground mb-5 ml-10">
+        Change your account password. Your password must meet the requirements below.
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Current Password */}
+          <Field label="Current password" icon={Lock}>
+            <div className="relative">
+              <Input
+                type={showCurrent ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current password"
+                className="h-10 pr-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowCurrent(!showCurrent)}
+              >
+                {showCurrent ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </Field>
+
+          {/* New Password */}
+          <Field label="New password" icon={Lock}>
+            <div className="relative">
+              <Input
+                type={showNew ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                className="h-10 pr-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowNew(!showNew)}
+              >
+                {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </Field>
+
+          {/* Confirm Password */}
+          <Field label="Confirm new password" icon={Lock}>
+            <div className="relative">
+              <Input
+                type={showConfirm ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                className="h-10 pr-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowConfirm(!showConfirm)}
+              >
+                {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            {confirmPassword.length > 0 && !passwordsMatch && (
+              <p className="text-xs text-destructive mt-1">Passwords do not match.</p>
+            )}
+          </Field>
+        </div>
+
+        {/* Password strength indicator */}
+        {newPassword.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-300", strengthColor)}
+                  style={{ width: `${strengthPercent}%` }}
+                />
+              </div>
+              <span className="text-xs font-medium text-muted-foreground min-w-[3rem] text-right">
+                {strengthLabel}
+              </span>
+            </div>
+
+            {/* Password requirements */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
+              <RequirementMet label="8+ characters" met={hasMinLength} />
+              <RequirementMet label="Uppercase letter" met={hasUppercase} />
+              <RequirementMet label="Lowercase letter" met={hasLowercase} />
+              <RequirementMet label="Number" met={hasNumber} />
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+          <Button
+            type="submit"
+            disabled={!canSubmit || changePwMut.isPending}
+            className="smooth hover:shadow-soft-md"
+          >
+            {changePwMut.isPending ? (
+              <Loader2 className="size-4 animate-spin mr-1.5" />
+            ) : (
+              <ShieldCheck className="size-4 mr-1.5" />
+            )}
+            Change password
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function RequirementMet({ label, met }: { label: string; met: boolean }) {
+  return (
+    <div className={cn("flex items-center gap-1.5 text-xs transition-colors", met ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+      {met ? (
+        <Check className="size-3.5 shrink-0" />
+      ) : (
+        <X className="size-3.5 shrink-0" />
+      )}
+      {label}
     </div>
   );
 }

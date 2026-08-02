@@ -89,6 +89,7 @@ export interface Store {
 
   // shared documents
   listDocuments(tenantId: string, params?: ListParams): Promise<ListResult<SharedDocument>>;
+  getDocument(id: string): Promise<SharedDocument | null>;
   upsertDocument(d: Partial<SharedDocument> & { id?: string }): Promise<SharedDocument>;
   deleteDocument(id: string): Promise<void>;
 

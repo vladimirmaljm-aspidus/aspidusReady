@@ -383,6 +383,9 @@ export class MockStore implements Store {
     if (params?.filters?.partner_id) items = items.filter((d) => d.partner_id === params.filters!.partner_id);
     return paginate(items, params);
   }
+  async getDocument(id: string): Promise<SharedDocument | null> {
+    return mock.documents.find((d) => d.id === id) || null;
+  }
   async upsertDocument(d: Partial<SharedDocument> & { id?: string }): Promise<SharedDocument> {
     const existing = d.id ? mock.documents.find((x) => x.id === d.id) : null;
     if (existing) {

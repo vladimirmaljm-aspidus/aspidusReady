@@ -782,6 +782,10 @@ export class PrismaStore implements Store {
     });
     return { items: rows.map((r: any) => ({ ...r, created_at: dateToISOOrNow(r.created_at) })), total };
   }
+  async getDocument(id: string): Promise<SharedDocument | null> {
+    const row = await db.sharedDocument.findUnique({ where: { id } });
+    return row ? ({ ...row, created_at: dateToISOOrNow(row.created_at) } as SharedDocument) : null;
+  }
 
   async upsertDocument(d: Partial<SharedDocument> & { id?: string }): Promise<SharedDocument> {
     const data: any = {

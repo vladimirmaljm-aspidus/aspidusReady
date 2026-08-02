@@ -51,6 +51,7 @@ export type ViewKey =
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"
+  | "portal-invoices"
   | "portal-documents"
   | "portal-catalog"
   | "portal-profile"

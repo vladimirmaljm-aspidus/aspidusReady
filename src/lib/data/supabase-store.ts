@@ -285,6 +285,11 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     return paginate((data as SharedDocument[]) || [], params);
   }
+  async getDocument(id: string): Promise<SharedDocument | null> {
+    const { data, error } = await this.sb().from("shared_documents").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return (data as SharedDocument) || null;
+  }
   async upsertDocument(d: Partial<SharedDocument> & { id?: string }): Promise<SharedDocument> {
     return this.smartUpsert<SharedDocument>("shared_documents", d);
   }

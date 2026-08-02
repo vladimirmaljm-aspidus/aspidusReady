@@ -70,6 +70,49 @@ export async function uploadKycDocument(
 }
 
 /**
+ * Upload a document to the documents bucket.
+ * Alias for uploadFile with the "documents" bucket.
+ */
+export async function uploadDocument(
+  path: string,
+  buffer: Buffer,
+  contentType: string,
+  size: number,
+): Promise<UploadResult> {
+  return uploadFile("documents", path, buffer, contentType, size);
+}
+
+/**
+ * Download a file from a Supabase Storage bucket.
+ * Returns the file buffer and content type.
+ */
+export async function downloadFile(
+  bucket: string,
+  path: string,
+): Promise<{ buffer: ArrayBuffer; contentType: string }> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured. Cannot download files.");
+  }
+
+  const sb = getSupabase();
+  const { data, error } = await sb.storage.from(bucket).download(path);
+
+  if (error) {
+    throw new Error(`Download failed: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error("File not found in storage.");
+  }
+
+  const buffer = await data.arrayBuffer();
+  return {
+    buffer,
+    contentType: data.type || "application/octet-stream",
+  };
+}
+
+/**
  * Delete a file from a Supabase Storage bucket.
  */
 export async function deleteFile(
