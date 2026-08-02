@@ -22,6 +22,7 @@ import {
   MapPin,
   ShieldAlert,
   MessageSquare,
+  Bell,
 } from "lucide-react";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,14 @@ const PortalInvoices = dynamic(
   () => import("@/components/portal/portal-invoices").then((m) => m.PortalInvoices),
   { ssr: false }
 );
+const PortalProformas = dynamic(
+  () => import("@/components/portal/portal-proformas").then((m) => m.PortalProformas),
+  { ssr: false }
+);
+const PortalNotifications = dynamic(
+  () => import("@/components/portal/portal-notifications").then((m) => m.PortalNotifications),
+  { ssr: false }
+);
 
 interface NavItem {
   key: ViewKey;
@@ -82,7 +91,9 @@ const NAV_ITEMS: NavItem[] = [
   { key: "portal-dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "portal-offers", label: "My Offers", icon: FileText, gate: "can_view_offers" },
   { key: "portal-invoices", label: "My Invoices", icon: FileText, gate: "can_view_invoices" },
+  { key: "portal-proformas", label: "My Proformas", icon: FileText, gate: "can_view_invoices" },
   { key: "portal-messages", label: "Messages", icon: MessageSquare },
+  { key: "portal-notifications", label: "Notifications", icon: Bell },
   { key: "portal-documents", label: "My Documents", icon: FolderOpen, gate: "can_view_documents" },
   { key: "portal-catalog", label: "Product Catalog", icon: Package, gate: "can_view_catalog" },
   { key: "portal-rfq", label: "Request a Quote", icon: ShoppingCart, gate: "can_submit_rfq" },
@@ -126,6 +137,8 @@ const VIEW_TITLES: Record<string, string> = {
   "portal-dashboard": "Dashboard",
   "portal-offers": "My Offers",
   "portal-invoices": "My Invoices",
+  "portal-proformas": "My Proformas",
+  "portal-notifications": "Notifications",
   "portal-documents": "My Documents",
   "portal-catalog": "Product Catalog",
   "portal-rfq": "Request a Quote",
@@ -340,6 +353,8 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
           {view === "portal-dashboard" && <PortalDashboard />}
           {view === "portal-offers" && <PortalOffers />}
           {view === "portal-invoices" && <PortalInvoices />}
+          {view === "portal-proformas" && <PortalProformas />}
+          {view === "portal-notifications" && <PortalNotifications />}
           {view === "portal-documents" && <PortalDocuments />}
           {view === "portal-catalog" && <PortalCatalog />}
           {view === "portal-kyc" && <PortalKyc />}

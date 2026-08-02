@@ -1148,6 +1148,11 @@ export class MockStore implements Store {
     if (unreadOnly) items = items.filter((n) => !n.read);
     return items.sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
+  async listNotificationsByPartner(tenantId: string, partnerId: string): Promise<Notification[]> {
+    return mock.notifications
+      .filter((n) => n.tenant_id === tenantId && (n.partner_id === partnerId || n.partner_id === null))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
   async createNotification(n: Omit<Notification, "id" | "created_at" | "read" | "read_at">): Promise<Notification> {
     const newN: Notification = {
       ...n, id: mock.nid("ntf_"), read: false, read_at: null, created_at: new Date().toISOString(),

@@ -227,6 +227,7 @@ export interface Store {
 
   // ---- notifications ----
   listNotifications(tenantId: string, userId?: string, unreadOnly?: boolean): Promise<Notification[]>;
+  listNotificationsByPartner(tenantId: string, partnerId: string): Promise<Notification[]>;
   createNotification(n: Omit<Notification, "id" | "created_at" | "read" | "read_at">): Promise<Notification>;
   markNotificationRead(id: string): Promise<void>;
   markAllNotificationsRead(tenantId: string, userId: string): Promise<void>;

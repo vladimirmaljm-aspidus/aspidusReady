@@ -1082,6 +1082,7 @@ export interface Notification {
   id: string;
   tenant_id: string;
   user_id: string | null; // null = broadcast to all tenant users
+  partner_id: string | null; // null = not partner-specific; for portal notifications
   type: NotificationType;
   title: string;
   message: string;

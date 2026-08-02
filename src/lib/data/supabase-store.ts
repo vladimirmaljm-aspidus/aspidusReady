@@ -1158,6 +1158,14 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     return (data as Notification[]) || [];
   }
+  async listNotificationsByPartner(tenantId: string, partnerId: string): Promise<Notification[]> {
+    let q = this.sb().from("notifications").select("*").eq("tenant_id", tenantId);
+    q = q.or(`partner_id.eq.${partnerId},partner_id.is.null`);
+    q = q.order("created_at", { ascending: false });
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data as Notification[]) || [];
+  }
   async createNotification(n: Omit<Notification, "id" | "created_at" | "read" | "read_at">): Promise<Notification> {
     const { data, error } = await this.sb().from("notifications").insert({ ...n, read: false }).select().single();
     if (error) throw error;

@@ -1827,6 +1827,17 @@ export class PrismaStore implements Store {
     return rows.map(mapNotificationRow);
   }
 
+  async listNotificationsByPartner(tenantId: string, partnerId: string): Promise<Notification[]> {
+    const rows = await db.notification.findMany({
+      where: {
+        tenant_id: tenantId,
+        OR: [{ partner_id: partnerId }, { partner_id: null }],
+      },
+      orderBy: { created_at: "desc" },
+    });
+    return rows.map(mapNotificationRow);
+  }
+
   async createNotification(n: Omit<Notification, "id" | "created_at" | "read" | "read_at">): Promise<Notification> {
     const r = await db.notification.create({
       data: {

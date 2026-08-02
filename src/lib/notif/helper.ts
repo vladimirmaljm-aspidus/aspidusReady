@@ -9,6 +9,7 @@ import type { NotificationType } from "@/lib/supabase/types";
 export async function notify(opts: {
   tenantId: string;
   userId?: string | null; // null = broadcast to all tenant admins
+  partnerId?: string | null; // null = not partner-specific; for portal notifications
   type: NotificationType;
   title: string;
   message: string;
@@ -22,6 +23,7 @@ export async function notify(opts: {
     await store.createNotification({
       tenant_id: opts.tenantId,
       user_id: opts.userId ?? null,
+      partner_id: opts.partnerId ?? null,
       type: opts.type,
       title: opts.title,
       message: opts.message,
