@@ -48,7 +48,9 @@ import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { Partner, PartnerType, PartnerEntityType, PortalAccess, PortalTier } from "@/lib/supabase/types";
 import { getTierMeta, ORDERED_TIERS } from "@/lib/portal/tiers";
 import { useAppStore } from "@/lib/store/app-store";
-import { CURRENCIES, ENTITY_TYPES, PAYMENT_TERMS_LOCAL, COUNTRIES } from "@/lib/data/reference";
+import { CURRENCIES, ENTITY_TYPES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { getCountriesForSelect, getCitiesForSelect, getCountry } from "@/lib/data/geo/countries";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 const PAGE_SIZE = 20;
 
@@ -1637,12 +1639,33 @@ function PartnerFormDialog({
                           </div>
                           <div className="space-y-1.5">
                             <Label>Country</Label>
-                            <Select value={form.country || ""} onValueChange={(v) => set("country", v)}>
-                              <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
-                              <SelectContent className="max-h-72">
-                                {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                              options={getCountriesForSelect()}
+                              value={form.country || ""}
+                              onChange={(v) => set("country", v)}
+                              placeholder="Select country…"
+                              searchPlaceholder="Search countries…"
+                              clearable
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>City</Label>
+                            {form.country ? (
+                              <SearchableSelect
+                                options={getCitiesForSelect(form.country)}
+                                value={form.city || ""}
+                                onChange={(v) => set("city", v)}
+                                placeholder="Select city…"
+                                searchPlaceholder="Search cities…"
+                                clearable
+                              />
+                            ) : (
+                              <Input
+                                value={form.city || ""}
+                                onChange={(e) => set("city", e.target.value)}
+                                placeholder="Select country first…"
+                              />
+                            )}
                           </div>
                         </div>
                       </div>

@@ -32,6 +32,7 @@ import {
   DollarSign, Ship, Container, ArrowLeftRight, Sparkles, Loader2, Building2,
   MapPin, Lightbulb, FileText,
 } from "lucide-react";
+import { PortAutocomplete } from "@/components/ui/port-autocomplete";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
@@ -1125,7 +1126,11 @@ function CalcFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Loading port</Label>
-            <Input value={form.loading_port || ""} onChange={(e) => set("loading_port", e.target.value)} placeholder="e.g. Santos" />
+            <PortAutocomplete
+              value={form.loading_port || ""}
+              onChange={(v) => set("loading_port", v)}
+              placeholder="Start typing port name…"
+            />
           </div>
 
           <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Sell Side</p></div>
@@ -1161,7 +1166,11 @@ function CalcFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Delivery port</Label>
-            <Input value={form.delivery_port || ""} onChange={(e) => set("delivery_port", e.target.value)} placeholder="e.g. Bar" />
+            <PortAutocomplete
+              value={form.delivery_port || ""}
+              onChange={(v) => set("delivery_port", v)}
+              placeholder="Start typing port name…"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Exchange rate</Label>

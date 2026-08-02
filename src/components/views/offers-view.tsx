@@ -7,6 +7,8 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PortAutocomplete } from "@/components/ui/port-autocomplete";
+import { TradeAdvisor } from "@/components/common/trade-advisor";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1709,12 +1711,20 @@ function OfferFormDialog({
                 {/* Shipping */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Port of Loading (POL)</Label>
-                    <Input value={form.pol || ""} onChange={(e) => set("pol", e.target.value)} placeholder="Shanghai" />
+                    <PortAutocomplete
+                      label="Port of Loading (POL)"
+                      value={form.pol || ""}
+                      onChange={(v) => set("pol", v)}
+                      placeholder="Start typing port name…"
+                    />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Port of Discharge (POD)</Label>
-                    <Input value={form.pod || ""} onChange={(e) => set("pod", e.target.value)} placeholder="Rotterdam" />
+                    <PortAutocomplete
+                      label="Port of Discharge (POD)"
+                      value={form.pod || ""}
+                      onChange={(v) => set("pod", v)}
+                      placeholder="Start typing port name…"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Vessel</Label>
@@ -1759,6 +1769,15 @@ function OfferFormDialog({
                     <Textarea rows={2} value={typeof form.terms === "string" ? form.terms : ""} onChange={(e) => set("terms", e.target.value)} placeholder="Delivery time, payment terms…" />
                   </div>
                 </div>
+
+                {/* Trade Advisor — auto-shows FTA + tariff info when countries are known */}
+                {selectedPartner?.country && (
+                  <TradeAdvisor
+                    reporterCode={selectedPartner.country}
+                    partnerCode={undefined}
+                    hsCode={(form.items?.[0] as any)?.hs_code}
+                  />
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>
