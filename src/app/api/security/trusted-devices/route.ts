@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api/helpers";
+import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
-  const tid = auth.tenantId ?? "";
+  const tid = resolveTenantId(auth, req) ?? "";
   const url = new URL(req.url);
   const explicitUserId = url.searchParams.get("user_id");
   // Super-admin with no explicit user_id filter sees ALL trusted devices system-wide.
