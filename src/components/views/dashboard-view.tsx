@@ -108,6 +108,7 @@ export function DashboardView() {
 
   const user = useAppStore((s) => s.user);
   const setView = useAppStore((s) => s.setView);
+  const activeTenantName = useAppStore((s) => s.activeTenantName);
 
   // Primary dashboard data
   const dashQ = useQuery<DashboardInsights>({
@@ -229,7 +230,6 @@ export function DashboardView() {
   ).length;
 
   const userName = user?.full_name || user?.username || "there";
-  const activeTenantName = useAppStore((s) => s.activeTenantName);
   const tenantName = activeTenantName || user?.tenant_id || "Aspidus";
 
   const lowStockCount = k.low_stock_count || 0;
