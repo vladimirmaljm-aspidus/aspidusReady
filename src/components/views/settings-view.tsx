@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
-import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle, Zap, AlertTriangle } from "lucide-react";
+import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle, Zap, AlertTriangle, Globe, Info } from "lucide-react";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import { CURRENCIES } from "@/lib/data/reference";
 
@@ -138,11 +139,12 @@ export function SettingsView() {
     <div>
       <PageHeader title="Settings" description="Configure company, security, and communications." />
       <Tabs defaultValue="company">
-        <TabsList className="grid w-full max-w-lg grid-cols-4">
+        <TabsList className="grid w-full max-w-2xl grid-cols-5">
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="comms">Communications</TabsTrigger>
-          <TabsTrigger value="preferences">My Preferences</TabsTrigger>
+          <TabsTrigger value="integrations">API Keys</TabsTrigger>
+          <TabsTrigger value="preferences">Preferences</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="mt-4">
@@ -153,6 +155,9 @@ export function SettingsView() {
         </TabsContent>
         <TabsContent value="comms" className="mt-4">
           <CommsTab />
+        </TabsContent>
+        <TabsContent value="integrations" className="mt-4">
+          <IntegrationsTab />
         </TabsContent>
         <TabsContent value="preferences" className="mt-4">
           <PreferencesTab />
@@ -930,6 +935,362 @@ function EmailTestSection({ value }: { value: CommsForm }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── API Integrations Tab ─────────────────────────────────────────────
+
+type IntegrationsForm = {
+  exchangerate_api_key: string;
+  alphavantage_api_key: string;
+  openweather_api_key: string;
+  searates_api_key: string;
+  uncomtrade_api_key: string;
+};
+
+const DEFAULT_INTEGRATIONS: IntegrationsForm = {
+  exchangerate_api_key: "",
+  alphavantage_api_key: "",
+  openweather_api_key: "",
+  searates_api_key: "",
+  uncomtrade_api_key: "",
+};
+
+function IntegrationsTab() {
+  const { value, setValue, loading, saving, save } = useSettingLoader<IntegrationsForm>("integrations", DEFAULT_INTEGRATIONS);
+
+  function set<K extends keyof IntegrationsForm>(k: K, v: IntegrationsForm[K]) {
+    setValue((prev) => ({ ...prev, [k]: v }));
+  }
+
+  if (loading) {
+    return (
+      <Card className="border-border/60 shadow-soft rounded-xl">
+        <CardContent className="p-6 space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Intro */}
+      <Card className="border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Globe className="size-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">API Integrations</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Connect external data services to enrich your trade platform. Each integration
+                provides different data — currency rates, commodity prices, container tracking,
+                weather, sanctions checks, and more. All keys are stored securely and only visible to admins.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 1. ExchangeRate-API */}
+      <ApiIntegrationCard
+        title="Exchange Rate API"
+        description="Live currency conversion for offers, invoices, and trade calculations."
+        icon="💱"
+        badge="1,500/month FREE"
+        badgeColor="emerald"
+        apiKey={value.exchangerate_api_key}
+        onChange={(v) => set("exchangerate_api_key", v)}
+        steps={[
+          "Go to https://www.exchangerate-api.com",
+          "Click 'Get Free API Key' (no credit card needed)",
+          "Sign up with your email",
+          "Copy the API key from your dashboard (starts with a hex string)",
+          "Paste it below and click Save",
+        ]}
+        testUrl="/api/integrations/exchange-rates?from=USD&to=EUR&amount=100"
+        testLabel="Test: Convert 100 USD → EUR"
+        note="Works without API key too (uses free ECB fallback rates, updated daily at 16:00 CET). API key gives real-time rates."
+      />
+
+      {/* 2. Alpha Vantage */}
+      <ApiIntegrationCard
+        title="Alpha Vantage — Commodity Prices"
+        description="Live prices for sugar, coffee, cocoa, corn, wheat, copper, oil, cotton, and more."
+        icon="📈"
+        badge="25/day FREE"
+        badgeColor="amber"
+        apiKey={value.alphavantage_api_key}
+        onChange={(v) => set("alphavantage_api_key", v)}
+        steps={[
+          "Go to https://www.alphavantage.co/support/#api-key",
+          "Fill in the form (name, email)",
+          "You'll receive your API key instantly (starts with letters/numbers)",
+          "Paste it below and click Save",
+        ]}
+        testUrl="/api/integrations/commodities?symbol=SUGAR"
+        testLabel="Test: Get current sugar price"
+        note="25 API calls per day. Data is cached for 12 hours so each commodity only uses 1 call per day."
+      />
+
+      {/* 3. OpenWeatherMap */}
+      <ApiIntegrationCard
+        title="OpenWeatherMap — Port Weather"
+        description="Current weather conditions at shipping ports for logistics planning."
+        icon="🌤️"
+        badge="1,000/day FREE"
+        badgeColor="sky"
+        apiKey={value.openweather_api_key}
+        onChange={(v) => set("openweather_api_key", v)}
+        steps={[
+          "Go to https://openweathermap.org/api",
+          "Click 'Sign Up' (free, no credit card)",
+          "After registration, go to your profile → API Keys",
+          "Copy the default API key (32-character hex string)",
+          "Paste it below and click Save",
+        ]}
+        testUrl="/api/integrations/weather?lat=25.01&lon=55.06"
+        testLabel="Test: Weather at Jebel Ali port (Dubai)"
+        note="Weather data is cached for 30 minutes. Shows temperature, wind, humidity, and conditions."
+      />
+
+      {/* 4. SeaRates */}
+      <ApiIntegrationCard
+        title="SeaRates — Container Tracking"
+        description="Track shipping containers in real-time across 150+ shipping lines (MAERSK, MSC, CMA CGM, etc.)."
+        icon="🚢"
+        badge="100/month FREE"
+        badgeColor="blue"
+        apiKey={value.searates_api_key}
+        onChange={(v) => set("searates_api_key", v)}
+        steps={[
+          "Go to https://www.searates.com",
+          "Click 'Sign Up' and create a free account",
+          "After login, go to 'My Profile' → 'API Access'",
+          "Click 'Generate API Key'",
+          "Copy the key and paste it below",
+        ]}
+        testUrl={null}
+        testLabel="Test with a container number in the Logistics module"
+        note="100 tracking requests per month. Covers MAERSK, MSC, CMA CGM, COSCO, Hapag-Lloyd, ONE, Yang Ming, and more."
+      />
+
+      {/* 5. UN Comtrade */}
+      <ApiIntegrationCard
+        title="UN Comtrade — Trade Statistics"
+        description="Official UN international trade data: import/export values by country pair and HS code."
+        icon="🌐"
+        badge="500/day FREE"
+        badgeColor="violet"
+        apiKey={value.uncomtrade_api_key}
+        onChange={(v) => set("uncomtrade_api_key", v)}
+        steps={[
+          "Go to https://comtradeapi.un.org",
+          "Click 'Register' and fill in your details",
+          "After email verification, log in",
+          "Go to 'Profile' → copy your 'Subscription Key' (32-character hex string)",
+          "Paste it below and click Save",
+        ]}
+        testUrl={null}
+        testLabel="Test in the Trade module — search import/export data by country"
+        note="500 API calls per day. Shows official trade statistics: how much of a product was imported/exported between any two countries."
+      />
+
+      {/* Always-on (no key needed) integrations */}
+      <Card className="border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CheckCircle2 className="size-5 text-emerald-600" />
+            Always Active (No Setup Needed)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border/40">
+            <span className="text-xl">🌍</span>
+            <div>
+              <p className="text-sm font-medium">Countries & Cities Database</p>
+              <p className="text-xs text-muted-foreground">125 countries with 15+ cities each, flags, currencies, calling codes. Our own embedded data — always works.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border/40">
+            <span className="text-xl">⚓</span>
+            <div>
+              <p className="text-sm font-medium">World Port Index</p>
+              <p className="text-xs text-muted-foreground">120+ major ports with UN/LOCODE and coordinates. Auto-completes POL/POD fields.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border/40">
+            <span className="text-xl">📍</span>
+            <div>
+              <p className="text-sm font-medium">Address Autocomplete (Nominatim/OSM)</p>
+              <p className="text-xs text-muted-foreground">Free address search via OpenStreetMap. No API key needed — just start typing an address.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border/40">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <p className="text-sm font-medium">OFAC Sanctions Check</p>
+              <p className="text-xs text-muted-foreground">Search the US Treasury SDN list. Free public data. Check any partner name before doing business.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border/40">
+            <span className="text-xl">📋</span>
+            <div>
+              <p className="text-sm font-medium">Trade Advisor (FTA + Tariffs)</p>
+              <p className="text-xs text-muted-foreground">Checks Free Trade Agreements, tariff rates, and required documents between any two countries. Built-in FTA database.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={() => save(value)} disabled={saving}>
+          {saving ? "Saving…" : "Save API Keys"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ApiIntegrationCard({
+  title,
+  description,
+  icon,
+  badge,
+  badgeColor,
+  apiKey,
+  onChange,
+  steps,
+  testUrl,
+  testLabel,
+  note,
+}: {
+  title: string;
+  description: string;
+  icon: string;
+  badge: string;
+  badgeColor: "emerald" | "amber" | "sky" | "blue" | "violet";
+  apiKey: string;
+  onChange: (v: string) => void;
+  steps: string[];
+  testUrl: string | null;
+  testLabel: string;
+  note?: string;
+}) {
+  const [showSteps, setShowSteps] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  async function runTest() {
+    if (!testUrl || !apiKey) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await fetch(testUrl);
+      const data = await r.json();
+      if (data.error) {
+        setTestResult(`❌ ${data.error}`);
+      } else if (data.rate) {
+        setTestResult(`✅ Success! Rate: ${data.rate} (source: ${data.source})`);
+      } else if (data.price) {
+        setTestResult(`✅ Success! Price: $${data.price} (change: ${data.changePct}%)`);
+      } else if (data.temperature !== undefined) {
+        setTestResult(`✅ Success! ${data.location}: ${data.temperature}°C, ${data.description}`);
+      } else if (data.items) {
+        setTestResult(`✅ Success! ${data.items.length || data.total} results`);
+      } else {
+        setTestResult(`✅ Connected successfully`);
+      }
+    } catch (e: any) {
+      setTestResult(`❌ ${e.message}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const badgeClasses: Record<string, string> = {
+    emerald: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+    amber: "bg-amber-500/10 text-amber-700 border-amber-500/30",
+    sky: "bg-sky-500/10 text-sky-700 border-sky-500/30",
+    blue: "bg-blue-500/10 text-blue-700 border-blue-500/30",
+    violet: "bg-violet-500/10 text-violet-700 border-violet-500/30",
+  };
+
+  return (
+    <Card className="border-border/60 shadow-soft rounded-xl">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{icon}</span>
+            <div>
+              <CardTitle className="text-base">{title}</CardTitle>
+              <CardDescription>{description}</CardDescription>
+            </div>
+          </div>
+          <Badge variant="outline" className={badgeClasses[badgeColor]}>{badge}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <Label>API Key</Label>
+          <Input
+            type="password"
+            value={apiKey}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Paste your API key here…"
+            className="font-mono"
+          />
+        </div>
+
+        {note && (
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/40 text-xs text-muted-foreground">
+            <Info className="size-3.5 shrink-0 mt-0.5" />
+            <span>{note}</span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          {testUrl && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={runTest}
+              disabled={testing || !apiKey}
+              className="gap-1.5"
+            >
+              {testing ? <Loader2 className="size-3.5 animate-spin" /> : <Zap className="size-3.5" />}
+              {testLabel}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSteps(!showSteps)}
+            className="gap-1.5"
+          >
+            <Info className="size-3.5" />
+            {showSteps ? "Hide setup guide" : "How to get API key?"}
+          </Button>
+        </div>
+
+        {testResult && (
+          <div className={`p-2.5 rounded-lg text-xs ${testResult.startsWith("✅") ? "bg-emerald-500/10 text-emerald-700" : "bg-destructive/10 text-destructive"}`}>
+            {testResult}
+          </div>
+        )}
+
+        {showSteps && (
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+            <p className="text-xs font-semibold mb-2">Step-by-step setup guide:</p>
+            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+              {steps.map((step, i) => (
+                <li key={i} className="leading-relaxed">{step}</li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
