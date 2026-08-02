@@ -5,8 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, MessageSquare, Loader2, Clock, CheckCheck } from "lucide-react";
+import { Send, Loader2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtRelative } from "@/lib/utils/format";
 
@@ -31,7 +30,7 @@ export function PortalMessages() {
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
-    refetchInterval: 15000, // Poll every 15s for new messages
+    refetchInterval: 10000, // Poll every 10s
   });
 
   const sendMut = useMutation({
@@ -50,7 +49,6 @@ export function PortalMessages() {
     },
   });
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -66,32 +64,27 @@ export function PortalMessages() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-2xl mx-auto">
       <Card className="border-border/60 shadow-soft rounded-xl overflow-hidden">
-        <CardHeader className="bg-primary/5 border-b border-border/60">
+        <CardHeader className="bg-primary/5 border-b border-border/60 py-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <MessageSquare className="size-5 text-primary" />
+            <MessageSquare className="size-4 text-primary" />
             Messages
-            {messages.length > 0 && (
-              <span className="text-xs text-muted-foreground font-normal">
-                · {messages.filter(m => m.direction === "incoming" && !m.read).length} unread
-              </span>
-            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {/* Messages area */}
-          <div ref={scrollRef} className="h-[400px] overflow-y-auto p-4 space-y-3">
+          {/* Messages */}
+          <div ref={scrollRef} className="h-[350px] overflow-y-auto p-3 space-y-2">
             {messagesQ.isLoading ? (
               <div className="flex items-center justify-center h-full">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
             ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <MessageSquare className="size-10 text-muted-foreground/30 mb-3" />
+                <MessageSquare className="size-8 text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">No messages yet.</p>
                 <p className="text-xs text-muted-foreground/70 mt-1">
-                  Send a message to our team — we typically respond within 24 hours.
+                  Send us a message — we respond within 24 hours.
                 </p>
               </div>
             ) : (
@@ -99,48 +92,35 @@ export function PortalMessages() {
                 <div
                   key={msg.id}
                   className={cn(
-                    "flex flex-col max-w-[80%] rounded-2xl p-3",
+                    "max-w-[80%] rounded-xl px-3 py-2",
                     msg.direction === "outgoing"
-                      ? "ml-auto bg-primary text-primary-foreground rounded-br-sm"
-                      : "mr-auto bg-muted rounded-bl-sm"
+                      ? "ml-auto bg-primary text-primary-foreground"
+                      : "mr-auto bg-muted"
                   )}
                 >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
-                  <div className={cn(
-                    "flex items-center gap-1 mt-1 text-[10px]",
-                    msg.direction === "outgoing" ? "text-primary-foreground/70" : "text-muted-foreground"
+                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                  <p className={cn(
+                    "text-[10px] mt-1",
+                    msg.direction === "outgoing" ? "text-primary-foreground/60" : "text-muted-foreground"
                   )}>
-                    <Clock className="size-2.5" />
                     {fmtRelative(msg.timestamp)}
-                    {msg.direction === "outgoing" && msg.read && (
-                      <CheckCheck className="size-2.5 ml-0.5" />
-                    )}
-                  </div>
+                  </p>
                 </div>
               ))
             )}
           </div>
 
-          {/* Input area */}
-          <form onSubmit={handleSend} className="border-t border-border/60 p-3 flex items-center gap-2">
+          {/* Input */}
+          <form onSubmit={handleSend} className="border-t border-border/60 p-2 flex gap-2">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message…"
+              placeholder="Write a message…"
               disabled={sendMut.isPending}
               className="flex-1"
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!input.trim() || sendMut.isPending}
-              className="shrink-0"
-            >
-              {sendMut.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Send className="size-4" />
-              )}
+            <Button type="submit" size="icon" disabled={!input.trim() || sendMut.isPending}>
+              {sendMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             </Button>
           </form>
         </CardContent>

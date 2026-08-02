@@ -1138,7 +1138,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                   </div>
 
                   {/* Message history */}
-                  <PortalMessageThread accessId={portalAccess.id} partnerId={partner.id} tenantId={partner.tenant_id} />
+                  <PortalMessageThread accessId={portalAccess.id} partnerId={partner.id} tenantId={partner.tenant_id} refreshKey={messageRefreshKey} />
 
                   {/* Send message */}
                   <div className="flex gap-2">

@@ -856,7 +856,11 @@ export class SupabaseStore implements Store {
   async upsertPortalAccess(p: Partial<PortalAccess> & { id?: string }): Promise<PortalAccess> {
     const payload: SupaRow = { ...p };
     // Strip columns that may not exist in the database yet (added gracefully)
-    const columnsThatMayNotExist = ["feature_flags", "onboarding_status", "portal_locked_until", "failed_login_attempts", "lockout_until", "notes"];
+    const columnsThatMayNotExist = [
+      "feature_flags", "onboarding_status", "portal_locked_until",
+      "failed_login_attempts", "lockout_until", "notes",
+      "failed_attempts", "locked_until", "token_version",
+    ];
     for (const col of columnsThatMayNotExist) {
       if (payload[col] === undefined) delete payload[col];
     }

@@ -60,12 +60,12 @@ export async function POST(req: NextRequest) {
     const passwordHash = await hashPassword(password);
 
     // Update the portal access record
+    // Note: failed_attempts and locked_until columns may not exist yet.
+    // Only update columns we know exist.
     await store.upsertPortalAccess({
       id: foundAccess.id,
       password_hash: passwordHash,
       must_set_password: false,
-      failed_attempts: 0,
-      locked_until: null,
     });
 
     // Audit the password reset

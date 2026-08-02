@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials or account not active." }, { status: 401 });
     }
 
-    // Check if portal account is locked
-    if (access.locked_until && new Date(access.locked_until) > new Date()) {
+    // Check if portal account is locked (column may not exist — use optional chaining)
+    const lockedUntil = (access as any).locked_until;
+    if (lockedUntil && new Date(lockedUntil) > new Date()) {
       return NextResponse.json({ error: "Account is temporarily locked. Try again later." }, { status: 423 });
     }
 
@@ -40,12 +41,12 @@ export async function POST(req: NextRequest) {
       sub: `portal:${access.id}`,
       username: access.portal_email || "",
       role: "portal_client",
-      token_version: access.token_version || 1,
+      token_version: (access as any).token_version || 1,
       tenant_id: access.tenant_id,
     });
     await setSessionCookie(token);
 
-    // Update last login
+    // Update last login (only update columns that exist)
     try {
       await store.upsertPortalAccess({
         id: access.id,
