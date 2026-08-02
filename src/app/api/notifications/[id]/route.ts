@@ -9,6 +9,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
   if (body.read) {
+    // Tenant ownership check: listNotifications ignores tenantId in the store,
+    // so we fetch all and filter for non-super_admin.
+    const all = await auth.store.listNotifications(auth.tenantId ?? "", auth.user.id);
+    const existing = all.find((n) => n.id === id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     await auth.store.markNotificationRead(id);
   }
   return NextResponse.json({ ok: true });
@@ -34,6 +42,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  // Tenant ownership check
+  const all = await auth.store.listNotifications(auth.tenantId ?? "", auth.user.id);
+  const existing = all.find((n) => n.id === id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   await auth.store.deleteNotification(id);
   return NextResponse.json({ ok: true });
 }

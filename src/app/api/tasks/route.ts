@@ -32,6 +32,12 @@ export async function GET(req: NextRequest) {
   // Fetch all tenant tasks (the store doesn't support complex filtering)
   let tasks = await auth.store.listTasks(tid);
 
+  // Tenant isolation: PrismaStore.listTasks ignores _tenantId, so we
+  // post-filter for non-super_admin.
+  if (!auth.isSuperAdmin && auth.tenantId) {
+    tasks = tasks.filter((t) => t.tenant_id === auth.tenantId);
+  }
+
   // Apply filters
   if (mine) {
     tasks = tasks.filter(

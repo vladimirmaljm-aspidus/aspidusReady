@@ -10,6 +10,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const item = await auth.store.getOffer(id);
     if (!item) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && item.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     return NextResponse.json(item);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
@@ -22,8 +25,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (auth instanceof NextResponse) return auth;
     const { id } = await params;
     const tid = resolveTenantId(auth, req);
+    // Tenant ownership check
+    const existing = await auth.store.getOffer(id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     const body = await req.json();
-    body.tenant_id = tid!;
+    // Preserve the entity's tenant_id
+    body.tenant_id = existing.tenant_id;
     // recompute totals from items if not provided
     if (Array.isArray(body.items) && body.items.length > 0 && body.total === undefined) {
       let subtotal = 0, discountTotal = 0, taxTotal = 0;
@@ -55,6 +65,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
     const { id } = await params;
+    const existing = await auth.store.getOffer(id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     await auth.store.deleteOffer(id);
     await audit(auth.store, auth.user, req, "offer.delete", "offer", id);
     return NextResponse.json({ ok: true });

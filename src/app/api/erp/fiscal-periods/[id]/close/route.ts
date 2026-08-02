@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAdmin, audit } from "@/lib/api/helpers";
+import { requireAdmin, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -12,6 +12,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const existing = await auth.store.getFiscalPeriod(id);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Tenant Ownership check
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     if (existing.status === "closed" || existing.status === "locked") {
       return NextResponse.json({ error: "Period is already closed or locked." }, { status: 400 });
     }

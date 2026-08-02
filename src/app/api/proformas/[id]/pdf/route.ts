@@ -17,6 +17,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const proforma = await auth.store.getProforma(id);
+    // Tenant ownership check
+    if (!proforma) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && proforma.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     const partner = proforma?.partner_id ? await auth.store.getPartner(proforma.partner_id) : null;
     const tenant = await auth.store.getTenant(tenantId);
 

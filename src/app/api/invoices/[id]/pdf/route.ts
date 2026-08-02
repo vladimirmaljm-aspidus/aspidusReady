@@ -17,6 +17,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const invoice = await auth.store.getInvoice(id);
+    // Tenant ownership check
+    if (!invoice) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && invoice.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     const partner = invoice?.partner_id ? await auth.store.getPartner(invoice.partner_id) : null;
     const tenant = await auth.store.getTenant(tenantId);
 

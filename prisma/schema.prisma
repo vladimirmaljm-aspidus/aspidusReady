@@ -62,6 +62,10 @@ model Tenant {
   erpJournalLines     ErpJournalLine[] @relation("JLTenant")
   documentRevisions   DocumentRevision[] @relation("DocRevTenant")
   erpSetting           ErpSetting?
+  letterheads          TenantLetterhead[]
+  seals                TenantSeal[]
+  invoices            Invoice[]
+  proformas           Proforma[]
 }
 
 // ============================================================
@@ -112,6 +116,8 @@ model User {
   notifications       Notification[]
   featureFlagUpdater  TenantFeatureFlags[] @relation("FlagUpdater")
   preferences        UserPreference[]
+  letterheadsCreated  TenantLetterhead[] @relation("LetterheadCreator")
+  sealsCreated        TenantSeal[]       @relation("SealCreator")
 
   @@index([tenant_id])
   @@index([email])
@@ -472,6 +478,7 @@ model EntityNote {
 // ============================================================
 model Invoice {
   id             String   @id @default(cuid())
+  tenant_id      String
   number         String   @unique
   offer_id       String?
   partner_id     String
@@ -492,9 +499,11 @@ model Invoice {
   updated_at     DateTime @updatedAt
 
   // Relations
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
   offer          Offer?   @relation(fields: [offer_id], references: [id])
   partner        Partner  @relation(fields: [partner_id], references: [id])
 
+  @@index([tenant_id])
   @@index([offer_id])
   @@index([partner_id])
   @@index([status])
@@ -506,6 +515,7 @@ model Invoice {
 // ============================================================
 model Proforma {
   id             String   @id @default(cuid())
+  tenant_id      String
   number         String   @unique
   offer_id       String?
   partner_id     String
@@ -527,9 +537,11 @@ model Proforma {
   updated_at     DateTime @updatedAt
 
   // Relations
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id])
   offer          Offer?   @relation(fields: [offer_id], references: [id])
   partner        Partner  @relation(fields: [partner_id], references: [id])
 
+  @@index([tenant_id])
   @@index([offer_id])
   @@index([partner_id])
   @@index([status])
@@ -967,6 +979,10 @@ model DocumentTemplate {
   table_header_color     String   @default("#111827")
   table_border_color     String   @default("#e5e7eb")
   table_stripe           Boolean  @default(true)
+  // Linked branding assets (memorandum + seal)
+  letterhead_id          String?  // ref TenantLetterhead — null = use tenant default letterhead
+  seal_id                String?  // ref TenantSeal — null = use tenant default seal
+  seal_enabled           Boolean  @default(true)  // whether to stamp seal on this template
   // Metadata
   created_by             String?
   created_at             DateTime @default(now())
@@ -975,9 +991,161 @@ model DocumentTemplate {
   // Relations
   tenant                 Tenant   @relation(fields: [tenant_id], references: [id])
   creator                User?    @relation("TemplateCreator", fields: [created_by], references: [id])
+  letterhead             TenantLetterhead? @relation(fields: [letterhead_id], references: [id], onDelete: SetNull)
+  seal                   TenantSeal?       @relation(fields: [seal_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id])
   @@index([type])
+  @@index([is_default])
+  @@index([letterhead_id])
+  @@index([seal_id])
+}
+
+// ============================================================
+// 30b. TenantLetterhead — Memorandum firme (company letterhead)
+// Per-tenant branded letterhead used by all document templates.
+// ============================================================
+model TenantLetterhead {
+  id                        String   @id @default(cuid())
+  tenant_id                 String
+  name                      String   // e.g. "Official Letterhead 2026"
+  is_default                Boolean  @default(false)
+
+  // ── Company identity (overrides Tenant defaults when set) ──
+  company_name              String?
+  company_legal_name        String?
+  company_address_line      String?
+  company_city              String?
+  company_postal_code       String?
+  company_country           String?  // ISO 3166-1 alpha-2
+  company_email             String?
+  company_phone             String?
+  company_website           String?
+  company_vat_number        String?
+  company_tax_id            String?
+  company_registration_number String?
+
+  // ── Bank details (shown in footer) ──
+  bank_name                 String?
+  bank_iban                 String?
+  bank_swift                String?
+  bank_account_holder       String?
+
+  // ── Logo ──
+  logo_url                  String?  // base64 data URL or remote URL
+  logo_position             String   @default("left")  // left | center | right
+  logo_width_mm             Int      @default(40)   // width in mm
+  logo_height_mm            Int      @default(15)   // height in mm
+  logo_lock_aspect          Boolean  @default(true)
+
+  // ── Branding colors ──
+  primary_color             String   @default("#0f766e")
+  accent_color              String   @default("#0d9488")
+  text_color                String   @default("#0f172a")
+  muted_text_color          String   @default("#64748b")
+
+  // ── Page layout ──
+  page_size                 String   @default("A4")  // A4 | Letter
+  margin_top_mm             Int      @default(25)
+  margin_bottom_mm          Int      @default(25)
+  margin_left_mm            Int      @default(20)
+  margin_right_mm           Int      @default(20)
+  header_height_mm          Int      @default(35)
+  footer_height_mm          Int      @default(28)
+
+  // ── Header layout ──
+  header_layout             String   @default("logo-left-info-right")
+  // logo-left-info-right | logo-right-info-left | logo-center | text-only | two-column
+  header_show_logo          Boolean  @default(true)
+  header_show_company_name  Boolean  @default(true)
+  header_show_contact       Boolean  @default(true)
+  header_show_vat           Boolean  @default(false)
+  header_divider            Boolean  @default(true)
+  header_divider_color      String   @default("#e2e8f0")
+  header_custom_html        String?  // advanced: custom HTML header
+
+  // ── Footer layout ──
+  footer_layout             String   @default("bank-contact-tax")
+  // bank-contact-tax | bank-only | contact-only | tax-id-only | custom
+  footer_show_bank_details  Boolean  @default(true)
+  footer_show_contact       Boolean  @default(true)
+  footer_show_tax_id        Boolean  @default(true)
+  footer_show_page_number   Boolean  @default(true)
+  footer_divider            Boolean  @default(true)
+  footer_divider_color      String   @default("#e2e8f0")
+  footer_custom_html        String?  // advanced: custom HTML footer
+  footer_text               String?  // optional small-print line
+
+  // ── Watermark ──
+  watermark_enabled         Boolean  @default(false)
+  watermark_text            String?
+  watermark_color           String   @default("#94a3b8")
+  watermark_opacity         Float    @default(0.08)  // 0.0 – 1.0
+  watermark_rotation        Float    @default(-45)   // degrees
+
+  // ── Typography ──
+  body_font_family          String   @default("Inter, system-ui, sans-serif")
+  body_font_size_pt         Int      @default(11)
+  heading_font_family       String   @default("Inter, system-ui, sans-serif")
+  heading_font_size_pt      Int      @default(16)
+
+  // ── Metadata ──
+  created_by                String?
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  // Relations
+  tenant                    Tenant   @relation(fields: [tenant_id], references: [id])
+  creator                   User?    @relation("LetterheadCreator", fields: [created_by], references: [id])
+  templates                 DocumentTemplate[]
+
+  @@index([tenant_id])
+  @@index([is_default])
+}
+
+// ============================================================
+// 30c. TenantSeal — Zigled (company seal / stamp)
+// Per-tenant seal image applied to documents.
+// ============================================================
+model TenantSeal {
+  id                  String   @id @default(cuid())
+  tenant_id           String
+  name                String   // e.g. "Official Round Seal"
+  is_default          Boolean  @default(false)
+
+  // ── Seal image ──
+  image_url           String   // base64 data URL (PNG with transparency preferred)
+  image_width_mm      Int      @default(35)   // rendered width in mm
+  image_height_mm     Int      @default(35)   // rendered height in mm
+  image_format        String   @default("png")  // png | jpg | svg
+
+  // ── Placement ──
+  position            String   @default("bottom-right")
+  // bottom-right | bottom-left | bottom-center | top-right | top-left | top-center
+  offset_x_mm         Int      @default(0)  // horizontal offset in mm (+ = right)
+  offset_y_mm         Int      @default(0)  // vertical offset in mm (+ = down)
+  opacity             Float    @default(1.0)  // 0.0 – 1.0
+  rotation_deg        Float    @default(0)   // degrees, 0 = upright
+
+  // ── Which document types this seal applies to (JSON array) ──
+  apply_to_types      String   @default("[]")  // e.g. ["offer","invoice","proforma"]; [] = all
+
+  // ── Optional signature line beside seal ──
+  signature_enabled   Boolean  @default(false)
+  signature_label     String?  // e.g. "Authorized signature"
+  signature_name      String?  // e.g. "Vladimir, Director"
+
+  // ── Metadata ──
+  created_by          String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  // Relations
+  tenant              Tenant   @relation(fields: [tenant_id], references: [id])
+  creator             User?    @relation("SealCreator", fields: [created_by], references: [id])
+  templates           DocumentTemplate[]
+
+  @@index([tenant_id])
   @@index([is_default])
 }
 

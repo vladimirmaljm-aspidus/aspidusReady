@@ -841,6 +841,124 @@ export interface DocumentTemplate {
   table_header_color: string;
   table_border_color: string;
   table_stripe: boolean;
+  // Linked branding assets
+  letterhead_id: string | null;
+  seal_id: string | null;
+  seal_enabled: boolean;
+  letterhead?: TenantLetterhead | null;
+  seal?: TenantSeal | null;
+  // Metadata
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
+// TenantLetterhead — Memorandum firme (company letterhead)
+// ============================================================
+export interface TenantLetterhead {
+  id: string;
+  tenant_id: string;
+  name: string;
+  is_default: boolean;
+  // Company identity
+  company_name: string | null;
+  company_legal_name: string | null;
+  company_address_line: string | null;
+  company_city: string | null;
+  company_postal_code: string | null;
+  company_country: string | null;
+  company_email: string | null;
+  company_phone: string | null;
+  company_website: string | null;
+  company_vat_number: string | null;
+  company_tax_id: string | null;
+  company_registration_number: string | null;
+  // Bank details
+  bank_name: string | null;
+  bank_iban: string | null;
+  bank_swift: string | null;
+  bank_account_holder: string | null;
+  // Logo
+  logo_url: string | null;
+  logo_position: "left" | "center" | "right";
+  logo_width_mm: number;
+  logo_height_mm: number;
+  logo_lock_aspect: boolean;
+  // Branding colors
+  primary_color: string;
+  accent_color: string;
+  text_color: string;
+  muted_text_color: string;
+  // Page layout
+  page_size: "A4" | "Letter";
+  margin_top_mm: number;
+  margin_bottom_mm: number;
+  margin_left_mm: number;
+  margin_right_mm: number;
+  header_height_mm: number;
+  footer_height_mm: number;
+  // Header layout
+  header_layout: string;
+  header_show_logo: boolean;
+  header_show_company_name: boolean;
+  header_show_contact: boolean;
+  header_show_vat: boolean;
+  header_divider: boolean;
+  header_divider_color: string;
+  header_custom_html: string | null;
+  // Footer layout
+  footer_layout: string;
+  footer_show_bank_details: boolean;
+  footer_show_contact: boolean;
+  footer_show_tax_id: boolean;
+  footer_show_page_number: boolean;
+  footer_divider: boolean;
+  footer_divider_color: string;
+  footer_custom_html: string | null;
+  footer_text: string | null;
+  // Watermark
+  watermark_enabled: boolean;
+  watermark_text: string | null;
+  watermark_color: string;
+  watermark_opacity: number;
+  watermark_rotation: number;
+  // Typography
+  body_font_family: string;
+  body_font_size_pt: number;
+  heading_font_family: string;
+  heading_font_size_pt: number;
+  // Metadata
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
+// TenantSeal — Zigled (company seal / stamp)
+// ============================================================
+export interface TenantSeal {
+  id: string;
+  tenant_id: string;
+  name: string;
+  is_default: boolean;
+  // Seal image
+  image_url: string;
+  image_width_mm: number;
+  image_height_mm: number;
+  image_format: "png" | "jpg" | "svg";
+  // Placement
+  position: "bottom-right" | "bottom-left" | "bottom-center" | "top-right" | "top-left" | "top-center";
+  offset_x_mm: number;
+  offset_y_mm: number;
+  opacity: number;
+  rotation_deg: number;
+  // Apply to types
+  apply_to_types: string; // JSON array string
+  // Signature
+  signature_enabled: boolean;
+  signature_label: string | null;
+  signature_name: string | null;
   // Metadata
   created_by: string | null;
   created_at: string;

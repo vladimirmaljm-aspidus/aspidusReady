@@ -12,6 +12,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const existing = await auth.store.getErpJournalEntry(id);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Tenant Ownership check
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     if (existing.status !== "posted") {
       return NextResponse.json({ error: "Only posted entries can be reversed." }, { status: 400 });
     }

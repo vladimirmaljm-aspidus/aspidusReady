@@ -17,6 +17,7 @@ import {
   MailQueueEntry,
   Tenant, ProductCatalogEntry, SupplierOffer, TradeCalculation,
   PortalAccess, DocumentTemplate, DocumentVerification, VerificationLog,
+  TenantLetterhead, TenantSeal,
   KycSubmission, KycDocument, PortalRfq,
   TenantFeatureFlags,
   Notification,
@@ -263,7 +264,9 @@ export class PrismaStore implements Store {
   // ─── Auth ───────────────────────────────────────────────────────────────
 
   async getUserByUsername(username: string): Promise<User | null> {
-    const r = await db.user.findUnique({ where: { username } });
+    // username is not @unique in the schema (tenants may share usernames),
+    // so use findFirst instead of findUnique to avoid a Prisma validation error.
+    const r = await db.user.findFirst({ where: { username } });
     return r ? mapUserRow(r) : null;
   }
 
@@ -278,27 +281,31 @@ export class PrismaStore implements Store {
   }
 
   async upsertUser(u: Partial<User> & { id?: string }): Promise<User> {
-    const data: any = {
-      username: u.username,
-      email: u.email,
-      full_name: u.full_name ?? null,
-      role: u.role ?? "staff",
-      permissions: stringifyJSON(u.permissions),
-      password_hash: u.password_hash ?? "",
-      totp_secret: u.totp_secret ?? null,
-      totp_enabled: u.totp_enabled ?? false,
-      locked_until: u.locked_until ? new Date(u.locked_until) : null,
-      failed_attempts: u.failed_attempts ?? 0,
-      last_login_at: u.last_login_at ? new Date(u.last_login_at) : null,
-      last_login_ip: u.last_login_ip ?? null,
-      last_login_country: u.last_login_country ?? null,
-      must_change_password: u.must_change_password ?? false,
-      token_version: u.token_version ?? 1,
-      signature: u.signature ?? null,
-      notif_prefs: stringifyJSON(u.notif_prefs),
-      active: u.active ?? true,
-      tenant_id: u.tenant_id ?? null,
-    };
+    // Only set fields that are explicitly provided. Previously this method
+    // always wrote every column (defaulting missing ones to "" / null / 0),
+    // which clobbered password_hash when callers did partial updates like
+    // { id, failed_attempts, locked_until }. Now undefined fields are skipped.
+    const data: Record<string, unknown> = {};
+    if (u.username !== undefined) data.username = u.username;
+    if (u.email !== undefined) data.email = u.email;
+    if (u.full_name !== undefined) data.full_name = u.full_name;
+    if (u.role !== undefined) data.role = u.role;
+    if (u.permissions !== undefined) data.permissions = stringifyJSON(u.permissions);
+    if (u.password_hash !== undefined) data.password_hash = u.password_hash;
+    if (u.totp_secret !== undefined) data.totp_secret = u.totp_secret;
+    if (u.totp_enabled !== undefined) data.totp_enabled = u.totp_enabled;
+    if (u.locked_until !== undefined) data.locked_until = u.locked_until ? new Date(u.locked_until) : null;
+    if (u.failed_attempts !== undefined) data.failed_attempts = u.failed_attempts;
+    if (u.last_login_at !== undefined) data.last_login_at = u.last_login_at ? new Date(u.last_login_at) : null;
+    if (u.last_login_ip !== undefined) data.last_login_ip = u.last_login_ip;
+    if (u.last_login_country !== undefined) data.last_login_country = u.last_login_country;
+    if (u.must_change_password !== undefined) data.must_change_password = u.must_change_password;
+    if (u.token_version !== undefined) data.token_version = u.token_version;
+    if (u.signature !== undefined) data.signature = u.signature;
+    if (u.notif_prefs !== undefined) data.notif_prefs = stringifyJSON(u.notif_prefs);
+    if (u.active !== undefined) data.active = u.active;
+    if (u.tenant_id !== undefined) data.tenant_id = u.tenant_id;
+
     let r;
     if (u.id) {
       r = await db.user.update({ where: { id: u.id }, data });
@@ -652,8 +659,8 @@ export class PrismaStore implements Store {
 
   // ─── Invoices ───────────────────────────────────────────────────────────
 
-  async listInvoices(_tenantId: string, params?: ListParams): Promise<ListResult<Invoice>> {
-    let where: any = {};
+  async listInvoices(tenantId: string, params?: ListParams): Promise<ListResult<Invoice>> {
+    let where: any = { tenant_id: tenantId };
     if (params?.filters?.status) where.status = params.filters.status;
     if (params?.filters?.partner_id) where.partner_id = params.filters.partner_id;
     if (params?.search) {
@@ -710,8 +717,8 @@ export class PrismaStore implements Store {
 
   // ─── Proformas ──────────────────────────────────────────────────────────
 
-  async listProformas(_tenantId: string, params?: ListParams): Promise<ListResult<Proforma>> {
-    let where: any = {};
+  async listProformas(tenantId: string, params?: ListParams): Promise<ListResult<Proforma>> {
+    let where: any = { tenant_id: tenantId };
     if (params?.filters?.status) where.status = params.filters.status;
     if (params?.search) {
       where.OR = [
@@ -1158,13 +1165,44 @@ export class PrismaStore implements Store {
     const rows = await db.securitySession.findMany({ where, orderBy: { created_at: "desc" } });
     return rows.map((r: any) => ({
       ...r,
+      last_used_at: dateToISO(r.last_used_at),
       expires_at: dateToISO(r.expires_at),
       created_at: dateToISOOrNow(r.created_at),
     }));
   }
 
   async revokeSession(id: string): Promise<void> {
-    await db.securitySession.delete({ where: { id } });
+    await db.securitySession.update({ where: { id }, data: { revoked: true, current: false } });
+  }
+
+  async revokeSessionById(id: string): Promise<void> {
+    await db.securitySession.update({ where: { id }, data: { revoked: true, current: false } });
+  }
+
+  async createSession(s: { user_id: string; ip?: string | null; user_agent?: string | null; country?: string | null; expires_at: string; current?: boolean }): Promise<SecuritySession> {
+    // If current=true, unset any other current sessions for this user first
+    if (s.current) {
+      await db.securitySession.updateMany({ where: { user_id: s.user_id, current: true }, data: { current: false } });
+    }
+    const r = await db.securitySession.create({
+      data: {
+        user_id: s.user_id,
+        ip: s.ip ?? null,
+        user_agent: s.user_agent ?? null,
+        country: s.country ?? null,
+        expires_at: new Date(s.expires_at),
+        current: s.current ?? false,
+        revoked: false,
+        last_used_at: new Date(),
+      },
+    });
+    return { ...r, last_used_at: dateToISO(r.last_used_at), expires_at: dateToISO(r.expires_at), created_at: dateToISOOrNow(r.created_at) };
+  }
+
+  async touchSession(id: string): Promise<void> {
+    try {
+      await db.securitySession.update({ where: { id }, data: { last_used_at: new Date() } });
+    } catch { /* session may not exist — ignore */ }
   }
 
   async listLoginHistory(_tenantId: string, userId?: string, limit?: number): Promise<LoginHistoryEntry[]> {
@@ -1177,9 +1215,25 @@ export class PrismaStore implements Store {
     return rows.map((r: any) => ({ ...r, created_at: dateToISOOrNow(r.created_at) }));
   }
 
+  async recordLoginHistory(e: { user_id: string; username: string; ip?: string | null; user_agent?: string | null; country?: string | null; success: boolean; reason?: string | null }): Promise<LoginHistoryEntry> {
+    const r = await db.loginHistoryEntry.create({
+      data: {
+        user_id: e.user_id,
+        username: e.username,
+        ip: e.ip ?? null,
+        user_agent: e.user_agent ?? null,
+        country: e.country ?? null,
+        success: e.success,
+        reason: e.reason ?? null,
+      },
+    });
+    return { ...r, created_at: dateToISOOrNow(r.created_at) };
+  }
+
   async listKnownIps(_tenantId: string, userId?: string): Promise<KnownIp[]> {
     const where: any = userId ? { user_id: userId } : {};
-    return db.knownIp.findMany({ where, orderBy: { created_at: "desc" } });
+    const rows = await db.knownIp.findMany({ where, orderBy: { last_seen: "desc" } });
+    return rows.map((r: any) => ({ ...r, first_seen: dateToISOOrNow(r.first_seen), last_seen: dateToISOOrNow(r.last_seen) }));
   }
 
   async trustIp(id: string, trusted: boolean): Promise<void> {
@@ -1190,13 +1244,63 @@ export class PrismaStore implements Store {
     await db.knownIp.delete({ where: { id } });
   }
 
+  async upsertKnownIp(ip: { user_id: string; ip: string; country?: string | null; trusted?: boolean }): Promise<KnownIp> {
+    // Find existing by user_id + ip
+    const existing = await db.knownIp.findFirst({ where: { user_id: ip.user_id, ip: ip.ip } });
+    if (existing) {
+      const r = await db.knownIp.update({
+        where: { id: existing.id },
+        data: {
+          last_seen: new Date(),
+          country: ip.country ?? existing.country,
+          trusted: ip.trusted ?? existing.trusted,
+        },
+      });
+      return { ...r, first_seen: dateToISOOrNow(r.first_seen), last_seen: dateToISOOrNow(r.last_seen) };
+    }
+    const r = await db.knownIp.create({
+      data: {
+        user_id: ip.user_id,
+        ip: ip.ip,
+        country: ip.country ?? null,
+        trusted: ip.trusted ?? false,
+      },
+    });
+    return { ...r, first_seen: dateToISOOrNow(r.first_seen), last_seen: dateToISOOrNow(r.last_seen) };
+  }
+
   async listTrustedDevices(_tenantId: string, userId?: string): Promise<TrustedDevice[]> {
     const where: any = userId ? { user_id: userId } : {};
-    return db.trustedDevice.findMany({ where, orderBy: { created_at: "desc" } });
+    const rows = await db.trustedDevice.findMany({ where, orderBy: { created_at: "desc" } });
+    return rows.map((r: any) => ({ ...r, last_used: dateToISOOrNow(r.last_used), created_at: dateToISOOrNow(r.created_at) }));
   }
 
   async revokeTrustedDevice(id: string): Promise<void> {
-    await db.trustedDevice.delete({ where: { id } });
+    await db.trustedDevice.update({ where: { id }, data: { revoked: true } });
+  }
+
+  async revokeTrustedDeviceById(id: string): Promise<void> {
+    await db.trustedDevice.update({ where: { id }, data: { revoked: true } });
+  }
+
+  async upsertTrustedDevice(d: { user_id: string; device_name: string; fingerprint: string; ip?: string | null }): Promise<TrustedDevice> {
+    const existing = await db.trustedDevice.findFirst({ where: { user_id: d.user_id, fingerprint: d.fingerprint } });
+    if (existing) {
+      const r = await db.trustedDevice.update({
+        where: { id: existing.id },
+        data: { last_used: new Date(), ip: d.ip ?? existing.ip, device_name: d.device_name || existing.device_name },
+      });
+      return { ...r, last_used: dateToISOOrNow(r.last_used), created_at: dateToISOOrNow(r.created_at) };
+    }
+    const r = await db.trustedDevice.create({
+      data: {
+        user_id: d.user_id,
+        device_name: d.device_name,
+        fingerprint: d.fingerprint,
+        ip: d.ip ?? null,
+      },
+    });
+    return { ...r, last_used: dateToISOOrNow(r.last_used), created_at: dateToISOOrNow(r.created_at) };
   }
 
   // ─── Mail Queue ─────────────────────────────────────────────────────────
@@ -1551,47 +1655,314 @@ export class PrismaStore implements Store {
     const rows = await db.documentTemplate.findMany({
       where: { tenant_id: tenantId },
       orderBy: { created_at: "desc" },
+      include: { letterhead: true, seal: true },
     });
     return rows.map((r: any) => ({
       ...r,
-      structure: parseJSON(r.structure, null),
       created_at: dateToISOOrNow(r.created_at),
       updated_at: dateToISOOrNow(r.updated_at),
+      letterhead: r.letterhead ? this._mapLetterhead(r.letterhead) : null,
+      seal: r.seal ? this._mapSeal(r.seal) : null,
     }));
   }
 
   async getDocumentTemplate(id: string): Promise<DocumentTemplate | null> {
-    const r = await db.documentTemplate.findUnique({ where: { id } });
-    return r ? { ...r, structure: parseJSON(r.structure, null), created_at: dateToISOOrNow(r.created_at), updated_at: dateToISOOrNow(r.updated_at) } : null;
+    const r = await db.documentTemplate.findUnique({ where: { id }, include: { letterhead: true, seal: true } });
+    if (!r) return null;
+    return {
+      ...r,
+      created_at: dateToISOOrNow(r.created_at),
+      updated_at: dateToISOOrNow(r.updated_at),
+      letterhead: r.letterhead ? this._mapLetterhead(r.letterhead) : null,
+      seal: r.seal ? this._mapSeal(r.seal) : null,
+    };
   }
 
   async getDefaultDocumentTemplate(tenantId: string, type: string): Promise<DocumentTemplate | null> {
     const r = await db.documentTemplate.findFirst({
       where: { tenant_id: tenantId, type, is_default: true },
+      include: { letterhead: true, seal: true },
     });
-    return r ? { ...r, structure: parseJSON(r.structure, null), created_at: dateToISOOrNow(r.created_at), updated_at: dateToISOOrNow(r.updated_at) } : null;
+    if (!r) return null;
+    return {
+      ...r,
+      created_at: dateToISOOrNow(r.created_at),
+      updated_at: dateToISOOrNow(r.updated_at),
+      letterhead: r.letterhead ? this._mapLetterhead(r.letterhead) : null,
+      seal: r.seal ? this._mapSeal(r.seal) : null,
+    };
   }
 
   async upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate> {
+    // If setting as default, unset other defaults of the same type for this tenant
+    if (t.is_default && t.tenant_id && t.type && !t.id) {
+      await db.documentTemplate.updateMany({
+        where: { tenant_id: t.tenant_id, type: t.type, is_default: true },
+        data: { is_default: false },
+      });
+    } else if (t.is_default && t.id) {
+      const existing = await db.documentTemplate.findUnique({ where: { id: t.id } });
+      if (existing) {
+        await db.documentTemplate.updateMany({
+          where: { tenant_id: existing.tenant_id, type: existing.type, is_default: true, id: { not: t.id } },
+          data: { is_default: false },
+        });
+      }
+    }
+
     const data: any = {
-      tenant_id: t.tenant_id ?? "",
-      name: t.name ?? "",
-      type: t.type ?? "offer",
-      structure: stringifyJSON(t.structure) ?? "{}",
-      is_default: t.is_default ?? false,
-      created_by: t.created_by ?? null,
+      tenant_id: t.tenant_id,
+      name: t.name,
+      type: t.type,
+      is_default: t.is_default,
+      created_by: t.created_by,
+      // Page layout
+      page_size: t.page_size,
+      page_margin_top: t.page_margin_top,
+      page_margin_bottom: t.page_margin_bottom,
+      page_margin_left: t.page_margin_left,
+      page_margin_right: t.page_margin_right,
+      // Header
+      header_enabled: t.header_enabled,
+      header_height: t.header_height,
+      header_content: t.header_content,
+      header_show_logo: t.header_show_logo,
+      header_show_company_name: t.header_show_company_name,
+      header_show_contact: t.header_show_contact,
+      // Footer
+      footer_enabled: t.footer_enabled,
+      footer_height: t.footer_height,
+      footer_content: t.footer_content,
+      footer_show_page_number: t.footer_show_page_number,
+      footer_show_bank_details: t.footer_show_bank_details,
+      footer_show_tax_id: t.footer_show_tax_id,
+      // Body styling
+      body_font_family: t.body_font_family,
+      body_font_size: t.body_font_size,
+      body_line_height: t.body_line_height,
+      primary_color: t.primary_color,
+      accent_color: t.accent_color,
+      // Table styling
+      table_header_bg: t.table_header_bg,
+      table_header_color: t.table_header_color,
+      table_border_color: t.table_border_color,
+      table_stripe: t.table_stripe,
+      // Branding links
+      letterhead_id: t.letterhead_id === undefined ? undefined : t.letterhead_id,
+      seal_id: t.seal_id === undefined ? undefined : t.seal_id,
+      seal_enabled: t.seal_enabled,
     };
+    // Strip undefined values so Prisma doesn't overwrite with null on update
+    Object.keys(data).forEach((k) => data[k] === undefined && delete data[k]);
+
     let r;
     if (t.id) {
-      r = await db.documentTemplate.update({ where: { id: t.id }, data });
+      r = await db.documentTemplate.update({ where: { id: t.id }, data, include: { letterhead: true, seal: true } });
     } else {
-      r = await db.documentTemplate.create({ data });
+      r = await db.documentTemplate.create({ data, include: { letterhead: true, seal: true } });
     }
-    return { ...r, structure: parseJSON(r.structure, null), created_at: dateToISOOrNow(r.created_at), updated_at: dateToISOOrNow(r.updated_at) };
+    return {
+      ...r,
+      created_at: dateToISOOrNow(r.created_at),
+      updated_at: dateToISOOrNow(r.updated_at),
+      letterhead: r.letterhead ? this._mapLetterhead(r.letterhead) : null,
+      seal: r.seal ? this._mapSeal(r.seal) : null,
+    };
   }
 
   async deleteDocumentTemplate(id: string): Promise<void> {
     await db.documentTemplate.delete({ where: { id } });
+  }
+
+  // ─── Tenant Letterheads (Memorandum firme) ──────────────────────────────
+
+  _mapLetterhead(r: any): TenantLetterhead {
+    return {
+      ...r,
+      created_at: dateToISOOrNow(r.created_at),
+      updated_at: dateToISOOrNow(r.updated_at),
+    };
+  }
+
+  async listLetterheads(tenantId: string): Promise<TenantLetterhead[]> {
+    const rows = await db.tenantLetterhead.findMany({
+      where: { tenant_id: tenantId },
+      orderBy: [{ is_default: "desc" }, { created_at: "desc" }],
+    });
+    return rows.map((r: any) => this._mapLetterhead(r));
+  }
+
+  async getLetterhead(id: string): Promise<TenantLetterhead | null> {
+    const r = await db.tenantLetterhead.findUnique({ where: { id } });
+    return r ? this._mapLetterhead(r) : null;
+  }
+
+  async getDefaultLetterhead(tenantId: string): Promise<TenantLetterhead | null> {
+    const r = await db.tenantLetterhead.findFirst({
+      where: { tenant_id: tenantId, is_default: true },
+    });
+    return r ? this._mapLetterhead(r) : null;
+  }
+
+  async upsertLetterhead(l: Partial<TenantLetterhead> & { id?: string; tenant_id: string }): Promise<TenantLetterhead> {
+    // If setting as default, unset other defaults for this tenant
+    if (l.is_default) {
+      await db.tenantLetterhead.updateMany({
+        where: { tenant_id: l.tenant_id, is_default: true, id: l.id ? { not: l.id } : undefined },
+        data: { is_default: false },
+      });
+    }
+    const data: any = {
+      tenant_id: l.tenant_id,
+      name: l.name,
+      is_default: l.is_default,
+      company_name: l.company_name,
+      company_legal_name: l.company_legal_name,
+      company_address_line: l.company_address_line,
+      company_city: l.company_city,
+      company_postal_code: l.company_postal_code,
+      company_country: l.company_country,
+      company_email: l.company_email,
+      company_phone: l.company_phone,
+      company_website: l.company_website,
+      company_vat_number: l.company_vat_number,
+      company_tax_id: l.company_tax_id,
+      company_registration_number: l.company_registration_number,
+      bank_name: l.bank_name,
+      bank_iban: l.bank_iban,
+      bank_swift: l.bank_swift,
+      bank_account_holder: l.bank_account_holder,
+      logo_url: l.logo_url,
+      logo_position: l.logo_position,
+      logo_width_mm: l.logo_width_mm,
+      logo_height_mm: l.logo_height_mm,
+      logo_lock_aspect: l.logo_lock_aspect,
+      primary_color: l.primary_color,
+      accent_color: l.accent_color,
+      text_color: l.text_color,
+      muted_text_color: l.muted_text_color,
+      page_size: l.page_size,
+      margin_top_mm: l.margin_top_mm,
+      margin_bottom_mm: l.margin_bottom_mm,
+      margin_left_mm: l.margin_left_mm,
+      margin_right_mm: l.margin_right_mm,
+      header_height_mm: l.header_height_mm,
+      footer_height_mm: l.footer_height_mm,
+      header_layout: l.header_layout,
+      header_show_logo: l.header_show_logo,
+      header_show_company_name: l.header_show_company_name,
+      header_show_contact: l.header_show_contact,
+      header_show_vat: l.header_show_vat,
+      header_divider: l.header_divider,
+      header_divider_color: l.header_divider_color,
+      header_custom_html: l.header_custom_html,
+      footer_layout: l.footer_layout,
+      footer_show_bank_details: l.footer_show_bank_details,
+      footer_show_contact: l.footer_show_contact,
+      footer_show_tax_id: l.footer_show_tax_id,
+      footer_show_page_number: l.footer_show_page_number,
+      footer_divider: l.footer_divider,
+      footer_divider_color: l.footer_divider_color,
+      footer_custom_html: l.footer_custom_html,
+      footer_text: l.footer_text,
+      watermark_enabled: l.watermark_enabled,
+      watermark_text: l.watermark_text,
+      watermark_color: l.watermark_color,
+      watermark_opacity: l.watermark_opacity,
+      watermark_rotation: l.watermark_rotation,
+      body_font_family: l.body_font_family,
+      body_font_size_pt: l.body_font_size_pt,
+      heading_font_family: l.heading_font_family,
+      heading_font_size_pt: l.heading_font_size_pt,
+      created_by: l.created_by,
+    };
+    Object.keys(data).forEach((k) => data[k] === undefined && delete data[k]);
+
+    let r;
+    if (l.id) {
+      r = await db.tenantLetterhead.update({ where: { id: l.id }, data });
+    } else {
+      r = await db.tenantLetterhead.create({ data });
+    }
+    return this._mapLetterhead(r);
+  }
+
+  async deleteLetterhead(id: string): Promise<void> {
+    // Unlink templates that reference this letterhead, then delete
+    await db.documentTemplate.updateMany({ where: { letterhead_id: id }, data: { letterhead_id: null } });
+    await db.tenantLetterhead.delete({ where: { id } });
+  }
+
+  // ─── Tenant Seals (Zigled) ──────────────────────────────────────────────
+
+  _mapSeal(r: any): TenantSeal {
+    return {
+      ...r,
+      created_at: dateToISOOrNow(r.created_at),
+      updated_at: dateToISOOrNow(r.updated_at),
+    };
+  }
+
+  async listSeals(tenantId: string): Promise<TenantSeal[]> {
+    const rows = await db.tenantSeal.findMany({
+      where: { tenant_id: tenantId },
+      orderBy: [{ is_default: "desc" }, { created_at: "desc" }],
+    });
+    return rows.map((r: any) => this._mapSeal(r));
+  }
+
+  async getSeal(id: string): Promise<TenantSeal | null> {
+    const r = await db.tenantSeal.findUnique({ where: { id } });
+    return r ? this._mapSeal(r) : null;
+  }
+
+  async getDefaultSeal(tenantId: string): Promise<TenantSeal | null> {
+    const r = await db.tenantSeal.findFirst({
+      where: { tenant_id: tenantId, is_default: true },
+    });
+    return r ? this._mapSeal(r) : null;
+  }
+
+  async upsertSeal(s: Partial<TenantSeal> & { id?: string; tenant_id: string }): Promise<TenantSeal> {
+    if (s.is_default) {
+      await db.tenantSeal.updateMany({
+        where: { tenant_id: s.tenant_id, is_default: true, id: s.id ? { not: s.id } : undefined },
+        data: { is_default: false },
+      });
+    }
+    const data: any = {
+      tenant_id: s.tenant_id,
+      name: s.name,
+      is_default: s.is_default,
+      image_url: s.image_url,
+      image_width_mm: s.image_width_mm,
+      image_height_mm: s.image_height_mm,
+      image_format: s.image_format,
+      position: s.position,
+      offset_x_mm: s.offset_x_mm,
+      offset_y_mm: s.offset_y_mm,
+      opacity: s.opacity,
+      rotation_deg: s.rotation_deg,
+      apply_to_types: s.apply_to_types,
+      signature_enabled: s.signature_enabled,
+      signature_label: s.signature_label,
+      signature_name: s.signature_name,
+      created_by: s.created_by,
+    };
+    Object.keys(data).forEach((k) => data[k] === undefined && delete data[k]);
+
+    let r;
+    if (s.id) {
+      r = await db.tenantSeal.update({ where: { id: s.id }, data });
+    } else {
+      r = await db.tenantSeal.create({ data });
+    }
+    return this._mapSeal(r);
+  }
+
+  async deleteSeal(id: string): Promise<void> {
+    await db.documentTemplate.updateMany({ where: { seal_id: id }, data: { seal_id: null } });
+    await db.tenantSeal.delete({ where: { id } });
   }
 
   // ─── Document Verification ──────────────────────────────────────────────
@@ -1881,16 +2252,22 @@ export class PrismaStore implements Store {
 
   async getInsights(tenantId?: string): Promise<DashboardInsights> {
     // Compute dashboard insights from the database
+    // Note: Deal and Offer don't have direct tenant_id — filter through Partner relation.
+    // Invoice and Partner have direct tenant_id.
+    const dealFilter = tenantId ? { partner: { tenant_id: tenantId } } : {};
+    const offerFilter = tenantId ? { partner: { tenant_id: tenantId } } : {};
+    const invoiceFilter = tenantId ? { tenant_id: tenantId } : {};
+    const partnerFilter = tenantId ? { tenant_id: tenantId } : {};
     const [dealCount, activeDeals, wonDeals, lostDeals, offerCount, pendingOffers, invoiceCount, overdueInvoices, partnerCount, productCount, recentAudit] = await Promise.all([
-      db.deal.count({ where: tenantId ? { tenant_id: tenantId } : {} }),
-      db.deal.count({ where: { stage: { in: ["lead", "qualified", "proposal", "negotiation"] }, ...(tenantId ? { tenant_id: tenantId } : {}) } }),
-      db.deal.count({ where: { stage: "won", ...(tenantId ? { tenant_id: tenantId } : {}) } }),
-      db.deal.count({ where: { stage: "lost", ...(tenantId ? { tenant_id: tenantId } : {}) } }),
-      db.offer.count({ where: tenantId ? { tenant_id: tenantId } : {} }),
-      db.offer.count({ where: { status: { in: ["draft", "sent"] }, ...(tenantId ? { tenant_id: tenantId } : {}) } }),
-      db.invoice.count({ where: tenantId ? { tenant_id: tenantId } : {} }),
-      db.invoice.count({ where: { status: "overdue", ...(tenantId ? { tenant_id: tenantId } : {}) } }),
-      db.partner.count({ where: tenantId ? { tenant_id: tenantId } : {} }),
+      db.deal.count({ where: dealFilter }),
+      db.deal.count({ where: { stage: { in: ["lead", "qualified", "proposal", "negotiation"] }, ...dealFilter } }),
+      db.deal.count({ where: { stage: "won", ...dealFilter } }),
+      db.deal.count({ where: { stage: "lost", ...dealFilter } }),
+      db.offer.count({ where: offerFilter }),
+      db.offer.count({ where: { status: { in: ["draft", "sent"] }, ...offerFilter } }),
+      db.invoice.count({ where: invoiceFilter }),
+      db.invoice.count({ where: { status: "overdue", ...invoiceFilter } }),
+      db.partner.count({ where: partnerFilter }),
       db.product.count({}),
       db.auditLog.findMany({
         where: tenantId ? {} : {},
@@ -1900,16 +2277,16 @@ export class PrismaStore implements Store {
     ]);
 
     // Get total deal value
-    const deals = await db.deal.findMany({ where: tenantId ? { tenant_id: tenantId } : {} });
+    const deals = await db.deal.findMany({ where: dealFilter });
     const totalDealValue = deals.reduce((sum, d) => sum + (d.value || 0), 0);
     const wonValue = deals.filter(d => d.stage === "won").reduce((sum, d) => sum + (d.value || 0), 0);
 
     // Get offers with totals
-    const offers = await db.offer.findMany({ where: tenantId ? { tenant_id: tenantId } : {} });
+    const offers = await db.offer.findMany({ where: offerFilter });
     const totalOfferValue = offers.reduce((sum, o) => sum + (o.total || 0), 0);
 
     // Get invoices
-    const invoices = await db.invoice.findMany({ where: tenantId ? { tenant_id: tenantId } : {} });
+    const invoices = await db.invoice.findMany({ where: invoiceFilter });
     const totalInvoiceValue = invoices.reduce((sum, i) => sum + (i.total || 0), 0);
     const paidInvoiceValue = invoices.filter(i => i.status === "paid").reduce((sum, i) => sum + (i.total || 0), 0);
 
@@ -1919,35 +2296,33 @@ export class PrismaStore implements Store {
       stageDistribution[d.stage] = (stageDistribution[d.stage] || 0) + 1;
     }
 
-    // Deal pipeline
-    const pipeline = Object.entries(stageDistribution).map(([stage, count]) => ({
-      stage: stage as DealStage,
-      count,
+    // Deal pipeline — ensure all stages present (matches DashboardInsights.deals_by_stage)
+    const order: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
+    const deals_by_stage = order.map((stage) => ({
+      stage,
+      count: stageDistribution[stage] || 0,
       value: deals.filter(d => d.stage === stage).reduce((s, d) => s + (d.value || 0), 0),
     }));
 
     return {
-      total_deals: dealCount,
-      active_deals: activeDeals,
-      won_deals: wonDeals,
-      lost_deals: lostDeals,
-      total_deal_value: totalDealValue,
-      won_value: wonValue,
-      win_rate: dealCount > 0 ? Math.round((wonDeals / dealCount) * 100) : 0,
-      total_offers: offerCount,
-      pending_offers: pendingOffers,
-      total_offer_value: totalOfferValue,
-      total_invoices: invoiceCount,
-      overdue_invoices: overdueInvoices,
-      total_invoice_value: totalInvoiceValue,
-      paid_invoice_value: paidInvoiceValue,
-      total_partners: partnerCount,
-      total_products: productCount,
-      pipeline,
+      kpis: {
+        partners_total: partnerCount,
+        partners_active: partnerCount,
+        deals_open: activeDeals,
+        deals_won_value: wonValue,
+        pipeline_value: totalDealValue - wonValue,
+        offers_pending: pendingOffers,
+        low_stock_count: 0,
+        invoices_outstanding: invoiceCount,
+        inventory_movements_30d: 0,
+      },
+      deals_by_stage,
+      offers_last_30d: [],
+      revenue_last_30d: [],
       recent_activity: recentAudit.map(mapAuditLogRow),
-      stage_distribution: stageDistribution,
-      monthly_revenue: [],
-    };
+      top_partners: [],
+      low_stock_products: [],
+    } as DashboardInsights;
   }
 
   // ─── ERP stubs (not yet implemented for Prisma) ──────────────────────────

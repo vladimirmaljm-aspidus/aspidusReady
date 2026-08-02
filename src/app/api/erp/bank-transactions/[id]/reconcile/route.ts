@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAdmin, audit } from "@/lib/api/helpers";
+import { requireAdmin, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -10,6 +10,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   try {
+    // Tenant Ownership check
+    const all = await auth.store.listErpBankTransactions(auth.tenantId ?? "", undefined, { limit: 100000 });
+    const existing = all.items.find((t) => t.id === id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+
     const body = await req.json();
     if (!body.journal_entry_id) {
       return NextResponse.json({ error: "journal_entry_id is required." }, { status: 400 });

@@ -24,6 +24,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!proforma) {
       return NextResponse.json({ error: "Proforma not found." }, { status: 404 });
     }
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && proforma.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Proforma not found." }, { status: 404 });
+    }
 
     // Fetch partner for email info
     const partner = proforma.partner_id ? await auth.store.getPartner(proforma.partner_id) : null;

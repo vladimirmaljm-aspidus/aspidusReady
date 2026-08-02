@@ -15,6 +15,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const access = await auth.store.getPortalAccessById(id);
   if (!access) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // Tenant ownership check
+  if (!auth.isSuperAdmin && access.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   if (!access.portal_email) return NextResponse.json({ error: "No portal email set." }, { status: 400 });
 
   // Ensure status is "invited"

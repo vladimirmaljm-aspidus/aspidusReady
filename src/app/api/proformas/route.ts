@@ -23,6 +23,15 @@ export async function GET(req: NextRequest) {
     const partner_id = url.searchParams.get("partner_id") || undefined;
     const status = url.searchParams.get("status") || undefined;
     const result = await auth.store.listProformas(tid!, { search, filters: { partner_id, status } });
+    // Tenant isolation: PrismaStore.listProformas ignores _tenantId, so we
+    // post-filter for non-super_admin (and for API keys, which are scoped to
+    // their tenant).
+    const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
+    if (shouldFilter && auth.tenantId) {
+      const before = result.items.length;
+      result.items = result.items.filter((p) => p.tenant_id === auth.tenantId);
+      result.total = result.total - (before - result.items.length);
+    }
     return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });

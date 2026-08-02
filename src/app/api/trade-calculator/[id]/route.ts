@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
 import { TradeCostLine } from "@/lib/supabase/types";
 import { TRADE_COST_TYPES } from "@/lib/data/reference";
 
@@ -11,6 +11,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const item = await auth.store.getTradeCalculation(id);
   if (!item) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
+  if ("user" in auth && !auth.isSuperAdmin && (item as any).tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   return NextResponse.json(item);
 }
 
@@ -27,11 +31,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const existing = await auth.store.getTradeCalculation(id);
   if (!existing) return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
+  // Tenant ownership check (for session auth)
+  if ("user" in auth && !auth.isSuperAdmin && (existing as any).tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
+  }
 
   try {
     const body = await req.json();
     body.id = id;
-    body.tenant_id = tenantId;
+    // Preserve the entity's tenant_id (regular users cannot move it to another tenant)
+    body.tenant_id = (existing as any).tenant_id || tenantId;
 
     // Compute totals from cost lines
     const qty = body.quantity || (existing as any).quantity || 0;
@@ -79,6 +88,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  // Tenant ownership check before delete
+  const existing = await auth.store.getTradeCalculation(id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if ("user" in auth && !auth.isSuperAdmin && (existing as any).tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   await auth.store.deleteTradeCalculation(id);
   const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
   await audit(auth.store, auditUser, req, "trade_calc.delete", "trade_calculation", id);

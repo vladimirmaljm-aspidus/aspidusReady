@@ -10,8 +10,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const { id } = await params;
+  // Tenant ownership check
+  const existing = await auth.store.getPortalRfq(id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   const body = await req.json();
-  const updated = await auth.store.upsertPortalRfq({ ...body, id });
+  const updated = await auth.store.upsertPortalRfq({ ...body, id, tenant_id: existing.tenant_id });
   await audit(auth.store, auth.user, req, "portal_rfq.update", "portal_rfq", id, { status: updated.status });
   return NextResponse.json(updated);
 }
@@ -23,6 +29,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const { id } = await params;
+  const existing = await auth.store.getPortalRfq(id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   await auth.store.deletePortalRfq(id);
   await audit(auth.store, auth.user, req, "portal_rfq.delete", "portal_rfq", id);
   return NextResponse.json({ ok: true });

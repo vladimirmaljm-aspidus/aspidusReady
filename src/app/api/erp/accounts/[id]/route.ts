@@ -12,6 +12,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const account = await auth.store.getErpAccount(id);
     if (!account) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && account.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     return NextResponse.json(account);
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -25,8 +29,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   try {
+    // Tenant ownership check
+    const existing = await auth.store.getErpAccount(id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     const body = await req.json();
-    const updated = await auth.store.upsertErpAccount({ ...body, id });
+    const updated = await auth.store.upsertErpAccount({ ...body, id, tenant_id: existing.tenant_id });
     await audit(auth.store, auth.user, req, "erp_account.update", "erp_account", id, {
       code: updated.code,
       name: updated.name,
@@ -46,6 +56,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const account = await auth.store.getErpAccount(id);
     if (!account) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && account.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     if (account.is_system) {
       return NextResponse.json({ error: "Cannot delete system account." }, { status: 403 });
     }

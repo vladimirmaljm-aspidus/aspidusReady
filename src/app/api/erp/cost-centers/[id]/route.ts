@@ -10,6 +10,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const { id } = await params;
   try {
+    // Tenant Ownership check
+    const all = await auth.store.listErpCostCenters(auth.tenantId ?? "", { limit: 100000 });
+    const existing = all.items.find((c) => c.id === id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     await auth.store.deleteErpCostCenter(id);
     await audit(auth.store, auth.user, req, "cost_center.delete", "erp_cost_center", id);
     return NextResponse.json({ ok: true });

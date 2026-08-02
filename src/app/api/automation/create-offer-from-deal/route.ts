@@ -42,6 +42,10 @@ export async function POST(req: NextRequest) {
     if (!deal) {
       return NextResponse.json({ error: "Deal not found." }, { status: 404 });
     }
+    // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
+    if ("user" in auth && !auth.isSuperAdmin && deal.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Deal not found." }, { status: 404 });
+    }
 
     // 2. Fetch partner data for auto-fill
     const partner = deal.partner_id ? await store.getPartner(deal.partner_id) : null;

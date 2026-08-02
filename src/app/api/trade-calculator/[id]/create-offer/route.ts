@@ -32,6 +32,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const calc = await auth.store.getTradeCalculation(id);
   if (!calc) return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
+  // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
+  if ("user" in auth && !auth.isSuperAdmin && (calc as any).tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
+  }
 
   let body: {
     partner_id?: string;

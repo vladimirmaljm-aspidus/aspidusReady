@@ -23,6 +23,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const u = await auth.store.getUserById(id);
     if (!u) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Tenant ownership check: regular users can only see users in their own tenant.
+    // Super_admin can see any user. Also hide super_admin accounts from non-super_admins.
+    if (!auth.isSuperAdmin) {
+      if (u.role === "super_admin" || u.tenant_id !== auth.tenantId) {
+        return NextResponse.json({ error: "Not found." }, { status: 404 });
+      }
+    }
     const { password_hash, totp_secret, ...safe } = u;
     return NextResponse.json(safe);
   } catch (error: any) {
@@ -34,20 +41,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-    if (auth.user.role !== "admin" && auth.user.id !== req.url.split("/").slice(-2, -1)[0]) {
-      // non-admins can edit only themselves
-      if (auth.user.role !== "admin") {
-        return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-      }
-    }
     const { id } = await params;
     const existing = await auth.store.getUserById(id);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+
+    // Tenant ownership check:
+    // - Super_admin can edit any user.
+    // - Regular admins can only edit users in their own tenant (and never super_admin accounts).
+    // - Regular non-admin users can only edit themselves.
+    if (!auth.isSuperAdmin) {
+      if (existing.role === "super_admin" || existing.tenant_id !== auth.tenantId) {
+        return NextResponse.json({ error: "Not found." }, { status: 404 });
+      }
+      if (auth.user.role !== "admin" && auth.user.id !== id) {
+        return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+      }
+    }
+
     const body = await req.json();
 
     // Prevent more than 2 admins per tenant when promoting to admin
     if (body.role === "admin" && existing.role !== "admin") {
-      const existingUsers = await auth.store.listUsers(auth.tenantId!);
+      const existingUsers = await auth.store.listUsers(existing.tenant_id);
       const adminCount = existingUsers.filter(u => u.role === "admin" && u.active).length;
       if (adminCount >= 2) {
         return NextResponse.json({ error: "Maximum 2 admins allowed per company. Remove an existing admin first." }, { status: 400 });
@@ -56,7 +71,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Prevent demoting the last admin
     if (existing.role === "admin" && body.role && body.role !== "admin") {
-      const users = await auth.store.listUsers(auth.tenantId!);
+      const users = await auth.store.listUsers(existing.tenant_id);
       const adminCount = users.filter(u => u.role === "admin" && u.active && u.id !== existing.id).length;
       if (adminCount < 1) {
         return NextResponse.json({ error: "Cannot demote the last admin. Promote another user first." }, { status: 400 });
@@ -68,7 +83,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       delete body.password;
       body.must_change_password = false;
     }
-    const updated = await auth.store.upsertUser({ ...whitelistUserFields(body), id });
+    // Preserve the user's tenant_id (regular users/admins cannot move users to another tenant)
+    const whitelisted = whitelistUserFields(body);
+    delete whitelisted.tenant_id;
+    const updated = await auth.store.upsertUser({ ...whitelisted, id });
     await audit(auth.store, auth.user, req, "user.update", "user", id, { username: updated.username });
     const { password_hash, totp_secret, ...safe } = updated;
     return NextResponse.json(safe);
@@ -81,7 +99,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-    if (auth.user.role !== "admin") {
+    if (auth.user.role !== "admin" && !auth.isSuperAdmin) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
     const { id } = await params;
@@ -91,9 +109,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const existing = await auth.store.getUserById(id);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
+    // Tenant Ownership check
+    if (!auth.isSuperAdmin) {
+      if (existing.role === "super_admin" || existing.tenant_id !== auth.tenantId) {
+        return NextResponse.json({ error: "Not found." }, { status: 404 });
+      }
+    }
+
     // Prevent deleting the last admin
     if (existing.role === "admin") {
-      const users = await auth.store.listUsers(auth.tenantId!);
+      const users = await auth.store.listUsers(existing.tenant_id);
       const adminCount = users.filter(u => u.role === "admin" && u.active && u.id !== existing.id).length;
       if (adminCount < 1) {
         return NextResponse.json({ error: "Cannot delete the last admin." }, { status: 400 });

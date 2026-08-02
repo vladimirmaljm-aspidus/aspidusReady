@@ -24,6 +24,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!offer) {
       return NextResponse.json({ error: "Offer not found." }, { status: 404 });
     }
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    }
 
     // Fetch partner for email info
     const partner = offer.partner_id ? await auth.store.getPartner(offer.partner_id) : null;

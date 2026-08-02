@@ -46,6 +46,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   try {
+    // Tenant ownership check
+    const existing = await auth.store.getPortalAccessById(id);
+    if (!existing) return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    }
     const updated = await auth.store.upsertPortalAccess({ id, ...update });
     await audit(auth.store, auth.user, req, "portal_access.permissions_update", "portal_access", id, update);
 

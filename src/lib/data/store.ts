@@ -13,6 +13,7 @@ import {
   MailQueueEntry,
   Tenant, ProductCatalogEntry, SupplierOffer, TradeCalculation,
   PortalAccess, DocumentTemplate, DocumentVerification, VerificationLog,
+  TenantLetterhead, TenantSeal,
   KycSubmission, KycDocument, PortalRfq,
   TenantFeatureFlags,
   Notification, NotificationType,
@@ -196,6 +197,29 @@ export interface Store {
   getDefaultDocumentTemplate(tenantId: string, type: string): Promise<DocumentTemplate | null>;
   upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate>;
   deleteDocumentTemplate(id: string): Promise<void>;
+
+  // ---- tenant letterheads (memorandum firme) ----
+  listLetterheads(tenantId: string): Promise<TenantLetterhead[]>;
+  getLetterhead(id: string): Promise<TenantLetterhead | null>;
+  getDefaultLetterhead(tenantId: string): Promise<TenantLetterhead | null>;
+  upsertLetterhead(l: Partial<TenantLetterhead> & { id?: string; tenant_id: string }): Promise<TenantLetterhead>;
+  deleteLetterhead(id: string): Promise<void>;
+
+  // ---- tenant seals (zigled) ----
+  listSeals(tenantId: string): Promise<TenantSeal[]>;
+  getSeal(id: string): Promise<TenantSeal | null>;
+  getDefaultSeal(tenantId: string): Promise<TenantSeal | null>;
+  upsertSeal(s: Partial<TenantSeal> & { id?: string; tenant_id: string }): Promise<TenantSeal>;
+  deleteSeal(id: string): Promise<void>;
+
+  // ---- security (write methods) ----
+  createSession(s: { user_id: string; ip?: string | null; user_agent?: string | null; country?: string | null; expires_at: string; current?: boolean }): Promise<SecuritySession>;
+  revokeSessionById(id: string): Promise<void>;
+  touchSession(id: string): Promise<void>;
+  recordLoginHistory(e: { user_id: string; username: string; ip?: string | null; user_agent?: string | null; country?: string | null; success: boolean; reason?: string | null }): Promise<LoginHistoryEntry>;
+  upsertKnownIp(ip: { user_id: string; ip: string; country?: string | null; trusted?: boolean }): Promise<KnownIp>;
+  upsertTrustedDevice(d: { user_id: string; device_name: string; fingerprint: string; ip?: string | null }): Promise<TrustedDevice>;
+  revokeTrustedDeviceById(id: string): Promise<void>;
 
   // ---- document verification ----
   createDocumentVerification(v: Omit<DocumentVerification, "id" | "created_at" | "verification_count" | "last_verified_at" | "last_verified_ip" | "status"> & { status?: string }): Promise<DocumentVerification>;

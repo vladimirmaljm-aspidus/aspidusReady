@@ -18,6 +18,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     // Fetch the offer to build a professional filename
     const offer = await auth.store.getOffer(id);
+    // Tenant ownership check
+    if (!offer) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
     const partner = offer?.partner_id ? await auth.store.getPartner(offer.partner_id) : null;
     const tenant = await auth.store.getTenant(tenantId);
 

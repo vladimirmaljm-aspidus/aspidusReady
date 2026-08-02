@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
     if (!rfq) {
       return NextResponse.json({ error: "Portal RFQ not found." }, { status: 404 });
     }
+    // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
+    if ("user" in auth && !auth.isSuperAdmin && rfq.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Portal RFQ not found." }, { status: 404 });
+    }
 
     // 2. Fetch partner data for auto-fill
     const partner = rfq.partner_id ? await store.getPartner(rfq.partner_id) : null;

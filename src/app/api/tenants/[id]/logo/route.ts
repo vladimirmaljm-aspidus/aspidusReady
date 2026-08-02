@@ -12,6 +12,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const { id } = await params;
+  // Tenant ownership check: a tenant admin can only upload a logo for their own tenant.
+  // Super_admin can upload for any tenant.
+  if (!auth.isSuperAdmin && id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
 
   const formData = await req.formData();
   const file = formData.get("logo") as File | null;

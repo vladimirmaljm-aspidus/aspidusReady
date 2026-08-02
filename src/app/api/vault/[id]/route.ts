@@ -7,6 +7,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  // Tenant ownership check: listVault ignores tenantId in the store,
+  // so we fetch all and filter for non-super_admin.
+  const all = await auth.store.listVault(auth.tenantId ?? "", { limit: 100000 });
+  const existing = all.items.find((v) => v.id === id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   await auth.store.deleteVaultSecret(id);
   await audit(auth.store, auth.user, req, "vault.delete", "vault_secret", id);
   return NextResponse.json({ ok: true });

@@ -30,6 +30,15 @@ export async function GET(req: NextRequest) {
       search, limit, offset,
       filters: { status, type },
     });
+    // Tenant isolation: PrismaStore.listPartners ignores _tenantId, so we
+    // post-filter for non-super_admin (and for API keys, which are scoped to
+    // their tenant).
+    const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
+    if (shouldFilter && auth.tenantId) {
+      const before = result.items.length;
+      result.items = result.items.filter((p) => p.tenant_id === auth.tenantId);
+      result.total = result.total - (before - result.items.length);
+    }
     return NextResponse.json(result);
   } catch (e) {
     console.error("[partners.list]", e);

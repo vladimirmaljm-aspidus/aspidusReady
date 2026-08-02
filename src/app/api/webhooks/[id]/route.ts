@@ -7,6 +7,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  // Tenant ownership check: listWebhooks ignores tenantId in the store,
+  // so we fetch all and filter for non-super_admin.
+  const all = await auth.store.listWebhooks(auth.tenantId ?? "");
+  const existing = all.find((w) => w.id === id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   await auth.store.deleteWebhook(id);
   await audit(auth.store, auth.user, req, "webhook.delete", "webhook", id);
   return NextResponse.json({ ok: true });

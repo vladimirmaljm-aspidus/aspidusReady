@@ -8,10 +8,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
 
-  // Verify the key belongs to the user's tenant
+  // Verify the key belongs to the user's tenant.
+  // listApiKeys ignores _tenantId in the store, so we fetch all and
+  // filter for non-super_admin.
   const keys = await auth.store.listApiKeys(auth.tenantId!);
   const key = keys.find((k) => k.id === id);
   if (!key) {
+    return NextResponse.json({ error: "API key not found." }, { status: 404 });
+  }
+  if (!auth.isSuperAdmin && key.tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "API key not found." }, { status: 404 });
   }
 

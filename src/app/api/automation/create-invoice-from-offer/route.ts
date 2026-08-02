@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
     if (!offer) {
       return NextResponse.json({ error: "Offer not found." }, { status: 404 });
     }
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    }
 
     // 2. Verify the offer is in a valid state (accepted or sent)
     if (offer.status !== "accepted" && offer.status !== "sent") {

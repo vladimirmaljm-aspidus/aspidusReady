@@ -11,6 +11,12 @@ export async function GET(req: NextRequest) {
   const search = url.searchParams.get("search") || undefined;
   const category = url.searchParams.get("category") || undefined;
   const result = await auth.store.listVault(tid, { search, filters: { category } });
+  // Tenant isolation: PrismaStore.listVault ignores _tenantId, so we
+  // post-filter for non-super_admin.
+  if (!auth.isSuperAdmin && auth.tenantId) {
+    result.items = result.items.filter((s) => s.tenant_id === auth.tenantId);
+    result.total = result.items.length;
+  }
   // strip encrypted_value from list response (only reveal on explicit get)
   return NextResponse.json({ items: result.items.map(({ encrypted_value, ...s }) => s), total: result.total });
 }

@@ -3,8 +3,6 @@ import { requireAuth, audit } from "@/lib/api/helpers";
 import { notifyKycRejected } from "@/lib/notif/helper";
 import { onKycRejected } from "@/lib/kyc/automation";
 
-export const runtime = "nodejs";
-
 /**
  * POST /api/kyc/[id]/reject
  *
@@ -20,6 +18,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const { id } = await params;
+  // Tenant ownership check
+  const existing = await auth.store.getKycSubmission(id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   let body: { reason?: string } = {};
   try { body = await req.json(); } catch { /* ok */ }
 

@@ -75,3 +75,9 @@ supabase-migrations/
 # sqlite
 *.db
 *.db-journal
+.env
+.env.bak
+aspidusReady-inspect/
+dev.log
+/db/*.db
+/db/*.db-journal

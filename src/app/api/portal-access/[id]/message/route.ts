@@ -29,6 +29,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const access = await auth.store.getPortalAccessById(id);
     if (!access) return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && access.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    }
 
     // Store message in audit log
     await auth.store.appendAudit({

@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
     if (!offer) {
       return NextResponse.json({ error: "Offer not found." }, { status: 404 });
     }
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    }
 
     // 2. Fetch partner data for auto-fill
     const partner = await store.getPartner(offer.partner_id);
