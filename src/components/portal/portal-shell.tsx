@@ -158,8 +158,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   // highlights the right item).
   useEffect(() => {
     if (initialView) setView(initialView);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialView]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [partner, setPartner] = useState<Partner | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);

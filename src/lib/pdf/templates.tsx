@@ -50,8 +50,21 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
   const primaryColor = tpl?.primary_color || "#0d9488";
   const fontSize = tpl?.body_font_size || 10;
   const lineHeight = tpl?.body_line_height || 1.4;
-  const marginTop = mmToPoints(tpl?.page_margin_top ?? 25);
-  const marginBottom = mmToPoints(tpl?.page_margin_bottom ?? 25);
+
+  // ── MEMORANDUM LAYOUT ────────────────────────────────────────────────
+  // Header: Company name (left) + Logo (right) — always the same on every page
+  // Footer: Company address + contact (left) + Page number (right) — always the same
+  // Content area: padded to never overlap with header/footer
+  //
+  // Header height: ~50pt (from top=8mm to top=8mm+50pt)
+  // Footer height: ~40pt (from bottom=8mm to bottom=8mm+40pt)
+  // Content padding: top=70pt (after header), bottom=55pt (before footer)
+
+  const headerTop = mmToPoints(8);
+  const headerHeight = 50;
+  const footerBottom = mmToPoints(8);
+  const footerHeight = 40;
+
   const marginLeft = mmToPoints(tpl?.page_margin_left ?? 18);
   const marginRight = mmToPoints(tpl?.page_margin_right ?? 18);
   const tableHeaderBg = tpl?.table_header_bg || primaryColor;
@@ -67,45 +80,71 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     page: {
       fontSize,
       lineHeight,
-      paddingTop: marginTop,
-      paddingBottom: marginBottom + 30, // reserve space for footer
+      // Content area: leave space for header and footer (no overlap)
+      paddingTop: headerTop + headerHeight + 15, // below header line
+      paddingBottom: footerBottom + footerHeight + 15, // above footer line
       paddingLeft: marginLeft,
       paddingRight: marginRight,
       fontFamily,
       color: "#1a1a1a",
     },
 
-    // ── Header (repeats on every page via fixed positioning) ────────────
+    // ── HEADER (memorandum — repeats on every page) ────────────────────
+    // Fixed position at top, contains company name + logo
     header: {
       position: "absolute",
-      top: mmToPoints(8),
+      top: headerTop,
       left: marginLeft,
-      right: marginLeft,
+      right: marginRight,
+      height: headerHeight,
       flexDirection: "row",
       justifyContent: "space-between",
-      // Align to bottom so company name baseline matches the logo bottom edge
-      alignItems: "flex-end",
+      alignItems: "center",
       paddingBottom: 8,
       borderBottomWidth: 2,
       borderBottomColor: primaryColor,
     },
-    headerLeft: { flexDirection: "column", flex: 1, paddingBottom: 2 },
-    companyName: { fontSize: 15, fontFamily: headingFontFamily, color: primaryColor, marginBottom: 0 },
-    companyTagline: { fontSize: 7.5, color: "#888", marginTop: 1 },
-    headerRight: { flexDirection: "column", alignItems: "flex-end", gap: 0 },
-    headerLogo: { width: 110, height: 42, objectFit: "contain" },
+    headerLeft: { flexDirection: "column", flex: 1, justifyContent: "center" },
+    companyName: { fontSize: 16, fontFamily: headingFontFamily, color: primaryColor, marginBottom: 0 },
+    companyTagline: { fontSize: 7.5, color: "#888", marginTop: 2 },
+    headerRight: { flexDirection: "column", alignItems: "flex-end", justifyContent: "center" },
+    headerLogo: { width: 120, height: 46, objectFit: "contain" },
 
-    // ── QR code (bottom-left corner, doesn't overlap with content) ─────
+    // ── FOOTER (memorandum — repeats on every page) ────────────────────
+    // Fixed position at bottom, contains company address + page number
+    footer: {
+      position: "absolute",
+      bottom: footerBottom,
+      left: marginLeft,
+      right: marginRight,
+      height: footerHeight,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: tableBorderColor,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    footerLeft: { flexDirection: "column", flex: 1 },
+    footerRight: { flexDirection: "column", alignItems: "flex-end" },
+    footerCompany: { fontSize: 7.5, fontFamily: headingFontFamily, color: "#555", marginBottom: 1 },
+    footerAddr: { fontSize: 7, color: "#888" },
+    footerContact: { fontSize: 7, color: "#888" },
+    footerHash: { fontSize: 7, fontFamily: headingFontFamily, color: primaryColor, marginBottom: 2 },
+    footerPage: { fontSize: 8, color: "#666", fontFamily: headingFontFamily },
+    footerSys: { fontSize: 6, color: "#bbb", fontStyle: "italic", marginTop: 2, textAlign: "right" },
+
+    // ── QR code (bottom-left corner, inside footer area) ──────────────
     qrSection: {
       position: "absolute",
-      bottom: mmToPoints(8),
+      bottom: footerBottom + footerHeight + 5,
       left: marginLeft,
       flexDirection: "column",
       alignItems: "center",
       gap: 2,
     },
-    qrImage: { width: 50, height: 50 },
-    qrLabel: { fontSize: 6, color: "#999", textAlign: "center" },
+    qrImage: { width: 45, height: 45 },
+    qrLabel: { fontSize: 5.5, color: "#999", textAlign: "center" },
 
     // ── Document title + metadata ──────────────────────────────────────
     docHeader: {
@@ -113,7 +152,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       justifyContent: "space-between",
       alignItems: "flex-start",
       marginBottom: 18,
-      marginTop: 10,
+      marginTop: 5,
     },
     docTitle: { fontSize: 20, fontFamily: headingFontFamily, color: "#1a1a1a", textTransform: "uppercase" },
     docSubtitle: { fontSize: 9, color: "#999", marginTop: 2 },
@@ -197,74 +236,14 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     remarks: { marginTop: 18 },
     remarksHeader: { fontSize: 9, fontFamily: headingFontFamily, color: "#333", marginBottom: 4, textDecoration: "underline" },
     remarksText: { fontSize: 8, color: "#666", lineHeight: 1.5 },
-
-    // ── Footer (repeats on every page via fixed positioning) ───────────
-    footer: {
-      position: "absolute",
-      bottom: mmToPoints(8),
-      left: marginLeft,
-      right: marginRight,
-      paddingTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: tableBorderColor,
-    },
-    footerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 3 },
-    footerLeft: { flexDirection: "column", flex: 1 },
-    footerRight: { flexDirection: "column", alignItems: "flex-end" },
-    footerCompany: { fontSize: 8, fontFamily: headingFontFamily, color: "#555", marginBottom: 1 },
-    footerAddr: { fontSize: 7, color: "#888" },
-    footerContact: { fontSize: 7, color: "#888" },
-    footerHash: { fontSize: 7, fontFamily: headingFontFamily, color: primaryColor, marginBottom: 2 },
-    footerPage: { fontSize: 8, color: "#666", fontFamily: headingFontFamily },
-    footerSys: { fontSize: 6.5, color: "#bbb", fontStyle: "italic", marginTop: 2, textAlign: "right" },
   });
 
   const docTitleMap = { offer: "Offer", invoice: "Invoice", proforma: "Proforma Invoice" };
   const items = (doc.items || []) as OfferLineItem[];
   const currency = doc.currency || "USD";
 
-  // Build the footer content (shared across all pages)
-  const FooterContent = () => (
-    <View style={styles.footer} fixed>
-      <View style={styles.footerRow}>
-        <View style={styles.footerLeft}>
-          <Text style={styles.footerCompany}>
-            {tenant?.legal_name || tenant?.name || "Company"}
-          </Text>
-          {tenant?.address_line && (
-            <Text style={styles.footerAddr}>
-              {tenant.address_line}
-              {tenant?.city ? `, ${tenant.city}` : ""}
-              {tenant?.country ? `, ${tenant.country}` : ""}
-            </Text>
-          )}
-          <Text style={styles.footerContact}>
-            {[
-              tenant?.email || (tenant as any)?.contact_email,
-              tenant?.website,
-              tenant?.phone || (tenant as any)?.contact_phone,
-            ].filter(Boolean).join("  ·  ")}
-          </Text>
-        </View>
-        <View style={styles.footerRight}>
-          {verificationCode && (
-            <Text style={styles.footerHash}>Verification: {verificationCode}</Text>
-          )}
-          <Text
-            style={styles.footerPage}
-            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-              `Page ${pageNumber} of ${totalPages}`
-            }
-          />
-          <Text style={styles.footerSys}>
-            Generated by {(pdfMeta?.creator || "Aspidus CRM")} · {new Date().toLocaleString("en-GB")}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-
-  // Build the header content (shared across all pages)
+  // Build the HEADER (memorandum — same on every page)
+  // Company name + logo ONLY, nothing else
   const HeaderContent = () => (
     <View style={styles.header} fixed>
       <View style={styles.headerLeft}>
@@ -282,6 +261,46 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     </View>
   );
 
+  // Build the FOOTER (memorandum — same on every page)
+  // Company address + contact (left) + Page number (right)
+  const FooterContent = () => (
+    <View style={styles.footer} fixed>
+      <View style={styles.footerLeft}>
+        <Text style={styles.footerCompany}>
+          {tenant?.legal_name || tenant?.name || "Company"}
+        </Text>
+        {tenant?.address_line && (
+          <Text style={styles.footerAddr}>
+            {tenant.address_line}
+            {tenant?.city ? `, ${tenant.city}` : ""}
+            {tenant?.country ? `, ${tenant.country}` : ""}
+          </Text>
+        )}
+        <Text style={styles.footerContact}>
+          {[
+            tenant?.email || (tenant as any)?.contact_email,
+            tenant?.website,
+            tenant?.phone || (tenant as any)?.contact_phone,
+          ].filter(Boolean).join("  ·  ")}
+        </Text>
+      </View>
+      <View style={styles.footerRight}>
+        {verificationCode && (
+          <Text style={styles.footerHash}>Verification: {verificationCode}</Text>
+        )}
+        <Text
+          style={styles.footerPage}
+          render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+            `Page ${pageNumber} of ${totalPages}`
+          }
+        />
+        <Text style={styles.footerSys}>
+          Generated by {(pdfMeta?.creator || "Aspidus CRM")} · {new Date().toLocaleString("en-GB")}
+        </Text>
+      </View>
+    </View>
+  );
+
   return (
     <Document
       title={pdfMeta?.title || `${docTitleMap[docType]} ${doc.number}`}
@@ -292,10 +311,11 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       producer="Aspidus CRM"
     >
       <Page size="A4" style={styles.page}>
+        {/* ── HEADER (memorandum) ── */}
         <HeaderContent />
 
         {/* Document title — separate row, full width */}
-        <View style={{ marginBottom: 12, marginTop: 10 }}>
+        <View style={{ marginBottom: 12, marginTop: 0 }}>
           <Text style={styles.docTitle}>{docTitleMap[docType]}</Text>
           {doc.subject && <Text style={styles.docSubtitle}>{doc.subject}</Text>}
         </View>
@@ -485,9 +505,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
           </View>
         )}
 
-        {/* QR code — bottom-left corner, positioned absolutely so it never
-            overlaps with body content. The page has paddingBottom that
-            reserves space below the footer line for it. */}
+        {/* QR code — positioned above the footer, inside the content area */}
         {qrCodeDataUrl && verificationCode && (
           <View style={styles.qrSection} fixed>
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
@@ -496,6 +514,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
           </View>
         )}
 
+        {/* ── FOOTER (memorandum) ── */}
         <FooterContent />
       </Page>
     </Document>

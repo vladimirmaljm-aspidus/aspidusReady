@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
 import { TradeCostLine } from "@/lib/supabase/types";
 import { TRADE_COST_TYPES } from "@/lib/data/reference";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
@@ -17,13 +17,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   const body = await req.json();
   body.tenant_id = tenantId;
-  if (!body.created_by) body.created_by = auth.user.id;
+  if (!body.created_by && "user" in auth) body.created_by = auth.user.id;
 
   // Compute totals from cost lines
   const qty = body.quantity || 0;
@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
   body.margin_percent = Math.round(marginPct * 100) / 100;
 
   const created = await auth.store.upsertTradeCalculation(body);
-  await audit(auth.store, auth.user, req, body.id ? "trade_calc.update" : "trade_calc.create", "trade_calculation", created.id, { name: created.name });
+  const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
+  await audit(auth.store, auditUser, req, body.id ? "trade_calc.update" : "trade_calc.create", "trade_calculation", created.id, { name: created.name });
   return NextResponse.json(created);
 }

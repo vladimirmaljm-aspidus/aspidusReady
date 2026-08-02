@@ -1831,7 +1831,8 @@ function PortalMessageThread({
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
+    // Use a microtask to avoid calling setState synchronously in the effect body
+    queueMicrotask(() => { if (mounted) setLoading(true); });
     fetch(`/api/audit?limit=100&entity_type=portal_access`)
       .then((r) => r.json())
       .then((data) => {

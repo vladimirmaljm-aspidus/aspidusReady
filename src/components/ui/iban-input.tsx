@@ -104,13 +104,6 @@ export function IbanInput({
     };
   }, [value]);
 
-  const StatusIcon = () => {
-    if (status === "checking") return <Loader2 className="size-4 animate-spin text-muted-foreground" />;
-    if (status === "valid") return <CheckCircle2 className="size-4 text-emerald-600" />;
-    if (status === "invalid") return <XCircle className="size-4 text-destructive" />;
-    return null;
-  };
-
   return (
     <div className="space-y-2">
       <div className="space-y-1.5">
@@ -132,7 +125,9 @@ export function IbanInput({
             )}
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <StatusIcon />
+            {status === "checking" && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+            {status === "valid" && <CheckCircle2 className="size-4 text-emerald-600" />}
+            {status === "invalid" && <XCircle className="size-4 text-destructive" />}
           </div>
         </div>
       </div>

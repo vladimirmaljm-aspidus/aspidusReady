@@ -21,15 +21,15 @@ export async function GET(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   const url = new URL(req.url);
-  const module = url.searchParams.get("module");
+  const mod = url.searchParams.get("module");
 
   const store = await getStore();
   // Saved filters are stored as user preferences with key "saved_filter:{module}:{id}"
   const prefs = await store.listUserPreferences(auth.user.id);
   let filters = prefs.filter((p) => p.preference_key.startsWith("saved_filter:"));
 
-  if (module) {
-    filters = filters.filter((p) => p.preference_key.startsWith(`saved_filter:${module}:`));
+  if (mod) {
+    filters = filters.filter((p) => p.preference_key.startsWith(`saved_filter:${mod}:`));
   }
 
   const result = filters.map((p) => {
@@ -76,13 +76,13 @@ export async function DELETE(req: NextRequest) {
 
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
-  const module = url.searchParams.get("module");
+  const mod = url.searchParams.get("module");
 
-  if (!id || !module) {
+  if (!id || !mod) {
     return NextResponse.json({ error: "id and module are required." }, { status: 400 });
   }
 
-  const key = `saved_filter:${module}:${id}`;
+  const key = `saved_filter:${mod}:${id}`;
   const store = await getStore();
   // Mark as deleted by setting value to null
   await store.setUserPreference(auth.user.id, key, null);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -24,7 +24,7 @@ export const runtime = "nodejs";
  *   partner_id, valid_until, payment_terms, notes
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     tenant_id: tenantId,
     number: offerNumber,
     partner_id: partnerId,
-    owner_id: auth.user.id,
+    owner_id: "user" in auth ? auth.user.id : null,
     status: "draft",
     subject,
     currency,
@@ -164,7 +164,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   };
 
   const created = await auth.store.upsertOffer(offerData);
-  await audit(auth.store, auth.user, req, "offer.create_from_calc", "offer", created.id, {
+  const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
+  await audit(auth.store, auditUser, req, "offer.create_from_calc", "offer", created.id, {
     trade_calc_id: id,
     offer_number: created.number,
     product_name: productName,

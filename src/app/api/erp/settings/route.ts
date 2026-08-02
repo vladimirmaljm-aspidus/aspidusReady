@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAdmin, resolveTenantId, audit } from "@/lib/api/helpers";
+import { requireAuth, requireAdmin, requireAuthOrApiKey, resolveTenantId, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
 // GET /api/erp/settings — Get ERP settings
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
 
   const tenantId = resolveTenantId(auth, req);
@@ -18,14 +18,22 @@ export async function GET(req: NextRequest) {
     if (!settings) return NextResponse.json({ error: "Not found." }, { status: 404 });
     return NextResponse.json(settings);
   } catch (e: any) {
+    console.error("[erp/settings GET]", e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
 // POST /api/erp/settings — Create/update ERP settings (requires admin)
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+
+  // For session auth, require admin role; for API key auth, check permissions
+  if ("apiKeyId" in auth) {
+    // API key auth — permission check handled by hasPermission if needed
+  } else if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) {
@@ -35,12 +43,13 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const upserted = await auth.store.upsertErpSettings({ ...body, tenant_id: tenantId });
-    await audit(auth.store, auth.user, req, "erp_settings.update", "erp_setting", upserted.id, {
+    await audit(auth.store, "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId }, req, "erp_settings.update", "erp_setting", upserted.id, {
       accounting_standard: upserted.accounting_standard,
       default_currency: upserted.default_currency,
     });
     return NextResponse.json(upserted);
   } catch (e: any) {
+    console.error("[erp/settings POST]", e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }

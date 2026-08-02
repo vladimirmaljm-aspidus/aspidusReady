@@ -64,7 +64,7 @@ export function validatePassword(
  * Generate a secure random password that meets the default policy.
  * Used when admin clicks "Generate" in the user creation form.
  */
-export function generateSecurePassword(length: number = 12): string {
+export async function generateSecurePassword(length: number = 12): Promise<string> {
   const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
   const lower = "abcdefghijkmnpqrstuvwxyz";
   const numbers = "23456789";
@@ -72,7 +72,7 @@ export function generateSecurePassword(length: number = 12): string {
   const all = upper + lower + numbers + symbols;
 
   // Use crypto for secure randomness
-  const { randomBytes } = require("crypto");
+  const { randomBytes } = await import("crypto");
   const bytes = randomBytes(length);
 
   // Ensure at least one of each required type

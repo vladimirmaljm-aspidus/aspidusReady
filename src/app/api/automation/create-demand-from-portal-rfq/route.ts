@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -15,10 +15,14 @@ export const runtime = "nodejs";
  * Body: { rfq_id: string }
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
 
-  const tid = auth.tenantId!;
+  const tid = resolveTenantId(auth, req);
+  if (!tid) {
+    return NextResponse.json({ error: "Tenant ID required." }, { status: 400 });
+  }
+
   try {
     const body = await req.json();
     const { rfq_id } = body;
@@ -39,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Fetch partner data for auto-fill
-    const partner = await store.getPartner(rfq.partner_id);
+    const partner = rfq.partner_id ? await store.getPartner(rfq.partner_id) : null;
 
     // 3. Auto-generate demand number
     const existingDemands = await store.listDemands(tid, { limit: 1 });
@@ -95,9 +99,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 8. Audit log
+    const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
     await audit(
       store,
-      auth.user,
+      auditUser,
       req,
       "automation.create_demand_from_portal_rfq",
       "demand",
@@ -113,10 +118,10 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json(created);
-  } catch (e) {
+  } catch (e: any) {
     console.error("[automation/create-demand-from-portal-rfq]", e);
     return NextResponse.json(
-      { error: "Failed to create demand from portal RFQ." },
+      { error: e.message || "Failed to create demand from portal RFQ." },
       { status: 500 }
     );
   }

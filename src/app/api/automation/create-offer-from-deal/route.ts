@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
 import type { OfferLineItem } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -16,10 +16,14 @@ export const runtime = "nodejs";
  * Body: { deal_id: string }
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
 
-  const tid = auth.tenantId!;
+  const tid = resolveTenantId(auth, req);
+  if (!tid) {
+    return NextResponse.json({ error: "Tenant ID required." }, { status: 400 });
+  }
+
   try {
     const body = await req.json();
     const { deal_id } = body;
@@ -40,13 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Fetch partner data for auto-fill
-    const partner = await store.getPartner(deal.partner_id);
-    if (!partner) {
-      return NextResponse.json(
-        { error: "Partner not found for this deal." },
-        { status: 404 }
-      );
-    }
+    const partner = deal.partner_id ? await store.getPartner(deal.partner_id) : null;
 
     // 3. Auto-generate offer number
     const existingOffers = await store.listOffers(tid, { limit: 1 });
@@ -55,8 +53,6 @@ export async function POST(req: NextRequest) {
     const offerNumber = `OF-${year}-${String(nextSeq).padStart(3, "0")}`;
 
     // 4. Build offer items from deal data
-    // Since deals don't have line items directly, we'll create a single line item
-    // from the deal value as a placeholder
     const items: OfferLineItem[] = [
       {
         product_id: "",
@@ -89,7 +85,7 @@ export async function POST(req: NextRequest) {
     const total = subtotal - discountTotal + taxTotal;
 
     // 6. Determine currency from partner preference or deal
-    const currency = partner.preferred_currency || deal.currency;
+    const currency = partner?.preferred_currency || deal.currency || "USD";
 
     // 7. Build the offer object
     const offerData = {
@@ -97,7 +93,7 @@ export async function POST(req: NextRequest) {
       number: offerNumber,
       deal_id: deal.id,
       partner_id: deal.partner_id,
-      owner_id: auth.user.id,
+      owner_id: "user" in auth ? auth.user.id : null,
       status: "draft" as const,
       subject: `Offer for: ${deal.title}`,
       currency,
@@ -106,7 +102,7 @@ export async function POST(req: NextRequest) {
       tax_total: taxTotal,
       total,
       notes: `Auto-generated from deal: ${deal.title}`,
-      terms: partner.preferred_payment_terms || null,
+      terms: partner?.preferred_payment_terms || null,
       valid_until: new Date(
         Date.now() + 30 * 24 * 60 * 60 * 1000
       ).toISOString(),
@@ -117,9 +113,10 @@ export async function POST(req: NextRequest) {
     const created = await store.upsertOffer(offerData);
 
     // 9. Audit log
+    const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
     await audit(
       store,
-      auth.user,
+      auditUser,
       req,
       "automation.create_offer_from_deal",
       "offer",
@@ -129,15 +126,15 @@ export async function POST(req: NextRequest) {
         deal_title: deal.title,
         offer_number: created.number,
         partner_id: deal.partner_id,
-        partner_name: partner.name,
+        partner_name: partner?.name || "Unknown",
       }
     );
 
     return NextResponse.json(created);
-  } catch (e) {
+  } catch (e: any) {
     console.error("[automation/create-offer-from-deal]", e);
     return NextResponse.json(
-      { error: "Failed to create offer from deal." },
+      { error: e.message || "Failed to create offer from deal." },
       { status: 500 }
     );
   }

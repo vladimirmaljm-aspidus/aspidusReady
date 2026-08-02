@@ -40,7 +40,8 @@ export function usePortalGeolocation(access: PortalAccess | null) {
     const meta = getTierMeta(access.tier);
     const required = meta.requiresLocation;
 
-    setState((s) => ({ ...s, required }));
+    // Use microtask to avoid synchronous setState in effect body
+    queueMicrotask(() => setState((s) => ({ ...s, required })));
 
     const sendLocation = (
       coords: { latitude: number; longitude: number; accuracy?: number },
