@@ -14,6 +14,7 @@ import {
   MailQueueEntry,
   Tenant, ProductCatalogEntry, SupplierOffer, TradeCalculation,
   PortalAccess, DocumentTemplate, DocumentVerification, VerificationLog,
+  TenantLetterhead, TenantSeal,
   KycSubmission, KycDocument, PortalRfq,
   TenantFeatureFlags,
   Notification,
@@ -2087,5 +2088,226 @@ export class SupabaseStore implements Store {
       .order("preference_key");
     if (error) throw error;
     return (data as UserPreference[]) || [];
+  }
+
+  // ─── Security (write methods) ───────────────────────────────────────────
+
+  async createSession(s: { user_id: string; ip?: string | null; user_agent?: string | null; country?: string | null; expires_at: string; current?: boolean }): Promise<SecuritySession> {
+    // Resolve tenant_id from user
+    const user = await this.getUserById(s.user_id);
+    const payload: SupaRow = {
+      user_id: s.user_id,
+      tenant_id: user?.tenant_id || null,
+      ip: s.ip ?? null,
+      user_agent: s.user_agent ?? null,
+      country: s.country ?? null,
+      expires_at: s.expires_at,
+      current: s.current ?? false,
+      revoked: false,
+      last_used_at: new Date().toISOString(),
+    };
+    const { data, error } = await this.sb().from("sessions").insert(payload).select().single();
+    if (error) throw error;
+    return data as SecuritySession;
+  }
+
+  async revokeSessionById(id: string): Promise<void> {
+    const { error } = await this.sb().from("sessions").update({ revoked: true, current: false }).eq("id", id);
+    if (error) throw error;
+  }
+
+  async touchSession(id: string): Promise<void> {
+    try {
+      await this.sb().from("sessions").update({ last_used_at: new Date().toISOString() }).eq("id", id);
+    } catch { /* best-effort */ }
+  }
+
+  async recordLoginHistory(e: { user_id: string; username: string; ip?: string | null; user_agent?: string | null; country?: string | null; success: boolean; reason?: string | null }): Promise<LoginHistoryEntry> {
+    const user = e.user_id ? await this.getUserById(e.user_id) : null;
+    const payload: SupaRow = {
+      user_id: e.user_id || null,
+      tenant_id: user?.tenant_id || null,
+      username: e.username,
+      ip: e.ip ?? null,
+      user_agent: e.user_agent ?? null,
+      country: e.country ?? null,
+      success: e.success,
+      reason: e.reason ?? null,
+    };
+    const { data, error } = await this.sb().from("login_history").insert(payload).select().single();
+    if (error) throw error;
+    return data as LoginHistoryEntry;
+  }
+
+  async upsertKnownIp(ip: { user_id: string; ip: string; country?: string | null; trusted?: boolean }): Promise<KnownIp> {
+    const user = await this.getUserById(ip.user_id);
+    // Find existing
+    const { data: existing } = await this.sb()
+      .from("known_ips")
+      .select("*")
+      .eq("user_id", ip.user_id)
+      .eq("ip", ip.ip)
+      .maybeSingle();
+    if (existing) {
+      const { data, error } = await this.sb()
+        .from("known_ips")
+        .update({
+          last_seen: new Date().toISOString(),
+          country: ip.country ?? (existing as any).country,
+          trusted: ip.trusted ?? (existing as any).trusted,
+        })
+        .eq("id", (existing as any).id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as KnownIp;
+    }
+    const payload: SupaRow = {
+      user_id: ip.user_id,
+      tenant_id: user?.tenant_id || null,
+      ip: ip.ip,
+      country: ip.country ?? null,
+      trusted: ip.trusted ?? false,
+    };
+    const { data, error } = await this.sb().from("known_ips").insert(payload).select().single();
+    if (error) throw error;
+    return data as KnownIp;
+  }
+
+  async upsertTrustedDevice(d: { user_id: string; device_name: string; fingerprint: string; ip?: string | null }): Promise<TrustedDevice> {
+    const user = await this.getUserById(d.user_id);
+    const { data: existing } = await this.sb()
+      .from("trusted_devices")
+      .select("*")
+      .eq("user_id", d.user_id)
+      .eq("fingerprint", d.fingerprint)
+      .maybeSingle();
+    if (existing) {
+      const { data, error } = await this.sb()
+        .from("trusted_devices")
+        .update({
+          last_used: new Date().toISOString(),
+          ip: d.ip ?? (existing as any).ip,
+          device_name: d.device_name || (existing as any).device_name,
+        })
+        .eq("id", (existing as any).id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as TrustedDevice;
+    }
+    const payload: SupaRow = {
+      user_id: d.user_id,
+      tenant_id: user?.tenant_id || null,
+      device_name: d.device_name,
+      fingerprint: d.fingerprint,
+      ip: d.ip ?? null,
+    };
+    const { data, error } = await this.sb().from("trusted_devices").insert(payload).select().single();
+    if (error) throw error;
+    return data as TrustedDevice;
+  }
+
+  async revokeTrustedDeviceById(id: string): Promise<void> {
+    const { error } = await this.sb().from("trusted_devices").update({ revoked: true }).eq("id", id);
+    if (error) throw error;
+  }
+
+  // ─── Tenant Letterheads (Memorandum firme) ──────────────────────────────
+
+  async listLetterheads(tenantId: string): Promise<TenantLetterhead[]> {
+    const { data, error } = await this.sb()
+      .from("tenant_letterheads")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data as TenantLetterhead[]) || [];
+  }
+
+  async getLetterhead(id: string): Promise<TenantLetterhead | null> {
+    const { data, error } = await this.sb().from("tenant_letterheads").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return (data as TenantLetterhead) || null;
+  }
+
+  async getDefaultLetterhead(tenantId: string): Promise<TenantLetterhead | null> {
+    const { data, error } = await this.sb()
+      .from("tenant_letterheads")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("is_default", true)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as TenantLetterhead) || null;
+  }
+
+  async upsertLetterhead(l: Partial<TenantLetterhead> & { id?: string; tenant_id: string }): Promise<TenantLetterhead> {
+    // If setting as default, unset other defaults
+    if (l.is_default) {
+      await this.sb()
+        .from("tenant_letterheads")
+        .update({ is_default: false })
+        .eq("tenant_id", l.tenant_id)
+        .eq("is_default", true)
+        .neq("id", l.id || "00000000-0000-0000-0000-000000000000");
+    }
+    return this.smartUpsert<TenantLetterhead>("tenant_letterheads", l);
+  }
+
+  async deleteLetterhead(id: string): Promise<void> {
+    // Unlink templates referencing this letterhead
+    await this.sb().from("document_templates").update({ letterhead_id: null }).eq("letterhead_id", id);
+    const { error } = await this.sb().from("tenant_letterheads").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  // ─── Tenant Seals (Zigled) ──────────────────────────────────────────────
+
+  async listSeals(tenantId: string): Promise<TenantSeal[]> {
+    const { data, error } = await this.sb()
+      .from("tenant_seals")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data as TenantSeal[]) || [];
+  }
+
+  async getSeal(id: string): Promise<TenantSeal | null> {
+    const { data, error } = await this.sb().from("tenant_seals").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return (data as TenantSeal) || null;
+  }
+
+  async getDefaultSeal(tenantId: string): Promise<TenantSeal | null> {
+    const { data, error } = await this.sb()
+      .from("tenant_seals")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("is_default", true)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as TenantSeal) || null;
+  }
+
+  async upsertSeal(s: Partial<TenantSeal> & { id?: string; tenant_id: string }): Promise<TenantSeal> {
+    if (s.is_default) {
+      await this.sb()
+        .from("tenant_seals")
+        .update({ is_default: false })
+        .eq("tenant_id", s.tenant_id)
+        .eq("is_default", true)
+        .neq("id", s.id || "00000000-0000-0000-0000-000000000000");
+    }
+    return this.smartUpsert<TenantSeal>("tenant_seals", s);
+  }
+
+  async deleteSeal(id: string): Promise<void> {
+    await this.sb().from("document_templates").update({ seal_id: null }).eq("seal_id", id);
+    const { error } = await this.sb().from("tenant_seals").delete().eq("id", id);
+    if (error) throw error;
   }
 }

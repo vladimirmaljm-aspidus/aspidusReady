@@ -93,7 +93,28 @@ interface AppState {
 
   loading: boolean;
   setLoading: (b: boolean) => void;
+
+  // ── Tenant context switching (super-admin only) ──
+  // When a super-admin selects a tenant, ALL data is scoped to that tenant.
+  // Regular users are always locked to their own tenant_id (this field is ignored).
+  activeTenantId: string | null;
+  activeTenantName: string | null;
+  setActiveTenant: (id: string | null, name: string | null) => void;
 }
+
+function loadActiveTenant(): { id: string | null; name: string | null } {
+  if (typeof window === "undefined") return { id: null, name: null };
+  try {
+    const raw = localStorage.getItem("aspidus_active_tenant");
+    if (!raw) return { id: null, name: null };
+    const parsed = JSON.parse(raw);
+    return { id: parsed.id || null, name: parsed.name || null };
+  } catch {
+    return { id: null, name: null };
+  }
+}
+
+const initialTenant = loadActiveTenant();
 
 export const useAppStore = create<AppState>((set) => ({
   user: null,
@@ -115,7 +136,47 @@ export const useAppStore = create<AppState>((set) => ({
 
   loading: false,
   setLoading: (b) => set({ loading: b }),
+
+  activeTenantId: initialTenant.id,
+  activeTenantName: initialTenant.name,
+  setActiveTenant: (id, name) => {
+    set({ activeTenantId: id, activeTenantName: name });
+    if (typeof window !== "undefined") {
+      if (id) {
+        localStorage.setItem("aspidus_active_tenant", JSON.stringify({ id, name }));
+      } else {
+        localStorage.removeItem("aspidus_active_tenant");
+      }
+    }
+  },
 }));
+
+/**
+ * Returns the effective tenant ID for the current session.
+ * - Super-admin: returns activeTenantId (manually selected) or user.tenant_id
+ * - Regular user: returns user.tenant_id (always their own)
+ */
+export function useEffectiveTenantId(): string | null {
+  const user = useAppStore((s) => s.user);
+  const activeTenantId = useAppStore((s) => s.activeTenantId);
+  if (isSuperAdmin(user)) {
+    return activeTenantId || user?.tenant_id || null;
+  }
+  return user?.tenant_id || null;
+}
+
+/**
+ * Returns a query string param for the active tenant, for use in API fetch calls.
+ * e.g. "?tenant_id=xxx" or "" if no tenant context is needed.
+ * Super-admins use this to scope data to the selected tenant.
+ */
+export function useTenantParam(): string {
+  const tid = useEffectiveTenantId();
+  const user = useAppStore((s) => s.user);
+  if (!isSuperAdmin(user)) return "";
+  if (!tid) return "";
+  return `tenant_id=${encodeURIComponent(tid)}`;
+}
 
 export function hasPermission(perms: string[] | null | undefined, key: string): boolean {
   if (!perms) return false;

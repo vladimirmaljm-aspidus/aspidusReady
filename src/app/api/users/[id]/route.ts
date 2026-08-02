@@ -61,7 +61,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json();
 
     // Prevent more than 2 admins per tenant when promoting to admin
-    if (body.role === "admin" && existing.role !== "admin") {
+    if (body.role === "admin" && existing.role !== "admin" && existing.tenant_id) {
       const existingUsers = await auth.store.listUsers(existing.tenant_id);
       const adminCount = existingUsers.filter(u => u.role === "admin" && u.active).length;
       if (adminCount >= 2) {
@@ -70,7 +70,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Prevent demoting the last admin
-    if (existing.role === "admin" && body.role && body.role !== "admin") {
+    if (existing.role === "admin" && body.role && body.role !== "admin" && existing.tenant_id) {
       const users = await auth.store.listUsers(existing.tenant_id);
       const adminCount = users.filter(u => u.role === "admin" && u.active && u.id !== existing.id).length;
       if (adminCount < 1) {
@@ -117,7 +117,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     // Prevent deleting the last admin
-    if (existing.role === "admin") {
+    if (existing.role === "admin" && existing.tenant_id) {
       const users = await auth.store.listUsers(existing.tenant_id);
       const adminCount = users.filter(u => u.role === "admin" && u.active && u.id !== existing.id).length;
       if (adminCount < 1) {

@@ -59,6 +59,7 @@ import {
 import { toast } from "sonner";
 import { initials } from "@/lib/utils/format";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { TenantContextSwitcher } from "@/components/layout/tenant-context-switcher";
 import { useSearchStore } from "@/components/layout/global-search";
 import { useTheme } from "next-themes";
 import { fmtRelative } from "@/lib/utils/format";
@@ -122,55 +123,6 @@ export function Topbar() {
   const searchOpen = useSearchStore((s) => s.open);
   const admin = isAdmin(user);
   const superAdmin = isSuperAdmin(user);
-
-  // Tenant context state for super-admins
-  const [tenantName, setTenantName] = React.useState<string | null>(null);
-  const [tenants, setTenants] = React.useState<Array<{ id: string; name: string }>>([]);
-  const [tenantDropdownOpen, setTenantDropdownOpen] = React.useState(false);
-
-  // Load tenant name for current user and tenants list for super-admins
-  React.useEffect(() => {
-    if (!user) return;
-    // Check for tenant_id query param (super-admin context switching)
-    const urlTenantId = new URLSearchParams(window.location.search).get("tenant_id");
-    if (superAdmin) {
-      fetch("/api/tenants")
-        .then((r) => r.json())
-        .then((data) => {
-          const items = (data.items || []) as Array<{ id: string; name: string }>;
-          setTenants(items);
-          if (urlTenantId) {
-            const t = items.find((x) => x.id === urlTenantId);
-            if (t) setTenantName(t.name);
-          }
-        })
-        .catch(() => {});
-    } else if (user.tenant_id) {
-      fetch("/api/auth/me")
-        .then((r) => r.json())
-        .then(() => {
-          // For regular users, we just show the tenant name from the tenants list
-          fetch("/api/tenants")
-            .then((r2) => r2.json())
-            .then((data) => {
-              const items = (data.items || []) as Array<{ id: string; name: string }>;
-              const myTenant = items.find((x: { id: string }) => x.id === user.tenant_id);
-              if (myTenant) setTenantName(myTenant.name);
-            })
-            .catch(() => {});
-        })
-        .catch(() => {});
-    }
-  }, [user, superAdmin]);
-
-  function handleTenantSwitch(tenantId: string, name: string) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("tenant_id", tenantId);
-    window.history.pushState({}, "", url.toString());
-    setTenantName(name);
-    setTenantDropdownOpen(false);
-    toast.success(`Switched to ${name}`);
-  }
 
   // Real-time notifications state
   const [notifications, setNotifications] = React.useState<NotifItem[]>([]);
@@ -240,48 +192,8 @@ export function Topbar() {
           {viewTitle}
         </h2>
 
-        {/* Tenant Context Indicator */}
-        {superAdmin ? (
-          <DropdownMenu open={tenantDropdownOpen} onOpenChange={setTenantDropdownOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 rounded-md border border-border/50 gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 smooth"
-              >
-                <Building2 className="size-3.5" />
-                <span className="truncate max-w-[120px]">{tenantName || "Platform"}</span>
-                <ChevronDown className="size-3 ml-0.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5 shadow-soft-lg border-border/50">
-              <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-3 py-2">
-                Switch Tenant Context
-              </DropdownMenuLabel>
-              <ScrollArea className="max-h-48">
-                {tenants.map((t) => (
-                  <DropdownMenuItem
-                    key={t.id}
-                    onClick={() => handleTenantSwitch(t.id, t.name)}
-                    className={cn("cursor-pointer rounded-lg px-3 py-2 text-sm smooth", tenantName === t.name && "bg-accent/50")}
-                  >
-                    <Building2 className="size-3.5 mr-2 text-muted-foreground" />
-                    <span className="truncate">{t.name}</span>
-                    {tenantName === t.name && <Check className="size-3.5 ml-auto text-primary" />}
-                  </DropdownMenuItem>
-                ))}
-              </ScrollArea>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : tenantName ? (
-          <Badge
-            variant="outline"
-            className="hidden sm:inline-flex gap-1 h-7 px-2 rounded-md border-border/50 text-[11px] font-medium text-muted-foreground smooth"
-          >
-            <Building2 className="size-3" />
-            <span className="truncate max-w-[120px]">{tenantName}</span>
-          </Badge>
-        ) : null}
+        {/* Tenant Context Switcher */}
+        <TenantContextSwitcher />
       </div>
 
       {/* ── Right: Action cluster ── */}
