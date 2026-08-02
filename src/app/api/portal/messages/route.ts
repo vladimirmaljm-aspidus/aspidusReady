@@ -26,12 +26,18 @@ export async function GET() {
     const access = await store.getPortalAccessById(accessId);
     if (!access) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-    // Messages stored as audit log entries with action="portal.message"
+    // Messages stored as audit log entries with action="portal.message" or "admin.message"
+    // Match by: entity_id === accessId OR details.partner_id === access.partner_id
+    // (admin may use a different access ID when sending from the portal-access list)
     const audit = await store.listAudit(access.tenant_id, { limit: 100 });
     const messages = audit.items
       .filter((a: any) =>
         (a.action === "portal.message" || a.action === "admin.message") &&
-        (a.entity_id === accessId || a.details?.access_id === accessId || a.details?.partner_id === access.partner_id)
+        (
+          a.entity_id === accessId ||
+          a.details?.access_id === accessId ||
+          a.details?.partner_id === access.partner_id
+        )
       )
       .map((a: any) => ({
         id: a.id,
