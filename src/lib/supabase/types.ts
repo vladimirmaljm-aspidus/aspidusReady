@@ -1,7 +1,7 @@
 // TypeScript types matching the Supabase schema (supabase_v23_1.sql)
 // These mirror the tables in your Supabase project.
 
-export type UserRole = "super_admin" | "admin" | "accountant" | "manager" | "staff" | "viewer";
+export type UserRole = "super_admin" | "admin" | "user";
 export type PartnerType = "supplier" | "buyer" | "both" | "agent" | "logistics" | "customs" | "bank" | "inspector";
 export type DealStage = "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
 export type OfferStatus = "draft" | "sent" | "accepted" | "rejected" | "expired";

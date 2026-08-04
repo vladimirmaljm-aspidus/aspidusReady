@@ -12,7 +12,7 @@ export async function GET() {
       const tenants = await auth.store.listTenants();
       return NextResponse.json({ items: tenants });
     }
-    // Regular admin/staff: return only their own tenant
+    // Regular admin/user: return only their own tenant
     if (auth.tenantId) {
       const tenant = await auth.store.getTenant(auth.tenantId);
       return NextResponse.json({ items: tenant ? [tenant] : [] });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionFromCookie } from "@/lib/auth/session";
+import { getSessionFromCookie, ImpersonationClaim } from "@/lib/auth/session";
 import { getStore } from "@/lib/data/store";
 import { SafeUser } from "@/lib/store/app-store";
 import { createHash } from "crypto";
@@ -10,6 +10,8 @@ export interface AuthContext {
   ip: string;
   tenantId: string | null; // null = super-admin (platform level, sees all)
   isSuperAdmin: boolean;
+  /** Present when a super_admin is currently impersonating another user. */
+  impersonation?: ImpersonationClaim;
 }
 
 export interface ApiKeyAuthContext {
@@ -31,22 +33,44 @@ export async function requireAuth(): Promise<AuthContext | NextResponse> {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
   const store = await getStore();
-  const user = await store.getUserById(session.sub);
-  if (!user || !user.active) {
+  const baseUser = await store.getUserById(session.sub);
+  if (!baseUser || !baseUser.active) {
     return NextResponse.json({ error: "Account not active." }, { status: 401 });
   }
-  if (user.token_version !== session.token_version) {
+  if (baseUser.token_version !== session.token_version) {
     return NextResponse.json({ error: "Session expired." }, { status: 401 });
   }
-  const { password_hash, totp_secret, ...safe } = user;
-  const isSuperAdmin = user.role === "super_admin";
+
+  // ── Impersonation handling ────────────────────────────────────────────
+  // If the session carries an `impersonating` claim, and it hasn't expired,
+  // swap the effective user to the impersonation target. Only super_admins
+  // can hold this claim (defense-in-depth check here).
+  let impersonation: ImpersonationClaim | undefined;
+  let effectiveUser = baseUser;
+  if (session.impersonating && baseUser.role === "super_admin") {
+    const expired = new Date(session.impersonating.expires_at).getTime() < Date.now();
+    if (!expired) {
+      const target = await store.getUserById(session.impersonating.target_user_id);
+      if (target && target.active) {
+        effectiveUser = target;
+        impersonation = session.impersonating;
+      }
+    }
+    // else: expired → fall through as the original super_admin. The next
+    // /api/super-admin/impersonate/end call (or the client banner's timer)
+    // will explicitly restore the cookie; the session still works meanwhile.
+  }
+
+  const { password_hash, totp_secret, ...safe } = effectiveUser;
+  const isSuperAdmin = effectiveUser.role === "super_admin" && !impersonation;
 
   // ── Subscription enforcement ──────────────────────────────────────────
   // SUPER-ADMIN IS NEVER BLOCKED — they manage the platform.
   // Regular users are blocked if their tenant's subscription has expired.
-  if (!isSuperAdmin && user.tenant_id) {
+  // When impersonating, we bypass this too — the super_admin is diagnosing.
+  if (!isSuperAdmin && !impersonation && effectiveUser.tenant_id) {
     try {
-      const tenant = await store.getTenant(user.tenant_id);
+      const tenant = await store.getTenant(effectiveUser.tenant_id);
       if (tenant) {
         // Suspended or cancelled tenants are always blocked
         if (tenant.status === "suspended" || tenant.status === "cancelled") {
@@ -82,8 +106,9 @@ export async function requireAuth(): Promise<AuthContext | NextResponse> {
     user: safe as SafeUser,
     store,
     ip: "",
-    tenantId: user.tenant_id,
+    tenantId: effectiveUser.tenant_id,
     isSuperAdmin,
+    impersonation,
   };
 }
 
@@ -189,9 +214,15 @@ export function resolveTenantId(auth: AuthContext | ApiKeyAuthContext, req: Next
     return auth.tenantId;
   }
   if (auth.isSuperAdmin) {
+    // Super-admin: prefer explicit ?tenant_id=xxx. If none is provided, return
+    // NULL — tenant-scoped routes MUST refuse rather than silently fall back
+    // to the super-admin's own tenant_id (which is null anyway). Platform-
+    // level routes (that don't need a tenant scope) shouldn't be calling this.
     const url = new URL(req.url);
-    return url.searchParams.get("tenant_id") || auth.tenantId;
+    return url.searchParams.get("tenant_id") || null;
   }
+  // Impersonation: auth.tenantId already reflects the impersonated user's
+  // tenant (requireAuth sets tenantId from effectiveUser.tenant_id).
   return auth.tenantId;
 }
 

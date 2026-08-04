@@ -37,6 +37,8 @@ export type ViewKey =
   // Platform (super-admin only)
   | "tenants"
   | "platform-dashboard"
+  | "super-admin-overview"
+  | "feature-flags"
   | "document-templates"
   | "document-verification"
   | "kyc-review"
@@ -195,14 +197,53 @@ export function useTenantParam(): string {
   return `tenant_id=${encodeURIComponent(tid)}`;
 }
 
+/**
+ * Client-side mirror of `src/lib/permissions/can.ts`. Kept here so client
+ * components don't need to import the server-only permission module.
+ *
+ * Rules (must stay in sync with the server evaluator):
+ *   1. super_admin OR perms includes "*"        -> allow
+ *   2. platform.* permission (non-super-admin)  -> deny
+ *   3. role === "admin"                         -> allow any non-platform perm
+ *   4. explicit grant / resource-wildcard match -> allow
+ *   5. otherwise                                -> deny
+ */
+export function canUser(u: SafeUser | null | undefined, key: string): boolean {
+  if (!u) return false;
+  if (u.role === "super_admin") return true;
+  const perms = u.permissions || [];
+  if (perms.includes("*")) return true;
+  if (key.startsWith("platform.")) return false;
+  if (u.role === "admin") return true;
+  if (perms.includes(key)) return true;
+  const dotIdx = key.indexOf(".");
+  if (dotIdx > 0 && perms.includes(`${key.slice(0, dotIdx)}.*`)) return true;
+  // Back-compat with legacy colon form ("partners:read", "erp:*")
+  const legacy = key.replace(".", ":");
+  if (perms.includes(legacy)) return true;
+  const colonIdx = legacy.indexOf(":");
+  if (colonIdx > 0 && perms.includes(`${legacy.slice(0, colonIdx)}:*`)) return true;
+  return false;
+}
+
+/**
+ * Legacy signature preserved for existing call sites that pass a permissions
+ * array directly. Accepts either dot- or colon-form keys.
+ */
 export function hasPermission(perms: string[] | null | undefined, key: string): boolean {
   if (!perms) return false;
   if (perms.includes("*")) return true;
-  return perms.some((p) => {
-    if (p === key) return true;
-    if (p.endsWith(":*")) return key.startsWith(p.slice(0, -1));
-    return false;
-  });
+  if (perms.includes(key)) return true;
+  const dotIdx = key.indexOf(".");
+  if (dotIdx > 0 && perms.includes(`${key.slice(0, dotIdx)}.*`)) return true;
+  const colonIdx = key.indexOf(":");
+  if (colonIdx > 0 && perms.includes(`${key.slice(0, colonIdx)}:*`)) return true;
+  // Cross-form fallback
+  const alt = key.includes(".") ? key.replace(".", ":") : key.replace(":", ".");
+  if (perms.includes(alt)) return true;
+  const altIdx = alt.search(/[.:]/);
+  if (altIdx > 0 && perms.includes(`${alt.slice(0, altIdx)}${alt[altIdx]}*`)) return true;
+  return false;
 }
 
 export function isAdmin(u: SafeUser | null): boolean {
@@ -216,5 +257,15 @@ export function isSuperAdmin(u: SafeUser | null): boolean {
 export function isAccountant(u: SafeUser | null): boolean {
   if (!u) return false;
   if (isAdmin(u)) return true; // admins always have ERP access
-  return u.role === "accountant" || hasPermission(u.permissions, "erp:*") || hasPermission(u.permissions, "erp:access");
+  return canUser(u, "erp.read");
+}
+
+/**
+ * React hook: does the current user hold `permission`?
+ * Use it to hide/show UI. NEVER rely on this for authorization — the server
+ * enforces via `requirePermission()`.
+ */
+export function useCan(permission: string): boolean {
+  const user = useAppStore((s) => s.user);
+  return canUser(user, permission);
 }

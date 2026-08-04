@@ -4,22 +4,35 @@ import { cookies } from "next/headers";
 const COOKIE_NAME = "crm_session";
 const SESSION_TTL_DAYS = 7;
 
+export interface ImpersonationClaim {
+  original_super_admin_id: string;
+  original_username: string;
+  target_user_id: string;
+  target_tenant_id: string | null;
+  expires_at: string; // ISO
+}
+
 export interface SessionPayload {
   sub: string;
   username: string;
   role: string;
   token_version: number;
   tenant_id: string | null;
+  /** Optional impersonation context — present only while a super_admin is acting as another user. */
+  impersonating?: ImpersonationClaim;
   iat?: number;
   exp?: number;
 }
 
 function getSecret(): Uint8Array {
   const s = process.env.SECRET_KEY;
-  if (!s && process.env.NODE_ENV === "production") {
-    throw new Error("SECRET_KEY environment variable is required in production. Generate a random 32+ character string.");
+  if (!s || s.length < 32) {
+    throw new Error(
+      "SECRET_KEY environment variable is required in every environment and must be at least 32 characters. " +
+      "Generate one with: openssl rand -hex 32"
+    );
   }
-  return new TextEncoder().encode(s || "dev-secret-change-in-production-please-32chars");
+  return new TextEncoder().encode(s);
 }
 
 export async function createSession(payload: Omit<SessionPayload, "iat" | "exp">): Promise<string> {

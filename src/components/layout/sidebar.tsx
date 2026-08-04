@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useAppStore, ViewKey, isAdmin, isSuperAdmin, isAccountant } from "@/lib/store/app-store";
+import { useAppStore, ViewKey, isAdmin, isSuperAdmin, isAccountant, canUser } from "@/lib/store/app-store";
 import { useI18nStore } from "@/lib/i18n/store";
 import { t, NAV, SECTIONS as I18N_SECTIONS, type Locale } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,13 @@ interface NavItem {
   i18nKey: string;
   i18nSection: string;
   icon: React.ComponentType<{ className?: string }>;
+  /**
+   * Required permission to see this nav item. If omitted, the item is
+   * visible to any authenticated CRM user.
+   * `platform.*` permissions are automatically super-admin-only per `canUser`.
+   */
+  permission?: string;
+  /** Legacy — still respected but new items should use `permission`. */
   adminOnly?: boolean;
   superAdminOnly?: boolean;
   featureFlag?: string;
@@ -47,68 +54,70 @@ const SECTIONS: NavSection[] = [
   {
     i18nKey: "overview",
     items: [
-      { key: "dashboard", i18nKey: "dashboard", i18nSection: "overview", icon: LayoutDashboard },
-      { key: "custom-dashboard", i18nKey: "custom-dashboard", i18nSection: "overview", icon: LayoutGrid },
-      { key: "calendar", i18nKey: "calendar", i18nSection: "overview", icon: Calendar },
-      { key: "tasks", i18nKey: "tasks", i18nSection: "overview", icon: ListChecks },
-      { key: "quick-notes", i18nKey: "quick-notes", i18nSection: "overview", icon: StickyNote },
+      { key: "dashboard", i18nKey: "dashboard", i18nSection: "overview", icon: LayoutDashboard, permission: "dashboard.read" },
+      { key: "custom-dashboard", i18nKey: "custom-dashboard", i18nSection: "overview", icon: LayoutGrid, permission: "dashboard.read" },
+      { key: "calendar", i18nKey: "calendar", i18nSection: "overview", icon: Calendar, permission: "calendar.read" },
+      { key: "tasks", i18nKey: "tasks", i18nSection: "overview", icon: ListChecks, permission: "tasks.read" },
+      { key: "quick-notes", i18nKey: "quick-notes", i18nSection: "overview", icon: StickyNote, permission: "notes.read" },
       { key: "workspace", i18nKey: "workspace", i18nSection: "overview", icon: Briefcase },
     ],
   },
   {
     i18nKey: "trade",
     items: [
-      { key: "product-catalog", i18nKey: "product-catalog", i18nSection: "trade", icon: BookOpen, featureFlag: "module_trade" },
-      { key: "supplier-offers", i18nKey: "supplier-offers", i18nSection: "trade", icon: Inbox, featureFlag: "module_trade" },
-      { key: "trade-calculator", i18nKey: "trade-calculator", i18nSection: "trade", icon: Calculator, featureFlag: "module_trade" },
+      { key: "product-catalog", i18nKey: "product-catalog", i18nSection: "trade", icon: BookOpen, permission: "product-catalog.read", featureFlag: "module_trade" },
+      { key: "supplier-offers", i18nKey: "supplier-offers", i18nSection: "trade", icon: Inbox, permission: "supplier-offers.read", featureFlag: "module_trade" },
+      { key: "trade-calculator", i18nKey: "trade-calculator", i18nSection: "trade", icon: Calculator, permission: "trade-calculator.read", featureFlag: "module_trade" },
     ],
   },
   {
     i18nKey: "crm",
     items: [
-      { key: "partners", i18nKey: "partners", i18nSection: "crm", icon: Users },
-      { key: "products", i18nKey: "products", i18nSection: "crm", icon: Package },
-      { key: "deals", i18nKey: "deals", i18nSection: "crm", icon: Handshake },
-      { key: "commissions", i18nKey: "commissions", i18nSection: "crm", icon: DollarSign },
-      { key: "offers", i18nKey: "offers", i18nSection: "crm", icon: FileText },
-      { key: "demands", i18nKey: "demands", i18nSection: "crm", icon: Inbox },
-      { key: "inventory", i18nKey: "inventory", i18nSection: "crm", icon: Boxes, featureFlag: "module_inventory" },
+      { key: "partners", i18nKey: "partners", i18nSection: "crm", icon: Users, permission: "partners.read" },
+      { key: "products", i18nKey: "products", i18nSection: "crm", icon: Package, permission: "products.read" },
+      { key: "deals", i18nKey: "deals", i18nSection: "crm", icon: Handshake, permission: "deals.read" },
+      { key: "commissions", i18nKey: "commissions", i18nSection: "crm", icon: DollarSign, permission: "commissions.read" },
+      { key: "offers", i18nKey: "offers", i18nSection: "crm", icon: FileText, permission: "offers.read" },
+      { key: "demands", i18nKey: "demands", i18nSection: "crm", icon: Inbox, permission: "demands.read" },
+      { key: "inventory", i18nKey: "inventory", i18nSection: "crm", icon: Boxes, permission: "inventory.read", featureFlag: "module_inventory" },
     ],
   },
   {
     i18nKey: "finance",
     items: [
-      { key: "invoices", i18nKey: "invoices", i18nSection: "finance", icon: Receipt },
-      { key: "proformas", i18nKey: "proformas", i18nSection: "finance", icon: FileSignature },
-      { key: "document-register", i18nKey: "document-register", i18nSection: "finance", icon: FolderOpen },
-      { key: "erp", i18nKey: "erp", i18nSection: "finance", icon: BookMarked, adminOnly: true, featureFlag: "module_finance" },
+      { key: "invoices", i18nKey: "invoices", i18nSection: "finance", icon: Receipt, permission: "invoices.read" },
+      { key: "proformas", i18nKey: "proformas", i18nSection: "finance", icon: FileSignature, permission: "proformas.read" },
+      { key: "document-register", i18nKey: "document-register", i18nSection: "finance", icon: FolderOpen, permission: "document-register.read" },
+      { key: "erp", i18nKey: "erp", i18nSection: "finance", icon: BookMarked, permission: "erp.read", featureFlag: "module_finance" },
     ],
   },
   {
     i18nKey: "administration",
     items: [
-      { key: "audit", i18nKey: "audit", i18nSection: "administration", icon: ScrollText },
-      { key: "documents", i18nKey: "documents", i18nSection: "administration", icon: FolderOpen },
-      { key: "kyc-review", i18nKey: "kyc-review", i18nSection: "administration", icon: ShieldCheck, adminOnly: true, featureFlag: "module_kyc" },
-      { key: "portal-rfqs", i18nKey: "portal-rfqs", i18nSection: "administration", icon: Inbox, adminOnly: true, featureFlag: "module_portal" },
-      { key: "document-verification", i18nKey: "document-verification", i18nSection: "administration", icon: ShieldCheck, adminOnly: true, featureFlag: "module_document_verification" },
-      { key: "document-templates", i18nKey: "document-templates", i18nSection: "administration", icon: FileText, adminOnly: true, featureFlag: "module_document_templates" },
-      { key: "security", i18nKey: "security", i18nSection: "administration", icon: ShieldCheck, adminOnly: true, featureFlag: "module_security" },
-      { key: "users", i18nKey: "users", i18nSection: "administration", icon: Users, adminOnly: true },
-      { key: "vault", i18nKey: "vault", i18nSection: "administration", icon: Lock, adminOnly: true, featureFlag: "module_vault" },
-      { key: "api-keys", i18nKey: "api-keys", i18nSection: "administration", icon: Key, adminOnly: true, featureFlag: "module_api_keys" },
-      { key: "webhooks", i18nKey: "webhooks", i18nSection: "administration", icon: Webhook, adminOnly: true, featureFlag: "module_webhooks" },
-      { key: "mail-queue", i18nKey: "mail-queue", i18nSection: "administration", icon: Mail, adminOnly: true, featureFlag: "module_mail_queue" },
-      { key: "email-templates", i18nKey: "email-templates", i18nSection: "administration", icon: Mail, adminOnly: true, featureFlag: "module_mail_queue" },
-      { key: "api-integrations", i18nKey: "api-integrations", i18nSection: "administration", icon: Plug, adminOnly: true },
-      { key: "settings", i18nKey: "settings", i18nSection: "administration", icon: Settings, adminOnly: true },
-      { key: "plans", i18nKey: "plans", i18nSection: "administration", icon: TrendingUp, adminOnly: true },
+      { key: "audit", i18nKey: "audit", i18nSection: "administration", icon: ScrollText, permission: "audit.read" },
+      { key: "documents", i18nKey: "documents", i18nSection: "administration", icon: FolderOpen, permission: "documents.read" },
+      { key: "kyc-review", i18nKey: "kyc-review", i18nSection: "administration", icon: ShieldCheck, permission: "kyc.read", featureFlag: "module_kyc" },
+      { key: "portal-rfqs", i18nKey: "portal-rfqs", i18nSection: "administration", icon: Inbox, permission: "portal.rfq_read", featureFlag: "module_portal" },
+      { key: "document-verification", i18nKey: "document-verification", i18nSection: "administration", icon: ShieldCheck, permission: "document-verify.read", featureFlag: "module_document_verification" },
+      { key: "document-templates", i18nKey: "document-templates", i18nSection: "administration", icon: FileText, permission: "document-templates.read", featureFlag: "module_document_templates" },
+      { key: "security", i18nKey: "security", i18nSection: "administration", icon: ShieldCheck, permission: "security.read", featureFlag: "module_security" },
+      { key: "users", i18nKey: "users", i18nSection: "administration", icon: Users, permission: "users.read" },
+      { key: "vault", i18nKey: "vault", i18nSection: "administration", icon: Lock, permission: "vault.read", featureFlag: "module_vault" },
+      { key: "api-keys", i18nKey: "api-keys", i18nSection: "administration", icon: Key, permission: "api-keys.read", featureFlag: "module_api_keys" },
+      { key: "webhooks", i18nKey: "webhooks", i18nSection: "administration", icon: Webhook, permission: "webhooks.read", featureFlag: "module_webhooks" },
+      { key: "mail-queue", i18nKey: "mail-queue", i18nSection: "administration", icon: Mail, permission: "mail-queue.read", featureFlag: "module_mail_queue" },
+      { key: "email-templates", i18nKey: "email-templates", i18nSection: "administration", icon: Mail, permission: "email-templates.read", featureFlag: "module_mail_queue" },
+      { key: "api-integrations", i18nKey: "api-integrations", i18nSection: "administration", icon: Plug, permission: "integrations.read" },
+      { key: "settings", i18nKey: "settings", i18nSection: "administration", icon: Settings, permission: "settings.read" },
+      { key: "plans", i18nKey: "plans", i18nSection: "administration", icon: TrendingUp, permission: "platform.plans.read" },
     ],
   },
   {
     i18nKey: "platform",
     items: [
-      { key: "platform-dashboard", i18nKey: "platform-dashboard", i18nSection: "platform", icon: LayoutDashboard, superAdminOnly: true },
+      { key: "platform-dashboard", i18nKey: "platform-dashboard", i18nSection: "platform", icon: LayoutDashboard, permission: "platform.overview" },
+      { key: "tenants", i18nKey: "tenants", i18nSection: "platform", icon: Building2, permission: "platform.tenants.read" },
+      { key: "feature-flags", i18nKey: "feature-flags", i18nSection: "platform", icon: ToggleRight, permission: "platform.feature_flags.read" },
     ],
   },
 ];
@@ -195,12 +204,17 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto custom-scroll px-3 py-4 space-y-1">
         {SECTIONS.map((section) => {
           const visibleItems = section.items.filter((n) => {
-            // Super-admin sees everything (including platform modules)
-            if (n.superAdminOnly) return superAdmin;
-            // Admin-only items: show if admin or accountant
-            if (n.adminOnly) return admin || accountant;
-            // Feature flag gating: if the item has a featureFlag and we have flags data,
-            // only show it if the flag is true. Super-admin sees everything regardless.
+            // Legacy: superAdminOnly / adminOnly still respected for any item
+            // that hasn't been migrated to `permission`.
+            if (n.superAdminOnly && !superAdmin) return false;
+            if (n.adminOnly && !(admin || accountant)) return false;
+
+            // New model: hide the item unless the user holds the permission.
+            // super_admin passes canUser for any key; admin passes for any
+            // non-platform key; regular users pass only when explicitly granted.
+            if (n.permission && !canUser(user, n.permission)) return false;
+
+            // Feature-flag gating (super-admin bypasses).
             if (n.featureFlag && flags && !superAdmin) {
               return flags[n.featureFlag] === true;
             }

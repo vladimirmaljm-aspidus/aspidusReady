@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { hashPassword } from "@/lib/auth/password";
 import { validatePassword } from "@/lib/auth/password-policy";
+import { consumePasswordReset } from "@/lib/auth/password-reset";
 
 export const runtime = "nodejs";
 
@@ -9,84 +10,54 @@ export const runtime = "nodejs";
  * POST /api/portal/reset-password
  * Body: { reset_token: "xxx", password: "newpassword123" }
  *
- * Validates the reset token (from audit log), checks expiry,
- * and sets the new password on the portal access record.
+ * Consumes a single-use hashed token from `password_resets`, sets the new password,
+ * and bumps token_version to invalidate any existing sessions.
  */
 export async function POST(req: NextRequest) {
   try {
     const { reset_token, password } = await req.json();
-
     if (!reset_token || !password) {
       return NextResponse.json({ error: "Reset token and password are required." }, { status: 400 });
     }
-
     const validation = validatePassword(password);
     if (!validation.ok) {
       return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
     }
 
-    const store = await getStore();
-
-    // Search audit logs for the reset token
-    // We check all tenants (the token was stored with the tenant_id)
-    const tenants = await store.listTenants();
-    let foundAccess: any = null;
-    let foundTenant: any = null;
-
-    for (const t of tenants) {
-      try {
-        const auditLogs = await store.listAudit(t.id, { limit: 100 });
-        // A token that was already consumed must not work again (replay).
-        const alreadyUsed = auditLogs.items.some(
-          (log) => log.action === "portal.password_reset_completed" && (log.details as any)?.reset_token === reset_token
-        );
-        if (alreadyUsed) {
-          return NextResponse.json({ error: "This reset link has already been used. Please request a new one." }, { status: 400 });
-        }
-        for (const log of auditLogs.items) {
-          if (log.action === "portal.password_reset_requested") {
-            const details = log.details as any;
-            if (details?.reset_token === reset_token) {
-              // Check expiry
-              if (new Date(details.expires_at) < new Date()) {
-                return NextResponse.json({ error: "Reset token has expired. Please request a new one." }, { status: 400 });
-              }
-              foundAccess = { id: log.entity_id, email: details.email };
-              foundTenant = t;
-              break;
-            }
-          }
-        }
-        if (foundAccess) break;
-      } catch { /* skip */ }
+    const result = await consumePasswordReset(reset_token);
+    if (!result.ok) {
+      const msg =
+        result.reason === "expired" ? "This reset link has expired. Please request a new one." :
+        result.reason === "already_used" ? "This reset link has already been used. Please request a new one." :
+        "Invalid reset token.";
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
-
-    if (!foundAccess) {
+    if (result.targetType !== "portal_access") {
       return NextResponse.json({ error: "Invalid reset token." }, { status: 400 });
     }
 
-    // Hash the new password
+    const store = await getStore();
     const passwordHash = await hashPassword(password);
+    const current = await store.getPortalAccessById(result.targetId!);
+    if (!current) {
+      return NextResponse.json({ error: "Account not found." }, { status: 400 });
+    }
 
-    // Update the portal access record. Bump token_version so any session
-    // opened with the old password (or a stolen cookie) stops working.
-    const currentAccess = await store.getPortalAccessById(foundAccess.id);
     await store.upsertPortalAccess({
-      id: foundAccess.id,
+      id: result.targetId!,
       password_hash: passwordHash,
       must_set_password: false,
-      token_version: (currentAccess?.token_version || 0) + 1,
+      token_version: (current.token_version || 0) + 1,
     });
 
-    // Audit the password reset
     await store.appendAudit({
-      tenant_id: foundTenant.id,
+      tenant_id: result.tenantId || null,
       user_id: null,
-      username: `portal:${foundAccess.email}`,
+      username: `portal:${current.portal_email || result.targetId}`,
       action: "portal.password_reset_completed",
       entity_type: "portal_access",
-      entity_id: foundAccess.id,
-      details: { email: foundAccess.email, reset_token },
+      entity_id: result.targetId!,
+      details: { email: current.portal_email },
       ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
       user_agent: req.headers.get("user-agent") || null,
     });

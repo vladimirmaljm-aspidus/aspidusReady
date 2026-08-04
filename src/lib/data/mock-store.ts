@@ -73,7 +73,7 @@ export class MockStore implements Store {
       username: u.username || "",
       email: u.email || "",
       full_name: u.full_name || null,
-      role: u.role || "staff",
+      role: u.role || "user",
       permissions: u.permissions || null,
       password_hash: u.password_hash || mock.mockHash("password"),
       totp_secret: u.totp_secret || null,

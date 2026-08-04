@@ -43,26 +43,19 @@ import { UserRole, Tenant } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const ROLE_LABEL: Record<UserRole, string> = {
-  super_admin: "Super Admin", admin: "Admin", accountant: "Accountant", manager: "Manager", staff: "Staff", viewer: "Viewer",
+  super_admin: "Super Admin", admin: "Admin", user: "User",
 };
 
 const ROLE_DESCRIPTION: Record<UserRole, string> = {
-  super_admin: "Platform administrator with access to all tenants",
-  admin: "Full access to all features and user management",
-  accountant: "Access to financial data, invoices, and ERP",
-  manager: "Can manage deals, offers, and client relationships",
-  staff: "Can view and edit basic records",
-  viewer: "Read-only access to view records",
+  super_admin: "Platform administrator — cross-tenant, cannot be created via this form",
+  admin: "Full access within this tenant (all non-platform actions)",
+  user: "Access limited to permissions assigned by the admin",
 };
 
-// admin=default, manager=chart-4, staff=secondary, viewer=outline
 const ROLE_BADGE: Record<UserRole, string> = {
   super_admin: "border-transparent bg-destructive text-destructive-foreground",
   admin: "border-transparent bg-primary text-primary-foreground",
-  accountant: "border-transparent bg-chart-3 text-white",
-  manager: "border-transparent bg-chart-4 text-white",
-  staff: "border-transparent bg-secondary text-secondary-foreground",
-  viewer: "",
+  user: "border-transparent bg-secondary text-secondary-foreground",
 };
 
 function initials(name?: string | null): string {
@@ -383,7 +376,7 @@ function UserFormDialog({
   const isSA = isSuperAdmin(currentUser);
 
   const [form, setForm] = useState<UserForm>({
-    username: "", email: "", full_name: "", role: "staff", tenant_id: "", password: "", active: true, permissions: null,
+    username: "", email: "", full_name: "", role: "user", tenant_id: "", password: "", active: true, permissions: null,
   });
   const [saving, setSaving] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -406,7 +399,7 @@ function UserFormDialog({
         username: user?.username || "",
         email: user?.email || "",
         full_name: user?.full_name || "",
-        role: (user?.role as UserRole) || "staff",
+        role: (user?.role as UserRole) || "user",
         tenant_id: user?.tenant_id || defaultTenantId,
         password: "",
         active: user?.active ?? true,
@@ -572,7 +565,7 @@ function UserFormDialog({
               <Select value={form.role} onValueChange={(v) => set("role", v as UserRole)}>
                 <SelectTrigger id="role"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(["super_admin", "admin", "accountant", "manager", "staff", "viewer"] as UserRole[]).filter((r) => isSA || r !== "super_admin").map((role) => (
+                  {(["super_admin", "admin", "user"] as UserRole[]).filter((r) => isSA || r !== "super_admin").map((role) => (
                     <SelectItem key={role} value={role}>
                       <div className="flex flex-col">
                         <span className="font-medium">{ROLE_LABEL[role]}</span>

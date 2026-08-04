@@ -55,6 +55,9 @@ const EmailTemplatesView = dynamic(() => import("@/components/views/email-templa
 const ApiIntegrationsView = dynamic(() => import("@/components/views/api-integrations-view").then((m) => m.ApiIntegrationsView), { ssr: false });
 const CommissionsView = dynamic(() => import("@/components/views/commissions-view").then((m) => m.CommissionsView), { ssr: false });
 const ErpView = dynamic(() => import("@/components/views/erp-view").then((m) => m.ErpView), { ssr: false });
+const TenantsView = dynamic(() => import("@/components/views/tenants-view").then((m) => m.TenantsView), { ssr: false });
+const SuperAdminOverviewView = dynamic(() => import("@/components/views/super-admin-overview-view").then((m) => m.SuperAdminOverviewView), { ssr: false });
+const FeatureFlagsView = dynamic(() => import("@/components/views/feature-flags-view").then((m) => m.FeatureFlagsView), { ssr: false });
 
 /* -------------------------------------------------------------------------- */
 /*  View renderer                                                             */
@@ -97,6 +100,12 @@ function ViewContent({ view }: { view: string }) {
     case "email-templates":      return <EmailTemplatesView />;
     case "api-integrations":     return <ApiIntegrationsView />;
     case "erp":                  return <ErpView />;
+    case "quick-notes":          return <QuickNotesView />;
+    case "workspace":            return <WorkspaceView />;
+    case "plans":                return <PlansView />;
+    case "tenants":              return <TenantsView />;
+    case "super-admin-overview": return <SuperAdminOverviewView />;
+    case "feature-flags":        return <FeatureFlagsView />;
     default:                     return <DashboardView />;
   }
 }

@@ -80,8 +80,8 @@ export async function GET(req: NextRequest) {
  *   partner_id, product_id, deal_id (optional links),
  *   instructions, estimated_hours, tags
  *
- * Admins and managers can assign tasks to any tenant user.
- * Regular staff can only create tasks for themselves.
+ * Admins can assign tasks to any tenant user; regular users only to themselves.
+ * Regular users can only create tasks for themselves.
  */
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
@@ -93,11 +93,11 @@ export async function POST(req: NextRequest) {
   body.tenant_id = tid;
   body.user_id = body.user_id || auth.user.id; // creator
 
-  // Permission check: only admin/manager can assign tasks to others
-  const canAssign = auth.isSuperAdmin || auth.user.role === "admin" || auth.user.role === "manager";
+  // Permission check: only admin can assign tasks to others
+  const canAssign = auth.isSuperAdmin || auth.user.role === "admin";
   if (body.assigned_to && body.assigned_to !== auth.user.id && !canAssign) {
     return NextResponse.json(
-      { error: "You can only create tasks for yourself. Ask a manager to assign tasks to others." },
+      { error: "You can only create tasks for yourself. Ask an admin to assign tasks to others." },
       { status: 403 }
     );
   }

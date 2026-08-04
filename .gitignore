@@ -12,3 +12,4 @@ tsconfig.tsbuildinfo
 .claude-flow/data/
 .claude-flow/logs/
 .claude-flow/sessions/
+scratchpad-backups/
