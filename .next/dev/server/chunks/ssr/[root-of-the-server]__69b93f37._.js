@@ -1003,9 +1003,8 @@ const NAV = {
         webhooks: "Webhooks",
         "mail-queue": "Mail Queue",
         settings: "Settings",
-        "super-admin-overview": "System Overview",
+        "platform-dashboard": "System Overview",
         tenants: "Tenants",
-        "feature-flags": "Feature Flags",
         "partner-360": "Partner 360",
         "custom-dashboard": "Custom Dashboard",
         calendar: "Calendar",
@@ -1042,9 +1041,8 @@ const NAV = {
         webhooks: "Webhooks",
         "mail-queue": "Red poruka",
         settings: "Podešavanja",
-        "super-admin-overview": "Pregled sistema",
+        "platform-dashboard": "Pregled sistema",
         tenants: "Tenanti",
-        "feature-flags": "Funkcionalne zastavice",
         "partner-360": "Partner 360",
         "custom-dashboard": "Prilagođena tabla",
         calendar: "Kalendar",
@@ -1840,6 +1838,7 @@ __turbopack_context__.s([
     ()=>Sidebar
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime.js [app-ssr] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$tanstack$2f$react$2d$query$2f$build$2f$modern$2f$useQuery$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/@tanstack/react-query/build/modern/useQuery.js [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2f$app$2d$store$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/store/app-store.ts [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$store$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/i18n/store.ts [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/i18n/dictionaries.ts [app-ssr] (ecmascript)");
@@ -1871,9 +1870,13 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$re
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$dollar$2d$sign$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__DollarSign$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/dollar-sign.js [app-ssr] (ecmascript) <export default as DollarSign>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$book$2d$marked$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__BookMarked$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/book-marked.js [app-ssr] (ecmascript) <export default as BookMarked>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$calendar$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Calendar$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/calendar.js [app-ssr] (ecmascript) <export default as Calendar>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$sticky$2d$note$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__StickyNote$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/sticky-note.js [app-ssr] (ecmascript) <export default as StickyNote>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$briefcase$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Briefcase$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/briefcase.js [app-ssr] (ecmascript) <export default as Briefcase>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trending$2d$up$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__TrendingUp$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/trending-up.js [app-ssr] (ecmascript) <export default as TrendingUp>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/components/ui/tooltip.tsx [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$avatar$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/components/ui/avatar.tsx [app-ssr] (ecmascript)");
 "use client";
+;
 ;
 ;
 ;
@@ -1911,6 +1914,18 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
                 i18nKey: "tasks",
                 i18nSection: "overview",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$list$2d$checks$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ListChecks$3e$__["ListChecks"]
+            },
+            {
+                key: "quick-notes",
+                i18nKey: "quick-notes",
+                i18nSection: "overview",
+                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$sticky$2d$note$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__StickyNote$3e$__["StickyNote"]
+            },
+            {
+                key: "workspace",
+                i18nKey: "workspace",
+                i18nSection: "overview",
+                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$briefcase$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Briefcase$3e$__["Briefcase"]
             }
         ]
     },
@@ -1921,19 +1936,22 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
                 key: "product-catalog",
                 i18nKey: "product-catalog",
                 i18nSection: "trade",
-                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$book$2d$open$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__BookOpen$3e$__["BookOpen"]
+                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$book$2d$open$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__BookOpen$3e$__["BookOpen"],
+                featureFlag: "module_trade"
             },
             {
                 key: "supplier-offers",
                 i18nKey: "supplier-offers",
                 i18nSection: "trade",
-                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$inbox$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Inbox$3e$__["Inbox"]
+                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$inbox$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Inbox$3e$__["Inbox"],
+                featureFlag: "module_trade"
             },
             {
                 key: "trade-calculator",
                 i18nKey: "trade-calculator",
                 i18nSection: "trade",
-                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$calculator$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Calculator$3e$__["Calculator"]
+                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$calculator$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Calculator$3e$__["Calculator"],
+                featureFlag: "module_trade"
             }
         ]
     },
@@ -1980,7 +1998,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
                 key: "inventory",
                 i18nKey: "inventory",
                 i18nSection: "crm",
-                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$boxes$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Boxes$3e$__["Boxes"]
+                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$boxes$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Boxes$3e$__["Boxes"],
+                featureFlag: "module_inventory"
             }
         ]
     },
@@ -2010,7 +2029,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
                 i18nKey: "erp",
                 i18nSection: "finance",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$book$2d$marked$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__BookMarked$3e$__["BookMarked"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_finance"
             }
         ]
     },
@@ -2034,35 +2054,40 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
                 i18nKey: "kyc-review",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$shield$2d$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ShieldCheck$3e$__["ShieldCheck"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_kyc"
             },
             {
                 key: "portal-rfqs",
                 i18nKey: "portal-rfqs",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$inbox$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Inbox$3e$__["Inbox"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_portal"
             },
             {
                 key: "document-verification",
                 i18nKey: "document-verification",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$shield$2d$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ShieldCheck$3e$__["ShieldCheck"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_document_verification"
             },
             {
                 key: "document-templates",
                 i18nKey: "document-templates",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$file$2d$text$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__FileText$3e$__["FileText"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_document_templates"
             },
             {
                 key: "security",
                 i18nKey: "security",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$shield$2d$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ShieldCheck$3e$__["ShieldCheck"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_security"
             },
             {
                 key: "users",
@@ -2076,35 +2101,40 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
                 i18nKey: "vault",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$lock$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Lock$3e$__["Lock"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_vault"
             },
             {
                 key: "api-keys",
                 i18nKey: "api-keys",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$key$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Key$3e$__["Key"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_api_keys"
             },
             {
                 key: "webhooks",
                 i18nKey: "webhooks",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$webhook$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Webhook$3e$__["Webhook"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_webhooks"
             },
             {
                 key: "mail-queue",
                 i18nKey: "mail-queue",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mail$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Mail$3e$__["Mail"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_mail_queue"
             },
             {
                 key: "email-templates",
                 i18nKey: "email-templates",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mail$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Mail$3e$__["Mail"],
-                adminOnly: true
+                adminOnly: true,
+                featureFlag: "module_mail_queue"
             },
             {
                 key: "api-integrations",
@@ -2118,6 +2148,13 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
                 i18nKey: "settings",
                 i18nSection: "administration",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$settings$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Settings$3e$__["Settings"],
+                adminOnly: true
+            },
+            {
+                key: "plans",
+                i18nKey: "plans",
+                i18nSection: "administration",
+                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trending$2d$up$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__TrendingUp$3e$__["TrendingUp"],
                 adminOnly: true
             }
         ]
@@ -2153,6 +2190,19 @@ function Sidebar() {
     const admin = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2f$app$2d$store$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["isAdmin"])(user);
     const superAdmin = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2f$app$2d$store$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["isSuperAdmin"])(user);
     const accountant = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2f$app$2d$store$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["isAccountant"])(user);
+    // Fetch feature flags for the current tenant to gate sidebar items
+    const { data: flagsData } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$tanstack$2f$react$2d$query$2f$build$2f$modern$2f$useQuery$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useQuery"])({
+        queryKey: [
+            "feature-flags-sidebar"
+        ],
+        queryFn: async ()=>{
+            const r = await fetch("/api/feature-flags");
+            if (!r.ok) return null;
+            return r.json();
+        },
+        staleTime: 10_000
+    });
+    const flags = flagsData?.flags || null;
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("aside", {
         className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["cn"])("h-screen sticky top-0 shrink-0 flex flex-col", "glass-sidebar border-r border-sidebar-border", "transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]", sidebarCollapsed ? "w-[72px]" : "w-[260px]"),
         children: [
@@ -2166,12 +2216,12 @@ function Sidebar() {
                             children: "A"
                         }, void 0, false, {
                             fileName: "[project]/src/components/layout/sidebar.tsx",
-                            lineNumber: 157,
+                            lineNumber: 175,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 152,
+                        lineNumber: 170,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2182,7 +2232,7 @@ function Sidebar() {
                                 children: "Aspidus"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 167,
+                                lineNumber: 185,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2190,27 +2240,34 @@ function Sidebar() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "trade-platform")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 170,
+                                lineNumber: 188,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 161,
+                        lineNumber: 179,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 147,
+                lineNumber: 165,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("nav", {
                 className: "flex-1 overflow-y-auto custom-scroll px-3 py-4 space-y-1",
                 children: SECTIONS.map((section)=>{
                     const visibleItems = section.items.filter((n)=>{
+                        // Super-admin sees everything (including platform modules)
                         if (n.superAdminOnly) return superAdmin;
+                        // Admin-only items: show if admin or accountant
                         if (n.adminOnly) return admin || accountant;
+                        // Feature flag gating: if the item has a featureFlag and we have flags data,
+                        // only show it if the flag is true. Super-admin sees everything regardless.
+                        if (n.featureFlag && flags && !superAdmin) {
+                            return flags[n.featureFlag] === true;
+                        }
                         return true;
                     });
                     if (visibleItems.length === 0) return null;
@@ -2225,12 +2282,12 @@ function Sidebar() {
                                     children: sectionLabel
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 195,
+                                    lineNumber: 220,
                                     columnNumber: 17
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 191,
+                                lineNumber: 216,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2247,25 +2304,25 @@ function Sidebar() {
                                         onClick: ()=>setView(item.key)
                                     }, item.key, false, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 208,
+                                        lineNumber: 233,
                                         columnNumber: 21
                                     }, this);
                                 })
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 201,
+                                lineNumber: 226,
                                 columnNumber: 15
                             }, this)
                         ]
                     }, section.i18nKey, true, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 189,
+                        lineNumber: 214,
                         columnNumber: 13
                     }, this);
                 })
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 177,
+                lineNumber: 195,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2281,12 +2338,12 @@ function Sidebar() {
                                     children: getInitials(user.full_name)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 233,
+                                    lineNumber: 258,
                                     columnNumber: 15
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 232,
+                                lineNumber: 257,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2297,7 +2354,7 @@ function Sidebar() {
                                         children: user.full_name || user.username
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 244,
+                                        lineNumber: 269,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2305,19 +2362,19 @@ function Sidebar() {
                                         children: formatRole(user.role)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 247,
+                                        lineNumber: 272,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 240,
+                                lineNumber: 265,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 228,
+                        lineNumber: 253,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2337,18 +2394,18 @@ function Sidebar() {
                                                     className: "size-3.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                    lineNumber: 275,
+                                                    lineNumber: 300,
                                                     columnNumber: 21
                                                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$chevron$2d$left$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ChevronLeft$3e$__["ChevronLeft"], {
                                                     className: "size-3.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                    lineNumber: 277,
+                                                    lineNumber: 302,
                                                     columnNumber: 21
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                lineNumber: 269,
+                                                lineNumber: 294,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2356,18 +2413,18 @@ function Sidebar() {
                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "collapse")
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                lineNumber: 280,
+                                                lineNumber: 305,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 258,
+                                        lineNumber: 283,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 257,
+                                    lineNumber: 282,
                                     columnNumber: 13
                                 }, this),
                                 sidebarCollapsed && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TooltipContent"], {
@@ -2377,30 +2434,30 @@ function Sidebar() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "expand-sidebar")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 289,
+                                    lineNumber: 314,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/layout/sidebar.tsx",
-                            lineNumber: 256,
+                            lineNumber: 281,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 255,
+                        lineNumber: 280,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 225,
+                lineNumber: 250,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/layout/sidebar.tsx",
-        lineNumber: 138,
+        lineNumber: 156,
         columnNumber: 5
     }, this);
 }
@@ -2413,21 +2470,21 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                 className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["cn"])("absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full", "bg-gradient-emerald transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]", active && !collapsed ? "w-[3px] h-5 opacity-100" : "w-0 h-5 opacity-0")
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 328,
+                lineNumber: 353,
                 columnNumber: 7
             }, this),
             active && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["cn"])("absolute inset-0 rounded-lg -z-10", "bg-sidebar-primary/[0.08]", collapsed && "bg-sidebar-primary/[0.12]")
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 338,
+                lineNumber: 363,
                 columnNumber: 9
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(Icon, {
                 className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["cn"])("size-[18px] shrink-0 transition-colors duration-200", active ? "text-sidebar-primary" : "text-white/35 group-hover:text-white/60")
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 346,
+                lineNumber: 371,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2435,20 +2492,20 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                 children: label
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 356,
+                lineNumber: 381,
                 columnNumber: 7
             }, this),
             active && collapsed && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "absolute -bottom-0.5 left-1/2 -translate-x-1/2 size-1 rounded-full bg-sidebar-primary"
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 365,
+                lineNumber: 390,
                 columnNumber: 9
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/layout/sidebar.tsx",
-        lineNumber: 314,
+        lineNumber: 339,
         columnNumber: 5
     }, this);
     if (collapsed) {
@@ -2459,7 +2516,7 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                     children: button
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                    lineNumber: 373,
+                    lineNumber: 398,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TooltipContent"], {
@@ -2469,13 +2526,13 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                     children: label
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                    lineNumber: 376,
+                    lineNumber: 401,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/layout/sidebar.tsx",
-            lineNumber: 372,
+            lineNumber: 397,
             columnNumber: 7
         }, this);
     }
@@ -4001,10 +4058,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$re
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$receipt$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Receipt$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/receipt.js [app-ssr] (ecmascript) <export default as Receipt>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$file$2d$pen$2d$line$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__FileSignature$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/file-pen-line.js [app-ssr] (ecmascript) <export default as FileSignature>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$boxes$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Boxes$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/boxes.js [app-ssr] (ecmascript) <export default as Boxes>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$building$2d$2$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Building2$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/building-2.js [app-ssr] (ecmascript) <export default as Building2>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$book$2d$open$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__BookOpen$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/book-open.js [app-ssr] (ecmascript) <export default as BookOpen>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$calculator$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Calculator$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/calculator.js [app-ssr] (ecmascript) <export default as Calculator>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$toggle$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ToggleRight$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/toggle-right.js [app-ssr] (ecmascript) <export default as ToggleRight>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$plus$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Plus$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/plus.js [app-ssr] (ecmascript) <export default as Plus>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$file$2d$down$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__FileDown$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/file-down.js [app-ssr] (ecmascript) <export default as FileDown>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$external$2d$link$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ExternalLink$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/external-link.js [app-ssr] (ecmascript) <export default as ExternalLink>");
@@ -4191,21 +4246,9 @@ const NAV_ITEMS = [
     },
     // Platform
     {
-        key: "super-admin-overview",
-        label: "System Overview",
+        key: "platform-dashboard",
+        label: "Platform Dashboard",
         icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$layout$2d$dashboard$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__LayoutDashboard$3e$__["LayoutDashboard"],
-        superAdminOnly: true
-    },
-    {
-        key: "tenants",
-        label: "Tenants",
-        icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$building$2d$2$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Building2$3e$__["Building2"],
-        superAdminOnly: true
-    },
-    {
-        key: "feature-flags",
-        label: "Feature Flags",
-        icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$toggle$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ToggleRight$3e$__["ToggleRight"],
         superAdminOnly: true
     }
 ];
@@ -4460,20 +4503,20 @@ function GlobalSearch() {
                             children: "Global Search"
                         }, void 0, false, {
                             fileName: "[project]/src/components/layout/global-search.tsx",
-                            lineNumber: 393,
+                            lineNumber: 391,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DialogDescription"], {
                             children: "Search partners, products, deals, offers, or navigate..."
                         }, void 0, false, {
                             fileName: "[project]/src/components/layout/global-search.tsx",
-                            lineNumber: 394,
+                            lineNumber: 392,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/layout/global-search.tsx",
-                    lineNumber: 392,
+                    lineNumber: 390,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Command"], {
@@ -4488,7 +4531,7 @@ function GlobalSearch() {
                             autoFocus: true
                         }, void 0, false, {
                             fileName: "[project]/src/components/layout/global-search.tsx",
-                            lineNumber: 404,
+                            lineNumber: 402,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandList"], {
@@ -4507,7 +4550,7 @@ function GlobalSearch() {
                                                             className: "size-4 text-muted-foreground"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 425,
+                                                            lineNumber: 423,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4515,7 +4558,7 @@ function GlobalSearch() {
                                                             children: r
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 426,
+                                                            lineNumber: 424,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("kbd", {
@@ -4523,18 +4566,18 @@ function GlobalSearch() {
                                                             children: shortcutHint
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 427,
+                                                            lineNumber: 425,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, `recent-${r}`, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 419,
+                                                    lineNumber: 417,
                                                     columnNumber: 23
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 417,
+                                            lineNumber: 415,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandGroup"], {
@@ -4552,12 +4595,12 @@ function GlobalSearch() {
                                                                 className: "size-4"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 446,
+                                                                lineNumber: 444,
                                                                 columnNumber: 27
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 445,
+                                                            lineNumber: 443,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4565,33 +4608,33 @@ function GlobalSearch() {
                                                             children: n.label
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 448,
+                                                            lineNumber: 446,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$arrow$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ArrowRight$3e$__["ArrowRight"], {
                                                             className: "ml-auto size-3.5 text-muted-foreground/50 group-data-[selected=true]:text-primary smooth"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 449,
+                                                            lineNumber: 447,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, n.key, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 439,
+                                                    lineNumber: 437,
                                                     columnNumber: 23
                                                 }, this);
                                             })
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 435,
+                                            lineNumber: 433,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandSeparator"], {
                                             className: "my-1"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 455,
+                                            lineNumber: 453,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandGroup"], {
@@ -4608,12 +4651,12 @@ function GlobalSearch() {
                                                                 className: "size-4"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 463,
+                                                                lineNumber: 461,
                                                                 columnNumber: 23
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 462,
+                                                            lineNumber: 460,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4621,7 +4664,7 @@ function GlobalSearch() {
                                                             children: "New Partner"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 465,
+                                                            lineNumber: 463,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4629,13 +4672,13 @@ function GlobalSearch() {
                                                             children: "Partners → New"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 466,
+                                                            lineNumber: 464,
                                                             columnNumber: 21
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 457,
+                                                    lineNumber: 455,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandItem"], {
@@ -4649,12 +4692,12 @@ function GlobalSearch() {
                                                                 className: "size-4"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 474,
+                                                                lineNumber: 472,
                                                                 columnNumber: 23
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 473,
+                                                            lineNumber: 471,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4662,7 +4705,7 @@ function GlobalSearch() {
                                                             children: "New Offer"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 476,
+                                                            lineNumber: 474,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4670,13 +4713,13 @@ function GlobalSearch() {
                                                             children: "Offers → New"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 477,
+                                                            lineNumber: 475,
                                                             columnNumber: 21
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 468,
+                                                    lineNumber: 466,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandItem"], {
@@ -4690,12 +4733,12 @@ function GlobalSearch() {
                                                                 className: "size-4"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 485,
+                                                                lineNumber: 483,
                                                                 columnNumber: 23
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 484,
+                                                            lineNumber: 482,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4703,7 +4746,7 @@ function GlobalSearch() {
                                                             children: "New Deal"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 487,
+                                                            lineNumber: 485,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4711,13 +4754,13 @@ function GlobalSearch() {
                                                             children: "Deals → New"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 488,
+                                                            lineNumber: 486,
                                                             columnNumber: 21
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 479,
+                                                    lineNumber: 477,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandItem"], {
@@ -4731,12 +4774,12 @@ function GlobalSearch() {
                                                                 className: "size-4"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 496,
+                                                                lineNumber: 494,
                                                                 columnNumber: 23
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 495,
+                                                            lineNumber: 493,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4744,7 +4787,7 @@ function GlobalSearch() {
                                                             children: "New Invoice"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 498,
+                                                            lineNumber: 496,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4752,13 +4795,13 @@ function GlobalSearch() {
                                                             children: "Invoices → New"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 499,
+                                                            lineNumber: 497,
                                                             columnNumber: 21
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 490,
+                                                    lineNumber: 488,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandItem"], {
@@ -4772,12 +4815,12 @@ function GlobalSearch() {
                                                                 className: "size-4"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 507,
+                                                                lineNumber: 505,
                                                                 columnNumber: 23
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 506,
+                                                            lineNumber: 504,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4785,7 +4828,7 @@ function GlobalSearch() {
                                                             children: "Download Offer PDF"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 509,
+                                                            lineNumber: 507,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4793,13 +4836,13 @@ function GlobalSearch() {
                                                             children: "Offers"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 510,
+                                                            lineNumber: 508,
                                                             columnNumber: 21
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 501,
+                                                    lineNumber: 499,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$command$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CommandItem"], {
@@ -4813,12 +4856,12 @@ function GlobalSearch() {
                                                                 className: "size-4"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 518,
+                                                                lineNumber: 516,
                                                                 columnNumber: 23
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 517,
+                                                            lineNumber: 515,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4826,7 +4869,7 @@ function GlobalSearch() {
                                                             children: "Open Client Portal"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 520,
+                                                            lineNumber: 518,
                                                             columnNumber: 21
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4834,19 +4877,19 @@ function GlobalSearch() {
                                                             children: "Portal mode"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 521,
+                                                            lineNumber: 519,
                                                             columnNumber: 21
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 512,
+                                                    lineNumber: 510,
                                                     columnNumber: 19
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 456,
+                                            lineNumber: 454,
                                             columnNumber: 17
                                         }, this)
                                     ]
@@ -4866,7 +4909,7 @@ function GlobalSearch() {
                                                         className: "size-7 rounded-md bg-muted shimmer"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                                        lineNumber: 532,
+                                                        lineNumber: 530,
                                                         columnNumber: 21
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4876,33 +4919,33 @@ function GlobalSearch() {
                                                                 className: "h-3 w-1/3 rounded bg-muted shimmer"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 534,
+                                                                lineNumber: 532,
                                                                 columnNumber: 23
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                                                 className: "h-2.5 w-1/4 rounded bg-muted/70 shimmer"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 535,
+                                                                lineNumber: 533,
                                                                 columnNumber: 23
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                                        lineNumber: 533,
+                                                        lineNumber: 531,
                                                         columnNumber: 21
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                                         className: "h-4 w-12 rounded bg-muted/70 shimmer"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                                        lineNumber: 537,
+                                                        lineNumber: 535,
                                                         columnNumber: 21
                                                     }, this)
                                                 ]
                                             }, i, true, {
                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                lineNumber: 531,
+                                                lineNumber: 529,
                                                 columnNumber: 19
                                             }, this)),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4910,13 +4953,13 @@ function GlobalSearch() {
                                             children: "Searching across partners, products, deals, offers, invoices…"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 540,
+                                            lineNumber: 538,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                    lineNumber: 529,
+                                    lineNumber: 527,
                                     columnNumber: 15
                                 }, this),
                                 debounced && !isLoading && hasResults && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Fragment"], {
@@ -4940,12 +4983,12 @@ function GlobalSearch() {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                    lineNumber: 565,
+                                                                    lineNumber: 563,
                                                                     columnNumber: 31
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 564,
+                                                                lineNumber: 562,
                                                                 columnNumber: 29
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4956,7 +4999,7 @@ function GlobalSearch() {
                                                                         children: hit.primary
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                        lineNumber: 568,
+                                                                        lineNumber: 566,
                                                                         columnNumber: 31
                                                                     }, this),
                                                                     hit.secondary && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4964,13 +5007,13 @@ function GlobalSearch() {
                                                                         children: hit.secondary
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                        lineNumber: 572,
+                                                                        lineNumber: 570,
                                                                         columnNumber: 33
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 567,
+                                                                lineNumber: 565,
                                                                 columnNumber: 29
                                                             }, this),
                                                             hit.tertiary && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4978,7 +5021,7 @@ function GlobalSearch() {
                                                                 children: hit.tertiary
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 578,
+                                                                lineNumber: 576,
                                                                 columnNumber: 31
                                                             }, this),
                                                             hit.badge && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -4987,26 +5030,26 @@ function GlobalSearch() {
                                                                 children: hit.badge
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 583,
+                                                                lineNumber: 581,
                                                                 columnNumber: 31
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$corner$2d$down$2d$left$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__CornerDownLeft$3e$__["CornerDownLeft"], {
                                                                 className: "size-3 text-muted-foreground/40 group-data-[selected=true]:text-primary shrink-0 hidden sm:block"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                                lineNumber: 593,
+                                                                lineNumber: 591,
                                                                 columnNumber: 29
                                                             }, this)
                                                         ]
                                                     }, `${hit.kind}-${hit.id}`, true, {
                                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                                        lineNumber: 558,
+                                                        lineNumber: 556,
                                                         columnNumber: 27
                                                     }, this);
                                                 })
                                             }, kind, false, {
                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                lineNumber: 554,
+                                                lineNumber: 552,
                                                 columnNumber: 21
                                             }, this);
                                         }),
@@ -5014,7 +5057,7 @@ function GlobalSearch() {
                                             className: "my-1"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 600,
+                                            lineNumber: 598,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5028,7 +5071,7 @@ function GlobalSearch() {
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 602,
+                                                    lineNumber: 600,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5039,7 +5082,7 @@ function GlobalSearch() {
                                                             children: "↑↓"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 606,
+                                                            lineNumber: 604,
                                                             columnNumber: 21
                                                         }, this),
                                                         "navigate",
@@ -5048,20 +5091,20 @@ function GlobalSearch() {
                                                             children: "↵"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                                            lineNumber: 608,
+                                                            lineNumber: 606,
                                                             columnNumber: 21
                                                         }, this),
                                                         "open"
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                                    lineNumber: 605,
+                                                    lineNumber: 603,
                                                     columnNumber: 19
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 601,
+                                            lineNumber: 599,
                                             columnNumber: 17
                                         }, this)
                                     ]
@@ -5074,7 +5117,7 @@ function GlobalSearch() {
                                                 className: "size-6 text-muted-foreground/50"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                lineNumber: 619,
+                                                lineNumber: 617,
                                                 columnNumber: 19
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5082,7 +5125,7 @@ function GlobalSearch() {
                                                 children: "No results found"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                lineNumber: 620,
+                                                lineNumber: 618,
                                                 columnNumber: 19
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5090,24 +5133,24 @@ function GlobalSearch() {
                                                 children: "Try a different search term."
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                lineNumber: 621,
+                                                lineNumber: 619,
                                                 columnNumber: 19
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                        lineNumber: 618,
+                                        lineNumber: 616,
                                         columnNumber: 17
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                    lineNumber: 617,
+                                    lineNumber: 615,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/layout/global-search.tsx",
-                            lineNumber: 411,
+                            lineNumber: 409,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5121,20 +5164,20 @@ function GlobalSearch() {
                                             children: shortcutHint
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 632,
+                                            lineNumber: 630,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                             children: "to toggle"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/global-search.tsx",
-                                            lineNumber: 633,
+                                            lineNumber: 631,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                    lineNumber: 631,
+                                    lineNumber: 629,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5147,42 +5190,42 @@ function GlobalSearch() {
                                                 children: "esc"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/global-search.tsx",
-                                                lineNumber: 637,
+                                                lineNumber: 635,
                                                 columnNumber: 17
                                             }, this),
                                             "close"
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/global-search.tsx",
-                                        lineNumber: 636,
+                                        lineNumber: 634,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/global-search.tsx",
-                                    lineNumber: 635,
+                                    lineNumber: 633,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/layout/global-search.tsx",
-                            lineNumber: 630,
+                            lineNumber: 628,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/layout/global-search.tsx",
-                    lineNumber: 399,
+                    lineNumber: 397,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/layout/global-search.tsx",
-            lineNumber: 388,
+            lineNumber: 386,
             columnNumber: 7
         }, this)
     }, void 0, false, {
         fileName: "[project]/src/components/layout/global-search.tsx",
-        lineNumber: 387,
+        lineNumber: 385,
         columnNumber: 5
     }, this);
 }
@@ -5286,8 +5329,7 @@ const VIEW_TITLES = {
     "supplier-offers": "Supplier Offers",
     "trade-calculator": "Trade Calculator",
     tenants: "Tenants",
-    "super-admin-overview": "System Overview",
-    "feature-flags": "Feature Flags",
+    "platform-dashboard": "Platform Dashboard",
     "partner-360": "Partner 360",
     "custom-dashboard": "Custom Dashboard",
     "email-templates": "Email Templates",
@@ -5376,7 +5418,7 @@ function Topbar() {
                                 className: "size-3.5"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 187,
+                                lineNumber: 186,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5384,7 +5426,7 @@ function Topbar() {
                                 children: "Aspidus"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 188,
+                                lineNumber: 187,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5392,13 +5434,13 @@ function Topbar() {
                                 children: "/"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 189,
+                                lineNumber: 188,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 186,
+                        lineNumber: 185,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
@@ -5406,18 +5448,18 @@ function Topbar() {
                         children: viewTitle
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 191,
+                        lineNumber: 190,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$tenant$2d$context$2d$switcher$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TenantContextSwitcher"], {}, void 0, false, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 196,
+                        lineNumber: 195,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/topbar.tsx",
-                lineNumber: 185,
+                lineNumber: 184,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5436,17 +5478,17 @@ function Topbar() {
                                         className: "size-4"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 210,
+                                        lineNumber: 209,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                    lineNumber: 204,
+                                    lineNumber: 203,
                                     columnNumber: 13
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 203,
+                                lineNumber: 202,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TooltipContent"], {
@@ -5460,19 +5502,19 @@ function Topbar() {
                                         children: "⌘K"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 214,
+                                        lineNumber: 213,
                                         columnNumber: 35
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 213,
+                                lineNumber: 212,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 202,
+                        lineNumber: 201,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$popover$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Popover"], {
@@ -5490,7 +5532,7 @@ function Topbar() {
                                             className: "size-4"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 226,
+                                            lineNumber: 225,
                                             columnNumber: 15
                                         }, this),
                                         unreadCount > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5498,18 +5540,18 @@ function Topbar() {
                                             children: unreadCount
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 228,
+                                            lineNumber: 227,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                    lineNumber: 221,
+                                    lineNumber: 220,
                                     columnNumber: 13
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 220,
+                                lineNumber: 219,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$popover$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["PopoverContent"], {
@@ -5528,7 +5570,7 @@ function Topbar() {
                                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "notifications")
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                        lineNumber: 242,
+                                                        lineNumber: 241,
                                                         columnNumber: 17
                                                     }, this),
                                                     unreadCount > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5536,13 +5578,13 @@ function Topbar() {
                                                         children: unreadCount
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                        lineNumber: 244,
+                                                        lineNumber: 243,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 241,
+                                                lineNumber: 240,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -5556,20 +5598,20 @@ function Topbar() {
                                                         className: "size-3.5 mr-1"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                        lineNumber: 256,
+                                                        lineNumber: 255,
                                                         columnNumber: 17
                                                     }, this),
                                                     (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "mark-all-read")
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 249,
+                                                lineNumber: 248,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 240,
+                                        lineNumber: 239,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$scroll$2d$area$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["ScrollArea"], {
@@ -5583,12 +5625,12 @@ function Topbar() {
                                                         className: "size-5 text-muted-foreground"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                        lineNumber: 266,
+                                                        lineNumber: 265,
                                                         columnNumber: 21
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 265,
+                                                    lineNumber: 264,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5596,7 +5638,7 @@ function Topbar() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "no-notifications")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 268,
+                                                    lineNumber: 267,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5604,13 +5646,13 @@ function Topbar() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "all-caught-up")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 269,
+                                                    lineNumber: 268,
                                                     columnNumber: 19
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 264,
+                                            lineNumber: 263,
                                             columnNumber: 17
                                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
                                             className: "divide-y divide-border/50",
@@ -5624,7 +5666,7 @@ function Topbar() {
                                                                 className: "absolute left-1.5 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-emerald-500"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                lineNumber: 285,
+                                                                lineNumber: 284,
                                                                 columnNumber: 27
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5633,48 +5675,48 @@ function Topbar() {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 293,
+                                                                    lineNumber: 292,
                                                                     columnNumber: 88
                                                                 }, this) : n.type.includes("accepted") || n.type.includes("won") || n.type.includes("paid") ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Check$3e$__["Check"], {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 294,
+                                                                    lineNumber: 293,
                                                                     columnNumber: 111
                                                                 }, this) : n.type.includes("kyc") ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$shield$2d$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ShieldCheck$3e$__["ShieldCheck"], {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 295,
+                                                                    lineNumber: 294,
                                                                     columnNumber: 53
                                                                 }, this) : n.type.includes("offer") ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$file$2d$text$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__FileText$3e$__["FileText"], {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 296,
+                                                                    lineNumber: 295,
                                                                     columnNumber: 55
                                                                 }, this) : n.type.includes("task") ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$clock$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Clock$3e$__["Clock"], {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 297,
+                                                                    lineNumber: 296,
                                                                     columnNumber: 54
                                                                 }, this) : n.type.includes("stock") ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$package$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Package$3e$__["Package"], {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 298,
+                                                                    lineNumber: 297,
                                                                     columnNumber: 55
                                                                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$info$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Info$3e$__["Info"], {
                                                                     className: "size-4"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 299,
+                                                                    lineNumber: 298,
                                                                     columnNumber: 28
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                lineNumber: 287,
+                                                                lineNumber: 286,
                                                                 columnNumber: 25
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5688,7 +5730,7 @@ function Topbar() {
                                                                                 children: n.title
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                                lineNumber: 303,
+                                                                                lineNumber: 302,
                                                                                 columnNumber: 29
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5696,13 +5738,13 @@ function Topbar() {
                                                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2f$format$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["fmtRelative"])(n.created_at)
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                                lineNumber: 306,
+                                                                                lineNumber: 305,
                                                                                 columnNumber: 29
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                        lineNumber: 302,
+                                                                        lineNumber: 301,
                                                                         columnNumber: 27
                                                                     }, this),
                                                                     n.message && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5710,39 +5752,39 @@ function Topbar() {
                                                                         children: n.message
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                        lineNumber: 311,
+                                                                        lineNumber: 310,
                                                                         columnNumber: 29
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                lineNumber: 301,
+                                                                lineNumber: 300,
                                                                 columnNumber: 25
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                        lineNumber: 275,
+                                                        lineNumber: 274,
                                                         columnNumber: 23
                                                     }, this)
                                                 }, n.id, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 274,
+                                                    lineNumber: 273,
                                                     columnNumber: 21
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 272,
+                                            lineNumber: 271,
                                             columnNumber: 17
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 262,
+                                        lineNumber: 261,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$separator$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Separator"], {}, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 321,
+                                        lineNumber: 320,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5758,24 +5800,24 @@ function Topbar() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "view-all")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 323,
+                                            lineNumber: 322,
                                             columnNumber: 15
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 322,
+                                        lineNumber: 321,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 234,
+                                lineNumber: 233,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 219,
+                        lineNumber: 218,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenu"], {
@@ -5794,22 +5836,22 @@ function Topbar() {
                                                     className: "size-4"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 345,
+                                                    lineNumber: 344,
                                                     columnNumber: 19
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 340,
+                                                lineNumber: 339,
                                                 columnNumber: 17
                                             }, this)
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 339,
+                                            lineNumber: 338,
                                             columnNumber: 15
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 338,
+                                        lineNumber: 337,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TooltipContent"], {
@@ -5818,13 +5860,13 @@ function Topbar() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "switch-language")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 349,
+                                        lineNumber: 348,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 337,
+                                lineNumber: 336,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuContent"], {
@@ -5839,7 +5881,7 @@ function Topbar() {
                                             children: "🇬🇧"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 358,
+                                            lineNumber: 357,
                                             columnNumber: 15
                                         }, this),
                                         "English",
@@ -5847,24 +5889,24 @@ function Topbar() {
                                             className: "size-3.5 ml-auto text-primary"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 360,
+                                            lineNumber: 359,
                                             columnNumber: 35
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                    lineNumber: 354,
+                                    lineNumber: 353,
                                     columnNumber: 13
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 353,
+                                lineNumber: 352,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 336,
+                        lineNumber: 335,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenu"], {
@@ -5883,22 +5925,22 @@ function Topbar() {
                                                     className: "size-4"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 376,
+                                                    lineNumber: 375,
                                                     columnNumber: 19
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 371,
+                                                lineNumber: 370,
                                                 columnNumber: 17
                                             }, this)
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 370,
+                                            lineNumber: 369,
                                             columnNumber: 15
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 369,
+                                        lineNumber: 368,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TooltipContent"], {
@@ -5907,13 +5949,13 @@ function Topbar() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "theme-customize")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 380,
+                                        lineNumber: 379,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 368,
+                                lineNumber: 367,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuContent"], {
@@ -5925,7 +5967,7 @@ function Topbar() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "theme-mode")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 385,
+                                        lineNumber: 384,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuItem"], {
@@ -5936,7 +5978,7 @@ function Topbar() {
                                                 className: "size-4 mr-2"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 392,
+                                                lineNumber: 391,
                                                 columnNumber: 15
                                             }, this),
                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "theme-light"),
@@ -5944,13 +5986,13 @@ function Topbar() {
                                                 className: "size-3.5 ml-auto text-primary"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 394,
+                                                lineNumber: 393,
                                                 columnNumber: 45
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 388,
+                                        lineNumber: 387,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuItem"], {
@@ -5961,7 +6003,7 @@ function Topbar() {
                                                 className: "size-4 mr-2"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 400,
+                                                lineNumber: 399,
                                                 columnNumber: 15
                                             }, this),
                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "theme-dark"),
@@ -5969,20 +6011,20 @@ function Topbar() {
                                                 className: "size-3.5 ml-auto text-primary"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 402,
+                                                lineNumber: 401,
                                                 columnNumber: 44
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 396,
+                                        lineNumber: 395,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuSeparator"], {
                                         className: "my-1 bg-border/50"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 405,
+                                        lineNumber: 404,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuLabel"], {
@@ -5990,7 +6032,7 @@ function Topbar() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "theme-accent-color")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 407,
+                                        lineNumber: 406,
                                         columnNumber: 13
                                     }, this),
                                     Object.keys(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2f$theme$2d$store$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["ACCENT_MAP"]).map((accent)=>{
@@ -6008,7 +6050,7 @@ function Topbar() {
                                                     }
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 418,
+                                                    lineNumber: 417,
                                                     columnNumber: 19
                                                 }, this),
                                                 __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2f$theme$2d$store$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["ACCENT_LABELS"][accent],
@@ -6016,33 +6058,33 @@ function Topbar() {
                                                     className: "size-3.5 ml-auto text-primary"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 423,
+                                                    lineNumber: 422,
                                                     columnNumber: 53
                                                 }, this)
                                             ]
                                         }, accent, true, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 413,
+                                            lineNumber: 412,
                                             columnNumber: 17
                                         }, this);
                                     })
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 384,
+                                lineNumber: 383,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 367,
+                        lineNumber: 366,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         className: "mx-1 h-5 w-px bg-border/50 hidden sm:block"
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 431,
+                        lineNumber: 430,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -6055,7 +6097,7 @@ function Topbar() {
                                 className: "size-3.5"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 440,
+                                lineNumber: 439,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -6063,13 +6105,13 @@ function Topbar() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "portal")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 441,
+                                lineNumber: 440,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 434,
+                        lineNumber: 433,
                         columnNumber: 9
                     }, this),
                     user && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -6080,27 +6122,27 @@ function Topbar() {
                                 className: "size-3 text-primary"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 450,
+                                lineNumber: 449,
                                 columnNumber: 22
                             }, this) : null,
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                 children: admin ? "Admin" : user.role
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 451,
+                                lineNumber: 450,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 446,
+                        lineNumber: 445,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         className: "mx-1 h-5 w-px bg-border/50 hidden md:block"
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 456,
+                        lineNumber: 455,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenu"], {
@@ -6117,12 +6159,12 @@ function Topbar() {
                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2f$format$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["initials"])(user?.full_name || user?.username)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 465,
+                                                lineNumber: 464,
                                                 columnNumber: 17
                                             }, this)
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 464,
+                                            lineNumber: 463,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6133,7 +6175,7 @@ function Topbar() {
                                                     children: user?.full_name || user?.username
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 470,
+                                                    lineNumber: 469,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -6141,31 +6183,31 @@ function Topbar() {
                                                     children: user?.email
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 473,
+                                                    lineNumber: 472,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 469,
+                                            lineNumber: 468,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$chevron$2d$down$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ChevronDown$3e$__["ChevronDown"], {
                                             className: "size-3 text-muted-foreground/60 hidden lg:block smooth"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 477,
+                                            lineNumber: 476,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                    lineNumber: 461,
+                                    lineNumber: 460,
                                     columnNumber: 13
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 460,
+                                lineNumber: 459,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuContent"], {
@@ -6185,12 +6227,12 @@ function Topbar() {
                                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2f$format$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["initials"])(user?.full_name || user?.username)
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                                        lineNumber: 490,
+                                                        lineNumber: 489,
                                                         columnNumber: 19
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 489,
+                                                    lineNumber: 488,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6201,7 +6243,7 @@ function Topbar() {
                                                             children: user?.full_name || user?.username
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                                            lineNumber: 495,
+                                                            lineNumber: 494,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -6209,7 +6251,7 @@ function Topbar() {
                                                             children: user?.email
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                                            lineNumber: 498,
+                                                            lineNumber: 497,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -6220,38 +6262,38 @@ function Topbar() {
                                                                     className: "size-2.5 mr-0.5 text-primary"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                                    lineNumber: 506,
+                                                                    lineNumber: 505,
                                                                     columnNumber: 23
                                                                 }, this) : null,
                                                                 user?.role
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                                            lineNumber: 501,
+                                                            lineNumber: 500,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/layout/topbar.tsx",
-                                                    lineNumber: 494,
+                                                    lineNumber: 493,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/layout/topbar.tsx",
-                                            lineNumber: 488,
+                                            lineNumber: 487,
                                             columnNumber: 15
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 487,
+                                        lineNumber: 486,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuSeparator"], {
                                         className: "my-1 bg-border/50"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 514,
+                                        lineNumber: 513,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuItem"], {
@@ -6262,14 +6304,14 @@ function Topbar() {
                                                 className: "size-4 mr-2.5 text-muted-foreground"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 520,
+                                                lineNumber: 519,
                                                 columnNumber: 15
                                             }, this),
                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "settings")
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 516,
+                                        lineNumber: 515,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuItem"], {
@@ -6280,21 +6322,21 @@ function Topbar() {
                                                 className: "size-4 mr-2.5 text-muted-foreground"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 527,
+                                                lineNumber: 526,
                                                 columnNumber: 15
                                             }, this),
                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "security")
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 523,
+                                        lineNumber: 522,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuSeparator"], {
                                         className: "my-1 bg-border/50"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 531,
+                                        lineNumber: 530,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DropdownMenuItem"], {
@@ -6305,32 +6347,32 @@ function Topbar() {
                                                 className: "size-4 mr-2.5"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                                lineNumber: 537,
+                                                lineNumber: 536,
                                                 columnNumber: 15
                                             }, this),
                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "sign-out")
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/topbar.tsx",
-                                        lineNumber: 533,
+                                        lineNumber: 532,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/topbar.tsx",
-                                lineNumber: 481,
+                                lineNumber: 480,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/topbar.tsx",
-                        lineNumber: 459,
+                        lineNumber: 458,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/topbar.tsx",
-                lineNumber: 200,
+                lineNumber: 199,
                 columnNumber: 7
             }, this)
         ]
@@ -6539,6 +6581,9 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2f$app$2
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/utils.ts [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$sheet$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/components/ui/sheet.tsx [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/shared/lib/app-dynamic.js [app-ssr] (ecmascript)");
+;
+;
+;
 ;
 ;
 ;
@@ -6784,6 +6829,30 @@ const DocumentTemplatesView = (0, __TURBOPACK__imported__module__$5b$project$5d2
     },
     ssr: false
 });
+const QuickNotesView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
+    loadableGenerated: {
+        modules: [
+            "[project]/src/components/views/quick-notes-view.tsx [app-client] (ecmascript, next/dynamic entry)"
+        ]
+    },
+    ssr: false
+});
+const WorkspaceView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
+    loadableGenerated: {
+        modules: [
+            "[project]/src/components/views/workspace-view.tsx [app-client] (ecmascript, next/dynamic entry)"
+        ]
+    },
+    ssr: false
+});
+const PlansView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
+    loadableGenerated: {
+        modules: [
+            "[project]/src/components/views/plans-view.tsx [app-client] (ecmascript, next/dynamic entry)"
+        ]
+    },
+    ssr: false
+});
 const PlatformDashboardView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
     loadableGenerated: {
         modules: [
@@ -6869,217 +6938,217 @@ const ErpView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules
         case "dashboard":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 62,
+                lineNumber: 65,
                 columnNumber: 41
             }, this);
         case "partners":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(PartnersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 63,
+                lineNumber: 66,
                 columnNumber: 41
             }, this);
         case "partner-360":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(Partner360View, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 64,
+                lineNumber: 67,
                 columnNumber: 41
             }, this);
         case "products":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ProductsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 65,
+                lineNumber: 68,
                 columnNumber: 41
             }, this);
         case "deals":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DealsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 66,
+                lineNumber: 69,
                 columnNumber: 41
             }, this);
         case "commissions":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(CommissionsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 67,
+                lineNumber: 70,
                 columnNumber: 42
             }, this);
         case "offers":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(OffersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 68,
+                lineNumber: 71,
                 columnNumber: 41
             }, this);
         case "demands":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DemandsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 69,
+                lineNumber: 72,
                 columnNumber: 41
             }, this);
         case "documents":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 70,
+                lineNumber: 73,
                 columnNumber: 41
             }, this);
         case "tasks":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(TasksView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 71,
+                lineNumber: 74,
                 columnNumber: 41
             }, this);
         case "audit":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(AuditView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 72,
+                lineNumber: 75,
                 columnNumber: 41
             }, this);
         case "users":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(UsersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 73,
+                lineNumber: 76,
                 columnNumber: 41
             }, this);
         case "settings":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SettingsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 74,
+                lineNumber: 77,
                 columnNumber: 41
             }, this);
         case "invoices":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(InvoicesView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 75,
+                lineNumber: 78,
                 columnNumber: 41
             }, this);
         case "proformas":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ProformasView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 76,
+                lineNumber: 79,
                 columnNumber: 41
             }, this);
         case "document-register":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentRegisterView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 77,
+                lineNumber: 80,
                 columnNumber: 41
             }, this);
         case "inventory":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(InventoryView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 78,
+                lineNumber: 81,
                 columnNumber: 41
             }, this);
         case "security":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SecurityView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 79,
+                lineNumber: 82,
                 columnNumber: 41
             }, this);
         case "vault":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(VaultView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 80,
+                lineNumber: 83,
                 columnNumber: 41
             }, this);
         case "api-keys":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ApiKeysView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 81,
+                lineNumber: 84,
                 columnNumber: 41
             }, this);
         case "webhooks":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(WebhooksView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 82,
+                lineNumber: 85,
                 columnNumber: 41
             }, this);
         case "mail-queue":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(MailQueueView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 83,
+                lineNumber: 86,
                 columnNumber: 41
             }, this);
         case "product-catalog":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ProductCatalogView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 84,
+                lineNumber: 87,
                 columnNumber: 41
             }, this);
         case "supplier-offers":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SupplierOffersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 85,
+                lineNumber: 88,
                 columnNumber: 41
             }, this);
         case "trade-calculator":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(TradeCalculatorView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 86,
+                lineNumber: 89,
                 columnNumber: 41
             }, this);
         case "document-templates":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentTemplatesView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 87,
+                lineNumber: 90,
                 columnNumber: 41
             }, this);
         case "platform-dashboard":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(PlatformDashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 88,
+                lineNumber: 91,
                 columnNumber: 39
             }, this);
         case "document-verification":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentVerificationView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 89,
+                lineNumber: 92,
                 columnNumber: 41
             }, this);
         case "kyc-review":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(KycReviewView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 90,
+                lineNumber: 93,
                 columnNumber: 41
             }, this);
         case "portal-rfqs":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(PortalRfqsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 91,
+                lineNumber: 94,
                 columnNumber: 41
             }, this);
         case "custom-dashboard":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(CustomDashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 92,
+                lineNumber: 95,
                 columnNumber: 42
             }, this);
         case "calendar":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(CalendarView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 93,
+                lineNumber: 96,
                 columnNumber: 41
             }, this);
         case "email-templates":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(EmailTemplatesView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 94,
+                lineNumber: 97,
                 columnNumber: 41
             }, this);
         case "api-integrations":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ApiIntegrationsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 95,
+                lineNumber: 98,
                 columnNumber: 41
             }, this);
         case "erp":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ErpView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 96,
+                lineNumber: 99,
                 columnNumber: 41
             }, this);
         default:
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 97,
+                lineNumber: 100,
                 columnNumber: 41
             }, this);
     }
@@ -7097,30 +7166,30 @@ const ErpView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules
                     children: "Navigation"
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                    lineNumber: 110,
+                    lineNumber: 113,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                     className: "h-full overflow-hidden",
                     children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$sidebar$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Sidebar"], {}, void 0, false, {
                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                        lineNumber: 112,
+                        lineNumber: 115,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                    lineNumber: 111,
+                    lineNumber: 114,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/layout/app-shell.tsx",
-            lineNumber: 108,
+            lineNumber: 111,
             columnNumber: 7
         }, this)
     }, void 0, false, {
         fileName: "[project]/src/components/layout/app-shell.tsx",
-        lineNumber: 107,
+        lineNumber: 110,
         columnNumber: 5
     }, this);
 }
@@ -7156,12 +7225,12 @@ function AppShell() {
                 className: "hidden lg:flex",
                 children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$sidebar$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Sidebar"], {}, void 0, false, {
                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                    lineNumber: 153,
+                    lineNumber: 156,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 152,
+                lineNumber: 155,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(MobileSidebar, {
@@ -7169,7 +7238,7 @@ function AppShell() {
                 onOpenChange: setMobileMenuOpen
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 157,
+                lineNumber: 160,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7197,33 +7266,33 @@ function AppShell() {
                                             d: "M3 6h14M3 10h14M3 14h14"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/app-shell.tsx",
-                                            lineNumber: 172,
+                                            lineNumber: 175,
                                             columnNumber: 17
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                                        lineNumber: 171,
+                                        lineNumber: 174,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                                    lineNumber: 165,
+                                    lineNumber: 168,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$topbar$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Topbar"], {}, void 0, false, {
                                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                                    lineNumber: 175,
+                                    lineNumber: 178,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/layout/app-shell.tsx",
-                            lineNumber: 163,
+                            lineNumber: 166,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                        lineNumber: 162,
+                        lineNumber: 165,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("main", {
@@ -7234,34 +7303,34 @@ function AppShell() {
                                 view: transitionKey
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                                lineNumber: 191,
+                                lineNumber: 194,
                                 columnNumber: 13
                             }, this)
                         }, transitionKey, false, {
                             fileName: "[project]/src/components/layout/app-shell.tsx",
-                            lineNumber: 181,
+                            lineNumber: 184,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                        lineNumber: 180,
+                        lineNumber: 183,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 160,
+                lineNumber: 163,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$global$2d$search$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["GlobalSearch"], {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 197,
+                lineNumber: 200,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/layout/app-shell.tsx",
-        lineNumber: 150,
+        lineNumber: 153,
         columnNumber: 5
     }, this);
 }

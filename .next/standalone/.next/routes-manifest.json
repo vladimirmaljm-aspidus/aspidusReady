@@ -936,6 +936,12 @@
       "namedRegex": "^/api/places/details(?:/)?$"
     },
     {
+      "page": "/api/plans",
+      "regex": "^/api/plans(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/plans(?:/)?$"
+    },
+    {
       "page": "/api/portal/catalog",
       "regex": "^/api/portal/catalog(?:/)?$",
       "routeKeys": {},
@@ -1156,6 +1162,12 @@
       "regex": "^/api/setup(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/setup(?:/)?$"
+    },
+    {
+      "page": "/api/subscription/status",
+      "regex": "^/api/subscription/status(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/subscription/status(?:/)?$"
     },
     {
       "page": "/api/super-admin/overview",

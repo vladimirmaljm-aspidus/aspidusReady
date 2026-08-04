@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useAppStore, ViewKey, isAdmin, isSuperAdmin, isAccountant } from "@/lib/store/app-store";
 import { useI18nStore } from "@/lib/i18n/store";
 import { t, NAV, SECTIONS as I18N_SECTIONS, type Locale } from "@/lib/i18n/dictionaries";
@@ -10,6 +11,7 @@ import {
   Webhook, Lock, Mail, Receipt, FileSignature, Boxes,
   ChevronLeft, ChevronRight, Building2, BookOpen, Calculator,
   ToggleRight, LayoutGrid, Plug, DollarSign, BookMarked, Calendar,
+  StickyNote, Briefcase, Settings2, TrendingUp,
 } from "lucide-react";
 import {
   Tooltip,
@@ -29,6 +31,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
   superAdminOnly?: boolean;
+  featureFlag?: string;
 }
 
 interface NavSection {
@@ -48,14 +51,16 @@ const SECTIONS: NavSection[] = [
       { key: "custom-dashboard", i18nKey: "custom-dashboard", i18nSection: "overview", icon: LayoutGrid },
       { key: "calendar", i18nKey: "calendar", i18nSection: "overview", icon: Calendar },
       { key: "tasks", i18nKey: "tasks", i18nSection: "overview", icon: ListChecks },
+      { key: "quick-notes", i18nKey: "quick-notes", i18nSection: "overview", icon: StickyNote },
+      { key: "workspace", i18nKey: "workspace", i18nSection: "overview", icon: Briefcase },
     ],
   },
   {
     i18nKey: "trade",
     items: [
-      { key: "product-catalog", i18nKey: "product-catalog", i18nSection: "trade", icon: BookOpen },
-      { key: "supplier-offers", i18nKey: "supplier-offers", i18nSection: "trade", icon: Inbox },
-      { key: "trade-calculator", i18nKey: "trade-calculator", i18nSection: "trade", icon: Calculator },
+      { key: "product-catalog", i18nKey: "product-catalog", i18nSection: "trade", icon: BookOpen, featureFlag: "module_trade" },
+      { key: "supplier-offers", i18nKey: "supplier-offers", i18nSection: "trade", icon: Inbox, featureFlag: "module_trade" },
+      { key: "trade-calculator", i18nKey: "trade-calculator", i18nSection: "trade", icon: Calculator, featureFlag: "module_trade" },
     ],
   },
   {
@@ -67,7 +72,7 @@ const SECTIONS: NavSection[] = [
       { key: "commissions", i18nKey: "commissions", i18nSection: "crm", icon: DollarSign },
       { key: "offers", i18nKey: "offers", i18nSection: "crm", icon: FileText },
       { key: "demands", i18nKey: "demands", i18nSection: "crm", icon: Inbox },
-      { key: "inventory", i18nKey: "inventory", i18nSection: "crm", icon: Boxes },
+      { key: "inventory", i18nKey: "inventory", i18nSection: "crm", icon: Boxes, featureFlag: "module_inventory" },
     ],
   },
   {
@@ -76,7 +81,7 @@ const SECTIONS: NavSection[] = [
       { key: "invoices", i18nKey: "invoices", i18nSection: "finance", icon: Receipt },
       { key: "proformas", i18nKey: "proformas", i18nSection: "finance", icon: FileSignature },
       { key: "document-register", i18nKey: "document-register", i18nSection: "finance", icon: FolderOpen },
-      { key: "erp", i18nKey: "erp", i18nSection: "finance", icon: BookMarked, adminOnly: true },
+      { key: "erp", i18nKey: "erp", i18nSection: "finance", icon: BookMarked, adminOnly: true, featureFlag: "module_finance" },
     ],
   },
   {
@@ -84,19 +89,20 @@ const SECTIONS: NavSection[] = [
     items: [
       { key: "audit", i18nKey: "audit", i18nSection: "administration", icon: ScrollText },
       { key: "documents", i18nKey: "documents", i18nSection: "administration", icon: FolderOpen },
-      { key: "kyc-review", i18nKey: "kyc-review", i18nSection: "administration", icon: ShieldCheck, adminOnly: true },
-      { key: "portal-rfqs", i18nKey: "portal-rfqs", i18nSection: "administration", icon: Inbox, adminOnly: true },
-      { key: "document-verification", i18nKey: "document-verification", i18nSection: "administration", icon: ShieldCheck, adminOnly: true },
-      { key: "document-templates", i18nKey: "document-templates", i18nSection: "administration", icon: FileText, adminOnly: true },
-      { key: "security", i18nKey: "security", i18nSection: "administration", icon: ShieldCheck, adminOnly: true },
+      { key: "kyc-review", i18nKey: "kyc-review", i18nSection: "administration", icon: ShieldCheck, adminOnly: true, featureFlag: "module_kyc" },
+      { key: "portal-rfqs", i18nKey: "portal-rfqs", i18nSection: "administration", icon: Inbox, adminOnly: true, featureFlag: "module_portal" },
+      { key: "document-verification", i18nKey: "document-verification", i18nSection: "administration", icon: ShieldCheck, adminOnly: true, featureFlag: "module_document_verification" },
+      { key: "document-templates", i18nKey: "document-templates", i18nSection: "administration", icon: FileText, adminOnly: true, featureFlag: "module_document_templates" },
+      { key: "security", i18nKey: "security", i18nSection: "administration", icon: ShieldCheck, adminOnly: true, featureFlag: "module_security" },
       { key: "users", i18nKey: "users", i18nSection: "administration", icon: Users, adminOnly: true },
-      { key: "vault", i18nKey: "vault", i18nSection: "administration", icon: Lock, adminOnly: true },
-      { key: "api-keys", i18nKey: "api-keys", i18nSection: "administration", icon: Key, adminOnly: true },
-      { key: "webhooks", i18nKey: "webhooks", i18nSection: "administration", icon: Webhook, adminOnly: true },
-      { key: "mail-queue", i18nKey: "mail-queue", i18nSection: "administration", icon: Mail, adminOnly: true },
-      { key: "email-templates", i18nKey: "email-templates", i18nSection: "administration", icon: Mail, adminOnly: true },
+      { key: "vault", i18nKey: "vault", i18nSection: "administration", icon: Lock, adminOnly: true, featureFlag: "module_vault" },
+      { key: "api-keys", i18nKey: "api-keys", i18nSection: "administration", icon: Key, adminOnly: true, featureFlag: "module_api_keys" },
+      { key: "webhooks", i18nKey: "webhooks", i18nSection: "administration", icon: Webhook, adminOnly: true, featureFlag: "module_webhooks" },
+      { key: "mail-queue", i18nKey: "mail-queue", i18nSection: "administration", icon: Mail, adminOnly: true, featureFlag: "module_mail_queue" },
+      { key: "email-templates", i18nKey: "email-templates", i18nSection: "administration", icon: Mail, adminOnly: true, featureFlag: "module_mail_queue" },
       { key: "api-integrations", i18nKey: "api-integrations", i18nSection: "administration", icon: Plug, adminOnly: true },
       { key: "settings", i18nKey: "settings", i18nSection: "administration", icon: Settings, adminOnly: true },
+      { key: "plans", i18nKey: "plans", i18nSection: "administration", icon: TrendingUp, adminOnly: true },
     ],
   },
   {
@@ -133,6 +139,18 @@ export function Sidebar() {
   const admin = isAdmin(user);
   const superAdmin = isSuperAdmin(user);
   const accountant = isAccountant(user);
+
+  // Fetch feature flags for the current tenant to gate sidebar items
+  const { data: flagsData } = useQuery({
+    queryKey: ["feature-flags-sidebar"],
+    queryFn: async () => {
+      const r = await fetch("/api/feature-flags");
+      if (!r.ok) return null;
+      return r.json();
+    },
+    staleTime: 10_000,
+  });
+  const flags: Record<string, boolean> | null = flagsData?.flags || null;
 
   return (
     <aside
@@ -177,8 +195,15 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto custom-scroll px-3 py-4 space-y-1">
         {SECTIONS.map((section) => {
           const visibleItems = section.items.filter((n) => {
+            // Super-admin sees everything (including platform modules)
             if (n.superAdminOnly) return superAdmin;
+            // Admin-only items: show if admin or accountant
             if (n.adminOnly) return admin || accountant;
+            // Feature flag gating: if the item has a featureFlag and we have flags data,
+            // only show it if the flag is true. Super-admin sees everything regardless.
+            if (n.featureFlag && flags && !superAdmin) {
+              return flags[n.featureFlag] === true;
+            }
             return true;
           });
           if (visibleItems.length === 0) return null;

@@ -42,6 +42,9 @@ const ProductCatalogView = dynamic(() => import("@/components/views/product-cata
 const SupplierOffersView = dynamic(() => import("@/components/views/supplier-offers-view").then((m) => m.SupplierOffersView), { ssr: false });
 const TradeCalculatorView = dynamic(() => import("@/components/views/trade-calculator-view").then((m) => m.TradeCalculatorView), { ssr: false });
 const DocumentTemplatesView = dynamic(() => import("@/components/views/document-templates-view").then((m) => m.DocumentTemplatesView), { ssr: false });
+const QuickNotesView = dynamic(() => import("@/components/views/quick-notes-view").then((m) => m.QuickNotesView), { ssr: false });
+const WorkspaceView = dynamic(() => import("@/components/views/workspace-view").then((m) => m.WorkspaceView), { ssr: false });
+const PlansView = dynamic(() => import("@/components/views/plans-view").then((m) => m.PlansView), { ssr: false });
 const PlatformDashboardView = dynamic(() => import("@/components/views/platform-dashboard-view").then((m) => m.PlatformDashboardView), { ssr: false });
 const DocumentVerificationView = dynamic(() => import("@/components/views/document-verification-view").then((m) => m.DocumentVerificationView), { ssr: false });
 const KycReviewView = dynamic(() => import("@/components/views/kyc-review-view").then((m) => m.KycReviewView), { ssr: false });

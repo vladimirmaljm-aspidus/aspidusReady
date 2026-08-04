@@ -48,6 +48,9 @@ export type ViewKey =
   | "email-templates"
   | "api-integrations"
   | "calendar"
+  | "quick-notes"
+  | "workspace"
+  | "plans"
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"
