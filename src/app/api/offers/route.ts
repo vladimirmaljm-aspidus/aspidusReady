@@ -66,6 +66,12 @@ export async function POST(req: NextRequest) {
     body.tax_total = taxTotal;
     body.total = subtotal - discountTotal + taxTotal;
   }
+  if (!body.id) {
+    const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const { enforceQuota } = await import("@/lib/api/plan-limits");
+    const denied = await enforceQuota(body.tenant_id, "monthly_documents", isSA);
+    if (denied) return denied;
+  }
   const created = await auth.store.upsertOffer(body);
   await audit(auth.store, getAuthUser(auth), req, body.id ? "offer.update" : "offer.create", "offer", created.id, { number: created.number });
   return NextResponse.json(created);

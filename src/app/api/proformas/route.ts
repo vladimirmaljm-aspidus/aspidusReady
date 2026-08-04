@@ -50,6 +50,12 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     body.tenant_id = tid!;
+    if (!body.id) {
+      const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+      const { enforceQuota } = await import("@/lib/api/plan-limits");
+      const denied = await enforceQuota(tid, "monthly_documents", isSA);
+      if (denied) return denied;
+    }
     const created = await auth.store.upsertProforma(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "proforma.update" : "proforma.create", "proforma", created.id, { number: created.number });
     return NextResponse.json(created);

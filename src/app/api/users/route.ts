@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { hashPassword } from "@/lib/auth/password";
+import { enforceQuota } from "@/lib/api/plan-limits";
 
 export const runtime = "nodejs";
 
@@ -92,6 +93,11 @@ export async function POST(req: NextRequest) {
     if (body.password) {
       body.password_hash = await hashPassword(body.password);
       delete body.password;
+    }
+    // Plan limit — only on CREATE (updates carry a body.id).
+    if (!body.id) {
+      const denied = await enforceQuota(body.tenant_id, "users", auth.isSuperAdmin);
+      if (denied) return denied;
     }
     const created = await auth.store.upsertUser(whitelistUserFields(body));
     await audit(auth.store, auth.user, req, body.id ? "user.update" : "user.create", "user", created.id, { username: created.username });
