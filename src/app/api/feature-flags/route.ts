@@ -1,26 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperAdmin, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireSuperAdmin, audit, resolveTenantId } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
+// GET: Any authenticated user can read their own tenant's feature flags
+// (needed by sidebar to show/hide modules). Super-admin can pass ?tenant_id=xxx.
 export async function GET(req: NextRequest) {
-  const auth = await requireSuperAdmin();
+  const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-  const url = new URL(req.url);
-  // Use resolveTenantId so super-admin can pass ?tenant_id=xxx but if omitted
-  // we fall back to their own tenant (or the first tenant in the system).
   const tenantId = resolveTenantId(auth, req);
-  if (!tenantId) return NextResponse.json({ error: "tenant_id required." }, { status: 400 });
+  if (!tenantId) return NextResponse.json({ flags: {} });
   const flags = await auth.store.getFeatureFlags(tenantId);
-  return NextResponse.json(flags);
+  if (!flags) {
+    return NextResponse.json({ flags: {} });
+  }
+  // Return a flat map of boolean flags for easy sidebar consumption
+  const flagMap: Record<string, boolean> = {
+    module_crm: (flags as any).module_crm ?? true,
+    module_trade: (flags as any).module_trade ?? false,
+    module_finance: (flags as any).module_finance ?? true,
+    module_inventory: (flags as any).module_inventory ?? false,
+    module_portal: (flags as any).module_portal ?? false,
+    module_kyc: (flags as any).module_kyc ?? false,
+    module_document_templates: (flags as any).module_document_templates ?? false,
+    module_document_verification: (flags as any).module_document_verification ?? false,
+    module_vault: (flags as any).module_vault ?? false,
+    module_api_keys: (flags as any).module_api_keys ?? false,
+    module_webhooks: (flags as any).module_webhooks ?? false,
+    module_mail_queue: (flags as any).module_mail_queue ?? false,
+    module_security: (flags as any).module_security ?? false,
+  };
+  return NextResponse.json({ flags: flagMap, raw: flags });
 }
 
+// PUT: Only super-admin can modify feature flags
 export async function PUT(req: NextRequest) {
   const auth = await requireSuperAdmin();
   if (auth instanceof NextResponse) return auth;
   const body = await req.json();
   if (!body.tenant_id) {
-    // Fall back to the resolved tenant so callers don't have to pass it.
     body.tenant_id = resolveTenantId(auth, req) || undefined;
   }
   if (!body.tenant_id) return NextResponse.json({ error: "tenant_id required." }, { status: 400 });
