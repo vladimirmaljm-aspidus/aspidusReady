@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       partnerName: partner?.name || "Client",
       docType: "proforma",
       docNumber: proforma.number || id,
-      tenantName: auth.user.tenant_id || "Aspidus Trade",
+      tenantName: (await auth.store.getTenant(tenantId))?.name || "Aspidus Trade",
       amount: proforma.total != null ? String(proforma.total) : undefined,
       currency: proforma.currency || undefined,
       dueDate: proforma.valid_until || undefined,
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       to: toEmail,
       subject,
       html,
+      tenantId,
       attachments: [{
         filename: `proforma-${proforma.number || id}.pdf`,
         content: pdfBuffer,

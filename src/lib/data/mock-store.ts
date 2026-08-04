@@ -429,18 +429,24 @@ export class MockStore implements Store {
   }
 
   // ---- settings ----
-  async getSetting<T = unknown>(key: string): Promise<T | null> {
-    return (mock.settings[key] as T) ?? null;
+  async getSetting<T = unknown>(key: string, tenantId: string | null = null): Promise<T | null> {
+    const scoped = `${tenantId ?? "__platform__"}::${key}`;
+    return (mock.settings[scoped] as T) ?? null;
   }
-  async setSetting(key: string, value: unknown): Promise<void> {
-    mock.settings[key] = value;
+  async setSetting(key: string, value: unknown, tenantId: string | null = null): Promise<void> {
+    const scoped = `${tenantId ?? "__platform__"}::${key}`;
+    mock.settings[scoped] = value;
   }
-  async getAllSettings(): Promise<Setting[]> {
-    return Object.entries(mock.settings).map(([k, v]) => ({
-      key: k,
-      value: v,
-      updated_at: new Date().toISOString(),
-    }));
+  async getAllSettings(tenantId: string | null = null): Promise<Setting[]> {
+    const prefix = `${tenantId ?? "__platform__"}::`;
+    return Object.entries(mock.settings)
+      .filter(([k]) => k.startsWith(prefix))
+      .map(([k, v]) => ({
+        key: k.slice(prefix.length),
+        value: v,
+        tenant_id: tenantId,
+        updated_at: new Date().toISOString(),
+      } as unknown as Setting));
   }
 
   // ---- tasks ----
@@ -1153,8 +1159,17 @@ export class MockStore implements Store {
     return items.sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   async listNotificationsByPartner(tenantId: string, partnerId: string): Promise<Notification[]> {
+    const PORTAL_SAFE_TYPES = new Set([
+      "kyc_submitted", "kyc_approved", "kyc_rejected",
+      "rfq_received", "rfq_quoted",
+      "offer_sent", "offer_accepted", "offer_rejected", "offer_expired",
+      "invoice_overdue", "invoice_paid",
+      "document_shared",
+      "portal_access_requested", "portal_access_approved", "portal_invite_sent",
+      "portal_message",
+    ]);
     return mock.notifications
-      .filter((n) => n.tenant_id === tenantId && (n.partner_id === partnerId || n.partner_id === null))
+      .filter((n) => n.tenant_id === tenantId && n.partner_id === partnerId && PORTAL_SAFE_TYPES.has(n.type))
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   async createNotification(n: Omit<Notification, "id" | "created_at" | "read" | "read_at">): Promise<Notification> {

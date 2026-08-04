@@ -119,6 +119,17 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
       verificationCode = generateVerificationCode(opts.docType, doc.number);
     }
     qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+  } else {
+    // Even when NOT creating a new verification (portal-side PDF re-download),
+    // if the admin already issued a verification for this document, we STILL
+    // render its QR so scans keep working. Portal never creates a verification
+    // but shouldn't strip an existing one either.
+    const existing = await store.getDocumentVerificationByDoc(opts.tenantId, opts.docType, opts.docId);
+    if (existing && existing.status === "active") {
+      verificationCode = existing.verification_code;
+      verificationId = existing.id;
+      qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+    }
   }
 
   // Resolve the logo URL so @react-pdf/renderer can fetch it

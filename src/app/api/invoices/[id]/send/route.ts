@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       partnerName: partner?.name || "Client",
       docType: "invoice",
       docNumber: invoice.number || id,
-      tenantName: auth.user.tenant_id || "Aspidus Trade",
+      tenantName: (await auth.store.getTenant(tenantId))?.name || "Aspidus Trade",
       amount: invoice.total != null ? String(invoice.total) : undefined,
       currency: invoice.currency || undefined,
       dueDate: invoice.due_date || undefined,
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       to: toEmail,
       subject,
       html,
+      tenantId,
       attachments: [{
         filename: `invoice-${invoice.number || id}.pdf`,
         content: pdfBuffer,

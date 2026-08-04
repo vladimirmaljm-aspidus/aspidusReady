@@ -144,6 +144,7 @@ function formatRole(role: string): string {
 
 export function Sidebar() {
   const { view, setView, sidebarCollapsed, toggleSidebar, user } = useAppStore();
+  const activeTenantId = useAppStore((s) => s.activeTenantId);
   const locale = useI18nStore((s) => s.locale);
   const admin = isAdmin(user);
   const superAdmin = isSuperAdmin(user);
@@ -204,6 +205,17 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto custom-scroll px-3 py-4 space-y-1">
         {SECTIONS.map((section) => {
           const visibleItems = section.items.filter((n) => {
+            // ── Super-admin scoping ───────────────────────────────────────
+            // A super_admin without an active tenant context does NOT
+            // belong to any tenant, so tenant-scoped modules are hidden.
+            // The only sections they see by default are Platform items.
+            // Selecting a tenant in the topbar switcher (impersonation)
+            // re-enables the tenant-scoped items.
+            if (superAdmin && !activeTenantId) {
+              const isPlatformItem = section.i18nKey === "platform" || (n.permission?.startsWith("platform.") ?? false);
+              if (!isPlatformItem) return false;
+            }
+
             // Legacy: superAdminOnly / adminOnly still respected for any item
             // that hasn't been migrated to `permission`.
             if (n.superAdminOnly && !superAdmin) return false;

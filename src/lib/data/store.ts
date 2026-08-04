@@ -106,9 +106,9 @@ export interface Store {
   appendAudit(entry: Omit<AuditLog, "id" | "created_at">): Promise<AuditLog>;
 
   // settings
-  getSetting<T = unknown>(key: string): Promise<T | null>;
-  setSetting(key: string, value: unknown): Promise<void>;
-  getAllSettings(): Promise<Setting[]>;
+  getSetting<T = unknown>(key: string, tenantId?: string | null): Promise<T | null>;
+  setSetting(key: string, value: unknown, tenantId?: string | null): Promise<void>;
+  getAllSettings(tenantId?: string | null): Promise<Setting[]>;
 
   // tasks
   listTasks(tenantId: string, userId?: string): Promise<UserTask[]>;

@@ -329,19 +329,42 @@ export class SupabaseStore implements Store {
   }
 
   // ---- settings ----
-  async getSetting<T = unknown>(key: string): Promise<T | null> {
-    const { data, error } = await this.sb().from("settings").select("value").eq("key", key).maybeSingle();
+  // Every setting lives under a specific tenant_id. `tenant_id = null` rows
+  // are PLATFORM-level settings (fallback SMTP, platform password policy,
+  // etc.) — only super_admin can read/write those.
+  async getSetting<T = unknown>(key: string, tenantId: string | null = null): Promise<T | null> {
+    const q = this.sb().from("settings").select("value").eq("key", key);
+    if (tenantId === null) q.is("tenant_id", null);
+    else q.eq("tenant_id", tenantId);
+    const { data, error } = await q.maybeSingle();
     if (error) throw error;
     return (data?.value as T) ?? null;
   }
-  async setSetting(key: string, value: unknown): Promise<void> {
-    const { error } = await this.sb()
-      .from("settings")
-      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
-    if (error) throw error;
+  async setSetting(key: string, value: unknown, tenantId: string | null = null): Promise<void> {
+    // Manual upsert: composite key (tenant_id, key) — but tenant_id can be null,
+    // so we look up first then update or insert.
+    const existing = this.sb().from("settings").select("id").eq("key", key);
+    if (tenantId === null) existing.is("tenant_id", null);
+    else existing.eq("tenant_id", tenantId);
+    const { data: found } = await existing.maybeSingle();
+    if (found) {
+      const { error } = await this.sb()
+        .from("settings")
+        .update({ value, updated_at: new Date().toISOString() })
+        .eq("id", (found as any).id);
+      if (error) throw error;
+    } else {
+      const { error } = await this.sb()
+        .from("settings")
+        .insert({ key, value, tenant_id: tenantId, updated_at: new Date().toISOString() });
+      if (error) throw error;
+    }
   }
-  async getAllSettings(): Promise<Setting[]> {
-    const { data, error } = await this.sb().from("settings").select("*");
+  async getAllSettings(tenantId: string | null = null): Promise<Setting[]> {
+    const q = this.sb().from("settings").select("*");
+    if (tenantId === null) q.is("tenant_id", null);
+    else q.eq("tenant_id", tenantId);
+    const { data, error } = await q;
     if (error) throw error;
     return (data as Setting[]) || [];
   }
@@ -1176,10 +1199,26 @@ export class SupabaseStore implements Store {
     return (data as Notification[]) || [];
   }
   async listNotificationsByPartner(tenantId: string, partnerId: string): Promise<Notification[]> {
-    let q = this.sb().from("notifications").select("*").eq("tenant_id", tenantId);
-    q = q.or(`partner_id.eq.${partnerId},partner_id.is.null`);
-    q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
+    // STRICT: only notifications addressed to this exact partner. No broadcast
+    // leak — internal notifications with partner_id=null are NEVER exposed to
+    // the portal. Also restricted to portal-safe types so misrouted internal
+    // notifications can't slip through.
+    const PORTAL_SAFE_TYPES = [
+      "kyc_submitted", "kyc_approved", "kyc_rejected",
+      "rfq_received", "rfq_quoted",
+      "offer_sent", "offer_accepted", "offer_rejected", "offer_expired",
+      "invoice_overdue", "invoice_paid",
+      "document_shared",
+      "portal_access_requested", "portal_access_approved", "portal_invite_sent",
+      "portal_message",
+    ];
+    const { data, error } = await this.sb()
+      .from("notifications")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("partner_id", partnerId)
+      .in("type", PORTAL_SAFE_TYPES)
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return (data as Notification[]) || [];
   }

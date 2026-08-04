@@ -75,7 +75,9 @@ interface EmailConfig {
  */
 export async function getEmailConfig(tenantId?: string): Promise<EmailConfig | null> {
   const store = await getStore();
-  const comms = await store.getSetting<any>("comms");
+  // Prefer the tenant's own comms config; fall back to platform-level (tenant_id NULL).
+  let comms = tenantId ? await store.getSetting<any>("comms", tenantId) : null;
+  if (!comms) comms = await store.getSetting<any>("comms", null);
   if (!comms) return null;
 
   const provider: EmailProvider = comms.email_provider || (comms.smtp_host ? "smtp" : "none");

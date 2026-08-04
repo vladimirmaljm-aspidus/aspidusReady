@@ -924,28 +924,40 @@ export class PrismaStore implements Store {
 
   // ─── Settings ───────────────────────────────────────────────────────────
 
-  async getSetting<T = unknown>(key: string): Promise<T | null> {
-    const r = await db.setting.findUnique({ where: { key } });
+  async getSetting<T = unknown>(key: string, tenantId: string | null = null): Promise<T | null> {
+    // Prisma schema might not have tenant_id in the composite key. Best-effort:
+    // include it in the key name so tenants don't collide. Callers that need
+    // real DB-level scoping should be on SupabaseStore.
+    const scopedKey = tenantId ? `${tenantId}::${key}` : key;
+    const r = await db.setting.findUnique({ where: { key: scopedKey } });
     if (!r) return null;
     try { return JSON.parse(r.value as string) as T; } catch { return r.value as unknown as T; }
   }
 
-  async setSetting(key: string, value: unknown): Promise<void> {
+  async setSetting(key: string, value: unknown, tenantId: string | null = null): Promise<void> {
     const val = typeof value === "string" ? value : JSON.stringify(value);
+    const scopedKey = tenantId ? `${tenantId}::${key}` : key;
     await db.setting.upsert({
-      where: { key },
+      where: { key: scopedKey },
       update: { value: val },
-      create: { key, value: val },
+      create: { key: scopedKey, value: val },
     });
   }
 
-  async getAllSettings(): Promise<Setting[]> {
-    const rows = await db.setting.findMany();
-    return rows.map((r: any) => ({
-      ...r,
-      created_at: dateToISOOrNow(r.created_at),
-      updated_at: dateToISOOrNow(r.updated_at),
-    }));
+  async getAllSettings(tenantId: string | null = null): Promise<Setting[]> {
+    const prefix = tenantId ? `${tenantId}::` : null;
+    const rows = await db.setting.findMany({
+      where: prefix ? { key: { startsWith: prefix } } : {},
+    });
+    return rows
+      .filter((r: any) => (prefix ? true : !r.key.includes("::")))
+      .map((r: any) => ({
+        ...r,
+        key: prefix ? r.key.slice(prefix.length) : r.key,
+        tenant_id: tenantId,
+        created_at: dateToISOOrNow(r.created_at),
+        updated_at: dateToISOOrNow(r.updated_at),
+      }));
   }
 
   // ─── Tasks ──────────────────────────────────────────────────────────────
@@ -2206,7 +2218,18 @@ export class PrismaStore implements Store {
     const rows = await db.notification.findMany({
       where: {
         tenant_id: tenantId,
-        OR: [{ partner_id: partnerId }, { partner_id: null }],
+        partner_id: partnerId,
+        type: {
+          in: [
+            "kyc_submitted", "kyc_approved", "kyc_rejected",
+            "rfq_received", "rfq_quoted",
+            "offer_sent", "offer_accepted", "offer_rejected", "offer_expired",
+            "invoice_overdue", "invoice_paid",
+            "document_shared",
+            "portal_access_requested", "portal_access_approved", "portal_invite_sent",
+            "portal_message",
+          ],
+        },
       },
       orderBy: { created_at: "desc" },
     });
