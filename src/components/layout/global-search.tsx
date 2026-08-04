@@ -86,9 +86,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "mail-queue", label: "Mail Queue", icon: Mail, adminOnly: true },
   { key: "settings", label: "Settings", icon: Settings, adminOnly: true },
   // Platform
-  { key: "super-admin-overview", label: "System Overview", icon: LayoutDashboard, superAdminOnly: true },
-  { key: "tenants", label: "Tenants", icon: Building2, superAdminOnly: true },
-  { key: "feature-flags", label: "Feature Flags", icon: ToggleRight, superAdminOnly: true },
+  { key: "platform-dashboard", label: "Platform Dashboard", icon: LayoutDashboard, superAdminOnly: true },
 ];
 
 /* -------------------------------------------------------------------------- */

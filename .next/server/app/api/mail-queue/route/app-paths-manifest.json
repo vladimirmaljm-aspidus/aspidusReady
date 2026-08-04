@@ -1,0 +1,3 @@
+{
+  "/api/mail-queue/route": "app/api/mail-queue/route.js"
+}

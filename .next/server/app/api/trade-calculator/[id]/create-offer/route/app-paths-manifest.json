@@ -1,0 +1,3 @@
+{
+  "/api/trade-calculator/[id]/create-offer/route": "app/api/trade-calculator/[id]/create-offer/route.js"
+}

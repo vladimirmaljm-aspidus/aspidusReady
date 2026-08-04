@@ -1,3 +1,789 @@
-[00:00:01.200] Server  WARN    ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-[00:00:01.224] Server  LOG     ✓ Ready in 1017ms
-[00:00:04.267] Server  LOG     ○ Compiling / ...
+[00:00:00.922] Server  WARN    ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+[00:00:01.016] Server  LOG     ✓ Ready in 818ms
+[00:00:14.236] Server  LOG     ○ Compiling / ...
+[00:02:17.217] Server  LOG     ✓ Compiled in 316ms
+[00:02:17.460] Browser ERROR   ./src/components/layout/sidebar.tsx:107:5
+Parsing ecmascript source code failed
+  105 |       { key: "platform-dashboard", i18nKey: "platform-dashboard", i18nSection: "platform", icon: LayoutDashboard, superAdminOnly: true },
+  106 |     ],
+> 107 |     ],
+      |     ^
+  108 |   },
+  109 | ];
+  110 |
+
+Unexpected token `]`. Expected identifier, string literal, numeric literal or [ for the computed key
+
+Import traces:
+  Client Component Browser:
+    ./src/components/layout/sidebar.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/layout/sidebar.tsx [Client Component SSR]
+    ./src/components/layout/app-shell.tsx [Client Component SSR]
+    ./src/app/page.tsx [Client Component SSR]
+    ./src/app/page.tsx [Server Component]
+[00:02:23.822] Browser ERROR   ./src/components/layout/sidebar.tsx:107:5
+Parsing ecmascript source code failed
+  105 |       { key: "platform-dashboard", i18nKey: "platform-dashboard", i18nSection: "platform", icon: LayoutDashboard, superAdminOnly: true },
+  106 |     ],
+> 107 |     ],
+      |     ^
+  108 |   },
+  109 | ];
+  110 |
+
+Unexpected token `]`. Expected identifier, string literal, numeric literal or [ for the computed key
+
+Import traces:
+  Client Component Browser:
+    ./src/components/layout/sidebar.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/layout/sidebar.tsx [Client Component SSR]
+    ./src/components/layout/app-shell.tsx [Client Component SSR]
+    ./src/app/page.tsx [Client Component SSR]
+    ./src/app/page.tsx [Server Component]
+[00:02:37.046] Server  LOG     ✓ Compiled in 602ms
+[00:03:09.944] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:09.945] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.127] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.127] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.128] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.129] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.130] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.131] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.132] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.132] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.134] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.135] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.136] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.137] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:10.159] Server  LOG     ✓ Compiled in 1457ms
+[00:03:10.387] Browser ERROR   ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:03:20.884] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.884] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.887] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.914] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.915] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.916] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.917] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.918] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.919] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.920] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.921] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:20.923] Server  ERROR   ⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:03:21.169] Browser ERROR   ./src/components/views/super-admin-overview-view.tsx:491:55
+Parsing ecmascript source code failed
+  489 |     return (
+  490 |       <div>
+> 491 |         {!embedded <PageHeader<PageHeader <PageHeader title="System Overview" description="Monitor all tenants and platform activity." />
+      |                                                       ^^^^^
+  492 |         <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+  493 |           <CardContent className="p-6 flex items-start gap-3">
+  494 |             <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+
+Expected '</', got 'title'
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/super-admin-overview-view.tsx [Client Component Browser]
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+[00:03:21.169] Browser ERROR   ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+   6 | import { TenantsView } from "@/components/views/tenants-view";
+   7 | import { FeatureFlagsView } from "@/components/views/feature-flags-view";
+>  8 | import { PlansView } from "@/components/views/plans-view";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   9 | import { PageHeader } from "@/components/common/page-header";
+  10 | import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+  11 |
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:05:09.951] Server  LOG     ✓ Compiled in 704ms
+[00:05:10.187] Browser ERROR   ./src/components/views/super-admin-overview-view.tsx:491:55
+Parsing ecmascript source code failed
+  489 |     return (
+  490 |       <div>
+> 491 |         {!embedded <PageHeader<PageHeader <PageHeader title="System Overview" description="Monitor all tenants and platform activity." />
+      |                                                       ^^^^^
+  492 |         <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+  493 |           <CardContent className="p-6 flex items-start gap-3">
+  494 |             <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+
+Expected '</', got 'title'
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/super-admin-overview-view.tsx [Client Component Browser]
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+[00:07:03.132] Browser ERROR   ./src/components/views/super-admin-overview-view.tsx:527:9
+Parsing ecmascript source code failed
+  525 |     <div>
+  526 |       {!embedded <PageHeader<PageHeader <PageHeader
+> 527 |         title="System Overview"
+      |         ^^^^^
+  528 |         description="Monitor all tenants and platform activity."
+  529 |         actions={
+  530 |           <div className="flex gap-2">
+
+Expected '</', got 'title'
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/super-admin-overview-view.tsx [Client Component Browser]
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+[00:07:11.855] Browser ERROR   ./src/components/views/super-admin-overview-view.tsx:541:7
+Parsing ecmascript source code failed
+  539 |       />
+  540 |
+> 541 |       {/* Create Company Dialog */}
+      |       ^
+  542 |       <CompanyDialog
+  543 |         open={createOpen}
+  544 |         onOpenChange={setCreateOpen}
+
+Expected '</', got '{'
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/super-admin-overview-view.tsx [Client Component Browser]
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+[00:07:18.350] Browser ERROR   ./src/components/views/super-admin-overview-view.tsx:541:7
+Parsing ecmascript source code failed
+  539 |       />
+  540 |
+> 541 |       {/* Create Company Dialog */}
+      |       ^
+  542 |       <CompanyDialog
+  543 |         open={createOpen}
+  544 |         onOpenChange={setCreateOpen}
+
+Expected '</', got '{'
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/super-admin-overview-view.tsx [Client Component Browser]
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+[00:08:39.969] Server  LOG     ✓ Compiled in 274ms

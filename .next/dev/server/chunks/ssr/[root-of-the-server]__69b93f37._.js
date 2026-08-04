@@ -1864,10 +1864,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$re
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$boxes$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Boxes$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/boxes.js [app-ssr] (ecmascript) <export default as Boxes>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$chevron$2d$left$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ChevronLeft$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/chevron-left.js [app-ssr] (ecmascript) <export default as ChevronLeft>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$chevron$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ChevronRight$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/chevron-right.js [app-ssr] (ecmascript) <export default as ChevronRight>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$building$2d$2$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Building2$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/building-2.js [app-ssr] (ecmascript) <export default as Building2>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$book$2d$open$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__BookOpen$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/book-open.js [app-ssr] (ecmascript) <export default as BookOpen>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$calculator$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Calculator$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/calculator.js [app-ssr] (ecmascript) <export default as Calculator>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$toggle$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ToggleRight$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/toggle-right.js [app-ssr] (ecmascript) <export default as ToggleRight>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$layout$2d$grid$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__LayoutGrid$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/layout-grid.js [app-ssr] (ecmascript) <export default as LayoutGrid>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$plug$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Plug$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/plug.js [app-ssr] (ecmascript) <export default as Plug>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$dollar$2d$sign$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__DollarSign$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/dollar-sign.js [app-ssr] (ecmascript) <export default as DollarSign>");
@@ -2128,24 +2126,10 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$a
         i18nKey: "platform",
         items: [
             {
-                key: "super-admin-overview",
-                i18nKey: "super-admin-overview",
+                key: "platform-dashboard",
+                i18nKey: "platform-dashboard",
                 i18nSection: "platform",
                 icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$layout$2d$dashboard$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__LayoutDashboard$3e$__["LayoutDashboard"],
-                superAdminOnly: true
-            },
-            {
-                key: "tenants",
-                i18nKey: "tenants",
-                i18nSection: "platform",
-                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$building$2d$2$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Building2$3e$__["Building2"],
-                superAdminOnly: true
-            },
-            {
-                key: "feature-flags",
-                i18nKey: "feature-flags",
-                i18nSection: "platform",
-                icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$toggle$2d$right$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ToggleRight$3e$__["ToggleRight"],
                 superAdminOnly: true
             }
         ]
@@ -2182,12 +2166,12 @@ function Sidebar() {
                             children: "A"
                         }, void 0, false, {
                             fileName: "[project]/src/components/layout/sidebar.tsx",
-                            lineNumber: 159,
+                            lineNumber: 157,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 154,
+                        lineNumber: 152,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2198,7 +2182,7 @@ function Sidebar() {
                                 children: "Aspidus"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 169,
+                                lineNumber: 167,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2206,19 +2190,19 @@ function Sidebar() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "trade-platform")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 172,
+                                lineNumber: 170,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 163,
+                        lineNumber: 161,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 149,
+                lineNumber: 147,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("nav", {
@@ -2241,12 +2225,12 @@ function Sidebar() {
                                     children: sectionLabel
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 197,
+                                    lineNumber: 195,
                                     columnNumber: 17
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 193,
+                                lineNumber: 191,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2263,25 +2247,25 @@ function Sidebar() {
                                         onClick: ()=>setView(item.key)
                                     }, item.key, false, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 210,
+                                        lineNumber: 208,
                                         columnNumber: 21
                                     }, this);
                                 })
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 203,
+                                lineNumber: 201,
                                 columnNumber: 15
                             }, this)
                         ]
                     }, section.i18nKey, true, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 191,
+                        lineNumber: 189,
                         columnNumber: 13
                     }, this);
                 })
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 179,
+                lineNumber: 177,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2297,12 +2281,12 @@ function Sidebar() {
                                     children: getInitials(user.full_name)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 235,
+                                    lineNumber: 233,
                                     columnNumber: 15
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 234,
+                                lineNumber: 232,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2313,7 +2297,7 @@ function Sidebar() {
                                         children: user.full_name || user.username
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 246,
+                                        lineNumber: 244,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2321,19 +2305,19 @@ function Sidebar() {
                                         children: formatRole(user.role)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 249,
+                                        lineNumber: 247,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                lineNumber: 242,
+                                lineNumber: 240,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 230,
+                        lineNumber: 228,
                         columnNumber: 11
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2353,18 +2337,18 @@ function Sidebar() {
                                                     className: "size-3.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                    lineNumber: 277,
+                                                    lineNumber: 275,
                                                     columnNumber: 21
                                                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$chevron$2d$left$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ChevronLeft$3e$__["ChevronLeft"], {
                                                     className: "size-3.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                    lineNumber: 279,
+                                                    lineNumber: 277,
                                                     columnNumber: 21
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                lineNumber: 271,
+                                                lineNumber: 269,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2372,18 +2356,18 @@ function Sidebar() {
                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "collapse")
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                                                lineNumber: 282,
+                                                lineNumber: 280,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                                        lineNumber: 260,
+                                        lineNumber: 258,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 259,
+                                    lineNumber: 257,
                                     columnNumber: 13
                                 }, this),
                                 sidebarCollapsed && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TooltipContent"], {
@@ -2393,30 +2377,30 @@ function Sidebar() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2f$dictionaries$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "expand-sidebar")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                                    lineNumber: 291,
+                                    lineNumber: 289,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/layout/sidebar.tsx",
-                            lineNumber: 258,
+                            lineNumber: 256,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/sidebar.tsx",
-                        lineNumber: 257,
+                        lineNumber: 255,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 227,
+                lineNumber: 225,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/layout/sidebar.tsx",
-        lineNumber: 140,
+        lineNumber: 138,
         columnNumber: 5
     }, this);
 }
@@ -2429,21 +2413,21 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                 className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["cn"])("absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full", "bg-gradient-emerald transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]", active && !collapsed ? "w-[3px] h-5 opacity-100" : "w-0 h-5 opacity-0")
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 330,
+                lineNumber: 328,
                 columnNumber: 7
             }, this),
             active && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["cn"])("absolute inset-0 rounded-lg -z-10", "bg-sidebar-primary/[0.08]", collapsed && "bg-sidebar-primary/[0.12]")
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 340,
+                lineNumber: 338,
                 columnNumber: 9
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(Icon, {
                 className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["cn"])("size-[18px] shrink-0 transition-colors duration-200", active ? "text-sidebar-primary" : "text-white/35 group-hover:text-white/60")
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 348,
+                lineNumber: 346,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2451,20 +2435,20 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                 children: label
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 358,
+                lineNumber: 356,
                 columnNumber: 7
             }, this),
             active && collapsed && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "absolute -bottom-0.5 left-1/2 -translate-x-1/2 size-1 rounded-full bg-sidebar-primary"
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/sidebar.tsx",
-                lineNumber: 367,
+                lineNumber: 365,
                 columnNumber: 9
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/layout/sidebar.tsx",
-        lineNumber: 316,
+        lineNumber: 314,
         columnNumber: 5
     }, this);
     if (collapsed) {
@@ -2475,7 +2459,7 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                     children: button
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                    lineNumber: 375,
+                    lineNumber: 373,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$tooltip$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["TooltipContent"], {
@@ -2485,13 +2469,13 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }) {
                     children: label
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/sidebar.tsx",
-                    lineNumber: 378,
+                    lineNumber: 376,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/layout/sidebar.tsx",
-            lineNumber: 374,
+            lineNumber: 372,
             columnNumber: 7
         }, this);
     }
@@ -6590,8 +6574,6 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 ;
 ;
 ;
-;
-;
 "use client";
 ;
 ;
@@ -6770,14 +6752,6 @@ const MailQueueView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_m
     },
     ssr: false
 });
-const TenantsView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
-    loadableGenerated: {
-        modules: [
-            "[project]/src/components/views/tenants-view.tsx [app-client] (ecmascript, next/dynamic entry)"
-        ]
-    },
-    ssr: false
-});
 const ProductCatalogView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
     loadableGenerated: {
         modules: [
@@ -6810,10 +6784,10 @@ const DocumentTemplatesView = (0, __TURBOPACK__imported__module__$5b$project$5d2
     },
     ssr: false
 });
-const SuperAdminOverviewView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
+const PlatformDashboardView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
     loadableGenerated: {
         modules: [
-            "[project]/src/components/views/super-admin-overview-view.tsx [app-client] (ecmascript, next/dynamic entry)"
+            "[project]/src/components/views/platform-dashboard-view.tsx [app-client] (ecmascript, next/dynamic entry)"
         ]
     },
     ssr: false
@@ -6838,14 +6812,6 @@ const PortalRfqsView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_
     loadableGenerated: {
         modules: [
             "[project]/src/components/views/portal-rfqs-view.tsx [app-client] (ecmascript, next/dynamic entry)"
-        ]
-    },
-    ssr: false
-});
-const FeatureFlagsView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$shared$2f$lib$2f$app$2d$dynamic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"])(async ()=>{}, {
-    loadableGenerated: {
-        modules: [
-            "[project]/src/components/views/feature-flags-view.tsx [app-client] (ecmascript, next/dynamic entry)"
         ]
     },
     ssr: false
@@ -6903,229 +6869,217 @@ const ErpView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules
         case "dashboard":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 64,
+                lineNumber: 62,
                 columnNumber: 41
             }, this);
         case "partners":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(PartnersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 65,
+                lineNumber: 63,
                 columnNumber: 41
             }, this);
         case "partner-360":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(Partner360View, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 66,
+                lineNumber: 64,
                 columnNumber: 41
             }, this);
         case "products":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ProductsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 67,
+                lineNumber: 65,
                 columnNumber: 41
             }, this);
         case "deals":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DealsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 68,
+                lineNumber: 66,
                 columnNumber: 41
             }, this);
         case "commissions":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(CommissionsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 69,
+                lineNumber: 67,
                 columnNumber: 42
             }, this);
         case "offers":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(OffersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 70,
+                lineNumber: 68,
                 columnNumber: 41
             }, this);
         case "demands":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DemandsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 71,
+                lineNumber: 69,
                 columnNumber: 41
             }, this);
         case "documents":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 72,
+                lineNumber: 70,
                 columnNumber: 41
             }, this);
         case "tasks":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(TasksView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 73,
+                lineNumber: 71,
                 columnNumber: 41
             }, this);
         case "audit":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(AuditView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 74,
+                lineNumber: 72,
                 columnNumber: 41
             }, this);
         case "users":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(UsersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 75,
+                lineNumber: 73,
                 columnNumber: 41
             }, this);
         case "settings":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SettingsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 76,
+                lineNumber: 74,
                 columnNumber: 41
             }, this);
         case "invoices":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(InvoicesView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 77,
+                lineNumber: 75,
                 columnNumber: 41
             }, this);
         case "proformas":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ProformasView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 78,
+                lineNumber: 76,
                 columnNumber: 41
             }, this);
         case "document-register":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentRegisterView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 79,
+                lineNumber: 77,
                 columnNumber: 41
             }, this);
         case "inventory":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(InventoryView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 80,
+                lineNumber: 78,
                 columnNumber: 41
             }, this);
         case "security":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SecurityView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 81,
+                lineNumber: 79,
                 columnNumber: 41
             }, this);
         case "vault":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(VaultView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 82,
+                lineNumber: 80,
                 columnNumber: 41
             }, this);
         case "api-keys":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ApiKeysView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 83,
+                lineNumber: 81,
                 columnNumber: 41
             }, this);
         case "webhooks":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(WebhooksView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 84,
+                lineNumber: 82,
                 columnNumber: 41
             }, this);
         case "mail-queue":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(MailQueueView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 85,
-                columnNumber: 41
-            }, this);
-        case "tenants":
-            return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(TenantsView, {}, void 0, false, {
-                fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 86,
+                lineNumber: 83,
                 columnNumber: 41
             }, this);
         case "product-catalog":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ProductCatalogView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 87,
+                lineNumber: 84,
                 columnNumber: 41
             }, this);
         case "supplier-offers":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SupplierOffersView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 88,
+                lineNumber: 85,
                 columnNumber: 41
             }, this);
         case "trade-calculator":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(TradeCalculatorView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 89,
+                lineNumber: 86,
                 columnNumber: 41
             }, this);
         case "document-templates":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentTemplatesView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 90,
+                lineNumber: 87,
                 columnNumber: 41
             }, this);
-        case "super-admin-overview":
-            return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SuperAdminOverviewView, {}, void 0, false, {
+        case "platform-dashboard":
+            return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(PlatformDashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 91,
-                columnNumber: 41
+                lineNumber: 88,
+                columnNumber: 39
             }, this);
         case "document-verification":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DocumentVerificationView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 92,
+                lineNumber: 89,
                 columnNumber: 41
             }, this);
         case "kyc-review":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(KycReviewView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 93,
+                lineNumber: 90,
                 columnNumber: 41
             }, this);
         case "portal-rfqs":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(PortalRfqsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 94,
-                columnNumber: 41
-            }, this);
-        case "feature-flags":
-            return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(FeatureFlagsView, {}, void 0, false, {
-                fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 95,
+                lineNumber: 91,
                 columnNumber: 41
             }, this);
         case "custom-dashboard":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(CustomDashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 96,
+                lineNumber: 92,
                 columnNumber: 42
             }, this);
         case "calendar":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(CalendarView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 97,
+                lineNumber: 93,
                 columnNumber: 41
             }, this);
         case "email-templates":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(EmailTemplatesView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 98,
+                lineNumber: 94,
                 columnNumber: 41
             }, this);
         case "api-integrations":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ApiIntegrationsView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 99,
+                lineNumber: 95,
                 columnNumber: 41
             }, this);
         case "erp":
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(ErpView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 100,
+                lineNumber: 96,
                 columnNumber: 41
             }, this);
         default:
             return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(DashboardView, {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 101,
+                lineNumber: 97,
                 columnNumber: 41
             }, this);
     }
@@ -7143,30 +7097,30 @@ const ErpView = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules
                     children: "Navigation"
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                    lineNumber: 114,
+                    lineNumber: 110,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                     className: "h-full overflow-hidden",
                     children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$sidebar$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Sidebar"], {}, void 0, false, {
                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                        lineNumber: 116,
+                        lineNumber: 112,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                    lineNumber: 115,
+                    lineNumber: 111,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/layout/app-shell.tsx",
-            lineNumber: 112,
+            lineNumber: 108,
             columnNumber: 7
         }, this)
     }, void 0, false, {
         fileName: "[project]/src/components/layout/app-shell.tsx",
-        lineNumber: 111,
+        lineNumber: 107,
         columnNumber: 5
     }, this);
 }
@@ -7202,12 +7156,12 @@ function AppShell() {
                 className: "hidden lg:flex",
                 children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$sidebar$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Sidebar"], {}, void 0, false, {
                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                    lineNumber: 157,
+                    lineNumber: 153,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 156,
+                lineNumber: 152,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(MobileSidebar, {
@@ -7215,7 +7169,7 @@ function AppShell() {
                 onOpenChange: setMobileMenuOpen
             }, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 161,
+                lineNumber: 157,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7243,33 +7197,33 @@ function AppShell() {
                                             d: "M3 6h14M3 10h14M3 14h14"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/layout/app-shell.tsx",
-                                            lineNumber: 176,
+                                            lineNumber: 172,
                                             columnNumber: 17
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                                        lineNumber: 175,
+                                        lineNumber: 171,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                                    lineNumber: 169,
+                                    lineNumber: 165,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$topbar$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Topbar"], {}, void 0, false, {
                                     fileName: "[project]/src/components/layout/app-shell.tsx",
-                                    lineNumber: 179,
+                                    lineNumber: 175,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/layout/app-shell.tsx",
-                            lineNumber: 167,
+                            lineNumber: 163,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                        lineNumber: 166,
+                        lineNumber: 162,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("main", {
@@ -7280,34 +7234,34 @@ function AppShell() {
                                 view: transitionKey
                             }, void 0, false, {
                                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                                lineNumber: 195,
+                                lineNumber: 191,
                                 columnNumber: 13
                             }, this)
                         }, transitionKey, false, {
                             fileName: "[project]/src/components/layout/app-shell.tsx",
-                            lineNumber: 185,
+                            lineNumber: 181,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/src/components/layout/app-shell.tsx",
-                        lineNumber: 184,
+                        lineNumber: 180,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 164,
+                lineNumber: 160,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$layout$2f$global$2d$search$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["GlobalSearch"], {}, void 0, false, {
                 fileName: "[project]/src/components/layout/app-shell.tsx",
-                lineNumber: 201,
+                lineNumber: 197,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/layout/app-shell.tsx",
-        lineNumber: 154,
+        lineNumber: 150,
         columnNumber: 5
     }, this);
 }

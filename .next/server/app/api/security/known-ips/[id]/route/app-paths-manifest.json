@@ -1,0 +1,3 @@
+{
+  "/api/security/known-ips/[id]/route": "app/api/security/known-ips/[id]/route.js"
+}

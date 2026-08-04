@@ -1,0 +1,3 @@
+{
+  "/api/banking/validate-iban/route": "app/api/banking/validate-iban/route.js"
+}

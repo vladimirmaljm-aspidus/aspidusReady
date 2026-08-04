@@ -36,12 +36,11 @@ export type ViewKey =
   | "mail-queue"
   // Platform (super-admin only)
   | "tenants"
-  | "super-admin-overview"
+  | "platform-dashboard"
   | "document-templates"
   | "document-verification"
   | "kyc-review"
   | "portal-rfqs"
-  | "feature-flags"
   // ERP / Accounting
   | "erp"
   // New features

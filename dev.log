@@ -1,16 +1,617 @@
 ▲ Next.js 16.1.3 (Turbopack)
 - Local:         http://localhost:3000
-- Network:       http://21.0.10.88:3000
+- Network:       http://21.0.17.221:3000
 - Environments: .env
 
 ✓ Starting...
-Attention: Next.js now collects completely anonymous telemetry regarding usage.
-This information is used to shape Next.js' roadmap and prioritize features.
-You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
-https://nextjs.org/telemetry
-
 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-✓ Ready in 1017ms
+✓ Ready in 818ms
 ○ Compiling / ...
- GET / 200 in 4.5s (compile: 4.4s, render: 52ms)
- GET / 200 in 41ms (compile: 17ms, render: 24ms)
+ GET / 200 in 602ms (compile: 374ms, render: 229ms)
+ GET /api/portal/me 200 in 249ms (compile: 206ms, render: 42ms)
+ GET /api/auth/me 200 in 256ms (compile: 246ms, render: 10ms)
+✓ Compiled in 316ms
+✓ Compiled in 602ms
+ GET / 200 in 48ms (compile: 30ms, render: 18ms)
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+✓ Compiled in 1457ms
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+⨯ ./src/components/views/platform-dashboard-view.tsx:8:1
+Module not found: Can't resolve '@/components/views/plans-view'
+[0m [90m  6 |[39m [36mimport[39m { [33mTenantsView[39m } [36mfrom[39m [32m"@/components/views/tenants-view"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mFeatureFlagsView[39m } [36mfrom[39m [32m"@/components/views/feature-flags-view"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { [33mPlansView[39m } [36mfrom[39m [32m"@/components/views/plans-view"[39m[33m;[39m
+ [90m    |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { [33mPageHeader[39m } [36mfrom[39m [32m"@/components/common/page-header"[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m { [33mLayoutDashboard[39m[33m,[39m [33mBuilding2[39m[33m,[39m [33mToggleRight[39m[33m,[39m [33mCreditCard[39m } [36mfrom[39m [32m"lucide-react"[39m[33m;[39m
+ [90m 11 |[39m[0m
+
+Import map: aliased to relative './src/components/views/plans-view' inside of [project]/
+
+
+Import trace:
+  Client Component Browser:
+    ./src/components/views/platform-dashboard-view.tsx [Client Component Browser]
+    ./src/components/layout/app-shell.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+✓ Compiled in 704ms
+✓ Compiled in 274ms
+ GET / 200 in 79ms (compile: 36ms, render: 44ms)

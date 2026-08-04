@@ -79,7 +79,7 @@ const STATUS_BADGE: Record<TenantStatus, string> = {
   cancelled: "bg-muted text-muted-foreground border-border",
 };
 
-export function TenantsView() {
+export function TenantsView({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 

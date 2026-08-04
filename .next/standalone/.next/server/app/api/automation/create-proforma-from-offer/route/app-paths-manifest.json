@@ -1,0 +1,3 @@
+{
+  "/api/automation/create-proforma-from-offer/route": "app/api/automation/create-proforma-from-offer/route.js"
+}

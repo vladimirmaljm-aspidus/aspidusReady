@@ -1,0 +1,3 @@
+{
+  "/api/erp/fiscal-periods/[id]/close/route": "app/api/erp/fiscal-periods/[id]/close/route.js"
+}

@@ -40,6 +40,44 @@ export async function requireAuth(): Promise<AuthContext | NextResponse> {
   }
   const { password_hash, totp_secret, ...safe } = user;
   const isSuperAdmin = user.role === "super_admin";
+
+  // ── Subscription enforcement ──────────────────────────────────────────
+  // SUPER-ADMIN IS NEVER BLOCKED — they manage the platform.
+  // Regular users are blocked if their tenant's subscription has expired.
+  if (!isSuperAdmin && user.tenant_id) {
+    try {
+      const tenant = await store.getTenant(user.tenant_id);
+      if (tenant) {
+        // Suspended or cancelled tenants are always blocked
+        if (tenant.status === "suspended" || tenant.status === "cancelled") {
+          return NextResponse.json(
+            { error: "Account suspended. Contact your platform administrator.", subscription_expired: true },
+            { status: 402 }
+          );
+        }
+        const now = new Date();
+        const subEnd = (tenant as any).subscription_end ? new Date((tenant as any).subscription_end) : null;
+        const trialEnd = (tenant as any).trial_ends_at ? new Date((tenant as any).trial_ends_at) : null;
+        // Check expiry: if subscription_end is in the past, block
+        if (subEnd && subEnd < now) {
+          return NextResponse.json(
+            { error: "Subscription expired. Contact your platform administrator to renew.", subscription_expired: true },
+            { status: 402 }
+          );
+        }
+        // Check trial expiry
+        if (String(tenant.status) === "trial" && trialEnd && trialEnd < now) {
+          return NextResponse.json(
+            { error: "Trial period expired. Subscribe to continue.", subscription_expired: true },
+            { status: 402 }
+          );
+        }
+      }
+    } catch (e) {
+      console.error("[requireAuth] Subscription check failed:", e);
+    }
+  }
+
   return {
     user: safe as SafeUser,
     store,

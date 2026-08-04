@@ -1,0 +1,3 @@
+{
+  "/api/kyc/[id]/approve/route": "app/api/kyc/[id]/approve/route.js"
+}

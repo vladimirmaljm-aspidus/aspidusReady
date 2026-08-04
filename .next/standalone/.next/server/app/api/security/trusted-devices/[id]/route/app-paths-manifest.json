@@ -1,0 +1,3 @@
+{
+  "/api/security/trusted-devices/[id]/route": "app/api/security/trusted-devices/[id]/route.js"
+}

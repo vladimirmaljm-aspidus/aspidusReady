@@ -1,0 +1,3 @@
+{
+  "/api/commission-agents/[id]/route": "app/api/commission-agents/[id]/route.js"
+}

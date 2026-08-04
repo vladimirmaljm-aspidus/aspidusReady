@@ -1,0 +1,45 @@
+{
+  "version": 3,
+  "middleware": {
+    "/": {
+      "files": [
+        "server/edge/chunks/node_modules_next_dist_esm_build_templates_edge-wrapper_78fa9d6a.js",
+        "server/edge/chunks/[root-of-the-server]__25fe7590._.js",
+        "server/edge/chunks/turbopack-node_modules_next_dist_esm_build_templates_edge-wrapper_99e3e1b8.js"
+      ],
+      "name": "middleware",
+      "page": "/",
+      "matchers": [
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/api\\/auth\\/login(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/api/auth/login"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/api\\/portal\\/login(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/api/portal/login"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/api\\/setup(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/api/setup"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/api\\/auth\\/logout(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/api/auth/logout"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "env": {
+        "__NEXT_BUILD_ID": "TTvCnfTn5bIe1eXAa07yJ",
+        "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "f0/4jGJ1+emC62JOg3fSRuUeVqntjGmA9J0ORfX8FSo=",
+        "__NEXT_PREVIEW_MODE_ID": "2297e54f136108ab067829e7a4151410",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "c1067d07bd02b73ab58d2bc0de9473d2ef7f76469438e13ab999233a4d48e697",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "9e6253219cb49703b2289099e45e8f5a9b053bf8ec30632d9874ffc46c9086dc"
+      }
+    }
+  },
+  "sortedMiddleware": [
+    "/"
+  ],
+  "functions": {}
+}

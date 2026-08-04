@@ -168,7 +168,7 @@ type EditableFlags = Omit<TenantFeatureFlags, "id" | "updated_by" | "updated_at"
 // ---------------------------------------------------------------
 // Main view
 // ---------------------------------------------------------------
-export function FeatureFlagsView() {
+export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 

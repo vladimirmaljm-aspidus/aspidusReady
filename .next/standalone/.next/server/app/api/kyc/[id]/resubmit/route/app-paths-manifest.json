@@ -1,0 +1,3 @@
+{
+  "/api/kyc/[id]/resubmit/route": "app/api/kyc/[id]/resubmit/route.js"
+}

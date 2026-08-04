@@ -389,7 +389,7 @@ function AssignAdminDialog({
 
 // ─── Main Component ─────────────────────────────────────────────────────
 
-export function SuperAdminOverviewView() {
+export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -523,7 +523,7 @@ export function SuperAdminOverviewView() {
 
   return (
     <div>
-      <PageHeader
+      {!embedded ? <PageHeader
         title="System Overview"
         description="Monitor all tenants and platform activity."
         actions={
@@ -531,12 +531,12 @@ export function SuperAdminOverviewView() {
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="size-4 mr-1" /> Create Company
             </Button>
-            <Button variant="outline" onClick={() => setView("tenants")}>
+            <Button variant="outline" onClick={() => setView("platform-dashboard")}>
               <Building2 className="size-4 mr-1" /> Manage Tenants
             </Button>
           </div>
         }
-      />
+      /> : null}
 
       {/* Create Company Dialog */}
       <CompanyDialog

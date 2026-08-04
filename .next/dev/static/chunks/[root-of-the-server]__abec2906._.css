@@ -3509,6 +3509,16 @@
     }
   }
 
+  .border-primary\/50 {
+    border-color: var(--primary);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-primary\/50 {
+      border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+    }
+  }
+
   .border-rose-500\/20 {
     border-color: #ff235733;
   }
@@ -3791,6 +3801,16 @@
     background-color: var(--color-amber-50);
   }
 
+  .bg-amber-50\/30 {
+    background-color: #fffbeb4d;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-50\/30 {
+      background-color: color-mix(in oklab, var(--color-amber-50) 30%, transparent);
+    }
+  }
+
   .bg-amber-50\/40 {
     background-color: #fffbeb66;
   }
@@ -3866,6 +3886,16 @@
   @supports (color: color-mix(in lab, red, red)) {
     .bg-amber-500\/15 {
       background-color: color-mix(in oklab, var(--color-amber-500) 15%, transparent);
+    }
+  }
+
+  .bg-amber-500\/20 {
+    background-color: #f99c0033;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-500\/20 {
+      background-color: color-mix(in oklab, var(--color-amber-500) 20%, transparent);
     }
   }
 
@@ -6263,6 +6293,16 @@
     }
   }
 
+  .ring-emerald-500\/40 {
+    --tw-ring-color: #00bb7f66;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .ring-emerald-500\/40 {
+      --tw-ring-color: color-mix(in oklab, var(--color-emerald-500) 40%, transparent);
+    }
+  }
+
   .ring-primary {
     --tw-ring-color: var(--primary);
   }
@@ -6274,6 +6314,16 @@
   @supports (color: color-mix(in lab, red, red)) {
     .ring-primary\/20 {
       --tw-ring-color: color-mix(in oklab, var(--primary) 20%, transparent);
+    }
+  }
+
+  .ring-primary\/30 {
+    --tw-ring-color: var(--primary);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .ring-primary\/30 {
+      --tw-ring-color: color-mix(in oklab, var(--primary) 30%, transparent);
     }
   }
 

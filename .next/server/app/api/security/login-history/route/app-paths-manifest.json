@@ -1,0 +1,3 @@
+{
+  "/api/security/login-history/route": "app/api/security/login-history/route.js"
+}

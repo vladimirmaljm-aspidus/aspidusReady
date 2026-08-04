@@ -1,0 +1,3 @@
+{
+  "/api/automation/create-demand-from-portal-rfq/route": "app/api/automation/create-demand-from-portal-rfq/route.js"
+}

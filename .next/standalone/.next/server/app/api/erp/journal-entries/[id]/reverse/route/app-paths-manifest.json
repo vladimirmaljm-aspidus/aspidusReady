@@ -1,0 +1,3 @@
+{
+  "/api/erp/journal-entries/[id]/reverse/route": "app/api/erp/journal-entries/[id]/reverse/route.js"
+}

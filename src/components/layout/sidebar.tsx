@@ -102,9 +102,7 @@ const SECTIONS: NavSection[] = [
   {
     i18nKey: "platform",
     items: [
-      { key: "super-admin-overview", i18nKey: "super-admin-overview", i18nSection: "platform", icon: LayoutDashboard, superAdminOnly: true },
-      { key: "tenants", i18nKey: "tenants", i18nSection: "platform", icon: Building2, superAdminOnly: true },
-      { key: "feature-flags", i18nKey: "feature-flags", i18nSection: "platform", icon: ToggleRight, superAdminOnly: true },
+      { key: "platform-dashboard", i18nKey: "platform-dashboard", i18nSection: "platform", icon: LayoutDashboard, superAdminOnly: true },
     ],
   },
 ];

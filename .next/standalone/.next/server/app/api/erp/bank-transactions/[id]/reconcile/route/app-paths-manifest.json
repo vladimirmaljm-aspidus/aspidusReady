@@ -1,0 +1,3 @@
+{
+  "/api/erp/bank-transactions/[id]/reconcile/route": "app/api/erp/bank-transactions/[id]/reconcile/route.js"
+}
