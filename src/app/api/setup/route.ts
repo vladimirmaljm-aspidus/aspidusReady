@@ -50,6 +50,17 @@ export async function POST(req: NextRequest) {
     const { getStore } = await import("@/lib/data/store");
     const store = await getStore();
     const existingTenants = await store.listTenants();
+
+    // Setup is a one-time bootstrap: once ANY tenant has an admin/super_admin
+    // user, refuse further calls. Without this, an unauthenticated attacker
+    // could POST here at any time and mint a fresh super_admin account.
+    for (const t of existingTenants) {
+      const users = await store.listUsers(t.id);
+      if (users.some((u) => u.role === "admin" || u.role === "super_admin")) {
+        return NextResponse.json({ error: "Setup already completed." }, { status: 403 });
+      }
+    }
+
     let tenant = existingTenants.find((t) => t.name === tenantName);
     if (!tenant) {
       tenant = await store.upsertTenant({ name: tenantName, legal_name: tenantName, country: "RS", currency: "EUR", plan: "enterprise", status: "active", max_users: 50 });

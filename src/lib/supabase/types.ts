@@ -799,6 +799,10 @@ export interface PortalAccess {
   last_login_ip: string | null;
   created_at: string;
   updated_at: string;
+  // Brute-force protection + session revocation on password change
+  failed_attempts: number;
+  locked_until: string | null;
+  token_version: number;
 }
 
 // ============================================================

@@ -6,7 +6,16 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
   const { id } = await params;
+  if (!auth.isSuperAdmin) {
+    const owned = await auth.store.listKnownIps(auth.tenantId || "");
+    if (!owned.some((x) => x.id === id)) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+  }
   const body = await req.json();
   await auth.store.trustIp(id, !!body.trusted);
   await audit(auth.store, auth.user, req, "ip.trust", "known_ip", id, { trusted: body.trusted });
@@ -16,7 +25,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
   const { id } = await params;
+  if (!auth.isSuperAdmin) {
+    const owned = await auth.store.listKnownIps(auth.tenantId || "");
+    if (!owned.some((x) => x.id === id)) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+  }
   await auth.store.forgetIp(id);
   await audit(auth.store, auth.user, req, "ip.forget", "known_ip", id);
   return NextResponse.json({ ok: true });

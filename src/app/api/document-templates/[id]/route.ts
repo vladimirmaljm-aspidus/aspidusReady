@@ -9,6 +9,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const t = await auth.store.getDocumentTemplate(id);
   if (!t) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && t.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   return NextResponse.json(t);
 }
 
@@ -19,8 +22,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const { id } = await params;
+  const existing = await auth.store.getDocumentTemplate(id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   const body = await req.json();
-  const updated = await auth.store.upsertDocumentTemplate({ ...body, id });
+  const updated = await auth.store.upsertDocumentTemplate({ ...body, id, tenant_id: existing.tenant_id });
   await audit(auth.store, auth.user, req, "doc_template.update", "document_template", id, { name: updated.name });
   return NextResponse.json(updated);
 }
@@ -32,6 +40,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const { id } = await params;
+  const existing = await auth.store.getDocumentTemplate(id);
+  if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
   await auth.store.deleteDocumentTemplate(id);
   await audit(auth.store, auth.user, req, "doc_template.delete", "document_template", id);
   return NextResponse.json({ ok: true });

@@ -875,6 +875,7 @@ export class MockStore implements Store {
       welcome_email_sent: p.welcome_email_sent ?? false,
       portal_email: p.portal_email || null, password_hash: p.password_hash || null,
       must_set_password: p.must_set_password ?? true, last_login_at: null, last_login_ip: null,
+      failed_attempts: 0, locked_until: null, token_version: 0,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
     mock.portalAccess.push(newP); return newP;
@@ -902,6 +903,9 @@ export class MockStore implements Store {
       return pa;
     }
     return null;
+  }
+  async getPortalAccessByEmailAnyTenant(email: string): Promise<PortalAccess | null> {
+    return mock.portalAccess.find((p) => p.portal_email === email) || null;
   }
 
   // ---- document templates ----

@@ -97,7 +97,13 @@ export class SupabaseStore implements Store {
     return (data as User) || null;
   }
   async listUsers(tenantId: string): Promise<User[]> {
-    const { data, error } = await this.sb().from("users").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+    // A falsy tenantId means "super-admin, no tenant filter" (see AuthContext.tenantId
+    // doc comment: "null = super-admin, sees all"). `.eq("tenant_id", "")` or
+    // `.eq("tenant_id", null)` matches zero rows in Postgres, which silently broke
+    // every platform-wide count (e.g. the Platform Dashboard overview).
+    let q = this.sb().from("users").select("*");
+    if (tenantId) q = q.eq("tenant_id", tenantId);
+    const { data, error } = await q.order("created_at", { ascending: false });
     if (error) throw error;
     return (data as User[]) || [];
   }
@@ -159,7 +165,8 @@ export class SupabaseStore implements Store {
 
   // ---- partners ----
   async listPartners(tenantId: string, params?: ListParams): Promise<ListResult<Partner>> {
-    let q = this.sb().from("partners").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("partners").select("*");
+    if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%,contact_name.ilike.%${params.search}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.type) q = q.eq("type", params.filters.type);
@@ -206,7 +213,8 @@ export class SupabaseStore implements Store {
 
   // ---- deals ----
   async listDeals(tenantId: string, params?: ListParams): Promise<ListResult<Deal>> {
-    let q = this.sb().from("deals").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("deals").select("*");
+    if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("title", `%${params.search}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.stage) q = q.eq("stage", params.filters.stage);
@@ -230,7 +238,8 @@ export class SupabaseStore implements Store {
 
   // ---- offers ----
   async listOffers(tenantId: string, params?: ListParams): Promise<ListResult<Offer>> {
-    let q = this.sb().from("offers").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("offers").select("*");
+    if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${params.search}%,subject.ilike.%${params.search}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
@@ -301,7 +310,8 @@ export class SupabaseStore implements Store {
 
   // ---- audit ----
   async listAudit(tenantId: string, params?: ListParams): Promise<ListResult<AuditLog>> {
-    let q = this.sb().from("audit_logs").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("audit_logs").select("*");
+    if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`action.ilike.%${params.search}%,username.ilike.%${params.search}%`);
     q = q.order("created_at", { ascending: false });
     const { data, error } = await q;
@@ -507,7 +517,8 @@ export class SupabaseStore implements Store {
 
   // ---- invoices ----
   async listInvoices(tenantId: string, params?: ListParams): Promise<ListResult<Invoice>> {
-    let q = this.sb().from("invoices").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("invoices").select("*");
+    if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${params.search}%,subject.ilike.%${params.search}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
@@ -923,6 +934,11 @@ export class SupabaseStore implements Store {
     if (!pa.password_hash || pa.status !== "active") return null;
     const valid = await verifyPassword(password, pa.password_hash);
     return valid ? pa : null;
+  }
+  async getPortalAccessByEmailAnyTenant(email: string): Promise<PortalAccess | null> {
+    const { data, error } = await this.sb().from("portal_access").select("*").eq("portal_email", email).maybeSingle();
+    if (error || !data) return null;
+    return data as PortalAccess;
   }
 
   // ---- document templates ----

@@ -80,12 +80,15 @@ export async function POST(req: NextRequest) {
     // Hash the new password
     const newPasswordHash = await hashPassword(new_password);
 
-    // Update the portal access record
+    // Update the portal access record. Bump token_version so any other
+    // outstanding sessions for this account (e.g. a stolen cookie) stop
+    // working immediately instead of remaining valid for up to 7 more days.
     const store = await getStore();
     await store.upsertPortalAccess({
       id: access.id,
       password_hash: newPasswordHash,
       must_set_password: false,
+      token_version: (access.token_version || 0) + 1,
     });
 
     // Audit log the password change

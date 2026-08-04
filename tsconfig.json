@@ -43,6 +43,7 @@
     "skills",
     "aspidusReady-inspect",
     "tool-results",
-    "agent-ctx"
+    "agent-ctx",
+    "vitest.config.ts"
   ]
 }

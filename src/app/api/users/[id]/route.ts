@@ -60,6 +60,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const body = await req.json();
 
+    // Only a super-admin can grant super-admin (platform-level) access —
+    // otherwise any user could self-promote via PUT on their own record.
+    if (body.role === "super_admin" && existing.role !== "super_admin" && !auth.isSuperAdmin) {
+      return NextResponse.json({ error: "Only a super-admin can grant super-admin access." }, { status: 403 });
+    }
+
     // Prevent more than 2 admins per tenant when promoting to admin
     if (body.role === "admin" && existing.role !== "admin" && existing.tenant_id) {
       const existingUsers = await auth.store.listUsers(existing.tenant_id);
@@ -86,6 +92,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Preserve the user's tenant_id (regular users/admins cannot move users to another tenant)
     const whitelisted = whitelistUserFields(body);
     delete whitelisted.tenant_id;
+
+    // A non-admin editing their own record must not be able to change their
+    // own role, permissions, or active flag — otherwise self-service profile
+    // editing doubles as a self-promotion path.
+    if (!auth.isSuperAdmin && auth.user.role !== "admin" && auth.user.id === id) {
+      delete whitelisted.role;
+      delete whitelisted.permissions;
+      delete whitelisted.active;
+    }
     const updated = await auth.store.upsertUser({ ...whitelisted, id });
     await audit(auth.store, auth.user, req, "user.update", "user", id, { username: updated.username });
     const { password_hash, totp_secret, ...safe } = updated;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionFromCookie } from "@/lib/auth/session";
+import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
 import { uploadKycDocument } from "@/lib/upload/service";
 
@@ -7,14 +7,9 @@ export const runtime = "nodejs";
 
 // Portal: upload a KYC document file (multipart form-data)
 export async function POST(req: NextRequest) {
-  const session = await getSessionFromCookie();
-  if (!session || session.role !== "portal_client") {
-    return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
-  }
-  const accessId = session.sub.replace("portal:", "");
+  const access = await getPortalSessionAccess();
+  if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   const store = await getStore();
-  const access = await store.getPortalAccessById(accessId);
-  if (!access) return NextResponse.json({ error: "Not permitted." }, { status: 403 });
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;

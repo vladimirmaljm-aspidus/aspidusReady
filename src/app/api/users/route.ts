@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
     // only admins can list
-    if (auth.user.role !== "admin" && !(auth.user.permissions || []).includes("*")) {
+    if (!auth.isSuperAdmin && auth.user.role !== "admin") {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
     // Super-admin with no tenant_id: list users from a specific tenant if requested
@@ -58,10 +58,16 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-    if (auth.user.role !== "admin" && !(auth.user.permissions || []).includes("*")) {
+    if (!auth.isSuperAdmin && auth.user.role !== "admin") {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
     const body = await req.json();
+
+    // Only a super-admin can grant super-admin (platform-level) access —
+    // otherwise any tenant admin could self-promote via this endpoint.
+    if (body.role === "super_admin" && !auth.isSuperAdmin) {
+      return NextResponse.json({ error: "Only a super-admin can grant super-admin access." }, { status: 403 });
+    }
 
     // Enforce tenant on new user
     // Super-admin can pick which tenant the user belongs to

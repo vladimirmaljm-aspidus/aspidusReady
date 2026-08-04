@@ -19,7 +19,9 @@ export async function getPortalSessionAccess(): Promise<PortalAccess | null> {
   const access = await store.getPortalAccessById(accessId);
   if (!access) return null;
   if (access.status !== "active") return null;
-  // Note: token_version and locked_until are no longer in the DB schema;
-  // session validation is handled by the session cookie itself.
+  // Reject stale JWTs: token_version is bumped whenever the password changes
+  // or access is revoked, so old sessions stop working immediately instead
+  // of remaining valid for the rest of their 7-day cookie lifetime.
+  if ((session.token_version || 0) !== (access.token_version || 0)) return null;
   return access;
 }

@@ -1,2 +1,14 @@
 skills/
 node_modules/
+
+# Build output — generated, must not be committed
+.next/
+tsconfig.tsbuildinfo
+
+# Ruflo local secrets and runtime data
+.env
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/

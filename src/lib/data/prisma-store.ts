@@ -1648,6 +1648,10 @@ export class PrismaStore implements Store {
     const ok = await verifyPassword(password, r.password_hash);
     return ok ? mapPortalAccessRow(r) : null;
   }
+  async getPortalAccessByEmailAnyTenant(email: string): Promise<PortalAccess | null> {
+    const r = await db.portalAccess.findFirst({ where: { portal_email: email } });
+    return r ? mapPortalAccessRow(r) : null;
+  }
 
   // ─── Document Templates ─────────────────────────────────────────────────
 

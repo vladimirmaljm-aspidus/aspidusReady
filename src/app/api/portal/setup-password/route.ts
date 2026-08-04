@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
+import { getSessionFromCookie } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
 import { validatePassword } from "@/lib/auth/password-policy";
 
 export const runtime = "nodejs";
 
-// Portal password setup — first-time password after admin invite
+// Portal password setup — used two ways:
+//  1. Anonymous first-time setup: the customer follows the emailed invite
+//     link (?access_id=...), which is only valid while must_set_password
+//     is still true. Once a password has been set, this path closes.
+//  2. Staff-initiated: an authenticated admin of the same tenant (or a
+//     super-admin) sets/resets a portal account's password from the CRM.
 export async function POST(req: NextRequest) {
   try {
     const { access_id, password } = await req.json();
@@ -23,12 +29,35 @@ export async function POST(req: NextRequest) {
     if (!access) {
       return NextResponse.json({ error: "Invalid access link." }, { status: 404 });
     }
-    if (access.status !== "invited" && access.status !== "active" && access.status !== "approved") {
-      return NextResponse.json({ error: "Account is not in setup state." }, { status: 400 });
+
+    let staffAuthorized = false;
+    const session = await getSessionFromCookie();
+    if (session && session.role !== "portal_client") {
+      const staffUser = await store.getUserById(session.sub);
+      if (
+        staffUser &&
+        staffUser.active &&
+        staffUser.token_version === session.token_version &&
+        (staffUser.role === "super_admin" || staffUser.tenant_id === access.tenant_id)
+      ) {
+        staffAuthorized = true;
+      }
     }
+
+    if (!staffAuthorized && !access.must_set_password) {
+      return NextResponse.json(
+        { error: "This account already has a password. Use sign-in or the forgot-password flow instead." },
+        { status: 403 }
+      );
+    }
+
     const passwordHash = await hashPassword(password);
     await store.upsertPortalAccess({
-      id: access_id, password_hash: passwordHash, must_set_password: false, status: "active",
+      id: access_id,
+      password_hash: passwordHash,
+      must_set_password: false,
+      status: "active",
+      token_version: (access.token_version || 0) + 1,
     });
     return NextResponse.json({ ok: true });
   } catch (e) {

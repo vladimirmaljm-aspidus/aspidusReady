@@ -4,6 +4,14 @@ import { createSession, setSessionCookie } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
+function getRequestIp(req: NextRequest): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "127.0.0.1"
+  );
+}
+
 // Portal login — separate session type (partner, not user)
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +20,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
     }
     const store = await getStore();
+    const ip = getRequestIp(req);
+
+    // Look up the account first (independent of the password check) so a
+    // lockout/failure counter can be tracked even on a wrong password.
+    const existing = tenant_id
+      ? await store.getPortalAccessByEmail(tenant_id, email)
+      : await store.getPortalAccessByEmailAnyTenant(email);
+
+    if (existing?.locked_until && new Date(existing.locked_until) > new Date()) {
+      return NextResponse.json({ error: "Account is temporarily locked. Try again later." }, { status: 423 });
+    }
 
     // If tenant_id is provided, verify with it; otherwise look up by email alone
     let access;
@@ -23,13 +42,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (!access) {
+      // Bump the failed-attempt counter on a known account (best-effort —
+      // we don't fail the request if this write has trouble).
+      if (existing) {
+        const next = (existing.failed_attempts || 0) + 1;
+        const lockUntil = next >= 5 ? new Date(Date.now() + 15 * 60000).toISOString() : null;
+        try {
+          await store.upsertPortalAccess({ id: existing.id, failed_attempts: next, locked_until: lockUntil });
+        } catch { /* non-critical */ }
+      }
       return NextResponse.json({ error: "Invalid credentials or account not active." }, { status: 401 });
-    }
-
-    // Check if portal account is locked (column may not exist — use optional chaining)
-    const lockedUntil = (access as any).locked_until;
-    if (lockedUntil && new Date(lockedUntil) > new Date()) {
-      return NextResponse.json({ error: "Account is temporarily locked. Try again later." }, { status: 423 });
     }
 
     // Check status is active
@@ -41,16 +63,19 @@ export async function POST(req: NextRequest) {
       sub: `portal:${access.id}`,
       username: access.portal_email || "",
       role: "portal_client",
-      token_version: (access as any).token_version || 1,
+      token_version: access.token_version || 0,
       tenant_id: access.tenant_id,
     });
     await setSessionCookie(token);
 
-    // Update last login (only update columns that exist)
+    // Success: reset the failed-attempt counter and record the login.
     try {
       await store.upsertPortalAccess({
         id: access.id,
+        failed_attempts: 0,
+        locked_until: null,
         last_login_at: new Date().toISOString(),
+        last_login_ip: ip,
       });
     } catch { /* non-critical */ }
 

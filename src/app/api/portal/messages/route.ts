@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionFromCookie } from "@/lib/auth/session";
+import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
 
 export const runtime = "nodejs";
@@ -15,16 +15,11 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const session = await getSessionFromCookie();
-    if (!session || session.role !== "portal_client") {
-      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
-    }
-    const accessId = session.sub?.replace("portal:", "");
-    if (!accessId) return NextResponse.json({ error: "Invalid session." }, { status: 401 });
+    const access = await getPortalSessionAccess();
+    if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    const accessId = access.id;
 
     const store = await getStore();
-    const access = await store.getPortalAccessById(accessId);
-    if (!access) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     // Messages stored as audit log entries with action="portal.message" or "admin.message"
     // Match by: entity_id === accessId OR details.partner_id === access.partner_id
@@ -57,12 +52,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSessionFromCookie();
-    if (!session || session.role !== "portal_client") {
-      return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
-    }
-    const accessId = session.sub?.replace("portal:", "");
-    if (!accessId) return NextResponse.json({ error: "Invalid session." }, { status: 401 });
+    const access = await getPortalSessionAccess();
+    if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    const accessId = access.id;
 
     const { message } = await req.json();
     if (!message?.trim()) {
@@ -70,8 +62,6 @@ export async function POST(req: NextRequest) {
     }
 
     const store = await getStore();
-    const access = await store.getPortalAccessById(accessId);
-    if (!access) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     // Store message in audit log
     await store.appendAudit({

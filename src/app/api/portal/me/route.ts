@@ -16,6 +16,9 @@ export async function GET() {
     if (!access || access.status !== "active") {
       return NextResponse.json({ access: null }, { status: 200 });
     }
+    if ((session.token_version || 0) !== (access.token_version || 0)) {
+      return NextResponse.json({ access: null }, { status: 200 });
+    }
     return NextResponse.json({ access: { ...access, password_hash: undefined } });
   } catch (e) {
     console.error("[portal/me] Error:", e);

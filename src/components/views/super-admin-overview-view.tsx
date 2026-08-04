@@ -301,17 +301,6 @@ function AssignAdminDialog({
   const [userId, setUserId] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const { data: users } = useQuery({
-    queryKey: ["all-users-for-assign", tenantKey],
-    queryFn: async () => {
-      const r = await fetch(api("/api/super-admin/overview"));
-      if (!r.ok) throw new Error("Failed");
-      // We just need the users list — use the users endpoint instead
-      return [] as Array<{ id: string; username: string; email: string; full_name: string | null; role: string; tenant_id: string | null }>;
-    },
-    enabled: open,
-  });
-
   // Fetch all users for assignment
   const { data: allUsers } = useQuery({
     queryKey: ["super-admin-all-users", tenantKey],

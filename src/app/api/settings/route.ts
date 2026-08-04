@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAdmin, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
+// Global settings (SMTP/API credentials, etc.) are not tenant-scoped and can
+// contain secrets — restricted to admin/super_admin, not every authenticated user.
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
     const url = new URL(req.url);
     const key = url.searchParams.get("key");
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
     const body = await req.json();
     const { key, value } = body;

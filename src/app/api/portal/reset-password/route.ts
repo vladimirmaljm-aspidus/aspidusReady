@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
     for (const t of tenants) {
       try {
         const auditLogs = await store.listAudit(t.id, { limit: 100 });
+        // A token that was already consumed must not work again (replay).
+        const alreadyUsed = auditLogs.items.some(
+          (log) => log.action === "portal.password_reset_completed" && (log.details as any)?.reset_token === reset_token
+        );
+        if (alreadyUsed) {
+          return NextResponse.json({ error: "This reset link has already been used. Please request a new one." }, { status: 400 });
+        }
         for (const log of auditLogs.items) {
           if (log.action === "portal.password_reset_requested") {
             const details = log.details as any;
@@ -61,13 +68,14 @@ export async function POST(req: NextRequest) {
     // Hash the new password
     const passwordHash = await hashPassword(password);
 
-    // Update the portal access record
-    // Note: failed_attempts and locked_until columns may not exist yet.
-    // Only update columns we know exist.
+    // Update the portal access record. Bump token_version so any session
+    // opened with the old password (or a stolen cookie) stops working.
+    const currentAccess = await store.getPortalAccessById(foundAccess.id);
     await store.upsertPortalAccess({
       id: foundAccess.id,
       password_hash: passwordHash,
       must_set_password: false,
+      token_version: (currentAccess?.token_version || 0) + 1,
     });
 
     // Audit the password reset
@@ -78,7 +86,7 @@ export async function POST(req: NextRequest) {
       action: "portal.password_reset_completed",
       entity_type: "portal_access",
       entity_id: foundAccess.id,
-      details: { email: foundAccess.email },
+      details: { email: foundAccess.email, reset_token },
       ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
       user_agent: req.headers.get("user-agent") || null,
     });
