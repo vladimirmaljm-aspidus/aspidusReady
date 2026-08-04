@@ -6,8 +6,11 @@ import { SuperAdminOverviewView } from "@/components/views/super-admin-overview-
 import { TenantsView } from "@/components/views/tenants-view";
 import { FeatureFlagsView } from "@/components/views/feature-flags-view";
 import { PlansView } from "@/components/views/plans-view";
+import { PlatformUsersView } from "@/components/views/platform-users-view";
+import { PlatformAuditView } from "@/components/views/platform-audit-view";
+import { PlatformHealthView } from "@/components/views/platform-health-view";
 import { PageHeader } from "@/components/common/page-header";
-import { LayoutDashboard, Building2, ToggleRight, CreditCard } from "lucide-react";
+import { LayoutDashboard, Building2, ToggleRight, CreditCard, Users, ScrollText, Heart } from "lucide-react";
 
 export function PlatformDashboardView() {
   const [tab, setTab] = useState("overview");
@@ -32,6 +35,15 @@ export function PlatformDashboardView() {
           <TabsTrigger value="plans" className="gap-1.5">
             <CreditCard className="size-3.5" /> Plans
           </TabsTrigger>
+          <TabsTrigger value="users" className="gap-1.5">
+            <Users className="size-3.5" /> Users
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="gap-1.5">
+            <ScrollText className="size-3.5" /> Audit
+          </TabsTrigger>
+          <TabsTrigger value="health" className="gap-1.5">
+            <Heart className="size-3.5" /> Health
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -45,6 +57,15 @@ export function PlatformDashboardView() {
         </TabsContent>
         <TabsContent value="plans" className="mt-6">
           <PlansView />
+        </TabsContent>
+        <TabsContent value="users" className="mt-6">
+          <PlatformUsersView />
+        </TabsContent>
+        <TabsContent value="audit" className="mt-6">
+          <PlatformAuditView />
+        </TabsContent>
+        <TabsContent value="health" className="mt-6">
+          <PlatformHealthView />
         </TabsContent>
       </Tabs>
     </div>

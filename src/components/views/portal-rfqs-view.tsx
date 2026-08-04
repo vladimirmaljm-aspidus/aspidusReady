@@ -28,6 +28,7 @@ import {
   Search, Inbox, Eye, Clock, FileText, Package, CheckCircle2, XCircle,
   ArrowRightLeft, FilePlus2, Save, Loader2, MapPin, Ship, CalendarDays,
   Tag, Hash, DollarSign, Boxes, Building2, StickyNote, FileCheck2,
+  Users as UsersIcon, Zap, RefreshCw, Factory, ShieldCheck, Globe2, Wallet, Repeat, User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -527,6 +528,92 @@ function RfqDetailSheet({
                 </CardContent>
               </Card>
             </div>
+
+            {/* Commercial terms + delivery schedule */}
+            {(rfq.payment_method || rfq.payment_terms || rfq.urgency || rfq.delivery_schedule) && (
+              <Card className="border-border/60 shadow-soft">
+                <CardHeader className="pb-2 pt-4">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Wallet className="size-4 text-primary" />
+                    Commercial &amp; Delivery Schedule
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <InfoRow icon={DollarSign} label="Payment method" value={rfq.payment_method ? rfq.payment_method.toUpperCase() : "—"} />
+                    <InfoRow icon={Wallet} label="Payment terms" value={rfq.payment_terms || "—"} />
+                    <InfoRow icon={Zap} label="Urgency" value={rfq.urgency || "—"} />
+                    <InfoRow icon={Repeat} label="Schedule" value={rfq.delivery_schedule || "—"} />
+                    {rfq.delivery_schedule && rfq.delivery_schedule !== "one_time" && (
+                      <>
+                        <InfoRow icon={Boxes} label="Qty per shipment" value={rfq.per_shipment_qty != null ? `${fmtNumber(rfq.per_shipment_qty)} ${unitLabel(rfq.unit)}` : "—"} />
+                        <InfoRow icon={RefreshCw} label="Shipments / period" value={rfq.shipments_per_period != null ? String(rfq.shipments_per_period) : "—"} />
+                        <InfoRow icon={CalendarDays} label="Contract duration" value={rfq.contract_duration_months != null ? `${rfq.contract_duration_months} months` : "—"} />
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Use case + certifications */}
+            {(rfq.target_market || rfq.end_use || rfq.quality_standard || rfq.certifications_required || rfq.packaging_requirements) && (
+              <Card className="border-border/60 shadow-soft">
+                <CardHeader className="pb-2 pt-4">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Factory className="size-4 text-primary" />
+                    Use case &amp; requirements
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-3">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <InfoRow icon={Factory} label="Target market" value={rfq.target_market || "—"} />
+                    <InfoRow icon={ShieldCheck} label="Quality standard" value={rfq.quality_standard || "—"} />
+                  </div>
+                  {rfq.end_use && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">End use</p>
+                      <p className="text-sm whitespace-pre-wrap p-2.5 rounded-md bg-muted/40 border border-border/40">{rfq.end_use}</p>
+                    </div>
+                  )}
+                  {rfq.certifications_required && (
+                    <InfoRow icon={ShieldCheck} label="Certifications required" value={rfq.certifications_required} />
+                  )}
+                  {rfq.packaging_requirements && (
+                    <InfoRow icon={Package} label="Packaging" value={rfq.packaging_requirements} />
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Buyer identity */}
+            {rfq.buyer_type && (
+              <Card className={`border-shadow-soft ${rfq.buyer_type === "third_party" ? "border-amber-500/40 bg-amber-500/[0.03]" : "border-border/60"}`}>
+                <CardHeader className="pb-2 pt-4">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    {rfq.buyer_type === "third_party" ? <UsersIcon className="size-4 text-amber-600" /> : <User className="size-4 text-primary" />}
+                    Buyer &mdash; {rfq.buyer_type === "third_party" ? "Third-party (sourcing on behalf)" : "Client is the buyer"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {rfq.buyer_type === "third_party" ? (
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <InfoRow icon={Building2} label="Company" value={rfq.third_party_company_name || "—"} />
+                      <InfoRow icon={Factory} label="Business type" value={rfq.third_party_business_type || "—"} />
+                      <InfoRow icon={Globe2} label="Country" value={countryLabel(rfq.third_party_country)} />
+                      <InfoRow icon={Hash} label="Tax ID" value={rfq.third_party_tax_id || "—"} />
+                      <InfoRow icon={FileText} label="Email" value={rfq.third_party_contact_email || "—"} />
+                      <InfoRow icon={FileText} label="Phone" value={rfq.third_party_contact_phone || "—"} />
+                      {rfq.third_party_website && (
+                        <div className="col-span-2 text-sm"><span className="text-xs text-muted-foreground">Website:</span> <a href={rfq.third_party_website} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline">{rfq.third_party_website}</a></div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">The requesting client's company is the buyer of record.</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Admin response */}
             <Card className="border-border/60 shadow-soft">
