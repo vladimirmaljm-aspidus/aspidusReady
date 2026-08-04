@@ -23,6 +23,7 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
+import { MapLink } from "@/components/common/map-link";
 import type {
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
 } from "@/lib/supabase/types";
@@ -250,7 +251,9 @@ function SessionsTab({ items, loading }: { items: SecuritySession[]; loading: bo
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell font-mono text-xs tabular">{s.ip || "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell font-mono text-xs tabular">
+                        <span className="inline-flex items-center gap-1.5">{s.ip || "—"}{s.ip && <MapLink ip={s.ip} />}</span>
+                      </TableCell>
                       <TableCell className="hidden lg:table-cell">{s.country || "—"}</TableCell>
                       <TableCell className="hidden xl:table-cell text-xs">{fmtDateTime(s.created_at)}</TableCell>
                       <TableCell className="hidden md:table-cell text-xs">{fmtRelative(s.last_used_at)}</TableCell>
@@ -335,7 +338,9 @@ function LoginHistoryTab({ items, loading }: { items: LoginHistoryEntry[]; loadi
                 >
                   <TableCell className="text-xs whitespace-nowrap">{fmtDateTime(l.created_at)}</TableCell>
                   <TableCell className="font-medium">{l.username}</TableCell>
-                  <TableCell className="hidden md:table-cell font-mono text-xs tabular">{l.ip || "—"}</TableCell>
+                  <TableCell className="hidden md:table-cell font-mono text-xs tabular">
+                    <span className="inline-flex items-center gap-1.5">{l.ip || "—"}{l.ip && <MapLink ip={l.ip} />}</span>
+                  </TableCell>
                   <TableCell className="hidden lg:table-cell">{l.country || "—"}</TableCell>
                   <TableCell className="hidden xl:table-cell">
                     <p className="text-xs text-muted-foreground truncate max-w-[280px]" title={l.user_agent || ""}>
@@ -437,7 +442,9 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
             <TableBody>
               {items.map((ip) => (
                 <TableRow key={ip.id}>
-                  <TableCell className="font-mono text-sm tabular">{ip.ip}</TableCell>
+                  <TableCell className="font-mono text-sm tabular">
+                    <span className="inline-flex items-center gap-1.5">{ip.ip}<MapLink ip={ip.ip} /></span>
+                  </TableCell>
                   <TableCell className="hidden md:table-cell">{ip.country || "—"}</TableCell>
                   <TableCell className="hidden lg:table-cell text-xs">{fmtDateTime(ip.first_seen)}</TableCell>
                   <TableCell className="hidden lg:table-cell text-xs">{fmtRelative(ip.last_seen)}</TableCell>
@@ -529,7 +536,9 @@ function TrustedDevicesTab({ items, loading }: { items: TrustedDevice[]; loading
                   <TableCell className="hidden md:table-cell font-mono text-xs text-muted-foreground tabular">
                     {d.fingerprint}
                   </TableCell>
-                  <TableCell className="hidden lg:table-cell font-mono text-xs tabular">{d.ip || "—"}</TableCell>
+                  <TableCell className="hidden lg:table-cell font-mono text-xs tabular">
+                    <span className="inline-flex items-center gap-1.5">{d.ip || "—"}{d.ip && <MapLink ip={d.ip} />}</span>
+                  </TableCell>
                   <TableCell className="hidden md:table-cell text-xs">{fmtRelative(d.last_used)}</TableCell>
                   <TableCell>
                     {d.revoked ? (

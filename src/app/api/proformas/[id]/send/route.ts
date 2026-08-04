@@ -11,6 +11,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Permission gate (proformas.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "proformas.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   if (auth.user.role !== "admin" && auth.user.role !== "super_admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });

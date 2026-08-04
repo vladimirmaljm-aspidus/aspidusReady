@@ -9,6 +9,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // Permission gate (kyc.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "kyc.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_kyc)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_kyc", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
@@ -28,6 +31,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // Permission gate (kyc.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "kyc.update"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_kyc)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_kyc", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });

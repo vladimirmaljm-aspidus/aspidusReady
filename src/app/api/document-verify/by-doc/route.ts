@@ -11,6 +11,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (document-verify.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "document-verify.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_document_verification)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_document_verification", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });

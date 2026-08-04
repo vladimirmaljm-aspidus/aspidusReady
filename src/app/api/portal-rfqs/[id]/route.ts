@@ -9,6 +9,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Permission gate (portal.update)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "portal.update"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_portal)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
@@ -32,6 +35,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Permission gate (portal.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "portal.delete"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_portal)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });

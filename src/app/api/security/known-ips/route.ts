@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (security.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "security.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_security)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_security", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });

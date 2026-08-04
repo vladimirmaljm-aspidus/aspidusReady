@@ -10,6 +10,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (portal.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "portal.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_portal)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   let tenantId = resolveTenantId(auth, req);
   if (!tenantId && auth.isSuperAdmin) {

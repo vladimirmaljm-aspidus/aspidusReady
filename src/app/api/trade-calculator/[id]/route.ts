@@ -11,6 +11,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // Permission gate (trade-calculator.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.read"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_trade)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_trade", _isSA); if (_f) return _f; } /* requireFeature wired */
 
   const { id } = await params;
   const item = await auth.store.getTradeCalculation(id);
@@ -32,6 +37,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Permission gate (trade-calculator.update)
     { const { requirePermission } = await import("@/lib/permissions/can");
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.update"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_trade)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_trade", _isSA); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
@@ -98,6 +108,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Permission gate (trade-calculator.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");
     if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.delete"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_trade)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_trade", _isSA); if (_f) return _f; } /* requireFeature wired */
 
   const { id } = await params;
   // Tenant ownership check before delete

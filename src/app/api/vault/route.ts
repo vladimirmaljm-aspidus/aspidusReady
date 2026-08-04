@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (vault.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "vault.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_vault)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_vault", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tid = auth.tenantId!;
   const url = new URL(req.url);
@@ -31,6 +34,9 @@ export async function POST(req: NextRequest) {
   // Permission gate (vault.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "vault.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_vault)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_vault", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const body = await req.json();
   body.tenant_id = auth.tenantId!;

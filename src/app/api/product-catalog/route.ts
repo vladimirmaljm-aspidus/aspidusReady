@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (product-catalog.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "product-catalog.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_trade)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_trade", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
@@ -25,6 +28,9 @@ export async function POST(req: NextRequest) {
   // Permission gate (product-catalog.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "product-catalog.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_trade)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_trade", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });

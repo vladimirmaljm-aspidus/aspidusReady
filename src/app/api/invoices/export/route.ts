@@ -10,6 +10,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (invoices.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "invoices.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tid = resolveTenantId(auth, req);
   if (!tid) return csvResponse("invoices.csv", "");

@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (mail-queue.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "mail-queue.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_mail_queue)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_mail_queue", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tid = auth.tenantId!;
   const url = new URL(req.url);
@@ -24,6 +27,9 @@ export async function POST(req: NextRequest) {
   // Permission gate (mail-queue.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "mail-queue.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_mail_queue)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_mail_queue", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const body = await req.json();
   body.tenant_id = auth.tenantId!;

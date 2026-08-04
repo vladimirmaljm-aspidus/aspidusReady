@@ -10,6 +10,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (erp.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "erp.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
 
   const tenantId = resolveTenantId(auth, req);
@@ -39,6 +42,9 @@ export async function POST(req: NextRequest) {
     // Permission gate (erp.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "erp.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
 
   const tenantId = resolveTenantId(auth, req);

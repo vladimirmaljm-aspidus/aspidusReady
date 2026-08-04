@@ -10,6 +10,11 @@ export async function GET(req: NextRequest) {
     // Permission gate (erp.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "erp.read"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_finance", _isSA); if (_f) return _f; } /* requireFeature wired */
 
 
   const tenantId = resolveTenantId(auth, req);
@@ -34,6 +39,11 @@ export async function POST(req: NextRequest) {
   // Permission gate (erp.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "erp.create"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_finance", _isSA); if (_f) return _f; } /* requireFeature wired */
 
 
   // For session auth, require admin role; for API key auth, check permissions

@@ -10,6 +10,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // Permission gate (proformas.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "proformas.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const { id } = await params;
     const item = await auth.store.getProforma(id);
@@ -30,6 +33,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // Permission gate (proformas.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "proformas.update"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const { id } = await params;
     const existing = await auth.store.getProforma(id);
@@ -53,6 +59,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Permission gate (proformas.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "proformas.delete"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const { id } = await params;
     const existing = await auth.store.getProforma(id);

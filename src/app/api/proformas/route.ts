@@ -15,6 +15,11 @@ export async function GET(req: NextRequest) {
     // Permission gate (proformas.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "proformas.read"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_finance", _isSA); if (_f) return _f; } /* requireFeature wired */
 
     const tid = resolveTenantId(auth, req);
 
@@ -49,6 +54,11 @@ export async function POST(req: NextRequest) {
   // Permission gate (proformas.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "proformas.create"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_finance", _isSA); if (_f) return _f; } /* requireFeature wired */
 
     const tid = resolveTenantId(auth, req);
 

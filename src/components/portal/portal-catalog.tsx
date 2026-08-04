@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { fmtDate } from "@/lib/utils/format";
 import type { ProductCatalogEntry } from "@/lib/supabase/types";
+import { RfqFormDialog } from "./rfq-form-dialog";
 
 // Category → accent color tokens (emerald / amber / teal / rose / violet)
 const CATEGORY_COLORS: Record<string, string> = {
@@ -67,6 +68,7 @@ export function PortalCatalog() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [rfqProduct, setRfqProduct] = useState<ProductCatalogEntry | null>(null);
 
   const catalogQ = useQuery<{ items: ProductCatalogEntry[]; total: number }>({
     queryKey: ["portal-catalog"],
@@ -220,40 +222,22 @@ export function PortalCatalog() {
           {selected ? (
             <CatalogDetail
               product={selected}
-              onRequestQuote={(product) => {
-                // Create a portal RFQ with the product pre-filled
-                const createRfq = async () => {
-                  try {
-                    const r = await fetch("/api/portal/rfqs", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        product_name: product.name,
-                        product_description: product.description,
-                        category: product.category,
-                        unit: product.base_unit,
-                        quantity: 1,
-                        currency: "USD",
-                        notes: `Request for quote for ${product.name} (from catalog)`,
-                        specifications: product.specifications,
-                      }),
-                    });
-                    if (!r.ok) throw new Error("Failed to create RFQ");
-                    toast.success("RFQ created! We'll get back to you with a quote.");
-                    setDetailId(null);
-                    // Navigate to RFQ view
-                    const setView = useAppStore.getState().setView;
-                    setView("portal-rfq");
-                  } catch (e: any) {
-                    toast.error(e.message || "Failed to create RFQ");
-                  }
-                };
-                createRfq();
-              }}
+              onRequestQuote={(product) => setRfqProduct(product)}
             />
           ) : null}
         </SheetContent>
       </Sheet>
+
+      {/* Detailed RFQ intake dialog */}
+      <RfqFormDialog
+        open={!!rfqProduct}
+        onClose={() => setRfqProduct(null)}
+        product={rfqProduct}
+        onCreated={() => {
+          setDetailId(null);
+          useAppStore.getState().setView("portal-rfq");
+        }}
+      />
     </div>
   );
 }

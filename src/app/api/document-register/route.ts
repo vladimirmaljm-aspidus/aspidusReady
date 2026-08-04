@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (document-register.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "document-register.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tid = auth.tenantId!;
   const url = new URL(req.url);
@@ -25,6 +28,9 @@ export async function POST(req: NextRequest) {
   // Permission gate (document-register.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "document-register.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const body = await req.json();
   body.tenant_id = auth.tenantId!;

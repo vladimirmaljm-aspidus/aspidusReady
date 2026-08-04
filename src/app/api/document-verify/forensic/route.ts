@@ -12,6 +12,9 @@ export async function POST(req: NextRequest) {
     // Permission gate (document-verify.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "document-verify.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_document_verification)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_document_verification", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   try {
     const { verification_code, pdf_hash } = await req.json();

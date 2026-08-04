@@ -154,6 +154,9 @@ export async function GET(req: NextRequest) {
     // Permission gate (email-templates.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "email-templates.read"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_mail_queue)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_mail_queue", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
 
   try {
@@ -205,6 +208,9 @@ export async function POST(req: NextRequest) {
   // Permission gate (email-templates.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "email-templates.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_mail_queue)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_mail_queue", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
 
   try {

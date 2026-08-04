@@ -9,6 +9,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // Permission gate (mail-queue.delete)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "mail-queue.delete"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_mail_queue)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_mail_queue", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const { id } = await params;
   // Tenant ownership check: listMailQueue ignores tenantId in the store,

@@ -1133,6 +1133,34 @@ export interface PortalRfq {
   specifications: string | null;
   notes: string | null;
 
+  // Extended intake (used to price the offer accurately)
+  target_market: string | null;          // e.g. "construction", "automotive", "food"
+  end_use: string | null;                // free-text description of how the product will be used
+  payment_method: string | null;         // "wire" | "lc" | "escrow" | "cash" | "other"
+  payment_terms: string | null;          // free-text: "net 30", "lc at sight", …
+  delivery_schedule: string | null;      // "one_time" | "monthly" | "quarterly" | "annually"
+  per_shipment_qty: number | null;       // for recurring
+  shipments_per_period: number | null;
+  contract_duration_months: number | null;
+  urgency: string | null;                // "flexible" | "normal" | "urgent"
+  packaging_requirements: string | null;
+  certifications_required: string | null;
+  quality_standard: string | null;
+
+  // Buyer identity
+  buyer_type: "self" | "third_party" | null;
+  third_party_company_name: string | null;
+  third_party_business_type: string | null;
+  third_party_country: string | null;
+  third_party_contact_email: string | null;
+  third_party_contact_phone: string | null;
+  third_party_tax_id: string | null;
+  third_party_website: string | null;
+
+  // Trace back to catalog / entry channel
+  product_id: string | null;
+  source: string | null;                 // "catalog" | "form" | "chat" | "email"
+
   // Admin response
   linked_offer_id: string | null;
   linked_demand_id: string | null;
