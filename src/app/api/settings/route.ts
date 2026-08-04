@@ -51,6 +51,10 @@ export async function PUT(req: NextRequest) {
   try {
     const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (settings.update)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "settings.update"); if (_d) return _d; } /* requirePermission wired */
+
 
     let tenantId: string | null;
     if (auth.isSuperAdmin) {

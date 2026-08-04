@@ -44,6 +44,10 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (commissions.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "commissions.create"); if (_d) return _d; } /* requirePermission wired */
+
     const tenantId = resolveTenantId(auth, req);
     if (!tenantId) return NextResponse.json({ error: "Tenant ID is required." }, { status: 400 });
 

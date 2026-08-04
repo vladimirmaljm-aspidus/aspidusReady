@@ -27,6 +27,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (partners.update)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "partners.update"); if (_d) return _d; } /* requirePermission wired */
+
     const { id } = await params;
     // Tenant ownership check: fetch existing first
     const existing = await auth.store.getPartner(id);
@@ -48,6 +52,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (partners.delete)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "partners.delete"); if (_d) return _d; } /* requirePermission wired */
+
     const { id } = await params;
     const existing = await auth.store.getPartner(id);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });

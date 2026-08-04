@@ -22,6 +22,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (document-register.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "document-register.create"); if (_d) return _d; } /* requirePermission wired */
+
   const body = await req.json();
   body.tenant_id = auth.tenantId!;
   if (!body.created_by) body.created_by = auth.user.id;

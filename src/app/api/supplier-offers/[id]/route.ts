@@ -22,6 +22,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (supplier-offers.update)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "supplier-offers.update"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   const existing = await auth.store.getSupplierOffer(id);
   if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
@@ -37,6 +41,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (supplier-offers.delete)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "supplier-offers.delete"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   const existing = await auth.store.getSupplierOffer(id);
   if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });

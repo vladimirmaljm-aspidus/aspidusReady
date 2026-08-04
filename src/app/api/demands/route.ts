@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (demands.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "demands.create"); if (_d) return _d; } /* requirePermission wired */
+
     const body = await req.json();
     body.tenant_id = auth.tenantId!;
     const created = await auth.store.upsertDemand(body);

@@ -22,6 +22,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (product-catalog.update)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "product-catalog.update"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   const existing = await auth.store.getProductCatalogEntry(id);
   if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
@@ -37,6 +41,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (product-catalog.delete)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "product-catalog.delete"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   const existing = await auth.store.getProductCatalogEntry(id);
   if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });

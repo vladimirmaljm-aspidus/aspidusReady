@@ -202,6 +202,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (email-templates.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "email-templates.create"); if (_d) return _d; } /* requirePermission wired */
+
 
   try {
     const tenantId = resolveTenantId(auth, req);

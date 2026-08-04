@@ -95,6 +95,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (trade-calculator.delete)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.delete"); if (_d) return _d; } } /* requirePermission wired */
+
   const { id } = await params;
   // Tenant ownership check before delete
   const existing = await auth.store.getTradeCalculation(id);

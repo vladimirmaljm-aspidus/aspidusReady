@@ -27,6 +27,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (document-register.read)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "document-register.read"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   // Tenant ownership check on the parent document before listing its revisions.
   const all = await auth.store.listDocumentRegister(auth.tenantId ?? "", { limit: 100000 });

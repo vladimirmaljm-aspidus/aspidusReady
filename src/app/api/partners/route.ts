@@ -53,6 +53,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (partners.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "partners.create"); if (_d) return _d; } } /* requirePermission wired */
+
   const tid = resolveTenantId(auth, req);
 
   // Permission check for API keys

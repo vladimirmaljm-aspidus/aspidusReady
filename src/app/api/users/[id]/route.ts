@@ -45,6 +45,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (users.update)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "users.update"); if (_d) return _d; } /* requirePermission wired */
+
     const { id } = await params;
     const existing = await auth.store.getUserById(id);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
@@ -118,6 +122,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (users.delete)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "users.delete"); if (_d) return _d; } /* requirePermission wired */
+
     if (auth.user.role !== "admin" && !auth.isSuperAdmin) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }

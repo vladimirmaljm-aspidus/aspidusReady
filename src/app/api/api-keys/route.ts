@@ -22,6 +22,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (api-keys.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "api-keys.create"); if (_d) return _d; } /* requirePermission wired */
+
   const body = await req.json();
 
   // Validate required fields

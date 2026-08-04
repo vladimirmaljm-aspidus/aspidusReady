@@ -90,6 +90,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (tasks.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "tasks.create"); if (_d) return _d; } /* requirePermission wired */
+
   const tid = resolveTenantId(auth, req);
   if (!tid) return NextResponse.json({ error: "Tenant required." }, { status: 400 });
 

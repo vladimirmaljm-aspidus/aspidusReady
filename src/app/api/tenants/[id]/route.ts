@@ -25,6 +25,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const auth = await requireSuperAdmin();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (platform.tenants.update)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "platform.tenants.update"); if (_d) return _d; } /* requirePermission wired */
+
     const { id } = await params;
     const body = await req.json();
 
@@ -91,6 +95,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const auth = await requireSuperAdmin();
     if (auth instanceof NextResponse) return auth;
+  // Permission gate (platform.tenants.delete)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "platform.tenants.delete"); if (_d) return _d; } /* requirePermission wired */
+
     const { id } = await params;
     await auth.store.deleteTenant(id);
     await audit(auth.store, auth.user, req, "tenant.delete", "tenant", id);

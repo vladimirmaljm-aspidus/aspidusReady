@@ -18,6 +18,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (webhooks.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "webhooks.create"); if (_d) return _d; } /* requirePermission wired */
+
   const body = await req.json();
   body.tenant_id = auth.tenantId!;
   const created = await auth.store.upsertWebhook(body);

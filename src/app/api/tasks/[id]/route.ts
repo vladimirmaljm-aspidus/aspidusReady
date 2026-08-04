@@ -29,6 +29,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (tasks.delete)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "tasks.delete"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   const allTasks = await auth.store.listTasks(auth.tenantId ?? "");
   const existing = allTasks.find((t) => t.id === id);

@@ -31,6 +31,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (erp.create)
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "erp.create"); if (_d) return _d; } } /* requirePermission wired */
+
 
   // For session auth, require admin role; for API key auth, check permissions
   if ("apiKeyId" in auth) {
