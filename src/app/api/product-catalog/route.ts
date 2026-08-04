@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (product-catalog.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "product-catalog.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   const url = new URL(req.url);

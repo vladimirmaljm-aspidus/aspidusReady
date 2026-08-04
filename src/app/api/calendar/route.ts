@@ -12,6 +12,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (calendar.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "calendar.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ items: [] });
 

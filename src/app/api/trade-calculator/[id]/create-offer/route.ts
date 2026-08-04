@@ -26,6 +26,10 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (trade-calculator.create)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.create"); if (_d) return _d; } } /* requirePermission wired */
+
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
 

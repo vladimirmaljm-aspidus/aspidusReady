@@ -18,6 +18,10 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (settings.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "settings.read"); if (_d) return _d; } /* requirePermission wired */
+
 
     // Determine scope
     let tenantId: string | null;

@@ -46,6 +46,10 @@ const SYMBOL_LABELS: Record<string, string> = {
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (integrations.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "integrations.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   const url = new URL(req.url);
   const symbol = url.searchParams.get("symbol") || "ALL";

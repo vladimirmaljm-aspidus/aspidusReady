@@ -21,6 +21,10 @@ const CACHE_TTL = 15 * 60 * 1000; // 15 minutes — tracking updates frequently
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (integrations.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "integrations.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   const url = new URL(req.url);
   const container = (url.searchParams.get("container") || "").trim().toUpperCase();

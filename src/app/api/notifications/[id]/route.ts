@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (notifications.update)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "notifications.update"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   const body = await req.json();
   if (body.read) {

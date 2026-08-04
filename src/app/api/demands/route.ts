@@ -7,6 +7,10 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (demands.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "demands.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tid = auth.tenantId!;
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || undefined;

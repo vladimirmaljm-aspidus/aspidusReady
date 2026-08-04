@@ -11,6 +11,10 @@ function getAuthUser(auth: AuthContext | ApiKeyAuthContext) {
 export async function GET(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (partners.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "partners.read"); if (_d) return _d; } } /* requirePermission wired */
+
   const tid = resolveTenantId(auth, req);
 
   // Permission check for API keys

@@ -7,6 +7,10 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (erp.create)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "erp.create"); if (_d) return _d; } /* requirePermission wired */
+
 
   const { id } = await params;
   try {

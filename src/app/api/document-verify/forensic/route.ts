@@ -9,6 +9,10 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (document-verify.create)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "document-verify.create"); if (_d) return _d; } /* requirePermission wired */
+
   try {
     const { verification_code, pdf_hash } = await req.json();
     if (!verification_code || !pdf_hash) {

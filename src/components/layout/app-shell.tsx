@@ -4,6 +4,7 @@ import * as React from "react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { GlobalSearch } from "./global-search";
+import { ImpersonateBanner } from "./impersonate-banner";
 import { useAppStore } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
 import {
@@ -170,6 +171,8 @@ export function AppShell() {
 
       {/* ── Main area ── */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* ── Impersonation banner (visible only while active) ── */}
+        <ImpersonateBanner />
         {/* ── Topbar ── */}
         <header className="h-14 sticky top-0 z-30 border-b border-border/60 glass-strong">
           <div className="h-full px-4 md:px-6 flex items-center justify-between gap-4">

@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (tasks.update)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "tasks.update"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   // Tenant ownership check: listTasks returns tasks; the store ignores tenantId,
   // so we filter here for regular users.

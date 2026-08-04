@@ -21,6 +21,10 @@ const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours — rates don't change that oft
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (integrations.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "integrations.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   const url = new URL(req.url);
   const from = url.searchParams.get("from") || "USD";

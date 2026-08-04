@@ -38,6 +38,10 @@ interface Shipment {
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (documents.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "documents.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   try {
     const tenantId = resolveTenantId(auth, req);

@@ -7,6 +7,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (portal.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "portal.read"); if (_d) return _d; } /* requirePermission wired */
+
   let tenantId = resolveTenantId(auth, req);
   if (!tenantId && auth.isSuperAdmin) {
     const tenants = await auth.store.listTenants();

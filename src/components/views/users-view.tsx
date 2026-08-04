@@ -32,7 +32,7 @@ import {
 import {
   Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext,
 } from "@/components/ui/pagination";
-import { Plus, Pencil, Trash2, Users as UsersIcon, ShieldAlert, ChevronDown, Wand2, Eye, EyeOff, Copy, Check, Building2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Users as UsersIcon, ShieldAlert, ChevronDown, Wand2, Eye, EyeOff, Copy, Check, Building2, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
@@ -250,6 +250,35 @@ export function UsersView() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {isSuperAdmin(currentUser) && !isSelf && u.role !== "super_admin" && u.active && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8 text-amber-600 hover:text-amber-700"
+                                title={`Impersonate ${u.username}`}
+                                onClick={async () => {
+                                  if (!confirm(`Start impersonating ${u.username}? This will be logged in the audit trail.`)) return;
+                                  try {
+                                    const r = await fetch("/api/super-admin/impersonate", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ user_id: u.id, tenant_id: u.tenant_id, duration_minutes: 60 }),
+                                    });
+                                    if (!r.ok) {
+                                      const e = await r.json().catch(() => ({}));
+                                      toast.error(e.error || "Failed to start impersonation.");
+                                      return;
+                                    }
+                                    toast.success(`Now impersonating ${u.username}.`);
+                                    setTimeout(() => window.location.reload(), 400);
+                                  } catch {
+                                    toast.error("Failed to start impersonation.");
+                                  }
+                                }}
+                              >
+                                <UserCheck className="size-4" />
+                              </Button>
+                            )}
                             <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(u); setShowForm(true); }} title="Edit">
                               <Pencil className="size-4" />
                             </Button>

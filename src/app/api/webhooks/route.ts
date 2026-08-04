@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (webhooks.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "webhooks.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tid = auth.tenantId!;
   const items = await auth.store.listWebhooks(tid);
   return NextResponse.json({ items });

@@ -7,6 +7,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (erp.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "erp.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) {
@@ -34,6 +38,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (erp.create)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "erp.create"); if (_d) return _d; } /* requirePermission wired */
+
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) {

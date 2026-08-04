@@ -7,6 +7,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (offers.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "offers.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tid = resolveTenantId(auth, req);
   if (!tid) return csvResponse("offers.csv", "");
 

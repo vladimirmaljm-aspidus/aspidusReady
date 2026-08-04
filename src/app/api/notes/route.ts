@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (notes.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "notes.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tid = auth.tenantId!;
   const url = new URL(req.url);
   const entity_type = url.searchParams.get("entity_type");

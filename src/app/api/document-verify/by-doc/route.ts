@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (document-verify.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "document-verify.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
 

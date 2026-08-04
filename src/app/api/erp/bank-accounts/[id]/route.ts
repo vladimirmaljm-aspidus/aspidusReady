@@ -7,6 +7,10 @@ export const runtime = "nodejs";
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (erp.delete)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "erp.delete"); if (_d) return _d; } /* requirePermission wired */
+
 
   const { id } = await params;
   try {

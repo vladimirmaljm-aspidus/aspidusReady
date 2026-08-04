@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (api-keys.delete)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "api-keys.delete"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
 
   // Verify the key belongs to the user's tenant.

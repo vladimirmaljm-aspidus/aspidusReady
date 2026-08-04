@@ -20,6 +20,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (users.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "users.read"); if (_d) return _d; } /* requirePermission wired */
+
     const { id } = await params;
     const u = await auth.store.getUserById(id);
     if (!u) return NextResponse.json({ error: "Not found." }, { status: 404 });

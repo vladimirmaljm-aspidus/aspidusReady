@@ -8,6 +8,10 @@ export async function GET() {
     // Super-admin sees all tenants; regular admin sees only their own tenant
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (platform.tenants.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "platform.tenants.read"); if (_d) return _d; } /* requirePermission wired */
+
     if (auth.isSuperAdmin) {
       const tenants = await auth.store.listTenants();
       return NextResponse.json({ items: tenants });
@@ -27,6 +31,10 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireSuperAdmin();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (platform.tenants.create)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "platform.tenants.create"); if (_d) return _d; } /* requirePermission wired */
+
     const body = await req.json();
     const created = await auth.store.upsertTenant(body);
     await audit(auth.store, auth.user, req, body.id ? "tenant.update" : "tenant.create", "tenant", created.id, { name: created.name });

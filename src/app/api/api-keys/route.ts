@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 export async function GET() {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (api-keys.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "api-keys.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tid = auth.tenantId!;
   const keys = await auth.store.listApiKeys(tid);
   // strip key_hash

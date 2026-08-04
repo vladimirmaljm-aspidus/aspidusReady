@@ -9,6 +9,10 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (platform.plans.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "platform.plans.read"); if (_d) return _d; } /* requirePermission wired */
+
 
     if (isSupabaseConfigured()) {
       const sb = getSupabase();

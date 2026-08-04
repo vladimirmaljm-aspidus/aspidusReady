@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (platform.feature_flags.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "platform.feature_flags.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ flags: {} });
   const flags = await auth.store.getFeatureFlags(tenantId);
@@ -37,6 +41,10 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const auth = await requireSuperAdmin();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (platform.feature_flags.update)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "platform.feature_flags.update"); if (_d) return _d; } /* requirePermission wired */
+
   const body = await req.json();
   if (!body.tenant_id) {
     body.tenant_id = resolveTenantId(auth, req) || undefined;

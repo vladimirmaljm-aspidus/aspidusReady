@@ -7,6 +7,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (commissions.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "commissions.read"); if (_d) return _d; } /* requirePermission wired */
+
     const { id } = await params;
     const item = await auth.store.getDealCommission(id);
     if (!item) return NextResponse.json({ error: "Not found." }, { status: 404 });

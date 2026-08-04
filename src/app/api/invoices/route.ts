@@ -12,6 +12,10 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuthOrApiKey(req);
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (invoices.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "invoices.read"); if (_d) return _d; } } /* requirePermission wired */
+
     const tid = resolveTenantId(auth, req);
 
     if ("apiKeyId" in auth && !hasPermission(auth.permissions, "invoices:read")) {

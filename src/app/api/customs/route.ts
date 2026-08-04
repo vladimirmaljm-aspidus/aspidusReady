@@ -99,6 +99,10 @@ const HS_CODES = [
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (erp.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "erp.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   const { searchParams } = new URL(req.url);
   const country = searchParams.get("country")?.toUpperCase();

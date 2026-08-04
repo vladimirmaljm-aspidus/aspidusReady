@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (trade-calculator.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.read"); if (_d) return _d; } } /* requirePermission wired */
+
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   const url = new URL(req.url);

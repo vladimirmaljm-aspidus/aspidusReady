@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (inventory.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "inventory.read"); if (_d) return _d; } /* requirePermission wired */
+
   const tid = auth.tenantId!;
   const url = new URL(req.url);
   const partner_id = url.searchParams.get("partner_id") || undefined;

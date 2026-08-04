@@ -19,6 +19,10 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (settings.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "settings.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   const url = new URL(req.url);
   const mod = url.searchParams.get("module");

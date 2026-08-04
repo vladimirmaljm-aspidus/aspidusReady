@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (supplier-offers.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "supplier-offers.read"); if (_d) return _d; } /* requirePermission wired */
+
   const { id } = await params;
   const item = await auth.store.getSupplierOffer(id);
   if (!item) return NextResponse.json({ error: "Not found." }, { status: 404 });

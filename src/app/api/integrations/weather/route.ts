@@ -22,6 +22,10 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes — weather changes frequently
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (integrations.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "integrations.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   const url = new URL(req.url);
   const lat = url.searchParams.get("lat");

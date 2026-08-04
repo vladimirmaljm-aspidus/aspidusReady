@@ -39,6 +39,10 @@ const CURRENCY_PAIRS = [
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+    // Permission gate (dashboard.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "dashboard.read"); if (_d) return _d; } /* requirePermission wired */
+
 
   try {
     // ── Fetch commodity prices from Alpha Vantage ──────────────────────

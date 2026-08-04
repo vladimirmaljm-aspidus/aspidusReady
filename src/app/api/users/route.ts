@@ -21,6 +21,10 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+    // Permission gate (users.read)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "users.read"); if (_d) return _d; } /* requirePermission wired */
+
     // only admins can list
     if (!auth.isSuperAdmin && auth.user.role !== "admin") {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
