@@ -61,6 +61,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       body.total = subtotal - discountTotal + taxTotal;
     }
     const updated = await auth.store.upsertOffer({ ...body, id });
+    // Record revision with per-field diff so we always know WHO changed WHAT.
+    try {
+      const { recordRevision } = await import("@/lib/api/doc-revisions");
+      await recordRevision({
+        docType: "offer", documentId: id, tenantId: existing.tenant_id,
+        before: existing as any, after: updated as any,
+        userId: auth.user.id, username: auth.user.username,
+      });
+    } catch (e) { console.warn("[offer.update] revision failed:", e); }
+    // If this update transitioned the offer to a cancelling status, void
+    // any commissions computed from its deal.
+    if ((updated as any).deal_id && updated.status !== existing.status) {
+      const { cascadeCommissionOnStatusChange } = await import("@/lib/api/commission-cascade");
+      cascadeCommissionOnStatusChange((updated as any).deal_id, existing.tenant_id, updated.status, `offer ${id} status→${updated.status}`).catch(() => {});
+    }
     await audit(auth.store, auth.user, req, "offer.update", "offer", id, { status: updated.status });
     return NextResponse.json(updated);
   } catch (error: any) {
@@ -81,6 +96,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
     if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+    // Void commissions tied to this offer's deal before we hard-delete.
+    if ((existing as any).deal_id) {
+      const { cascadeCommissionOnDelete } = await import("@/lib/api/commission-cascade");
+      await cascadeCommissionOnDelete((existing as any).deal_id, existing.tenant_id, `offer ${id} deleted`);
     }
     await auth.store.deleteOffer(id);
     await audit(auth.store, auth.user, req, "offer.delete", "offer", id);

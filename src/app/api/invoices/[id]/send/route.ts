@@ -75,6 +75,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }],
     });
 
+    // Promote status draft→sent and stamp sent_at (only on first successful send).
+    if (emailResult.success) {
+      try {
+        await auth.store.upsertInvoice({ id, status: invoice.status === "draft" || !invoice.status ? "sent" : invoice.status, sent_at: new Date().toISOString() } as any);
+      } catch (e) { console.warn("[invoice.send] status bump failed:", e); }
+    }
+
     await audit(auth.store, auth.user, req, "invoice.send_email", "invoice", id, { to: toEmail });
 
     return NextResponse.json(emailResult);

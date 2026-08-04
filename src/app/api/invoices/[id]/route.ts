@@ -45,6 +45,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     const body = await req.json();
     const updated = await auth.store.upsertInvoice({ ...body, id, tenant_id: existing.tenant_id });
+    try {
+      const { recordRevision } = await import("@/lib/api/doc-revisions");
+      await recordRevision({
+        docType: "invoice", documentId: id, tenantId: existing.tenant_id,
+        before: existing as any, after: updated as any,
+        userId: auth.user.id, username: auth.user.username,
+      });
+    } catch (e) { console.warn("[invoice.update] revision failed:", e); }
     await audit(auth.store, auth.user, req, "invoice.update", "invoice", id, { status: updated.status });
     return NextResponse.json(updated);
   } catch (error: any) {

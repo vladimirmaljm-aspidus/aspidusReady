@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { generatePdf } from "@/lib/pdf/generator";
+import { markDocumentViewed } from "@/lib/portal/mark-viewed";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       tenantId: access.tenant_id,
       createVerification: false,
     });
+
+    // Fire-and-forget: mark as viewed (status sent→viewed on first open).
+    markDocumentViewed("proformas", id, access.tenant_id, access.portal_email).catch(() => {});
 
     return new NextResponse(new Uint8Array(result.buffer), {
       headers: {

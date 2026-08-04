@@ -72,6 +72,28 @@ export async function POST(req: NextRequest) {
       const { enforceQuota } = await import("@/lib/api/plan-limits");
       const denied = await enforceQuota(tid, "partners", isSA);
       if (denied) return denied;
+
+      // Duplicate check: tax_id / vat_number collision within the same tenant
+      // is a hard error; identical name is a soft-warn 409 (client can force).
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+        for (const field of ["tax_id", "vat_number"]) {
+          const v = (body as any)[field];
+          if (v && String(v).trim() !== "") {
+            const { data: hit } = await sb.from("partners").select("id, name, tax_id, vat_number").eq("tenant_id", tid!).eq(field, v).maybeSingle();
+            if (hit) {
+              return NextResponse.json({ error: `Partner with ${field} "${v}" already exists (${hit.name}).`, duplicate: field, existing: hit }, { status: 409 });
+            }
+          }
+        }
+        if (body.name && String(body.name).trim() !== "" && !body.force) {
+          const { data: byName } = await sb.from("partners").select("id, name, country").eq("tenant_id", tid!).ilike("name", body.name).limit(1);
+          if (byName && byName.length > 0) {
+            return NextResponse.json({ error: `Partner "${body.name}" already exists. Send force:true to override.`, duplicate: "name", existing: byName[0] }, { status: 409 });
+          }
+        }
+      } catch (e) { console.warn("[partners.upsert] dupe-check failed (allowing):", e); }
     }
     const created = await auth.store.upsertPartner(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "partner.update" : "partner.create", "partner", created.id, { name: created.name });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
+import { redactListForPortal } from "@/lib/portal/redact";
 
 export const runtime = "nodejs";
 
@@ -15,5 +16,5 @@ export async function GET() {
   }
   const store = await getStore();
   const result = await store.listOffers(access.tenant_id, { filters: { partner_id: access.partner_id } });
-  return NextResponse.json(result);
+  return NextResponse.json(redactListForPortal(result));
 }

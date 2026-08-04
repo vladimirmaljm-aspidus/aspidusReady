@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
+import { redactListForPortal } from "@/lib/portal/redact";
 
 export const runtime = "nodejs";
 
@@ -16,5 +17,5 @@ export async function GET() {
   const result = await store.listDocuments(access.tenant_id, { filters: { partner_id: access.partner_id } });
   // only show docs visible to partner
   result.items = result.items.filter((d) => d.visible_to_partner);
-  return NextResponse.json(result);
+  return NextResponse.json(redactListForPortal(result));
 }

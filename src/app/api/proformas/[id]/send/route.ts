@@ -75,6 +75,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }],
     });
 
+    // Promote status draft→sent and stamp sent_at (only on first successful send).
+    if (emailResult.success) {
+      try {
+        await auth.store.upsertProforma({ id, status: proforma.status === "draft" || !proforma.status ? "sent" : proforma.status, sent_at: new Date().toISOString() } as any);
+      } catch (e) { console.warn("[proforma.send] status bump failed:", e); }
+    }
+
     await audit(auth.store, auth.user, req, "proforma.send_email", "proforma", id, { to: toEmail });
 
     return NextResponse.json(emailResult);

@@ -64,6 +64,28 @@ export async function POST(req: NextRequest) {
       const { enforceQuota } = await import("@/lib/api/plan-limits");
       const denied = await enforceQuota(tid, "products", isSA);
       if (denied) return denied;
+
+      // Duplicate check: same tenant + same SKU OR same name (case-insensitive).
+      // A tenant may legitimately have two products with different SKUs but
+      // the same name (variants) — so an SKU collision is a hard error,
+      // a name-only collision is a soft warning returned as 409 with an
+      // `existing` payload so the client can decide.
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+        if (body.sku && String(body.sku).trim() !== "") {
+          const { data: bySku } = await sb.from("products").select("id, sku, name").eq("tenant_id", tid!).eq("sku", body.sku).maybeSingle();
+          if (bySku) {
+            return NextResponse.json({ error: `Product with SKU "${body.sku}" already exists.`, duplicate: "sku", existing: bySku }, { status: 409 });
+          }
+        }
+        if (body.name && String(body.name).trim() !== "") {
+          const { data: byName } = await sb.from("products").select("id, sku, name").eq("tenant_id", tid!).ilike("name", body.name).limit(1);
+          if (byName && byName.length > 0 && !body.force) {
+            return NextResponse.json({ error: `A product with name "${body.name}" already exists. Send force:true to override.`, duplicate: "name", existing: byName[0] }, { status: 409 });
+          }
+        }
+      } catch (e) { console.warn("[products.upsert] dupe-check failed (allowing):", e); }
     }
     const created = await auth.store.upsertProduct(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "product.update" : "product.create", "product", created.id, { sku: created.sku, name: created.name });

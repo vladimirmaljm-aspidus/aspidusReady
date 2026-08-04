@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
+import { redactListForPortal } from "@/lib/portal/redact";
 
 export const runtime = "nodejs";
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(redactListForPortal(result));
   } catch (e: any) {
     console.error("[portal.proformas]", e);
     return NextResponse.json({ error: e.message }, { status: 500 });
