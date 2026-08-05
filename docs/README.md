@@ -77,12 +77,7 @@ Each document follows this structure:
 7. **Common workflows** — step-by-step for typical tasks
 8. **Known limitations / tips** — gotchas to watch out for
 
-## Login Credentials (Demo / Production)
 
-| Role | URL | Username | Password |
-|------|-----|----------|----------|
-| Admin | https://aspidus.onrender.com | `vladimir` | `Vladimir2026` |
-| Portal (Premium) | https://aspidus.onrender.com/portal/login | `vladimir@aspidus.co` | `Portal2026` |
 
 ## Portal Tier Quick Reference
 
