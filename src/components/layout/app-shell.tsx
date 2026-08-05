@@ -62,6 +62,7 @@ const SuperAdminOverviewView = dynamic(() => import("@/components/views/super-ad
 const FeatureFlagsView = dynamic(() => import("@/components/views/feature-flags-view").then((m) => m.FeatureFlagsView), { ssr: false });
 const PortalUploadsView = dynamic(() => import("@/components/views/portal-uploads-view").then((m) => m.PortalUploadsView), { ssr: false });
 const LogisticsRequestsView = dynamic(() => import("@/components/views/logistics-requests-view").then((m) => m.LogisticsRequestsView), { ssr: false });
+const PlanUpgradeQueueView = dynamic(() => import("@/components/views/plan-upgrade-queue-view").then((m) => m.PlanUpgradeQueueView), { ssr: false });
 
 /* -------------------------------------------------------------------------- */
 /*  View renderer                                                             */
@@ -112,6 +113,7 @@ function ViewContent({ view }: { view: string }) {
     case "feature-flags":        return <FeatureFlagsView />;
     case "portal-uploads":       return <PortalUploadsView />;
     case "logistics-requests":   return <LogisticsRequestsView />;
+    case "plan-upgrade-queue":   return <PlanUpgradeQueueView />;
     default:                     return <DashboardView />;
   }
 }

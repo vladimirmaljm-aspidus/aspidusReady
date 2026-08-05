@@ -594,6 +594,32 @@ function TenantFormDialog({
                     <Input type="number" min={1} value={form.max_users ?? 10} onChange={(e) => set("max_users", Number(e.target.value))} className="tabular" />
                   </div>
                   <div className="space-y-1.5">
+                    <Label>Trial days</Label>
+                    <Input
+                      type="number" min={0}
+                      value={(form as any).trial_days ?? 10}
+                      onChange={(e) => set("trial_days" as any, Number(e.target.value) as any)}
+                      className="tabular"
+                    />
+                    <p className="text-[10px] text-muted-foreground">Default is 10. Set 0 to skip trial entirely.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Trial ends at</Label>
+                    <Input
+                      type="date"
+                      value={(form as any).trial_ends_at ? String((form as any).trial_ends_at).slice(0, 10) : ""}
+                      onChange={(e) => set("trial_ends_at" as any, (e.target.value || null) as any)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Subscription end</Label>
+                    <Input
+                      type="date"
+                      value={(form as any).subscription_end ? String((form as any).subscription_end).slice(0, 10) : ""}
+                      onChange={(e) => set("subscription_end" as any, (e.target.value || null) as any)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
                     <Label>Primary color (optional)</Label>
                     <div className="flex items-center gap-2">
                       <input

@@ -1,0 +1,197 @@
+"use client";
+
+import * as React from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CheckCircle2, XCircle, RefreshCw, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
+import { PageHeader } from "@/components/common/page-header";
+import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
+
+interface UpgradeRequest {
+  id: string;
+  tenant_id: string;
+  requested_by: string | null;
+  requested_plan: string;
+  current_plan: string | null;
+  message: string | null;
+  status: "pending" | "approved" | "rejected";
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  admin_note: string | null;
+  created_at: string;
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  pending: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
+  approved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+  rejected: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
+};
+
+interface Tenant { id: string; name: string; plan?: string }
+
+export function PlanUpgradeQueueView() {
+  const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = React.useState<string>("pending");
+  const [reviewing, setReviewing] = React.useState<UpgradeRequest | null>(null);
+  const [decision, setDecision] = React.useState<"approve" | "reject">("approve");
+  const [months, setMonths] = React.useState<number>(12);
+  const [note, setNote] = React.useState("");
+
+  const listQ = useQuery({
+    queryKey: ["plan-upgrade-queue", statusFilter],
+    queryFn: async () => {
+      const q = new URLSearchParams();
+      if (statusFilter !== "all") q.set("status", statusFilter);
+      const r = await fetch(`/api/plan-upgrade-requests?${q.toString()}`);
+      if (!r.ok) throw new Error("Failed to load queue");
+      return r.json() as Promise<{ items: UpgradeRequest[]; total: number }>;
+    },
+  });
+  const tenantsQ = useQuery({
+    queryKey: ["plan-upgrade-tenants"],
+    queryFn: async () => {
+      const r = await fetch("/api/tenants");
+      return r.ok ? (r.json() as Promise<{ items: Tenant[] }>) : { items: [] };
+    },
+  });
+  const tenantName = React.useMemo(() => new Map((tenantsQ.data?.items || []).map((t) => [t.id, t.name])), [tenantsQ.data]);
+  const items = listQ.data?.items || [];
+
+  const reviewMut = useMutation({
+    mutationFn: async () => {
+      if (!reviewing) return;
+      const r = await fetch(`/api/plan-upgrade-requests/${reviewing.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, months, admin_note: note || undefined }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Failed");
+    },
+    onSuccess: () => {
+      toast.success(decision === "approve" ? "Plan upgraded." : "Request rejected.");
+      qc.invalidateQueries({ queryKey: ["plan-upgrade-queue"] });
+      setReviewing(null); setNote(""); setMonths(12);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title="Plan Upgrade Queue"
+        description="Approve or reject subscription upgrade requests from tenants."
+      />
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="size-4 text-primary" /> Requests</CardTitle>
+            <div className="flex items-center gap-2">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" onClick={() => listQ.refetch()}>
+                <RefreshCw className="size-3.5 mr-1" /> Refresh
+              </Button>
+            </div>
+          </div>
+          <CardDescription className="text-xs">Click a row to approve or reject.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="border rounded-lg overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>From → To</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Message</TableHead>
+                  <TableHead>Requested</TableHead>
+                  <TableHead>Reviewed</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {listQ.isLoading && <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>}
+                {!listQ.isLoading && items.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Nothing here.</TableCell></TableRow>}
+                {items.map((r) => (
+                  <TableRow key={r.id} className={r.status === "pending" ? "cursor-pointer hover:bg-accent/40" : "opacity-70"} onClick={() => r.status === "pending" && setReviewing(r)}>
+                    <TableCell className="font-medium">{tenantName.get(r.tenant_id) || r.tenant_id.slice(0, 8)}</TableCell>
+                    <TableCell className="text-xs">
+                      <span className="text-muted-foreground">{r.current_plan || "—"}</span>
+                      <span className="mx-1.5">→</span>
+                      <strong className="capitalize">{r.requested_plan}</strong>
+                    </TableCell>
+                    <TableCell><Badge variant="outline" className={STATUS_STYLE[r.status]}>{r.status}</Badge></TableCell>
+                    <TableCell className="text-xs max-w-[240px] truncate" title={r.message || ""}>{r.message || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground" title={fmtDateTime(r.created_at)}>{fmtRelative(r.created_at)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground" title={r.reviewed_at ? fmtDateTime(r.reviewed_at) : ""}>{r.reviewed_at ? fmtRelative(r.reviewed_at) : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!reviewing} onOpenChange={(o) => !o && setReviewing(null)}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>Review upgrade request</DialogTitle>
+            <DialogDescription>
+              {reviewing && `${tenantName.get(reviewing.tenant_id) || "Tenant"} — ${reviewing.current_plan || "—"} → ${reviewing.requested_plan}`}
+            </DialogDescription>
+          </DialogHeader>
+          {reviewing?.message && (
+            <div className="rounded-lg bg-muted/40 p-3 text-sm">
+              <p className="text-xs text-muted-foreground mb-1">Client message</p>
+              <p>{reviewing.message}</p>
+            </div>
+          )}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Decision</Label>
+              <div className="flex gap-2 mt-1">
+                <Button size="sm" variant={decision === "approve" ? "default" : "outline"} onClick={() => setDecision("approve")}>
+                  <CheckCircle2 className="size-4 mr-1" /> Approve
+                </Button>
+                <Button size="sm" variant={decision === "reject" ? "default" : "outline"} className={decision === "reject" ? "bg-destructive" : ""} onClick={() => setDecision("reject")}>
+                  <XCircle className="size-4 mr-1" /> Reject
+                </Button>
+              </div>
+            </div>
+            {decision === "approve" && (
+              <div>
+                <Label className="text-xs">Subscription length (months)</Label>
+                <Input type="number" min={1} value={months} onChange={(e) => setMonths(Number(e.target.value) || 12)} />
+                <p className="text-[10px] text-muted-foreground mt-1">Tenant's plan will switch immediately and subscription_end will be stamped {months} months from now.</p>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs">Note (optional, shared with tenant)</Label>
+              <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why…" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewing(null)}>Cancel</Button>
+            <Button onClick={() => reviewMut.mutate()} disabled={reviewMut.isPending}>
+              {reviewMut.isPending ? "Saving…" : decision === "approve" ? "Approve & upgrade" : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

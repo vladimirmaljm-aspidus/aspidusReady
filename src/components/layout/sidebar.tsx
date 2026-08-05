@@ -140,6 +140,7 @@ const SECTIONS: NavSection[] = [
       { key: "platform-dashboard", i18nKey: "platform-dashboard", i18nSection: "platform", icon: LayoutDashboard, permission: "platform.overview" },
       { key: "tenants", i18nKey: "tenants", i18nSection: "platform", icon: Building2, permission: "platform.tenants.read" },
       { key: "feature-flags", i18nKey: "feature-flags", i18nSection: "platform", icon: ToggleRight, permission: "platform.feature_flags.read" },
+      { key: "plan-upgrade-queue", i18nKey: "plan-upgrade-queue", i18nSection: "platform", icon: TrendingUp, permission: "platform.plans.write" },
     ],
   },
 ];

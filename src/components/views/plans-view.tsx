@@ -131,7 +131,7 @@ export function PlansView() {
   });
   const upgradeMut = useMutation({
     mutationFn: async (plan: Plan) => {
-      const r = await fetch("/api/upgrade-request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requested_plan: plan.name, message: message || undefined }) });
+      const r = await fetch("/api/plan-upgrade-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requested_plan: plan.name, message: message || undefined }) });
       if (!r.ok) throw new Error("Failed"); return r.json();
     },
     onSuccess: () => { toast.success("Upgrade request sent!"); setUpgradeDialog(null); setMessage(""); },
