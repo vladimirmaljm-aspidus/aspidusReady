@@ -132,7 +132,12 @@ export const useAppStore = create<AppState>((set) => ({
   setAppMode: (m) => set({ appMode: m, view: m === "portal" ? "portal-dashboard" : "dashboard" }),
 
   view: "dashboard",
-  setView: (v) => set({ view: v, selectedId: null }),
+  // Note: do NOT wipe selectedId here. Drill-down flows like
+  // Partners → Partner 360 do setSelectedId(id) then setView("partner-360"),
+  // and clearing selectedId inside setView made the target view render empty
+  // (Partner 360 falls back to "no selection" → user bounces to the list).
+  // Views that need a clean state should reset selectedId themselves.
+  setView: (v) => set({ view: v }),
 
   selectedId: null,
   setSelectedId: (id) => set({ selectedId: id }),
