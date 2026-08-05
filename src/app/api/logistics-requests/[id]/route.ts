@@ -54,6 +54,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await audit(auth.store, auth.user, req, "logistics.update", "logistics_request", id, { fields: Object.keys(patch) });
+
+  // Notify the client if the quote just became available or status meaningfully changed
+  const becameQuoted = row.status !== "quoted" && data.status === "quoted";
+  const statusChanged = row.status !== data.status;
+  if (becameQuoted || statusChanged) {
+    try {
+      const { getStore } = await import("@/lib/data/store");
+      const store = await getStore();
+      const partner = await store.getPartner(data.partner_id);
+      await store.createNotification({
+        tenant_id: data.tenant_id,
+        user_id: null,
+        partner_id: data.partner_id,
+        type: (becameQuoted ? "logistics_quoted" : "logistics_status") as any,
+        title: becameQuoted
+          ? `Freight quote available for ${data.number}`
+          : `Freight request ${data.number} · ${data.status}`,
+        message: becameQuoted && data.quoted_price != null
+          ? `${data.quoted_currency || ""} ${data.quoted_price} · ${data.quoted_transit_days || "?"} days`
+          : `Status updated to ${data.status}`,
+        entity_type: "logistics_request",
+        entity_id: id,
+        action_url: `/portal/logistics`,
+        action_label: "Open request",
+      } as any);
+    } catch (e) { console.warn("[logistics.PATCH notify]", e); }
+  }
   return NextResponse.json(data);
 }
 

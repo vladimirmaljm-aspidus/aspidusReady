@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
   const kyc = await requireKycApproved(access);
   if (kyc) return kyc;
 
+  if (!access.partner_id) {
+    return NextResponse.json({ error: "Portal account is not linked to a partner. Ask your admin to link it before submitting a request." }, { status: 400 });
+  }
+
   const body = await req.json();
   // Server-imposed fields — never trust the client on tenant/partner/status/number
   const insert = {

@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
-import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAlert, MapPin, ClipboardList } from "lucide-react";
+import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAlert, MapPin, ClipboardList, FileText, ArrowRightCircle } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
@@ -305,6 +305,22 @@ function RequestDetailSheet({
     }
   }, [req?.id]);
 
+  const toOfferMut = useMutation({
+    mutationFn: async () => {
+      if (!req) return;
+      const r = await fetch(api(`/api/logistics-requests/${req.id}/to-offer`), { method: "POST" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Failed to create offer");
+      return data;
+    },
+    onSuccess: (data: any) => {
+      toast.success("Offer created from this request.");
+      qc.invalidateQueries({ queryKey: ["logistics-requests"] });
+      if (data?.offer_id) toast.info(`Offer id: ${data.offer_id}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!req) return;
@@ -489,13 +505,18 @@ function RequestDetailSheet({
                 <Label className="text-xs">Internal notes (admin only)</Label>
                 <Textarea rows={2} value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} placeholder="Cost breakdown, supplier ref…" />
               </div>
-              <div className="flex items-center justify-between gap-2 pt-2 border-t">
+              <div className="flex items-center justify-between gap-2 pt-2 border-t flex-wrap">
                 <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(req)}>
                   <Trash2 className="size-4 mr-1" /> Delete
                 </Button>
-                <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
-                  {saveMut.isPending ? "Saving…" : "Save changes"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => toOfferMut.mutate()} disabled={toOfferMut.isPending || !price}>
+                    <ArrowRightCircle className="size-4 mr-1" /> {toOfferMut.isPending ? "Creating…" : "Convert to Offer"}
+                  </Button>
+                  <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
+                    {saveMut.isPending ? "Saving…" : "Save changes"}
+                  </Button>
+                </div>
               </div>
             </div>
           </section>

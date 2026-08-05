@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Truck, Ship, Plane, Train, Package, Plus, Send, Trash2, MapPin, ArrowRight, Loader2, FileText, ChevronDown, ChevronRight } from "lucide-react";
+import { Truck, Ship, Plane, Train, Package, Plus, Send, Trash2, MapPin, ArrowRight, Loader2, FileText, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { COUNTRIES, INCOTERMS } from "@/lib/data/reference";
 
@@ -51,12 +51,21 @@ const MODE_META: Record<LogisticsMode, { label: string; icon: React.ComponentTyp
 export function PortalLogistics() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = React.useState(false);
+  const [prefill, setPrefill] = React.useState<any>(null);
   const listQ = useQuery({
     queryKey: ["portal-logistics"],
     queryFn: async () => {
       const r = await fetch("/api/portal/logistics");
       if (!r.ok) throw new Error("Failed to load requests");
-      return r.json() as Promise<{ items: LogisticsRequest[] }>;
+      return r.json() as Promise<{ items: any[] }>;
+    },
+  });
+  // Load partner profile so we can pre-fill the origin address on the first request.
+  const profileQ = useQuery({
+    queryKey: ["portal-profile-for-logistics"],
+    queryFn: async () => {
+      const r = await fetch("/api/portal/profile");
+      return r.ok ? r.json() : null;
     },
   });
   const items = listQ.data?.items || [];
@@ -68,7 +77,7 @@ export function PortalLogistics() {
           <h1 className="text-2xl font-bold tracking-tight">Logistics</h1>
           <p className="text-sm text-muted-foreground">Request shipping quotes — sea, road, air, rail. Fill in origin, destination, cargo and we'll send you a proposal.</p>
         </div>
-        <Button onClick={() => setShowForm(true)} className="gap-2"><Plus className="size-4" /> New request</Button>
+        <Button onClick={() => { setPrefill(null); setShowForm(true); }} className="gap-2"><Plus className="size-4" /> New request</Button>
       </div>
 
       <Card>
@@ -101,11 +110,21 @@ export function PortalLogistics() {
                       {r.destination_city || "?"}, {r.destination_country || "?"}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <Badge variant="outline" className="capitalize">{r.status.replace(/_/g, " ")}</Badge>
-                    {r.quoted_price != null && (
-                      <p className="text-xs font-medium mt-1 tabular">{r.quoted_currency} {r.quoted_price} · {r.quoted_transit_days}d</p>
-                    )}
+                  <div className="text-right shrink-0 flex items-center gap-2">
+                    <div>
+                      <Badge variant="outline" className="capitalize">{r.status.replace(/_/g, " ")}</Badge>
+                      {r.quoted_price != null && (
+                        <p className="text-xs font-medium mt-1 tabular">{r.quoted_currency} {r.quoted_price} · {r.quoted_transit_days}d</p>
+                      )}
+                    </div>
+                    <Button
+                      size="icon" variant="ghost" title="Duplicate this request"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const { id, number, status, created_at, quoted_price, quoted_currency, quoted_transit_days, ...rest } = r as any;
+                        setPrefill(rest); setShowForm(true);
+                      }}
+                    ><Copy className="size-4" /></Button>
                   </div>
                 </div>
               );
@@ -114,25 +133,50 @@ export function PortalLogistics() {
         </CardContent>
       </Card>
 
-      <LogisticsRequestForm open={showForm} onClose={() => setShowForm(false)} onCreated={() => { qc.invalidateQueries({ queryKey: ["portal-logistics"] }); setShowForm(false); }} />
+      <LogisticsRequestForm
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        onCreated={() => { qc.invalidateQueries({ queryKey: ["portal-logistics"] }); setShowForm(false); }}
+        prefill={prefill}
+        profile={profileQ.data}
+      />
     </div>
   );
 }
 
-function LogisticsRequestForm({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
-  const [f, setF] = React.useState<any>({
-    mode: "sea_fcl", container_type: "20FT", incoterm: "CIF", urgency: "normal",
-    origin_country: "", origin_city: "", origin_postal_code: "", origin_address_line: "",
-    origin_company: "", origin_contact_name: "", origin_contact_phone: "", origin_port: "",
-    destination_country: "", destination_city: "", destination_postal_code: "", destination_address_line: "",
-    destination_company: "", destination_contact_name: "", destination_contact_phone: "", destination_port: "",
-    target_pickup_date: "", target_delivery_date: "",
-    cargo_description: "", hs_codes: "", cargo_value: "" as number | "", cargo_currency: "USD",
-    total_weight_kg: "" as number | "", total_volume_cbm: "" as number | "", total_packages: "" as number | "",
-    is_hazardous: false, is_temperature_controlled: false, temperature_range: "", insurance_required: false,
-    special_instructions: "",
-    packing_list: [] as PackingLine[],
-  });
+function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { open: boolean; onClose: () => void; onCreated: () => void; prefill?: any; profile?: any }) {
+  // Sensible default: origin address from the partner's profile (client is
+  // usually shipping FROM their own location) — user can overwrite.
+  const initialForm = React.useCallback(() => {
+    const base: any = {
+      mode: "sea_fcl", container_type: "20FT", incoterm: "CIF", urgency: "normal",
+      origin_country: "", origin_city: "", origin_postal_code: "", origin_address_line: "",
+      origin_company: "", origin_contact_name: "", origin_contact_phone: "", origin_port: "",
+      destination_country: "", destination_city: "", destination_postal_code: "", destination_address_line: "",
+      destination_company: "", destination_contact_name: "", destination_contact_phone: "", destination_port: "",
+      target_pickup_date: "", target_delivery_date: "",
+      cargo_description: "", hs_codes: "", cargo_value: "" as number | "", cargo_currency: "USD",
+      total_weight_kg: "" as number | "", total_volume_cbm: "" as number | "", total_packages: "" as number | "",
+      is_hazardous: false, is_temperature_controlled: false, temperature_range: "", insurance_required: false,
+      special_instructions: "",
+      packing_list: [] as PackingLine[],
+    };
+    // Prefer explicit prefill (duplicate flow) over profile defaults.
+    if (prefill) return { ...base, ...prefill, packing_list: prefill.packing_list || [] };
+    const partner = profile?.partner;
+    if (partner) {
+      base.origin_company = partner.name || "";
+      base.origin_country = partner.country || "";
+      base.origin_city = partner.city || "";
+      base.origin_address_line = partner.address_line || partner.address || "";
+      base.origin_postal_code = partner.postal_code || "";
+      base.origin_contact_name = partner.contact_name || "";
+      base.origin_contact_phone = partner.phone || "";
+    }
+    return base;
+  }, [prefill, profile]);
+  const [f, setF] = React.useState<any>(initialForm);
+  React.useEffect(() => { if (open) setF(initialForm()); }, [open, initialForm]);
   const [submitting, setSubmitting] = React.useState(false);
   const [openSec, setOpenSec] = React.useState({ transport: true, origin: true, destination: true, cargo: true, packing: false, extras: false });
 
