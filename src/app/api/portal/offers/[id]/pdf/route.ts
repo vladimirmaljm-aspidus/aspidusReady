@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
+import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { generatePdf } from "@/lib/pdf/generator";
 import { markDocumentViewed } from "@/lib/portal/mark-viewed";
 
@@ -37,6 +38,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!access.can_download_pdf) {
       return NextResponse.json({ error: "PDF download not available for your tier." }, { status: 403 });
     }
+
+    const _kycBlock = await requireKycApproved(access);
+    if (_kycBlock) return _kycBlock;
 
     const result = await generatePdf({
       docType: "offer",

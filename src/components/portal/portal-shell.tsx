@@ -167,6 +167,14 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   // the audit logging and re-logs every 5 minutes).
   const geo = usePortalGeolocation(portalAccess);
 
+  // KYC gate — non-exempt tiers that require KYC cannot use the portal until
+  // their submission is `approved`. Enforced on the CLIENT here so the user
+  // is bounced straight to the KYC view; the SERVER-side redaction plus the
+  // per-endpoint permission gates are the real safety net.
+  const kycRequired = portalAccess ? getTierMeta(portalAccess.tier).requiresKyc && !portalAccess.exempt_kyc : false;
+  const kycApproved = partner?.kyc_status === "approved";
+  const kycBlocking = kycRequired && !kycApproved && !profileLoading;
+
   // Fetch partner profile once for sidebar/topbar display
   useEffect(() => {
     let mounted = true;
@@ -257,6 +265,14 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   const TierIcon = TIER_META[tier].icon;
   const partnerName = partner?.name || "Client";
 
+  // If KYC is required but not yet approved, force the KYC view. Other tabs
+  // are hidden in the sidebar below (see kycBlocking guard).
+  useEffect(() => {
+    if (kycBlocking && view !== "portal-kyc") {
+      setView("portal-kyc");
+    }
+  }, [kycBlocking, view, setView]);
+
   const activeTitle =
     view === "portal-profile" ? "My Profile" : VIEW_TITLES[view] || "Client Portal";
 
@@ -277,6 +293,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
           signOut={signOut}
           tier={tier}
           TierIcon={TierIcon}
+          kycBlocking={kycBlocking}
         />
       </aside>
 
@@ -301,6 +318,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
               signOut={signOut}
               tier={tier}
               TierIcon={TierIcon}
+              kycBlocking={kycBlocking}
             />
           </aside>
         </div>
@@ -347,19 +365,38 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
           </div>
         </header>
 
-        {/* View router */}
+        {/* View router. When KYC is required and not approved, ONLY the KYC
+            page renders; every other view is short-circuited to a banner. */}
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-x-hidden">
-          {view === "portal-dashboard" && <PortalDashboard />}
-          {view === "portal-offers" && <PortalOffers />}
-          {view === "portal-invoices" && <PortalInvoices />}
-          {view === "portal-proformas" && <PortalProformas />}
-          {view === "portal-notifications" && <PortalNotifications />}
-          {view === "portal-documents" && <PortalDocuments />}
-          {view === "portal-catalog" && <PortalCatalog />}
-          {view === "portal-kyc" && <PortalKyc />}
-          {view === "portal-rfq" && <PortalRfq />}
-          {view === "portal-messages" && <PortalMessages />}
-          {view === "portal-profile" && <PortalProfile />}
+          {kycBlocking && view !== "portal-kyc" ? (
+            <div className="max-w-2xl mx-auto mt-8 rounded-xl border border-amber-500/40 bg-amber-500/5 p-6 text-center">
+              <div className="size-12 mx-auto rounded-full bg-amber-500/15 flex items-center justify-center mb-3">
+                <ShieldAlert className="size-6 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-semibold">Complete your KYC verification first</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your account tier (<strong>{getTierMeta(tier).label}</strong>) requires KYC approval
+                before you can view offers, invoices, documents or submit requests.
+              </p>
+              <Button className="mt-4" onClick={() => setView("portal-kyc")}>
+                Go to KYC Verification
+              </Button>
+            </div>
+          ) : (
+            <>
+              {view === "portal-dashboard" && <PortalDashboard />}
+              {view === "portal-offers" && <PortalOffers />}
+              {view === "portal-invoices" && <PortalInvoices />}
+              {view === "portal-proformas" && <PortalProformas />}
+              {view === "portal-notifications" && <PortalNotifications />}
+              {view === "portal-documents" && <PortalDocuments />}
+              {view === "portal-catalog" && <PortalCatalog />}
+              {view === "portal-kyc" && <PortalKyc />}
+              {view === "portal-rfq" && <PortalRfq />}
+              {view === "portal-messages" && <PortalMessages />}
+              {view === "portal-profile" && <PortalProfile />}
+            </>
+          )}
         </main>
       </div>
     </div>
@@ -377,6 +414,7 @@ function SidebarContent({
   signOut,
   tier,
   TierIcon,
+  kycBlocking,
 }: {
   portalAccess: PortalAccess;
   partnerName: string;
@@ -387,10 +425,15 @@ function SidebarContent({
   signOut: () => void;
   tier: PortalTier;
   TierIcon: React.ComponentType<{ className?: string }>;
+  kycBlocking: boolean;
 }) {
-  const visibleItems = NAV_ITEMS.filter(
-    (n) => !n.gate || (portalAccess[n.gate] as boolean)
-  );
+  // While KYC is blocking, only the KYC + Profile items are usable. Everything
+  // else is hidden so the sidebar can't tease functionality the user hasn't
+  // unlocked yet.
+  const visibleItems = NAV_ITEMS.filter((n) => {
+    if (kycBlocking && n.key !== "portal-kyc" && n.key !== "portal-profile") return false;
+    return !n.gate || (portalAccess[n.gate] as boolean);
+  });
 
   // Group items: main workspace vs account
   const isAccountItem = (label: string) =>

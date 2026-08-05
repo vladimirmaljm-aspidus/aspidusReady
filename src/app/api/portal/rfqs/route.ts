@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
+import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
 import { notifyRfqReceived } from "@/lib/notif/helper";
 
@@ -14,6 +15,8 @@ export async function GET() {
   if (!access.can_submit_rfq) {
     return NextResponse.json({ error: "Not permitted." }, { status: 403 });
   }
+  const _kycBlock = await requireKycApproved(access);
+  if (_kycBlock) return _kycBlock;
   const store = await getStore();
   const rfqs = await store.listPortalRfqsByPartner(access.partner_id);
   return NextResponse.json({ items: rfqs });

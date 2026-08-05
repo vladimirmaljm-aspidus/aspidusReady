@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
+import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
 import { redactListForPortal } from "@/lib/portal/redact";
 
@@ -23,7 +24,9 @@ export async function GET(req: NextRequest) {
 
     const statusFilter = req.nextUrl.searchParams.get("status") || undefined;
 
-    const store = await getStore();
+    const _kycBlock = await requireKycApproved(access);
+  if (_kycBlock) return _kycBlock;
+  const store = await getStore();
     const result = await store.listProformas(access.tenant_id, {
       filters: {
         partner_id: access.partner_id,
