@@ -35,8 +35,36 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Get the old tenant to check if plan changed
     const oldTenant = await auth.store.getTenant(id);
     const oldPlan = oldTenant?.plan;
+    const oldStatus = (oldTenant as any)?.status;
 
     const updated = await auth.store.upsertTenant({ ...body, id });
+
+    // If the tenant just got suspended / cancelled, kill every existing
+    // session for every user in that tenant right now. Bumping
+    // token_version on the users invalidates their JWTs — the next request
+    // they make hits requireAuth which returns 401. Without this the user
+    // could stay in the app on a stale session until the cookie expires.
+    const nowSuspending = body.status &&
+      body.status !== oldStatus &&
+      (body.status === "suspended" || body.status === "cancelled");
+    if (nowSuspending) {
+      try {
+        const users = await auth.store.listUsers(id);
+        await Promise.all(users.map((u) => auth.store.upsertUser({
+          id: u.id, token_version: (u.token_version || 0) + 1,
+        } as any)));
+      } catch (e) { console.warn("[tenant.suspend user bump]", e); }
+      // Same for portal_access rows — their token_version lives on portal_access
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+        // No dedicated RPC — do it in JS.
+        const { data: rows } = await sb.from("portal_access").select("id, token_version").eq("tenant_id", id);
+        for (const r of (rows as { id: string; token_version: number | null }[] | null) || []) {
+          await sb.from("portal_access").update({ token_version: (r.token_version || 0) + 1 }).eq("id", r.id);
+        }
+      } catch (e) { console.warn("[tenant.suspend portal bump]", e); }
+    }
 
     // If plan changed to a named preset (Starter/Business/Enterprise/Trial),
     // sync feature flags to the plan template. If plan === "custom", DON'T
