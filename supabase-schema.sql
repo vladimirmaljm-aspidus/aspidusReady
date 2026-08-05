@@ -1249,3 +1249,24 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('portal-uploads', 'portal
 -- Storage policies: service_role can do everything; anon can only read with signed URL
 CREATE POLICY "kyc_docs_service_full" ON storage.objects FOR ALL USING (bucket_id = 'kyc-documents' AND auth.role() = 'service_role') WITH CHECK (bucket_id = 'kyc-documents' AND auth.role() = 'service_role');
 CREATE POLICY "portal_uploads_service_full" ON storage.objects FOR ALL USING (bucket_id = 'portal-uploads' AND auth.role() = 'service_role') WITH CHECK (bucket_id = 'portal-uploads' AND auth.role() = 'service_role');
+
+-- =============================================================================
+-- Tenant-ID immutability trigger — allow SET NULL cascades on tenant delete
+-- =============================================================================
+-- The original trigger forbade ANY change to tenant_id, which broke DELETE
+-- tenants because Postgres's ON DELETE SET NULL cascade (used by audit_logs
+-- and a couple of other loosely-coupled tables) tries to null the column.
+-- This version blocks re-parenting between tenants but permits the null
+-- transition, so tenant deletion works while cross-tenant tampering does not.
+CREATE OR REPLACE FUNCTION prevent_tenant_id_change() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND OLD.tenant_id IS NOT NULL
+     AND NEW.tenant_id IS DISTINCT FROM OLD.tenant_id
+     AND NEW.tenant_id IS NOT NULL THEN
+    RAISE EXCEPTION 'tenant_id is immutable (attempted change from % to %)',
+      OLD.tenant_id, NEW.tenant_id USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
