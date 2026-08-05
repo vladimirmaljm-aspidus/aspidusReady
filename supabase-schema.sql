@@ -1213,6 +1213,14 @@ CREATE POLICY "erp_sett_all" ON erp_settings FOR ALL USING (true) WITH CHECK (tr
 CREATE POLICY "letterheads_all" ON tenant_letterheads FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "seals_all" ON tenant_seals FOR ALL USING (true) WITH CHECK (true);
 
+-- Logistics: enable RLS + service_role bypass (matches the pattern used by
+-- every other tenant-scoped table above — the real tenant isolation lives
+-- in the API-layer resolveTenantId + requirePermission guards).
+ALTER TABLE logistics_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE logistics_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "logistics_req_all" ON logistics_requests FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "logistics_evt_all" ON logistics_events FOR ALL USING (true) WITH CHECK (true);
+
 -- =============================================================================
 -- Supabase Storage: KYC Documents Bucket
 -- =============================================================================

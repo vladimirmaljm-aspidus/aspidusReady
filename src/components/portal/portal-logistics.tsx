@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Truck, Ship, Plane, Train, Package, Plus, Send, Trash2, MapPin, ArrowRight, Loader2, FileText, ChevronDown, ChevronRight, Copy } from "lucide-react";
+import { Truck, Ship, Plane, Train, Package, Plus, Send, Trash2, MapPin, ArrowRight, Loader2, FileText, ChevronDown, ChevronRight, Copy, History, CheckCircle2, XCircle, Play, MessageSquare, ArrowRightCircle } from "lucide-react";
 import { toast } from "sonner";
 import { COUNTRIES, INCOTERMS } from "@/lib/data/reference";
 
@@ -52,6 +52,7 @@ export function PortalLogistics() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = React.useState(false);
   const [prefill, setPrefill] = React.useState<any>(null);
+  const [openTimelineId, setOpenTimelineId] = React.useState<string | null>(null);
   const listQ = useQuery({
     queryKey: ["portal-logistics"],
     queryFn: async () => {
@@ -96,36 +97,48 @@ export function PortalLogistics() {
           <div className="space-y-2">
             {items.map((r) => {
               const Icon = MODE_META[r.mode]?.icon || Package;
+              const open = openTimelineId === r.id;
               return (
-                <div key={r.id} className="flex items-center gap-3 rounded-lg border border-border/60 p-3 hover:border-primary/40 smooth">
-                  <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Icon className="size-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold">{r.number}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                      <MapPin className="size-3 shrink-0" />
-                      {r.origin_city || "?"}, {r.origin_country || "?"}
-                      <ArrowRight className="size-3 mx-1" />
-                      {r.destination_city || "?"}, {r.destination_country || "?"}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0 flex items-center gap-2">
-                    <div>
-                      <Badge variant="outline" className="capitalize">{r.status.replace(/_/g, " ")}</Badge>
-                      {r.quoted_price != null && (
-                        <p className="text-xs font-medium mt-1 tabular">{r.quoted_currency} {r.quoted_price} · {r.quoted_transit_days}d</p>
-                      )}
+                <div key={r.id} className="rounded-lg border border-border/60 hover:border-primary/40 smooth">
+                  <div className="flex items-center gap-3 p-3">
+                    <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <Icon className="size-5 text-primary" />
                     </div>
-                    <Button
-                      size="icon" variant="ghost" title="Duplicate this request"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const { id, number, status, created_at, quoted_price, quoted_currency, quoted_transit_days, ...rest } = r as any;
-                        setPrefill(rest); setShowForm(true);
-                      }}
-                    ><Copy className="size-4" /></Button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold">{r.number}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                        <MapPin className="size-3 shrink-0" />
+                        {r.origin_city || "?"}, {r.origin_country || "?"}
+                        <ArrowRight className="size-3 mx-1" />
+                        {r.destination_city || "?"}, {r.destination_country || "?"}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 flex items-center gap-2">
+                      <div>
+                        <Badge variant="outline" className="capitalize">{r.status.replace(/_/g, " ")}</Badge>
+                        {r.quoted_price != null && (
+                          <p className="text-xs font-medium mt-1 tabular">{r.quoted_currency} {r.quoted_price} · {r.quoted_transit_days}d</p>
+                        )}
+                      </div>
+                      <Button
+                        size="icon" variant="ghost" title={open ? "Hide timeline" : "Show timeline"}
+                        onClick={() => setOpenTimelineId(open ? null : r.id)}
+                      ><History className="size-4" /></Button>
+                      <Button
+                        size="icon" variant="ghost" title="Duplicate this request"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const { id, number, status, created_at, quoted_price, quoted_currency, quoted_transit_days, ...rest } = r as any;
+                          setPrefill(rest); setShowForm(true);
+                        }}
+                      ><Copy className="size-4" /></Button>
+                    </div>
                   </div>
+                  {open && (
+                    <div className="border-t border-border/60 px-4 py-3 bg-muted/20">
+                      <PortalTimeline requestId={r.id} />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -303,6 +316,69 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PortalTimeline({ requestId }: { requestId: string }) {
+  interface EventItem {
+    id: string;
+    event_type: string;
+    from_status: string | null;
+    to_status: string | null;
+    actor_role: string;
+    message: string | null;
+    created_at: string;
+  }
+  const q = useQuery({
+    queryKey: ["portal-logistics-events", requestId],
+    queryFn: async () => {
+      const r = await fetch(`/api/portal/logistics/${requestId}/events`);
+      if (!r.ok) return { items: [] as EventItem[] };
+      return r.json() as Promise<{ items: EventItem[] }>;
+    },
+    refetchInterval: 20_000,
+  });
+  const events = q.data?.items || [];
+  if (q.isLoading) return <p className="text-xs text-muted-foreground">Loading timeline…</p>;
+  if (!events.length) return <p className="text-xs text-muted-foreground">No status updates yet — we'll let you know as soon as anything changes.</p>;
+
+  const iconFor = (t: string) => {
+    switch (t) {
+      case "created": return { Icon: Send, color: "text-primary" };
+      case "quoted": return { Icon: FileText, color: "text-blue-600" };
+      case "accepted": return { Icon: CheckCircle2, color: "text-emerald-600" };
+      case "rejected": return { Icon: XCircle, color: "text-destructive" };
+      case "in_progress": return { Icon: Play, color: "text-indigo-600" };
+      case "completed": return { Icon: CheckCircle2, color: "text-emerald-700" };
+      case "cancelled": return { Icon: XCircle, color: "text-muted-foreground" };
+      case "converted_to_offer": return { Icon: ArrowRightCircle, color: "text-primary" };
+      case "note": return { Icon: MessageSquare, color: "text-muted-foreground" };
+      default: return { Icon: History, color: "text-muted-foreground" };
+    }
+  };
+  return (
+    <ol className="relative border-l border-border ml-2 space-y-2 pl-4">
+      {events.map((e) => {
+        const { Icon, color } = iconFor(e.event_type);
+        return (
+          <li key={e.id} className="relative">
+            <span className={`absolute -left-[22px] top-0 size-4 rounded-full bg-background border border-border flex items-center justify-center ${color}`}>
+              <Icon className="size-2.5" />
+            </span>
+            <div className="text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium capitalize">{e.event_type.replace(/_/g, " ")}</span>
+                {e.from_status && e.to_status && e.from_status !== e.to_status && (
+                  <span className="text-muted-foreground">{e.from_status} → {e.to_status}</span>
+                )}
+                <span className="text-muted-foreground">{new Date(e.created_at).toLocaleString()}</span>
+              </div>
+              {e.message && <p className="text-muted-foreground mt-0.5">{e.message}</p>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

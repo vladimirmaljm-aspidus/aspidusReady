@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
-import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAlert, MapPin, ClipboardList, FileText, ArrowRightCircle } from "lucide-react";
+import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAlert, MapPin, ClipboardList, FileText, ArrowRightCircle, History, CheckCircle2, MessageSquare, XCircle, Play, Send } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
@@ -20,6 +20,17 @@ import { useCan } from "@/lib/store/app-store";
 import type { Partner } from "@/lib/supabase/types";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
+
+interface LogisticsEvent {
+  id: string;
+  event_type: string;
+  from_status: string | null;
+  to_status: string | null;
+  actor_role: "admin" | "client" | "system";
+  message: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
 
 interface LogisticsRequest {
   id: string;
@@ -309,6 +320,18 @@ function RequestDetailSheet({
     }
   }, [req?.id]);
 
+  const eventsQ = useQuery({
+    queryKey: ["logistics-events", req?.id],
+    queryFn: async () => {
+      if (!req) return { items: [] as LogisticsEvent[] };
+      const r = await fetch(api(`/api/logistics-requests/${req.id}/events`));
+      if (!r.ok) return { items: [] as LogisticsEvent[] };
+      return r.json() as Promise<{ items: LogisticsEvent[] }>;
+    },
+    enabled: !!req,
+    refetchInterval: 15_000,
+  });
+
   const toOfferMut = useMutation({
     mutationFn: async () => {
       if (!req) return;
@@ -320,6 +343,7 @@ function RequestDetailSheet({
     onSuccess: (data: any) => {
       toast.success("Offer created from this request.");
       qc.invalidateQueries({ queryKey: ["logistics-requests"] });
+      qc.invalidateQueries({ queryKey: ["logistics-events"] });
       if (data?.offer_id) toast.info(`Offer id: ${data.offer_id}`);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -459,6 +483,13 @@ function RequestDetailSheet({
           )}
 
           <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+              <History className="size-3.5" /> Timeline
+            </h3>
+            <TimelineList events={eventsQ.data?.items || []} loading={eventsQ.isLoading} />
+          </section>
+
+          <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quote / status</h3>
             <div className="rounded-lg border p-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -558,6 +589,51 @@ function AddressCard({ title, data }: { title: string; data: any }) {
         </a>
       )}
     </div>
+  );
+}
+
+function TimelineList({ events, loading }: { events: LogisticsEvent[]; loading: boolean }) {
+  if (loading) return <p className="text-xs text-muted-foreground">Loading timeline…</p>;
+  if (!events.length) return <p className="text-xs text-muted-foreground py-2">No events yet — the timeline records every status change, quote, and note.</p>;
+
+  const iconFor = (t: string) => {
+    switch (t) {
+      case "created": return { Icon: Send, color: "text-primary" };
+      case "quoted": return { Icon: FileText, color: "text-blue-600" };
+      case "accepted": return { Icon: CheckCircle2, color: "text-emerald-600" };
+      case "rejected": return { Icon: XCircle, color: "text-destructive" };
+      case "in_progress": return { Icon: Play, color: "text-indigo-600" };
+      case "completed": return { Icon: CheckCircle2, color: "text-emerald-700" };
+      case "cancelled": return { Icon: XCircle, color: "text-muted-foreground" };
+      case "converted_to_offer": return { Icon: ArrowRightCircle, color: "text-primary" };
+      case "note": return { Icon: MessageSquare, color: "text-muted-foreground" };
+      default: return { Icon: History, color: "text-muted-foreground" };
+    }
+  };
+  return (
+    <ol className="relative border-l border-border/60 ml-2 space-y-3 pl-4">
+      {events.map((e) => {
+        const { Icon, color } = iconFor(e.event_type);
+        return (
+          <li key={e.id} className="relative">
+            <span className={cn("absolute -left-[22px] top-0 size-4 rounded-full bg-background border border-border flex items-center justify-center", color)}>
+              <Icon className="size-2.5" />
+            </span>
+            <div className="text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium capitalize">{e.event_type.replace(/_/g, " ")}</span>
+                {e.from_status && e.to_status && e.from_status !== e.to_status && (
+                  <span className="text-muted-foreground">{e.from_status} → {e.to_status}</span>
+                )}
+                <Badge variant="outline" className="text-[10px] capitalize">{e.actor_role}</Badge>
+                <span className="text-muted-foreground" title={fmtDateTime(e.created_at)}>{fmtRelative(e.created_at)}</span>
+              </div>
+              {e.message && <p className="text-muted-foreground mt-0.5">{e.message}</p>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
