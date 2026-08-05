@@ -189,10 +189,10 @@ function PermissionEditor({ user, tenantName, onClose, onSaved }: {
     try {
       const final = wildcard ? ["*"] : perms;
       const r = await fetch(`/api/users/${user.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ permissions: final }),
       });
-      if (!r.ok) throw new Error("Failed to save");
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Failed to save (HTTP ${r.status})`);
       toast.success(`Permissions updated for ${user.username}.`);
       onSaved();
     } catch (e: any) {

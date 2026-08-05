@@ -5,6 +5,7 @@ import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { GlobalSearch } from "./global-search";
 import { ImpersonateBanner } from "./impersonate-banner";
+import { SubscriptionBanner } from "./subscription-banner";
 import { useAppStore } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
 import {
@@ -176,6 +177,7 @@ export function AppShell() {
       {/* ── Main area ── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* ── Impersonation banner (visible only while active) ── */}
+        <SubscriptionBanner />
         <ImpersonateBanner />
         {/* ── Topbar ── */}
         <header className="h-14 sticky top-0 z-30 border-b border-border/60 glass-strong">
