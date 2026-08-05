@@ -155,7 +155,15 @@ export function PlansView() {
                 <p className="text-xl font-bold capitalize">{currentPlan || "—"}</p>
                 {isTrial && <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30">Trial</Badge>}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">{subData.subscription.days_remaining != null ? `${subData.subscription.days_remaining} days remaining` : "No expiry"}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isTrial
+                  ? (subData.subscription.trial_days_remaining != null
+                      ? `${subData.subscription.trial_days_remaining} day${subData.subscription.trial_days_remaining === 1 ? "" : "s"} left on trial`
+                      : "Trial period")
+                  : (subData.subscription.days_remaining != null
+                      ? `${subData.subscription.days_remaining} day${subData.subscription.days_remaining === 1 ? "" : "s"} remaining`
+                      : "No expiry")}
+              </p>
             </div>
             {isTrial && <div className="text-right"><p className="text-sm font-medium text-amber-600">Upgrade to unlock all features</p></div>}
           </CardContent>
@@ -192,7 +200,16 @@ export function PlansView() {
                 <div className="border-t border-border/40 pt-2"><p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Modules</p><div className="flex flex-wrap gap-1">{included.map((code: string, i: number) => <Badge key={i} variant="outline" className="text-[10px] py-0">{code}</Badge>)}</div></div>
               </CardContent>
               <CardFooter className="pt-0">
-                {isCurrent ? <Button className="w-full" variant="outline" disabled>Current Plan</Button> : <Button className="w-full" variant={isFeatured ? "default" : "outline"} onClick={() => setUpgradeDialog(plan)}><TrendingUp className="size-4 mr-1.5" />{plan.price_monthly === 0 ? "Start Free Trial" : "Request Upgrade"}</Button>}
+                {isCurrent ? (
+                  <Button className="w-full" variant="outline" disabled>Current Plan</Button>
+                ) : plan.price_monthly === 0 ? (
+                  // Never offer "Start Free Trial" to an existing tenant — trials only apply at fresh sign-up.
+                  <Button className="w-full" variant="outline" disabled>Trial only for new accounts</Button>
+                ) : (
+                  <Button className="w-full" variant={isFeatured ? "default" : "outline"} onClick={() => setUpgradeDialog(plan)}>
+                    <TrendingUp className="size-4 mr-1.5" />Request Upgrade
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           );

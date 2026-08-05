@@ -5,22 +5,26 @@ import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
+    // Any authenticated user (including tenant users on trial) needs to see
+    // the public plan catalog so they can pick an upgrade. Non-public plans
+    // and admin-only plans stay hidden for anyone who isn't super_admin.
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-    // Permission gate (platform.plans.read)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "platform.plans.read"); if (_d) return _d; } /* requirePermission wired */
-
 
     if (isSupabaseConfigured()) {
       const sb = getSupabase();
-      const { data, error } = await sb.from("plans").select("*").eq("is_active", true).order("sort_order", { ascending: true });
+      let q = sb.from("plans").select("*").eq("is_active", true).order("sort_order", { ascending: true });
+      if (!auth.isSuperAdmin) q = q.eq("is_public", true);
+      const { data, error } = await q;
       if (error) throw error;
       return NextResponse.json({ items: data || [] });
     }
-    const plans = await db.plan.findMany({ where: { is_active: true }, orderBy: { sort_order: "asc" } });
+    const plans = await db.plan.findMany({
+      where: auth.isSuperAdmin ? { is_active: true } : { is_active: true, is_public: true },
+      orderBy: { sort_order: "asc" },
+    });
     return NextResponse.json({ items: plans });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
