@@ -181,7 +181,9 @@ export function Sidebar() {
       if (!r.ok) return null;
       return r.json();
     },
-    staleTime: 10_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
   const flags: Record<string, boolean> | null = flagsData?.flags || null;
 

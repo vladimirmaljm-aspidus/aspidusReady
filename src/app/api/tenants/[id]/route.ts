@@ -82,6 +82,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       } catch (e) {
         console.error("[tenants.update] Feature flags update failed:", e);
       }
+
+      // Invalidate the in-memory feature-flag cache so the tenant's admin sees
+      // the new plan's modules on their next API hit (no need to log out).
+      try {
+        const { invalidateFeatureCache } = await import("@/lib/api/feature-guard");
+        invalidateFeatureCache(id);
+      } catch { /* non-critical */ }
+    }
+
+    // If the super_admin bumped trial_days for a tenant that's still on
+    // trial, re-anchor trial_ends_at to today + new N days. Otherwise leave
+    // trial_ends_at alone (super_admin can set an explicit date instead).
+    if (body.trial_days !== undefined && (String(updated.status) === "trial" || String(updated.plan) === "trial")) {
+      const days = Number(body.trial_days);
+      if (days > 0 && body.trial_ends_at === undefined) {
+        const end = new Date();
+        end.setDate(end.getDate() + days);
+        await auth.store.upsertTenant({ id, trial_ends_at: end.toISOString() } as any);
+      }
     }
 
     await audit(auth.store, auth.user, req, "tenant.update", "tenant", id, { name: updated.name, plan: body.plan });

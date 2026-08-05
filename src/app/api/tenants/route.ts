@@ -37,6 +37,20 @@ export async function POST(req: NextRequest) {
       const _d = requirePermission(auth, "platform.tenants.create"); if (_d) return _d; } /* requirePermission wired */
 
     const body = await req.json();
+    // Auto-compute trial_ends_at when creating a fresh trial tenant so the
+    // countdown starts today. Skip if the super_admin explicitly set a date
+    // or if trial_days=0 (opting the tenant out of trial entirely).
+    if (!body.id) {
+      const isTrial = body.plan === "trial" || body.status === "trial" || (!body.plan && !body.status);
+      const days = Number(body.trial_days ?? 10);
+      if (isTrial && days > 0 && !body.trial_ends_at) {
+        const end = new Date();
+        end.setDate(end.getDate() + days);
+        body.trial_ends_at = end.toISOString();
+        if (!body.status) body.status = "trial";
+        if (!body.plan) body.plan = "trial";
+      }
+    }
     const created = await auth.store.upsertTenant(body);
     await audit(auth.store, auth.user, req, body.id ? "tenant.update" : "tenant.create", "tenant", created.id, { name: created.name });
     return NextResponse.json(created);
