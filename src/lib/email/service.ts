@@ -403,26 +403,147 @@ export function kycStatusEmail(opts: {
   status: string;
   tenantName: string;
   reason?: string | null;
+  portalUrl?: string;
 }): { subject: string; html: string } {
   const approved = opts.status === "approved";
+  const rejected = opts.status === "rejected";
+  const resubmit = opts.status === "resubmit";
+
   const subject = approved
     ? `KYC Approved — ${opts.tenantName}`
-    : `KYC ${opts.status === "rejected" ? "Rejected" : "Update Required"} — ${opts.tenantName}`;
+    : rejected
+    ? `KYC Rejected — ${opts.tenantName}`
+    : `KYC Update Required — ${opts.tenantName}`;
+
+  const headerColor = approved ? "#0f766e" : rejected ? "#dc2626" : "#f59e0b";
+  const headerLabel = approved ? "KYC Approved" : rejected ? "KYC Rejected" : "KYC Update Required";
+  const noteBlock = opts.reason
+    ? `<div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;border-radius:6px;margin:16px 0;">
+         <p style="color:#78350f;font-size:13px;font-weight:600;margin:0 0 6px;">${resubmit ? "What we need from you:" : "Reason:"}</p>
+         <p style="color:#78350f;font-size:14px;line-height:1.5;margin:0;white-space:pre-wrap;">${opts.reason}</p>
+       </div>`
+    : "";
+  const cta = opts.portalUrl && !rejected
+    ? `<div style="text-align:center;margin:24px 0;">
+         <a href="${opts.portalUrl}" style="background:${headerColor};color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;font-size:14px;">
+           ${approved ? "Open Portal" : "Update Submission"}
+         </a>
+       </div>`
+    : "";
+
   const html = `
-    <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-      <div style="background: ${approved ? "#0f766e" : "#dc2626"}; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
-        <h1 style="margin: 0; font-size: 22px;">KYC ${approved ? "Approved" : opts.status === "rejected" ? "Rejected" : "Update Required"}</h1>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+      <div style="background: ${headerColor}; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
+        <h1 style="margin: 0; font-size: 22px;">${headerLabel}</h1>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${opts.tenantName}</p>
       </div>
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
         <p style="color: #333; font-size: 15px;">Hello ${opts.partnerName},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.6;">
           ${approved
-            ? "Your KYC verification has been approved. Your account is now fully active and all data has been saved to your profile."
-            : opts.status === "rejected"
-            ? `Your KYC submission has been rejected. Reason: ${opts.reason || "Please contact your account manager for details."}`
-            : "Your KYC submission requires updates. Please log in to the portal to review and resubmit."}
+            ? "Your KYC verification has been approved. Your account is now fully active — you can access offers, invoices and documents in the portal."
+            : rejected
+            ? "Unfortunately your KYC submission has been rejected."
+            : "Your KYC submission needs additional information before we can approve it. Please review the note below and update your submission in the portal."}
+        </p>
+        ${noteBlock}
+        ${cta}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+        <p style="color: #888; font-size: 12px; line-height: 1.5;">
+          This is an automated notification from ${opts.tenantName}. If you have questions, reply to this email or message us in the portal.
         </p>
       </div>
+      <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
+        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+      </p>
+    </div>
+  `;
+  return { subject, html };
+}
+
+/**
+ * Notify a portal partner that a new document has been shared with them
+ * (a manually shared PDF, not one of the automatic offer/invoice mails).
+ */
+export function shareDocumentEmail(opts: {
+  partnerName: string;
+  documentName: string;
+  documentType?: string;
+  tenantName: string;
+  message?: string | null;
+  portalUrl: string;
+}): { subject: string; html: string } {
+  const subject = `New document shared — ${opts.documentName}`;
+  const msgBlock = opts.message
+    ? `<div style="background:#f0fdfa;border-left:4px solid #0f766e;padding:14px 16px;border-radius:6px;margin:16px 0;">
+         <p style="color:#134e4a;font-size:13px;font-weight:600;margin:0 0 6px;">Message from ${opts.tenantName}:</p>
+         <p style="color:#134e4a;font-size:14px;line-height:1.5;margin:0;white-space:pre-wrap;">${opts.message}</p>
+       </div>`
+    : "";
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+      <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
+        <h1 style="margin: 0; font-size: 22px;">New document shared</h1>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${opts.tenantName}</p>
+      </div>
+      <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="color: #333; font-size: 15px;">Hello ${opts.partnerName},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">
+          A new ${opts.documentType || "document"} <strong>${opts.documentName}</strong> is now available in your portal.
+        </p>
+        ${msgBlock}
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${opts.portalUrl}" style="background:#0f766e;color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;font-size:14px;">
+            Open Documents
+          </a>
+        </div>
+      </div>
+      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
+        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+      </p>
+    </div>
+  `;
+  return { subject, html };
+}
+
+/**
+ * Notify an admin/portal user that a new message has arrived on the internal
+ * portal-chat thread (partner → admin or admin → partner).
+ */
+export function newMessageEmail(opts: {
+  toName: string;
+  fromName: string;
+  preview: string;
+  tenantName: string;
+  portalUrl: string;
+  direction: "portal_to_admin" | "admin_to_portal";
+}): { subject: string; html: string } {
+  const subject = opts.direction === "portal_to_admin"
+    ? `New portal message from ${opts.fromName}`
+    : `New message from ${opts.tenantName}`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+      <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
+        <h1 style="margin: 0; font-size: 22px;">New message</h1>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">from ${opts.fromName}</p>
+      </div>
+      <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="color: #333; font-size: 15px;">Hello ${opts.toName},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">
+          <strong>${opts.fromName}</strong> sent you a message.
+        </p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0;">
+          <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap;">${opts.preview.slice(0, 400)}${opts.preview.length > 400 ? "…" : ""}</p>
+        </div>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${opts.portalUrl}" style="background:#0f766e;color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;font-size:14px;">
+            Open Messages
+          </a>
+        </div>
+      </div>
+      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
+        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+      </p>
     </div>
   `;
   return { subject, html };

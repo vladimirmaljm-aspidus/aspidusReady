@@ -42,6 +42,7 @@ export async function onKycApproved(ctx: KycAutomationContext) {
       to: emailTarget,
       status: "approved",
       tenantName: tenant?.name || "Aspidus",
+      portalUrl: `${baseUrl || process.env.APP_BASE_URL || ""}/portal/login`,
     });
     await sendEmail({
       to: emailTarget,
@@ -156,6 +157,7 @@ export async function onKycResubmit(
     status: "resubmit",
     tenantName: tenant?.name || "Aspidus",
     reason: note,
+    portalUrl: `${process.env.APP_BASE_URL || ""}/portal/login`,
   });
   await sendEmail({
     to: emailTarget,

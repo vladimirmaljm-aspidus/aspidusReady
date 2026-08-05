@@ -16,7 +16,8 @@ import { getTierMeta } from "@/lib/portal/tiers";
  *    browser grants permission. The portal shell can gate content behind
  *    this state.
  *
- * The hook also fires on a 5-minute interval so long sessions stay logged.
+ * Location is captured ONCE per login (per access.id). No periodic re-logging
+ * — the audit entry belongs to the login event, not to session activity.
  */
 export function usePortalGeolocation(access: PortalAccess | null) {
   const [state, setState] = useState<{
@@ -98,21 +99,9 @@ export function usePortalGeolocation(access: PortalAccess | null) {
       });
     };
 
-    // Fire immediately
-    request();
-
-    // Re-log every 5 minutes so long sessions stay fresh in the audit log
-    const interval = setInterval(() => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(onSuccess, onError, {
-          enableHighAccuracy: true,
-          timeout: 10_000,
-          maximumAge: 60_000,
-        });
-      }
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
+    // Fire once per login. `sentRef` protects against React strict-mode
+    // double-invoke and against any accidental re-render loop.
+    if (!sentRef.current) request();
   }, [access?.id, access?.tier]);
 
   return state;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import {
   LayoutDashboard,
@@ -85,6 +86,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   gate?: keyof PortalAccess;
+  badgeKey?: "messages_unread";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -92,7 +94,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "portal-offers", label: "My Offers", icon: FileText, gate: "can_view_offers" },
   { key: "portal-invoices", label: "My Invoices", icon: FileText, gate: "can_view_invoices" },
   { key: "portal-proformas", label: "My Proformas", icon: FileText, gate: "can_view_invoices" },
-  { key: "portal-messages", label: "Messages", icon: MessageSquare },
+  { key: "portal-messages", label: "Messages", icon: MessageSquare, badgeKey: "messages_unread" },
   { key: "portal-notifications", label: "Notifications", icon: Bell },
   { key: "portal-documents", label: "My Documents", icon: FolderOpen, gate: "can_view_documents" },
   { key: "portal-catalog", label: "Product Catalog", icon: Package, gate: "can_view_catalog" },
@@ -174,6 +176,19 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   const kycRequired = portalAccess ? getTierMeta(portalAccess.tier).requiresKyc && !portalAccess.exempt_kyc : false;
   const kycApproved = partner?.kyc_status === "approved";
   const kycBlocking = kycRequired && !kycApproved && !profileLoading;
+
+  // Unread messages badge for the sidebar
+  const unreadQ = useQuery({
+    queryKey: ["portal-messages-unread"],
+    queryFn: async () => {
+      const r = await fetch("/api/portal/messages/unread");
+      return r.ok ? (r.json() as Promise<{ count: number }>) : { count: 0 };
+    },
+    refetchInterval: 20_000,
+    refetchOnWindowFocus: true,
+    enabled: !!portalAccess,
+  });
+  const messagesUnread = unreadQ.data?.count ?? 0;
 
   // Fetch partner profile once for sidebar/topbar display
   useEffect(() => {
@@ -294,6 +309,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
           tier={tier}
           TierIcon={TierIcon}
           kycBlocking={kycBlocking}
+          messagesUnread={messagesUnread}
         />
       </aside>
 
@@ -319,6 +335,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
               tier={tier}
               TierIcon={TierIcon}
               kycBlocking={kycBlocking}
+              messagesUnread={messagesUnread}
             />
           </aside>
         </div>
@@ -415,6 +432,7 @@ function SidebarContent({
   tier,
   TierIcon,
   kycBlocking,
+  messagesUnread,
 }: {
   portalAccess: PortalAccess;
   partnerName: string;
@@ -426,6 +444,7 @@ function SidebarContent({
   tier: PortalTier;
   TierIcon: React.ComponentType<{ className?: string }>;
   kycBlocking: boolean;
+  messagesUnread: number;
 }) {
   // While KYC is blocking, only the KYC + Profile items are usable. Everything
   // else is hidden so the sidebar can't tease functionality the user hasn't
@@ -512,6 +531,7 @@ function SidebarContent({
           {workspaceItems.map((item, idx) => {
             const Icon = item.icon;
             const active = isActive(item);
+            const badgeCount = item.badgeKey === "messages_unread" ? messagesUnread : 0;
             return (
               <button
                 key={`ws-${idx}`}
@@ -531,7 +551,12 @@ function SidebarContent({
                       : "text-muted-foreground group-hover:text-foreground"
                   )}
                 />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate flex-1 text-left">{item.label}</span>
+                {badgeCount > 0 && (
+                  <Badge className="bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0 h-5 min-w-[20px] justify-center rounded-full tabular">
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </Badge>
+                )}
               </button>
             );
           })}

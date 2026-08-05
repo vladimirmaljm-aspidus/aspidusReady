@@ -1,130 +1,229 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Send, Loader2, MessageSquare } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Send, Loader2, MessageSquare, CheckCheck, Check, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fmtRelative } from "@/lib/utils/format";
+import { fmtDateTime, fmtRelative, initials } from "@/lib/utils/format";
+import { useAppStore } from "@/lib/store/app-store";
+import { toast } from "sonner";
+import type { PortalAccess, Partner } from "@/lib/supabase/types";
 
 interface PortalMessage {
   id: string;
-  direction: "incoming" | "outgoing";
-  message: string;
-  sender: string;
-  timestamp: string;
-  read: boolean;
+  direction: "portal_to_admin" | "admin_to_portal";
+  body: string;
+  sender_username: string;
+  read_at: string | null;
+  created_at: string;
+  attachment_url: string | null;
+  attachment_name: string | null;
+}
+
+/** Groups messages by yyyy-mm-dd for date separators. */
+function groupByDay(items: PortalMessage[]) {
+  const groups = new Map<string, PortalMessage[]>();
+  for (const m of items) {
+    const day = new Date(m.created_at).toISOString().slice(0, 10);
+    (groups.get(day) ?? groups.set(day, []).get(day)!).push(m);
+  }
+  return [...groups.entries()].map(([day, msgs]) => ({ day, msgs }));
+}
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  if (iso === today) return "Today";
+  if (iso === yesterday) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
 export function PortalMessages() {
   const qc = useQueryClient();
   const [input, setInput] = useState("");
+  const access = useAppStore((s) => s.portalAccess) as PortalAccess | null;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [partnerName, setPartnerName] = useState("Client");
+
+  // Load partner name once for avatar
+  useEffect(() => {
+    fetch("/api/portal/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { partner?: Partner } | null) => { if (d?.partner?.name) setPartnerName(d.partner.name); })
+      .catch(() => {});
+  }, []);
 
   const messagesQ = useQuery<{ items: PortalMessage[] }>({
     queryKey: ["portal-messages"],
     queryFn: async () => {
       const r = await fetch("/api/portal/messages");
-      if (!r.ok) throw new Error("Failed");
+      if (!r.ok) throw new Error("Failed to load messages");
       return r.json();
     },
-    refetchInterval: 10000, // Poll every 10s
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
+  const items = messagesQ.data?.items || [];
+  const grouped = useMemo(() => groupByDay(items), [items]);
+
+  useEffect(() => {
+    // Auto-scroll to bottom on new messages
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [items.length]);
+
   const sendMut = useMutation({
-    mutationFn: async (message: string) => {
+    mutationFn: async (body: string) => {
       const r = await fetch("/api/portal/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ body }),
       });
-      if (!r.ok) throw new Error("Failed to send");
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to send");
+      }
       return r.json();
     },
     onSuccess: () => {
       setInput("");
       qc.invalidateQueries({ queryKey: ["portal-messages"] });
     },
+    onError: (e: Error) => toast.error(e.message || "Failed to send"),
   });
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  const canSend = input.trim().length > 0 && !sendMut.isPending;
+
+  function submit() {
+    if (canSend) sendMut.mutate(input.trim());
+  }
+
+  function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submit();
     }
-  }, [messagesQ.data?.items]);
-
-  const messages = messagesQ.data?.items || [];
-
-  function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim() || sendMut.isPending) return;
-    sendMut.mutate(input.trim());
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Card className="border-border/60 shadow-soft rounded-xl overflow-hidden">
-        <CardHeader className="bg-primary/5 border-b border-border/60 py-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <MessageSquare className="size-4 text-primary" />
-            Messages
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* Messages */}
-          <div ref={scrollRef} className="h-[350px] overflow-y-auto p-3 space-y-2">
-            {messagesQ.isLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <MessageSquare className="size-8 text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">No messages yet.</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  Send us a message — we respond within 24 hours.
-                </p>
-              </div>
-            ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "max-w-[80%] rounded-xl px-3 py-2",
-                    msg.direction === "outgoing"
-                      ? "ml-auto bg-primary text-primary-foreground"
-                      : "mr-auto bg-muted"
-                  )}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
-                  <p className={cn(
-                    "text-[10px] mt-1",
-                    msg.direction === "outgoing" ? "text-primary-foreground/60" : "text-muted-foreground"
-                  )}>
-                    {fmtRelative(msg.timestamp)}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
+    <div className="max-w-3xl mx-auto h-[calc(100vh-180px)] flex flex-col">
+      {/* Header */}
+      <div className="rounded-t-2xl border border-b-0 border-border/60 bg-card px-5 py-3 flex items-center gap-3 shadow-soft">
+        <div className="size-10 rounded-full bg-gradient-emerald flex items-center justify-center text-white">
+          <MessageSquare className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Aspidus Support</p>
+          <p className="text-xs text-muted-foreground">
+            {messagesQ.isFetching ? "Refreshing…" : "Usually replies within 1 business day"}
+          </p>
+        </div>
+      </div>
 
-          {/* Input */}
-          <form onSubmit={handleSend} className="border-t border-border/60 p-2 flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Write a message…"
-              disabled={sendMut.isPending}
-              className="flex-1"
-            />
-            <Button type="submit" size="icon" disabled={!input.trim() || sendMut.isPending}>
-              {sendMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      {/* Thread */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto custom-scroll border-x border-border/60 bg-muted/20 px-4 py-6 space-y-4"
+      >
+        {messagesQ.isLoading ? (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin mr-2" /> Loading conversation…
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center text-sm text-muted-foreground">
+            <div className="size-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+              <MessageSquare className="size-6 text-primary" />
+            </div>
+            <p className="text-base font-medium text-foreground">Start the conversation</p>
+            <p className="max-w-xs mt-1">Send a message to your account manager — they'll receive an email notification.</p>
+          </div>
+        ) : (
+          grouped.map(({ day, msgs }) => (
+            <div key={day} className="space-y-3">
+              <div className="flex items-center gap-2 my-2">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{dayLabel(day)}</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              {msgs.map((m) => <Bubble key={m.id} m={m} partnerName={partnerName} />)}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Composer */}
+      <div className="rounded-b-2xl border border-t-0 border-border/60 bg-card p-3 shadow-soft">
+        <div className="flex items-end gap-2">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Type a message…  (Enter to send, Shift+Enter for new line)"
+            rows={2}
+            maxLength={8000}
+            className="resize-none flex-1 min-h-[52px]"
+            disabled={sendMut.isPending}
+          />
+          <Button size="lg" onClick={submit} disabled={!canSend} className="h-[52px] px-4">
+            {sendMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2 px-1">
+          Messages are private and only visible to your account manager.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Bubble({ m, partnerName }: { m: PortalMessage; partnerName: string }) {
+  const isMine = m.direction === "portal_to_admin";
+  return (
+    <div className={cn("flex items-end gap-2", isMine ? "justify-end" : "justify-start")}>
+      {!isMine && (
+        <Avatar className="size-7 shrink-0">
+          <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">AS</AvatarFallback>
+        </Avatar>
+      )}
+      <div
+        className={cn(
+          "max-w-[75%] rounded-2xl px-4 py-2.5 shadow-soft break-words",
+          isMine
+            ? "bg-primary text-primary-foreground rounded-br-md"
+            : "bg-card border border-border/60 rounded-bl-md",
+        )}
+      >
+        <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.body}</p>
+        {m.attachment_url && m.attachment_name && (
+          <a
+            href={m.attachment_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "mt-2 inline-flex items-center gap-1.5 text-xs font-medium underline",
+              isMine ? "text-primary-foreground/90" : "text-primary",
+            )}
+          >
+            <Paperclip className="size-3" />
+            {m.attachment_name}
+          </a>
+        )}
+        <div className={cn("flex items-center gap-1 mt-1 text-[10px] tabular", isMine ? "text-primary-foreground/70 justify-end" : "text-muted-foreground")}>
+          <span title={fmtDateTime(m.created_at)}>{new Date(m.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+          {isMine && (m.read_at ? <CheckCheck className="size-3" /> : <Check className="size-3" />)}
+        </div>
+      </div>
+      {isMine && (
+        <Avatar className="size-7 shrink-0">
+          <AvatarFallback className="bg-muted text-muted-foreground text-[10px] font-semibold">
+            {initials(partnerName)}
+          </AvatarFallback>
+        </Avatar>
+      )}
     </div>
   );
 }

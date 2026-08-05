@@ -1,99 +1,86 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
+import { listThread, insertMessage, markThreadRead, sanitizeMessageBody } from "@/lib/portal/messages";
+import { sendEmail, newMessageEmail } from "@/lib/email/service";
 import { getStore } from "@/lib/data/store";
 
 export const runtime = "nodejs";
 
 /**
- * GET /api/portal/messages
- * Lists messages between portal client and admin team.
- *
- * POST /api/portal/messages
- * Body: { message: "text" }
- * Sends a message from portal client to admin team.
+ * GET  /api/portal/messages          → returns full thread + marks incoming read
+ * POST /api/portal/messages          → portal client sends message to admin,
+ *                                      notifies (in-app + email to tenant contact)
  */
 
 export async function GET() {
+  const access = await getPortalSessionAccess();
+  if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+
   try {
-    const access = await getPortalSessionAccess();
-    if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
-    const accessId = access.id;
-
-    const store = await getStore();
-
-    // Messages stored as audit log entries with action="portal.message" or "admin.message"
-    // Match by: entity_id === accessId OR details.partner_id === access.partner_id
-    // (admin may use a different access ID when sending from the portal-access list)
-    const audit = await store.listAudit(access.tenant_id, { limit: 100 });
-    const messages = audit.items
-      .filter((a: any) =>
-        (a.action === "portal.message" || a.action === "admin.message") &&
-        (
-          a.entity_id === accessId ||
-          a.details?.access_id === accessId ||
-          a.details?.partner_id === access.partner_id
-        )
-      )
-      .map((a: any) => ({
-        id: a.id,
-        direction: a.action === "portal.message" ? "outgoing" : "incoming",
-        message: a.details?.message || "",
-        sender: a.username || "System",
-        timestamp: a.created_at,
-        read: a.details?.read || false,
-      }))
-      .sort((a: any, b: any) => b.timestamp.localeCompare(a.timestamp));
-
-    return NextResponse.json({ items: messages });
+    const items = await listThread(access.tenant_id, access.partner_id);
+    // Mark admin→portal messages as read for this partner (the client is viewing now).
+    await markThreadRead(access.tenant_id, access.partner_id, "portal").catch(() => {});
+    return NextResponse.json({ items });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
+  const access = await getPortalSessionAccess();
+  if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+
+  const raw = await req.json().catch(() => ({}));
+  const body = sanitizeMessageBody(raw?.body ?? raw?.message);
+  if (!body) return NextResponse.json({ error: "Message body is required." }, { status: 400 });
+
   try {
-    const access = await getPortalSessionAccess();
-    if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
-    const accessId = access.id;
-
-    const { message } = await req.json();
-    if (!message?.trim()) {
-      return NextResponse.json({ error: "Message is required." }, { status: 400 });
-    }
-
-    const store = await getStore();
-
-    // Store message in audit log
-    await store.appendAudit({
+    const msg = await insertMessage({
       tenant_id: access.tenant_id,
-      user_id: null,
-      username: `portal:${access.portal_email || accessId}`,
-      action: "portal.message",
-      entity_type: "portal_access",
-      entity_id: accessId,
-      details: {
-        message: message.trim(),
-        partner_id: access.partner_id,
-        read: false,
-      },
-      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
-      user_agent: req.headers.get("user-agent") || null,
+      partner_id: access.partner_id,
+      portal_access_id: access.id,
+      direction: "portal_to_admin",
+      body,
+      sender_username: `portal:${access.portal_email || access.id}`,
+      sender_user_id: null,
+      attachment_url: raw?.attachment_url || null,
+      attachment_name: raw?.attachment_name || null,
+      attachment_type: raw?.attachment_type || null,
     });
 
-    // Create a notification for admin
+    // Notify admins in-app + optionally email tenant contact.
     try {
+      const store = await getStore();
+      const partner = await store.getPartner(access.partner_id);
       await store.createNotification({
         tenant_id: access.tenant_id,
         user_id: null,
-        type: "system_message" as any,
-        title: `Portal message from ${access.portal_email}`,
-        message: message.trim().substring(0, 200),
+        partner_id: access.partner_id,
+        type: "portal_message" as any,
+        title: `New message from ${partner?.name || access.portal_email}`,
+        message: body.slice(0, 200),
         entity_type: "portal_access",
-        entity_id: accessId,
+        entity_id: access.id,
+        action_url: `/portal-access?open=${access.id}`,
+        action_label: "Open thread",
       } as any);
-    } catch { /* non-critical */ }
 
-    return NextResponse.json({ ok: true });
+      const tenant = await store.getTenant(access.tenant_id);
+      const notifyTo = tenant?.email;
+      if (notifyTo) {
+        const { subject, html } = newMessageEmail({
+          toName: tenant?.name || "Team",
+          fromName: partner?.name || access.portal_email || "Portal client",
+          preview: body,
+          tenantName: tenant?.name || "Aspidus",
+          portalUrl: `${process.env.APP_BASE_URL || ""}/portal-access?open=${access.id}`,
+          direction: "portal_to_admin",
+        });
+        await sendEmail({ to: notifyTo, subject, html, tenantId: access.tenant_id }).catch(() => {});
+      }
+    } catch (e) { console.warn("[portal.messages.POST notify]", e); }
+
+    return NextResponse.json(msg);
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
