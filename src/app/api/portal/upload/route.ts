@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
       contentType: file.type,
       size: file.size,
     });
-    // Schema drift: populate size AND size_bytes so an INSERT works on both
-    // schema variants (see supabase-schema.sql + SupabaseStore.addKycDocument).
+    // portal_uploads canonical column is `size_bytes` (verified against
+    // production DB introspection).
     const row = await recordPortalUpload({
       tenant_id: access.tenant_id,
       partner_id: access.partner_id,
@@ -69,8 +69,7 @@ export async function POST(req: NextRequest) {
       size_bytes: file.size,
       uploaded_by_email: access.portal_email,
       description,
-      size: file.size,
-    } as any);
+    });
     return NextResponse.json(row);
   } catch (e: any) {
     console.error("[portal.upload]", e);

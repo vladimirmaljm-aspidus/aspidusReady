@@ -420,9 +420,8 @@ CREATE TABLE IF NOT EXISTS portal_uploads (
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
--- For databases that were created before size_bytes replaced size, keep both
--- available so old code and old data don't crash. The application writes to
--- size_bytes; the alter is idempotent so it's safe to re-run.
+-- Idempotent additions for DBs provisioned before these columns landed.
+-- Canonical column is `size_bytes` (verified against production).
 ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS size_bytes bigint NOT NULL DEFAULT 0;
 ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS message_id text;
 ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS uploaded_by_email text;
