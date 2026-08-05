@@ -164,6 +164,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Incorrect password." }, { status: 401 });
     }
 
+    // ---- Tenant status gate ---------------------------------------------
+    // Suspended / cancelled tenants must not be able to log in — otherwise a
+    // client whose subscription expired could keep working normally. Super
+    // admins bypass (they need to be able to unblock the tenant).
+    if (user.role !== "super_admin" && user.tenant_id) {
+      const tenant = await store.getTenant(user.tenant_id) as any;
+      if (tenant?.status === "suspended" || tenant?.status === "cancelled") {
+        try {
+          await store.recordLoginHistory({
+            user_id: user.id,
+            username: user.username,
+            ip,
+            user_agent: userAgent,
+            country: null,
+            success: false,
+            reason: `Tenant ${tenant.status}`,
+          });
+        } catch { /* non-critical */ }
+        await store.appendAudit({
+          user_id: user.id,
+          username: user.username,
+          action: "login.blocked",
+          entity_type: "auth",
+          entity_id: user.id,
+          details: { reason: `tenant_${tenant.status}` },
+          ip,
+          user_agent: userAgent,
+        });
+        return NextResponse.json(
+          {
+            error: tenant.status === "suspended"
+              ? "Your workspace is suspended. Contact the platform administrator to reactivate it."
+              : "Your workspace has been cancelled. Contact the platform administrator.",
+            subscription_blocked: true,
+            tenant_status: tenant.status,
+          },
+          { status: 402 },
+        );
+      }
+      // Also block on expired subscription / trial (belt + braces on top of the cron sweep).
+      const now = new Date();
+      const subEnd = tenant?.subscription_end ? new Date(tenant.subscription_end) : null;
+      const trialEnd = tenant?.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
+      if (subEnd && subEnd < now && tenant.status !== "trial") {
+        return NextResponse.json({ error: "Subscription expired. Contact the platform administrator to renew.", subscription_expired: true }, { status: 402 });
+      }
+      if (String(tenant?.status) === "trial" && trialEnd && trialEnd < now) {
+        return NextResponse.json({ error: "Trial period has ended. Upgrade to continue using Aspidus.", subscription_expired: true }, { status: 402 });
+      }
+    }
+
     // ---- SUCCESS: reset failed attempts + record login ----
     await store.upsertUser({ id: user.id, failed_attempts: 0, locked_until: null });
     await store.updateUserLastLogin(user.id, ip);

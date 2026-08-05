@@ -81,6 +81,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Account is not yet active. Please set up your password first." }, { status: 403 });
     }
 
+    // Tenant status gate — a suspended / cancelled workspace must not let
+    // its portal clients keep logging in.
+    const tenant = await store.getTenant(access.tenant_id) as any;
+    if (tenant?.status === "suspended" || tenant?.status === "cancelled") {
+      return NextResponse.json({
+        error: "This workspace is not currently active. Please contact your account manager.",
+        tenant_status: tenant.status,
+      }, { status: 402 });
+    }
+    const now = new Date();
+    const subEnd = tenant?.subscription_end ? new Date(tenant.subscription_end) : null;
+    const trialEnd = tenant?.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
+    if (subEnd && subEnd < now && String(tenant?.status) !== "trial") {
+      return NextResponse.json({ error: "This workspace's subscription has expired.", subscription_expired: true }, { status: 402 });
+    }
+    if (String(tenant?.status) === "trial" && trialEnd && trialEnd < now) {
+      return NextResponse.json({ error: "This workspace's trial period has ended.", subscription_expired: true }, { status: 402 });
+    }
+
     const token = await createSession({
       sub: `portal:${access.id}`,
       username: access.portal_email || "",
