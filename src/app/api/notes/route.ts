@@ -10,13 +10,15 @@ export async function GET(req: NextRequest) {
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "notes.read"); if (_d) return _d; } /* requirePermission wired */
 
-  const tid = auth.tenantId!;
+  const tid = auth.tenantId;
+  if (!tid) return NextResponse.json({ items: [] });
   const url = new URL(req.url);
   const entity_type = url.searchParams.get("entity_type");
   const entity_id = url.searchParams.get("entity_id");
-  if (!entity_type || !entity_id) {
-    return NextResponse.json({ error: "entity_type and entity_id required." }, { status: 400 });
-  }
+  // Without entity params we return empty rather than 400 — the sidebar
+  // widget probes /api/notes on every view change and would otherwise
+  // spam red error toasts.
+  if (!entity_type || !entity_id) return NextResponse.json({ items: [] });
   const notes = await auth.store.listNotes(tid, entity_type, entity_id);
   return NextResponse.json({ items: notes });
 }
