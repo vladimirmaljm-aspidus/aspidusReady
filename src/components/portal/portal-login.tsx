@@ -49,6 +49,7 @@ export function PortalLogin() {
   const [accessId, setAccessId] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   // Forgot password state
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -156,9 +157,17 @@ export function PortalLogin() {
 
   async function setupPassword(e: React.FormEvent) {
     e.preventDefault();
-    if (!accessId || !newPassword) return;
+    setSetupError(null);
+    if (!accessId) {
+      setSetupError("Missing access ID from the invitation link. Please open the link from your invitation email again.");
+      return;
+    }
+    if (!newPassword) {
+      setSetupError("Please enter a password.");
+      return;
+    }
     if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters.");
+      setSetupError("Password must be at least 8 characters.");
       return;
     }
     setSetupLoading(true);
@@ -168,17 +177,32 @@ export function PortalLogin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_id: accessId, password: newPassword }),
       });
-      const data = await res.json();
+      let data: any = {};
+      try { data = await res.json(); } catch { /* non-JSON response */ }
       if (!res.ok) {
-        toast.error(data.error || "Password setup failed.");
+        // Show the error INLINE in the dialog — a toast that vanishes after
+        // 3 seconds is why users kept saying "nothing happened".
+        setSetupError(data.error || `Password setup failed (HTTP ${res.status}). Please try again or contact your account manager.`);
         return;
       }
-      toast.success("Password set. You can now sign in.");
+      // Success — the server auto-signed us in (data.auto_signed_in). Just
+      // hydrate the client state and drop the user into their portal.
+      if (data.access) {
+        setPortalAccess(data.access);
+        setAppMode("portal");
+        toast.success("Password set. Welcome!");
+      } else {
+        // Rare fallback (server didn't return access): treat as normal login.
+        toast.success("Password set. Please sign in.");
+        setEmail(searchParams.get("email") || "");
+      }
       setSetupOpen(false);
       setAccessId("");
       setNewPassword("");
-    } catch {
-      toast.error("Network error. Please try again.");
+      // Remove the ?access_id= from the URL so a refresh doesn't re-open the dialog.
+      window.history.replaceState({}, "", "/portal/login");
+    } catch (err: any) {
+      setSetupError("Network error — could not reach the server. Please check your connection and try again.");
     } finally {
       setSetupLoading(false);
     }
@@ -316,11 +340,21 @@ export function PortalLogin() {
                           id="new_password"
                           type="password"
                           value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="••••••••"
+                          onChange={(e) => { setNewPassword(e.target.value); setSetupError(null); }}
+                          placeholder="At least 8 characters"
+                          minLength={8}
+                          autoComplete="new-password"
                           disabled={setupLoading}
                         />
+                        <p className="text-[11px] text-muted-foreground">
+                          Minimum 8 characters. Anything you can remember — no uppercase / number requirement.
+                        </p>
                       </div>
+                      {setupError && (
+                        <div className="p-3 rounded-lg text-sm bg-destructive/10 text-destructive border border-destructive/30">
+                          {setupError}
+                        </div>
+                      )}
                       <DialogFooter>
                         <Button
                           type="button"

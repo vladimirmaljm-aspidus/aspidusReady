@@ -29,7 +29,7 @@ import {
   Building2, ShieldCheck, Star, Landmark, Receipt, FileCheck2,
   CheckCircle2, Clock, XCircle, AlertTriangle, Send, Ban, Plus,
   Download, Eye, FileSignature, Calculator, Inbox, UserX,
-  Calendar, Tag, FileBadge, Trash2,
+  Calendar, Tag, FileBadge, Trash2, KeyRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +44,7 @@ import {
   KycSubmission, PortalRfq, PortalAccess,
 } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { cn } from "@/lib/utils";
 
 // Local KYC status union (pre-existing duplicate KycStatus export collapses
 // the imported symbol — same workaround used in kyc-review-view.tsx).
@@ -126,10 +127,20 @@ function invoiceStatusClass(status: string): string {
 
 // ---------- portal access ----------
 const PORTAL_TIER_LABELS: Record<string, string> = {
-  limited: "Limited",
+  limited: "Basic (legacy)",
+  basic: "Basic",
   standard: "Standard",
+  business: "Business",
   premium: "Premium",
 };
+
+// Ordered from most to least privileged, matching src/lib/portal/tiers.ts
+const TIER_ORDER: { value: string; label: string; hint: string }[] = [
+  { value: "premium",  label: "Premium",  hint: "VIP · KYC optional · full features" },
+  { value: "business", label: "Business", hint: "Full KYC · PDF download · RFQ" },
+  { value: "standard", label: "Standard", hint: "Full KYC · RFQ · no PDF download" },
+  { value: "basic",    label: "Basic",    hint: "Read-only, no RFQ / PDF" },
+];
 
 function portalStatusClass(status: string): string {
   switch (status) {
@@ -1346,6 +1357,8 @@ function PortalTab({
   const [inviteSending, setInviteSending] = useState(false);
   const [showChangeEmail, setShowChangeEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
+  const [showChangeTier, setShowChangeTier] = useState(false);
+  const [nextTier, setNextTier] = useState<string>("");
 
   const inviteMut = useMutation({
     mutationFn: async () => {
@@ -1382,6 +1395,52 @@ function PortalTab({
     onSuccess: (_data, status) => {
       toast.success(`Portal access ${status}.`);
       qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const forceResetMut = useMutation({
+    mutationFn: async () => {
+      if (!portalAccess) throw new Error("No portal access");
+      // Flip must_set_password=true and bump token_version so the current
+      // session is invalidated. Admin then clicks "Send invite" to email
+      // the setup link again — or shares the /portal/login?access_id=… URL
+      // manually if the client can't receive the email.
+      const r = await fetch(api("/api/portal-access"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: portalAccess.id,
+          must_set_password: true,
+          password_hash: null,
+          token_version: (portalAccess.token_version || 0) + 1,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Reset failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Password reset. Click 'Send invite' to email the setup link, or share it manually.");
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const changeTierMut = useMutation({
+    mutationFn: async (tier: string) => {
+      if (!portalAccess) throw new Error("No portal access");
+      const r = await fetch(api("/api/portal-access"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: portalAccess.id, tier }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Change tier failed");
+      return r.json();
+    },
+    onSuccess: (_d, tier) => {
+      toast.success(`Tier changed to ${PORTAL_TIER_LABELS[tier] || tier}.`);
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
+      setShowChangeTier(false);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1514,6 +1573,25 @@ function PortalTab({
                   >
                     <Mail className="size-4 mr-1.5" /> Change email
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setNextTier(portalAccess.tier); setShowChangeTier(true); }}
+                  >
+                    <Star className="size-4 mr-1.5" /> Change tier
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (confirm(`Reset password for ${partnerName}? Their current session will be invalidated and they'll have to set a new password from the invite email.`)) {
+                        forceResetMut.mutate();
+                      }
+                    }}
+                    disabled={forceResetMut.isPending}
+                  >
+                    <KeyRound className="size-4 mr-1.5" /> Reset password
+                  </Button>
                   {portalAccess.status === "active" ? (
                     <Button
                       size="sm"
@@ -1565,6 +1643,50 @@ function PortalTab({
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={showChangeTier} onOpenChange={setShowChangeTier}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>Change portal tier</DialogTitle>
+            <DialogDescription>
+              Higher tiers unlock more features (RFQ, PDF download, KYC-exempt). Downgrading revokes those features immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {TIER_ORDER.map((t) => {
+              const current = portalAccess?.tier === t.value;
+              return (
+                <label key={t.value} className={cn("flex items-start gap-3 rounded-lg border p-3 cursor-pointer smooth", nextTier === t.value ? "border-primary bg-primary/5" : "border-border hover:bg-accent/40")}>
+                  <input
+                    type="radio"
+                    name="tier"
+                    value={t.value}
+                    checked={nextTier === t.value}
+                    onChange={() => setNextTier(t.value)}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{t.label}</span>
+                      {current && <Badge variant="outline" className="text-[10px]">Current</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t.hint}</p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowChangeTier(false)}>Cancel</Button>
+            <Button
+              onClick={() => changeTierMut.mutate(nextTier)}
+              disabled={changeTierMut.isPending || !nextTier || nextTier === portalAccess?.tier}
+            >
+              {changeTierMut.isPending ? "Saving…" : "Apply tier"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showChangeEmail} onOpenChange={setShowChangeEmail}>
         <DialogContent size="md">
