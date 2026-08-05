@@ -54,6 +54,7 @@ export type ViewKey =
   | "workspace"
   | "plans"
   | "portal-uploads"
+  | "logistics-requests"
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"
@@ -65,6 +66,7 @@ export type ViewKey =
   | "portal-rfq"
   | "portal-messages"
   | "portal-proformas"
+  | "portal-logistics"
   | "portal-notifications";
 
 export interface SafeUser {

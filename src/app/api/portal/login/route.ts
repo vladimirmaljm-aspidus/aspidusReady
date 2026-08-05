@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
           error: "This email is registered with multiple organizations. Please select which one to sign into.",
           multiple_tenants: true,
           tenants,
-        }, { status: 300 });
+        }, { status: 409 });
       }
     }
 

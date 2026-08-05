@@ -24,6 +24,7 @@ import {
   ShieldAlert,
   MessageSquare,
   Bell,
+  Truck,
 } from "lucide-react";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,10 @@ const PortalNotifications = dynamic(
   () => import("@/components/portal/portal-notifications").then((m) => m.PortalNotifications),
   { ssr: false }
 );
+const PortalLogistics = dynamic(
+  () => import("@/components/portal/portal-logistics").then((m) => m.PortalLogistics),
+  { ssr: false }
+);
 
 interface NavItem {
   key: ViewKey;
@@ -99,6 +104,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "portal-documents", label: "My Documents", icon: FolderOpen, gate: "can_view_documents" },
   { key: "portal-catalog", label: "Product Catalog", icon: Package, gate: "can_view_catalog" },
   { key: "portal-rfq", label: "Request a Quote", icon: ShoppingCart, gate: "can_submit_rfq" },
+  { key: "portal-logistics", label: "Logistics", icon: Truck },
   { key: "portal-kyc", label: "KYC Verification", icon: ShieldCheck },
   { key: "portal-profile", label: "My Profile", icon: User, gate: "can_view_profile" },
   { key: "portal-profile", label: "Company Info", icon: Building2, gate: "can_view_company_info" },
@@ -144,6 +150,7 @@ const VIEW_TITLES: Record<string, string> = {
   "portal-documents": "My Documents",
   "portal-catalog": "Product Catalog",
   "portal-rfq": "Request a Quote",
+  "portal-logistics": "Logistics",
   "portal-kyc": "KYC Verification",
   "portal-profile": "My Profile",
 };
@@ -410,6 +417,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
               {view === "portal-catalog" && <PortalCatalog />}
               {view === "portal-kyc" && <PortalKyc />}
               {view === "portal-rfq" && <PortalRfq />}
+              {view === "portal-logistics" && <PortalLogistics />}
               {view === "portal-messages" && <PortalMessages />}
               {view === "portal-profile" && <PortalProfile />}
             </>

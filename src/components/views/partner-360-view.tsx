@@ -1344,6 +1344,8 @@ function PortalTab({
 
   const qc = useQueryClient();
   const [inviteSending, setInviteSending] = useState(false);
+  const [showChangeEmail, setShowChangeEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
 
   const inviteMut = useMutation({
     mutationFn: async () => {
@@ -1380,6 +1382,29 @@ function PortalTab({
     onSuccess: (_data, status) => {
       toast.success(`Portal access ${status}.`);
       qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const changeEmailMut = useMutation({
+    mutationFn: async (email: string) => {
+      if (!portalAccess) throw new Error("No portal access");
+      const r = await fetch(api(`/api/portal-access/${portalAccess.id}/change-email`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_email: email, send_reset_link: true }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Change email failed");
+      }
+      return r.json();
+    },
+    onSuccess: (data: any) => {
+      toast.success(data?.email_sent ? `Login email changed. Set-password email sent to ${data.email_sent}.` : "Login email changed.");
+      qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, "partner360", partnerId] });
+      setShowChangeEmail(false);
+      setNewEmail("");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1482,6 +1507,13 @@ function PortalTab({
                   >
                     <Send className="size-4 mr-1.5" /> Send invite
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setNewEmail(portalAccess.portal_email || ""); setShowChangeEmail(true); }}
+                  >
+                    <Mail className="size-4 mr-1.5" /> Change email
+                  </Button>
                   {portalAccess.status === "active" ? (
                     <Button
                       size="sm"
@@ -1533,6 +1565,27 @@ function PortalTab({
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={showChangeEmail} onOpenChange={setShowChangeEmail}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>Change portal login email</DialogTitle>
+            <DialogDescription>
+              The client&apos;s existing session will be invalidated. A welcome email with a set-password link is sent to the new address.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label>New email</Label>
+            <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="client@example.com" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowChangeEmail(false)}>Cancel</Button>
+            <Button onClick={() => changeEmailMut.mutate(newEmail)} disabled={changeEmailMut.isPending || !newEmail}>
+              {changeEmailMut.isPending ? "Saving…" : "Change email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* RFQs */}
       <Card className="card-premium">

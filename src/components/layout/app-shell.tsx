@@ -60,6 +60,7 @@ const TenantsView = dynamic(() => import("@/components/views/tenants-view").then
 const SuperAdminOverviewView = dynamic(() => import("@/components/views/super-admin-overview-view").then((m) => m.SuperAdminOverviewView), { ssr: false });
 const FeatureFlagsView = dynamic(() => import("@/components/views/feature-flags-view").then((m) => m.FeatureFlagsView), { ssr: false });
 const PortalUploadsView = dynamic(() => import("@/components/views/portal-uploads-view").then((m) => m.PortalUploadsView), { ssr: false });
+const LogisticsRequestsView = dynamic(() => import("@/components/views/logistics-requests-view").then((m) => m.LogisticsRequestsView), { ssr: false });
 
 /* -------------------------------------------------------------------------- */
 /*  View renderer                                                             */
@@ -109,6 +110,7 @@ function ViewContent({ view }: { view: string }) {
     case "super-admin-overview": return <SuperAdminOverviewView />;
     case "feature-flags":        return <FeatureFlagsView />;
     case "portal-uploads":       return <PortalUploadsView />;
+    case "logistics-requests":   return <LogisticsRequestsView />;
     default:                     return <DashboardView />;
   }
 }
