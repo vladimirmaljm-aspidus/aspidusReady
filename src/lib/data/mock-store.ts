@@ -1134,6 +1134,7 @@ export class MockStore implements Store {
       module_finance: f.module_finance ?? true,
       module_inventory: f.module_inventory ?? true,
       module_portal: f.module_portal ?? true,
+      module_logistics: f.module_logistics ?? true,
       module_kyc: f.module_kyc ?? true,
       module_document_templates: f.module_document_templates ?? true,
       module_document_verification: f.module_document_verification ?? true,

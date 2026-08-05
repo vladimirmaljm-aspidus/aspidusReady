@@ -529,6 +529,7 @@ CREATE TABLE IF NOT EXISTS feature_flags (
   module_finance  boolean NOT NULL DEFAULT true,
   module_inventory boolean NOT NULL DEFAULT true,
   module_portal   boolean NOT NULL DEFAULT true,
+  module_logistics boolean NOT NULL DEFAULT true,
   module_kyc      boolean NOT NULL DEFAULT true,
   module_document_templates boolean NOT NULL DEFAULT true,
   module_document_verification boolean NOT NULL DEFAULT true,
@@ -1052,6 +1053,23 @@ CREATE INDEX IF NOT EXISTS idx_erp_bank_accounts_tenant ON erp_bank_accounts(ten
 CREATE INDEX IF NOT EXISTS idx_erp_bank_transactions_tenant ON erp_bank_transactions(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_erp_bank_transactions_bank ON erp_bank_transactions(bank_account_id);
 CREATE INDEX IF NOT EXISTS idx_erp_settings_tenant ON erp_settings(tenant_id);
+
+-- Tracking + carrier fields on logistics_requests (added post-launch — use
+-- ALTER TABLE ADD IF NOT EXISTS so existing DBs pick them up without a full
+-- migration). These are populated when an admin moves the request into
+-- in_progress or completed.
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS tracking_number text;
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS tracking_url text;
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS carrier text;
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS carrier_reference text;
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS quoted_at timestamptz;
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS accepted_at timestamptz;
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS shipped_at timestamptz;
+ALTER TABLE logistics_requests ADD COLUMN IF NOT EXISTS delivered_at timestamptz;
+
+-- Feature flags: module_logistics added post-launch. Backfill existing rows
+-- with `true` so tenants keep seeing the module they were already using.
+ALTER TABLE feature_flags ADD COLUMN IF NOT EXISTS module_logistics boolean NOT NULL DEFAULT true;
 
 -- ---------- logistics_events ----------
 -- Append-only timeline for each logistics_request: who did what when.

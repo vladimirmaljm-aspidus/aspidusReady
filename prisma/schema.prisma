@@ -1367,6 +1367,7 @@ model TenantFeatureFlags {
   module_finance                Boolean  @default(true)   // invoices + proformas
   module_inventory              Boolean  @default(false)
   module_portal                 Boolean  @default(false)  // client portal
+  module_logistics              Boolean  @default(true)   // freight quote requests + packing lists
   module_kyc                    Boolean  @default(false)  // KYC verification
   module_document_templates     Boolean  @default(false)
   module_document_verification  Boolean  @default(false)  // QR + forensic

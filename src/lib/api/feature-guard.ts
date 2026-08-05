@@ -24,6 +24,7 @@ type ModuleFlag =
   | "module_finance"
   | "module_inventory"
   | "module_portal"
+  | "module_logistics"
   | "module_kyc"
   | "module_document_templates"
   | "module_document_verification"
@@ -44,7 +45,7 @@ async function loadFlags(tenantId: string): Promise<Record<string, boolean>> {
   const supabase = getSupabase();
   const { data } = await supabase
     .from("feature_flags")
-    .select("module_crm, module_trade, module_finance, module_inventory, module_portal, module_kyc, module_document_templates, module_document_verification, module_vault, module_api_keys, module_webhooks, module_mail_queue, module_security")
+    .select("module_crm, module_trade, module_finance, module_inventory, module_portal, module_logistics, module_kyc, module_document_templates, module_document_verification, module_vault, module_api_keys, module_webhooks, module_mail_queue, module_security")
     .eq("tenant_id", tenantId)
     .maybeSingle();
   const flags = (data as any) || {};

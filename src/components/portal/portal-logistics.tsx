@@ -34,6 +34,7 @@ interface LogisticsRequest {
   destination_country: string | null; destination_city: string | null;
   total_weight_kg: number | null; total_packages: number | null;
   quoted_price: number | null; quoted_currency: string | null; quoted_transit_days: number | null;
+  tracking_number?: string | null; tracking_url?: string | null; carrier?: string | null;
   created_at: string;
 }
 
@@ -120,6 +121,12 @@ export function PortalLogistics() {
                           <p className="text-xs font-medium mt-1 tabular">{r.quoted_currency} {r.quoted_price} · {r.quoted_transit_days}d</p>
                         )}
                       </div>
+                      <a
+                        href={`/api/portal/logistics/${r.id}/packing-list.pdf`}
+                        target="_blank" rel="noopener noreferrer"
+                        title="Download packing list PDF"
+                        className="inline-flex items-center justify-center size-9 rounded-md hover:bg-accent smooth"
+                      ><FileText className="size-4" /></a>
                       <Button
                         size="icon" variant="ghost" title={open ? "Hide timeline" : "Show timeline"}
                         onClick={() => setOpenTimelineId(open ? null : r.id)}
@@ -134,6 +141,16 @@ export function PortalLogistics() {
                       ><Copy className="size-4" /></Button>
                     </div>
                   </div>
+                  {(r.tracking_number || r.carrier) && (
+                    <div className="px-4 pb-3 -mt-1 text-xs flex flex-wrap gap-3">
+                      {r.carrier && <span><span className="text-muted-foreground">Carrier:</span> <strong>{r.carrier}</strong></span>}
+                      {r.tracking_number && (
+                        r.tracking_url
+                          ? <a href={r.tracking_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Track {r.tracking_number}</a>
+                          : <span><span className="text-muted-foreground">Tracking:</span> <strong>{r.tracking_number}</strong></span>
+                      )}
+                    </div>
+                  )}
                   {open && (
                     <div className="border-t border-border/60 px-4 py-3 bg-muted/20">
                       <PortalTimeline requestId={r.id} />

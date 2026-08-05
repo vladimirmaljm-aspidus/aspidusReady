@@ -38,6 +38,13 @@ interface LogisticsRequest {
   partner_id: string;
   portal_access_id: string | null;
   number: string;
+  tracking_number?: string | null;
+  tracking_url?: string | null;
+  carrier?: string | null;
+  carrier_reference?: string | null;
+  quoted_at?: string | null;
+  shipped_at?: string | null;
+  delivered_at?: string | null;
   status: "pending" | "quoted" | "accepted" | "rejected" | "cancelled" | "in_progress" | "completed";
   mode: string;
   container_type: string | null;
@@ -308,6 +315,10 @@ function RequestDetailSheet({
   const [days, setDays] = React.useState<string>("");
   const [quoteNotes, setQuoteNotes] = React.useState<string>("");
   const [adminNotes, setAdminNotes] = React.useState<string>("");
+  const [trackingNumber, setTrackingNumber] = React.useState<string>("");
+  const [trackingUrl, setTrackingUrl] = React.useState<string>("");
+  const [carrier, setCarrier] = React.useState<string>("");
+  const [carrierReference, setCarrierReference] = React.useState<string>("");
 
   React.useEffect(() => {
     if (req) {
@@ -317,6 +328,10 @@ function RequestDetailSheet({
       setDays(req.quoted_transit_days != null ? String(req.quoted_transit_days) : "");
       setQuoteNotes(req.quoted_notes || "");
       setAdminNotes(req.admin_notes || "");
+      setTrackingNumber(req.tracking_number || "");
+      setTrackingUrl(req.tracking_url || "");
+      setCarrier(req.carrier || "");
+      setCarrierReference(req.carrier_reference || "");
     }
   }, [req?.id]);
 
@@ -360,6 +375,10 @@ function RequestDetailSheet({
       if (price) patch.quoted_price = Number(price);
       if (currency) patch.quoted_currency = currency;
       if (days) patch.quoted_transit_days = Number(days);
+      patch.tracking_number = trackingNumber || null;
+      patch.tracking_url = trackingUrl || null;
+      patch.carrier = carrier || null;
+      patch.carrier_reference = carrierReference || null;
       const r = await fetch(api(`/api/logistics-requests/${req.id}`), {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
       });
@@ -539,6 +558,46 @@ function RequestDetailSheet({
               <div>
                 <Label className="text-xs">Internal notes (admin only)</Label>
                 <Textarea rows={2} value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} placeholder="Cost breakdown, supplier ref…" />
+              </div>
+
+              {/* Tracking + carrier — most useful once the shipment is in progress. */}
+              <div className="pt-2 border-t">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Shipment tracking</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Carrier</Label>
+                    <Input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Maersk, DHL, MSC…" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Carrier reference</Label>
+                    <Input value={carrierReference} onChange={(e) => setCarrierReference(e.target.value)} placeholder="Booking / BL / AWB no." />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tracking number</Label>
+                    <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="e.g. MSCU1234567" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tracking URL</Label>
+                    <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" />
+                  </div>
+                </div>
+                {(req.quoted_at || req.shipped_at || req.delivered_at) && (
+                  <div className="mt-2 text-xs text-muted-foreground flex flex-wrap gap-3">
+                    {req.quoted_at && <span>Quoted {fmtRelative(req.quoted_at)}</span>}
+                    {req.shipped_at && <span>Shipped {fmtRelative(req.shipped_at)}</span>}
+                    {req.delivered_at && <span>Delivered {fmtRelative(req.delivered_at)}</span>}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 border-t">
+                <a
+                  href={api(`/api/logistics-requests/${req.id}/packing-list.pdf`)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <FileText className="size-3.5" /> Download packing list PDF
+                </a>
               </div>
               <div className="flex items-center justify-between gap-2 pt-2 border-t flex-wrap">
                 {canDelete ? (

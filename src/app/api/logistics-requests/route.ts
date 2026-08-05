@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; }
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_logistics", auth.isSuperAdmin); if (_f) return _f; }
 
   const tid = resolveTenantId(auth, req);
   if (!tid) return NextResponse.json({ items: [], total: 0 });

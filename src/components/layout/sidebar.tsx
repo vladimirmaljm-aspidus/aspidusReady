@@ -94,7 +94,7 @@ const SECTIONS: NavSection[] = [
   {
     i18nKey: "logistics",
     items: [
-      { key: "logistics-requests", i18nKey: "logistics-requests", i18nSection: "logistics", icon: Truck, permission: "logistics.read", featureFlag: "module_portal" },
+      { key: "logistics-requests", i18nKey: "logistics-requests", i18nSection: "logistics", icon: Truck, permission: "logistics.read", featureFlag: "module_logistics" },
     ],
   },
   {

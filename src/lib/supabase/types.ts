@@ -1183,6 +1183,7 @@ export interface TenantFeatureFlags {
   module_finance: boolean; // invoices + proformas
   module_inventory: boolean;
   module_portal: boolean; // client portal
+  module_logistics: boolean; // freight quote requests + packing lists
   module_kyc: boolean; // KYC verification
   module_document_templates: boolean;
   module_document_verification: boolean; // QR + forensic

@@ -45,9 +45,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "status", "quoted_price", "quoted_currency", "quoted_transit_days",
     "quoted_notes", "linked_offer_id", "admin_notes",
     "target_pickup_date", "target_delivery_date",
+    // Tracking / carrier fields — filled in as the shipment progresses
+    "tracking_number", "tracking_url", "carrier", "carrier_reference",
   ];
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const k of allow) if (body[k] !== undefined) patch[k] = body[k];
+
+  // Auto-set milestone timestamps based on status transition — so the
+  // timeline / dashboard can show 'quoted 3 days ago', 'shipped Tuesday',
+  // without every UI having to compute it from events.
+  if (typeof patch.status === "string" && patch.status !== row.status) {
+    const now = new Date().toISOString();
+    if (patch.status === "quoted" && !row.quoted_at) patch.quoted_at = now;
+    if (patch.status === "accepted" && !row.accepted_at) patch.accepted_at = now;
+    if (patch.status === "in_progress" && !row.shipped_at) patch.shipped_at = now;
+    if (patch.status === "completed" && !row.delivered_at) patch.delivered_at = now;
+  }
 
   const sb = getSupabase();
   const { data, error } = await sb.from("logistics_requests").update(patch).eq("id", id).select().single();
@@ -108,6 +121,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         action_url: `/portal/logistics`,
         action_label: "Open request",
       } as any);
+
+      // Email the client when a quote becomes available. Best-effort — a
+      // mail server hiccup must not block the PATCH from succeeding.
+      if (becameQuoted && data.quoted_price != null) {
+        try {
+          const partner = await store.getPartner(data.partner_id);
+          if (partner?.email) {
+            const tenant = await store.getTenant(data.tenant_id);
+            const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
+            const { logisticsQuoteReadyEmail, sendEmail } = await import("@/lib/email/service");
+            const route = `${data.origin_city || data.origin_country || "?"} → ${data.destination_city || data.destination_country || "?"}`;
+            const { subject, html } = logisticsQuoteReadyEmail({
+              partnerName: partner.name || "Client",
+              requestNumber: data.number,
+              route,
+              mode: data.mode,
+              price: data.quoted_price,
+              currency: data.quoted_currency || "USD",
+              transitDays: data.quoted_transit_days ?? "—",
+              notes: data.quoted_notes || null,
+              tenantName: tenant?.name || "Aspidus",
+              portalUrl: `${baseUrl}/portal/logistics`,
+            });
+            await sendEmail({ to: partner.email, subject, html, tenantId: data.tenant_id });
+          }
+        } catch (e) { console.warn("[logistics.PATCH email]", e); }
+      }
     } catch (e) { console.warn("[logistics.PATCH notify]", e); }
   }
   return NextResponse.json(data);

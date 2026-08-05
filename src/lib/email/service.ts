@@ -548,3 +548,43 @@ export function newMessageEmail(opts: {
   `;
   return { subject, html };
 }
+
+export function logisticsQuoteReadyEmail(opts: {
+  partnerName: string;
+  requestNumber: string;
+  route: string;
+  mode: string;
+  price: number | string;
+  currency: string;
+  transitDays: number | string;
+  notes: string | null;
+  tenantName: string;
+  portalUrl: string;
+}): { subject: string; html: string } {
+  const subject = `Freight quote ready — ${opts.requestNumber} · ${opts.route}`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+      <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
+        <h1 style="margin: 0; font-size: 22px;">Your freight quote is ready</h1>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${opts.requestNumber} · ${opts.mode.toUpperCase()}</p>
+      </div>
+      <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="color: #333; font-size: 15px;">Hello ${opts.partnerName},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">We've prepared a quote for your shipment <strong>${opts.route}</strong>.</p>
+        <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+          <tr><td style="padding:8px 0;color:#6b7280;">Route</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.route}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Mode</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.mode.toUpperCase()}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Price</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.currency} ${opts.price}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Estimated transit</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.transitDays} days</td></tr>
+        </table>
+        ${opts.notes ? `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0;"><p style="color:#374151;font-size:13px;line-height:1.6;margin:0;white-space:pre-wrap;">${opts.notes}</p></div>` : ""}
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${opts.portalUrl}" style="background:#0f766e;color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;font-size:14px;">Review Quote</a>
+        </div>
+        <p style="color:#888;font-size:12px;line-height:1.5;">Sign in to your portal to accept, decline, or ask for changes.</p>
+      </div>
+      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">© ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.</p>
+    </div>
+  `;
+  return { subject, html };
+}

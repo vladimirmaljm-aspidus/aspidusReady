@@ -39,6 +39,7 @@ import {
   Save,
   Loader2,
   Building2,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -88,6 +89,12 @@ const MODULES: ModuleDef[] = [
     name: "Client Portal",
     description: "Self-service portal for partners and buyers.",
     icon: ExternalLink,
+  },
+  {
+    key: "module_logistics",
+    name: "Logistics",
+    description: "Portal freight quote requests + admin tracking / packing list PDFs.",
+    icon: Truck,
   },
   {
     key: "module_kyc",
@@ -148,6 +155,7 @@ const DEFAULT_FLAGS: Omit<TenantFeatureFlags, "id" | "tenant_id" | "updated_by" 
   module_finance: true,
   module_inventory: true,
   module_portal: true,
+  module_logistics: true,
   module_kyc: true,
   module_document_templates: true,
   module_document_verification: true,
@@ -230,6 +238,7 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
       module_finance: flags?.module_finance ?? DEFAULT_FLAGS.module_finance,
       module_inventory: flags?.module_inventory ?? DEFAULT_FLAGS.module_inventory,
       module_portal: flags?.module_portal ?? DEFAULT_FLAGS.module_portal,
+      module_logistics: (flags as any)?.module_logistics ?? DEFAULT_FLAGS.module_logistics,
       module_kyc: flags?.module_kyc ?? DEFAULT_FLAGS.module_kyc,
       module_document_templates:
         flags?.module_document_templates ?? DEFAULT_FLAGS.module_document_templates,
