@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "portal.read"); if (_d) return _d; }
+    const _d = requirePermission(auth, "portal-uploads.read"); if (_d) return _d; }
 
   const { id } = await params;
   const finalUpload = auth.isSuperAdmin
@@ -37,7 +37,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "portal.delete"); if (_d) return _d; }
+    const _d = requirePermission(auth, "portal-uploads.delete"); if (_d) return _d; }
 
   const { id } = await params;
   const upload = await getPortalUpload(id, auth.tenantId || "");

@@ -41,6 +41,22 @@ export class SupabaseStore implements Store {
   }
 
   /**
+   * Convert empty strings to null across the payload. Postgres refuses "" for
+   * date/timestamp/numeric/uuid/jsonb columns with error 22007
+   * ('invalid input syntax for type date: ""'), and every form in the app
+   * sends "" for an unfilled optional field. This one-liner unblocks all of
+   * them without every route having to re-implement the same sanitization.
+   */
+  private sanitizePayload(row: SupaRow): SupaRow {
+    const out: SupaRow = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (v === "") out[k] = null;
+      else out[k] = v;
+    }
+    return out;
+  }
+
+  /**
    * Smart upsert: uses INSERT when no id is provided, UPDATE when id exists.
    * This avoids issues with Supabase's upsert() and auto-generated UUIDs.
    */
@@ -48,7 +64,7 @@ export class SupabaseStore implements Store {
     table: string,
     data: Partial<T> & { id?: string },
   ): Promise<T> {
-    const payload: SupaRow = { ...data };
+    const payload: SupaRow = this.sanitizePayload({ ...data });
     if (data.id) {
       // UPDATE existing record
       const { id, ...fields } = payload;

@@ -180,18 +180,25 @@ export async function POST(req: NextRequest) {
     });
 
     // ---- Security module: write session, login history, known IP, trusted device ----
+    // NOTE: sessions/known_ips/trusted_devices all have NOT NULL tenant_id
+    // in Postgres, and super_admin users have no tenant. Skip these tables
+    // entirely for platform-level accounts — nothing meaningful to write and
+    // trying to insert null tenant_id crashes with 23502.
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-    try {
-      await store.createSession({
-        user_id: user.id,
-        ip,
-        user_agent: userAgent,
-        country: null,
-        expires_at: expiresAt,
-        current: true,
-      });
-    } catch (e) {
-      console.error("[login] createSession failed:", e);
+    if (user.tenant_id) {
+      try {
+        await store.createSession({
+          user_id: user.id,
+          tenant_id: user.tenant_id,
+          ip,
+          user_agent: userAgent,
+          country: null,
+          expires_at: expiresAt,
+          current: true,
+        } as any);
+      } catch (e) {
+        console.error("[login] createSession failed:", e);
+      }
     }
 
     try {
@@ -208,25 +215,29 @@ export async function POST(req: NextRequest) {
       console.error("[login] recordLoginHistory (success) failed:", e);
     }
 
-    try {
-      await store.upsertKnownIp({
-        user_id: user.id,
-        ip,
-        country: null,
-      });
-    } catch (e) {
-      console.error("[login] upsertKnownIp failed:", e);
-    }
+    if (user.tenant_id) {
+      try {
+        await store.upsertKnownIp({
+          user_id: user.id,
+          tenant_id: user.tenant_id,
+          ip,
+          country: null,
+        } as any);
+      } catch (e) {
+        console.error("[login] upsertKnownIp failed:", e);
+      }
 
-    try {
-      await store.upsertTrustedDevice({
-        user_id: user.id,
-        device_name: deriveDeviceName(userAgent),
-        fingerprint: deviceFingerprint(userAgent, ip),
-        ip,
-      });
-    } catch (e) {
-      console.error("[login] upsertTrustedDevice failed:", e);
+      try {
+        await store.upsertTrustedDevice({
+          user_id: user.id,
+          tenant_id: user.tenant_id,
+          device_name: deriveDeviceName(userAgent),
+          fingerprint: deviceFingerprint(userAgent, ip),
+          ip,
+        } as any);
+      } catch (e) {
+        console.error("[login] upsertTrustedDevice failed:", e);
+      }
     }
 
     const token = await createSession({

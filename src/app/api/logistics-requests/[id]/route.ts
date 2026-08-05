@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "documents.read"); if (_d) return _d; }
+    const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; }
 
   const { id } = await params;
   const row = await loadOwned(id, auth);
@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "documents.update"); if (_d) return _d; }
+    const _d = requirePermission(auth, "logistics.update"); if (_d) return _d; }
 
   const { id } = await params;
   const row = await loadOwned(id, auth);
@@ -88,7 +88,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "documents.delete"); if (_d) return _d; }
+    const _d = requirePermission(auth, "logistics.delete"); if (_d) return _d; }
 
   const { id } = await params;
   const row = await loadOwned(id, auth);

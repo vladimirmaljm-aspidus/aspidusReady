@@ -14,7 +14,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "offers.create"); if (_d) return _d; }
+    const _d = requirePermission(auth, "logistics.convert"); if (_d) return _d; }
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d2 = requirePermission(auth, "offers.create"); if (_d2) return _d2; }
 
   const { id } = await params;
   const sb = getSupabase();

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "documents.read"); if (_d) return _d; }
+    const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; }
 
   const tid = resolveTenantId(auth, req);
   if (!tid) return NextResponse.json({ items: [], total: 0 });

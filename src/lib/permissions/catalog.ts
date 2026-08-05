@@ -182,6 +182,29 @@ export const PORTAL = {
   MESSAGE: "portal.message",
   RFQ_READ: "portal.rfq_read",
   RFQ_UPDATE: "portal.rfq_update",
+  // Fine-grained admin actions on a portal_access row
+  CHANGE_EMAIL: "portal.change_email",
+  CHANGE_TIER: "portal.change_tier",
+  RESET_PASSWORD: "portal.reset_password",
+  SUSPEND: "portal.suspend",
+  REVOKE: "portal.revoke",
+} as const;
+
+// ─── Portal Uploads (admin view of client-uploaded documents) ───────────────
+export const PORTAL_UPLOADS = {
+  READ: "portal-uploads.read",
+  DOWNLOAD: "portal-uploads.download",
+  DELETE: "portal-uploads.delete",
+} as const;
+
+// ─── Logistics (freight quote requests submitted through the portal) ────────
+export const LOGISTICS = {
+  READ: "logistics.read",
+  CREATE: "logistics.create",     // admin can manually create/edit rows
+  UPDATE: "logistics.update",     // status / notes / dates
+  DELETE: "logistics.delete",
+  QUOTE: "logistics.quote",       // enter/change price + transit + notes
+  CONVERT: "logistics.convert",   // convert to Offer
 } as const;
 
 // ─── KYC ────────────────────────────────────────────────────────────────────
@@ -329,6 +352,8 @@ export const ALL_PERMISSIONS = [
   ...Object.values(ERP),
   ...Object.values(COMMISSIONS),
   ...Object.values(PORTAL),
+  ...Object.values(PORTAL_UPLOADS),
+  ...Object.values(LOGISTICS),
   ...Object.values(KYC),
   ...Object.values(USERS),
   ...Object.values(SETTINGS),
