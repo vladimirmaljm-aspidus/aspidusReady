@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
     const _f = await requireFeature(_tid, "module_trade", _isSA); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
-  if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
+  // Super-admin without an active tenant selected: return empty rather than
+  // 400 — the view is meant to be tenant-scoped and the client is not
+  // "broken", the user just hasn't chosen a tenant yet.
+  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
   const url = new URL(req.url);
   const search = url.searchParams.get("search") || undefined;
   const result = await auth.store.listTradeCalculations(tenantId, { search });

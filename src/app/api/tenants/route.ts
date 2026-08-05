@@ -5,12 +5,13 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    // Super-admin sees all tenants; regular admin sees only their own tenant
+    // Super-admin sees all tenants; regular admin sees only their own tenant.
+    // No platform.* gate — non-super-admins are already limited to their own
+    // tenant below, and many client views (impersonation banner, tenant
+    // switcher, portal-uploads folder headers) need this endpoint to work
+    // for any signed-in user.
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-    // Permission gate (platform.tenants.read)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "platform.tenants.read"); if (_d) return _d; } /* requirePermission wired */
 
     if (auth.isSuperAdmin) {
       const tenants = await auth.store.listTenants();

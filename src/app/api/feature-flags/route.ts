@@ -5,12 +5,11 @@ export const runtime = "nodejs";
 
 // GET: Any authenticated user can read their own tenant's feature flags
 // (needed by sidebar to show/hide modules). Super-admin can pass ?tenant_id=xxx.
+// No platform.* permission gate — the response is scoped to the caller's own
+// tenant via resolveTenantId, so a tenant user sees only their own flags.
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (platform.feature_flags.read)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "platform.feature_flags.read"); if (_d) return _d; } /* requirePermission wired */
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ flags: {} });

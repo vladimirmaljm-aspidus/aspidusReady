@@ -65,7 +65,8 @@ export function PlatformUsersView() {
   const tenantName = React.useMemo(() => new Map(tenants.map((t) => [t.id, t.name])), [tenants]);
 
   const filtered = items.filter((u) => {
-    if (tenantFilter !== "all" && (u.tenant_id || "") !== tenantFilter) return false;
+    if (tenantFilter === "__platform__") { if (u.tenant_id) return false; }
+    else if (tenantFilter !== "all" && (u.tenant_id || "") !== tenantFilter) return false;
     if (roleFilter !== "all" && u.role !== roleFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -102,7 +103,7 @@ export function PlatformUsersView() {
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All tenants</SelectItem>
-                <SelectItem value="">Platform (super_admin)</SelectItem>
+                <SelectItem value="__platform__">Platform (super_admin)</SelectItem>
                 {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
               </SelectContent>
             </Select>
