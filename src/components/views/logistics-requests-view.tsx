@@ -16,6 +16,7 @@ import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAl
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useCan } from "@/lib/store/app-store";
 import type { Partner } from "@/lib/supabase/types";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
@@ -287,6 +288,9 @@ function RequestDetailSheet({
 }) {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const canUpdate = useCan("logistics.update");
+  const canDelete = useCan("logistics.delete");
+  const canConvert = useCan("logistics.convert");
   const [status, setStatus] = React.useState<string>("");
   const [price, setPrice] = React.useState<string>("");
   const [currency, setCurrency] = React.useState<string>("USD");
@@ -506,16 +510,22 @@ function RequestDetailSheet({
                 <Textarea rows={2} value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} placeholder="Cost breakdown, supplier ref…" />
               </div>
               <div className="flex items-center justify-between gap-2 pt-2 border-t flex-wrap">
-                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(req)}>
-                  <Trash2 className="size-4 mr-1" /> Delete
-                </Button>
+                {canDelete ? (
+                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(req)}>
+                    <Trash2 className="size-4 mr-1" /> Delete
+                  </Button>
+                ) : <span />}
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => toOfferMut.mutate()} disabled={toOfferMut.isPending || !price}>
-                    <ArrowRightCircle className="size-4 mr-1" /> {toOfferMut.isPending ? "Creating…" : "Convert to Offer"}
-                  </Button>
-                  <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
-                    {saveMut.isPending ? "Saving…" : "Save changes"}
-                  </Button>
+                  {canConvert && (
+                    <Button size="sm" variant="outline" onClick={() => toOfferMut.mutate()} disabled={toOfferMut.isPending || !price}>
+                      <ArrowRightCircle className="size-4 mr-1" /> {toOfferMut.isPending ? "Creating…" : "Convert to Offer"}
+                    </Button>
+                  )}
+                  {canUpdate && (
+                    <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
+                      {saveMut.isPending ? "Saving…" : "Save changes"}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

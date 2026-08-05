@@ -1634,21 +1634,31 @@ function StepDocuments({
 
   async function handleFileSelect(dt: DocTypeDef, file: File | null) {
     if (!file) return;
+    // Client-side sanity checks before the round-trip so the user gets
+    // instant feedback instead of a 400 from the server.
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File is too large. Maximum size is 10 MB.");
+      return;
+    }
+    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+    if (file.type && !allowed.includes(file.type)) {
+      toast.error("Unsupported file type. Allowed: PDF, JPEG, PNG, WebP.");
+      return;
+    }
     setUploadingType(dt.type);
     try {
+      // The server parses multipart/form-data. Never set Content-Type by hand
+      // here — the browser needs to include the multipart boundary itself.
+      const form = new FormData();
+      form.append("file", file);
+      form.append("type", dt.type);
       const r = await fetch("/api/portal/kyc/document", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: dt.type,
-          filename: file.name,
-          mime_type: file.type || "application/octet-stream",
-          size: file.size,
-        }),
+        body: form,
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Upload failed");
+        throw new Error(e.error || `Upload failed (HTTP ${r.status})`);
       }
       const doc: KycDocument = await r.json();
       // Replace any existing document of the same type, otherwise append.

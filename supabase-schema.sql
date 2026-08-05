@@ -405,17 +405,29 @@ CREATE TABLE IF NOT EXISTS portal_uploads (
   category        text NOT NULL DEFAULT 'general',
   doc_type        text,
   kyc_submission_id text REFERENCES kyc_submissions(id) ON DELETE SET NULL,
+  message_id      text,
   filename        text NOT NULL,
   original_name   text,
   storage_bucket  text,
   storage_path    text,
   mime_type       text,
-  size            bigint NOT NULL DEFAULT 0,
+  size_bytes      bigint NOT NULL DEFAULT 0,
+  uploaded_by_email text,
+  description     text,
   uploaded_at     timestamptz NOT NULL DEFAULT now(),
   deleted_at      timestamptz,
+  deleted_by      text,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
+-- For databases that were created before size_bytes replaced size, keep both
+-- available so old code and old data don't crash. The application writes to
+-- size_bytes; the alter is idempotent so it's safe to re-run.
+ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS size_bytes bigint NOT NULL DEFAULT 0;
+ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS message_id text;
+ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS uploaded_by_email text;
+ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE portal_uploads ADD COLUMN IF NOT EXISTS deleted_by text;
 CREATE INDEX IF NOT EXISTS idx_pu_tenant ON portal_uploads(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_pu_partner ON portal_uploads(partner_id);
 CREATE INDEX IF NOT EXISTS idx_pu_kyc ON portal_uploads(kyc_submission_id);
@@ -1040,6 +1052,26 @@ CREATE INDEX IF NOT EXISTS idx_erp_bank_accounts_tenant ON erp_bank_accounts(ten
 CREATE INDEX IF NOT EXISTS idx_erp_bank_transactions_tenant ON erp_bank_transactions(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_erp_bank_transactions_bank ON erp_bank_transactions(bank_account_id);
 CREATE INDEX IF NOT EXISTS idx_erp_settings_tenant ON erp_settings(tenant_id);
+
+-- ---------- logistics_events ----------
+-- Append-only timeline for each logistics_request: who did what when.
+-- Used by the admin detail sheet + portal client's "status history" view
+-- so the timeline is queryable without walking audit_logs.
+CREATE TABLE IF NOT EXISTS logistics_events (
+  id                  text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  tenant_id           text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  logistics_request_id text NOT NULL REFERENCES logistics_requests(id) ON DELETE CASCADE,
+  event_type          text NOT NULL,         -- 'created', 'quoted', 'accepted', 'rejected', 'in_progress', 'completed', 'cancelled', 'note'
+  from_status         text,
+  to_status           text,
+  actor_id            text,                  -- users.id (admin) or portal_access.id (client)
+  actor_role          text NOT NULL DEFAULT 'system',  -- 'admin' | 'client' | 'system'
+  message             text,
+  metadata            jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_le_tenant ON logistics_events(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_le_request ON logistics_events(logistics_request_id, created_at DESC);
 
 -- =============================================================================
 -- ROW LEVEL SECURITY (RLS) — tenant isolation + role-based access

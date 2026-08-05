@@ -229,9 +229,9 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
           <Section title="Transport" open={openSec.transport} onToggle={() => setOpenSec({ ...openSec, transport: !openSec.transport })}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Fld label="Mode *"><Select value={f.mode} onValueChange={(v) => set("mode", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(MODE_META).map(([k, m]) => <SelectItem key={k} value={k}>{m.label}</SelectItem>)}</SelectContent></Select></Fld>
-              {f.mode.startsWith("sea") && (<Fld label="Container type"><Select value={f.container_type} onValueChange={(v) => set("container_type", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["20FT","40FT","40HC","45HC","LCL"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></Fld>)}
-              <Fld label="Incoterm"><Select value={f.incoterm} onValueChange={(v) => set("incoterm", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{INCOTERMS.map((i) => <SelectItem key={i.code} value={i.code}>{i.code} — {i.name}</SelectItem>)}</SelectContent></Select></Fld>
-              <Fld label="Urgency"><Select value={f.urgency} onValueChange={(v) => set("urgency", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="flexible">Flexible</SelectItem><SelectItem value="normal">Normal</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select></Fld>
+              {f.mode.startsWith("sea") && (<Fld label="Container type"><Select value={f.container_type ?? ""} onValueChange={(v) => set("container_type", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["20FT","40FT","40HC","45HC","LCL"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></Fld>)}
+              <Fld label="Incoterm"><Select value={f.incoterm ?? ""} onValueChange={(v) => set("incoterm", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{INCOTERMS.map((i) => <SelectItem key={i.code} value={i.code}>{i.code} — {i.name}</SelectItem>)}</SelectContent></Select></Fld>
+              <Fld label="Urgency"><Select value={f.urgency ?? "normal"} onValueChange={(v) => set("urgency", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="flexible">Flexible</SelectItem><SelectItem value="normal">Normal</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select></Fld>
               <Fld label="Pickup date"><Input type="date" value={f.target_pickup_date} onChange={(e) => set("target_pickup_date", e.target.value)} /></Fld>
               <Fld label="Delivery date"><Input type="date" value={f.target_delivery_date} onChange={(e) => set("target_delivery_date", e.target.value)} /></Fld>
             </div>
@@ -252,7 +252,7 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2"><Fld label="Description *"><Textarea rows={2} value={f.cargo_description} onChange={(e) => set("cargo_description", e.target.value)} placeholder="e.g. bagged sugar ICUMSA-45, 25kg PP bags" /></Fld></div>
               <Fld label="HS codes"><Input value={f.hs_codes} onChange={(e) => set("hs_codes", e.target.value)} placeholder="1701.14, 1701.99" /></Fld>
-              <Fld label="Cargo value"><div className="flex gap-1"><Input type="number" step="any" value={f.cargo_value} onChange={(e) => set("cargo_value", e.target.value === "" ? "" : Number(e.target.value))} /><Select value={f.cargo_currency} onValueChange={(v) => set("cargo_currency", v)}><SelectTrigger className="w-24"><SelectValue /></SelectTrigger><SelectContent>{["USD","EUR","AED","GBP"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div></Fld>
+              <Fld label="Cargo value"><div className="flex gap-1"><Input type="number" step="any" value={f.cargo_value} onChange={(e) => set("cargo_value", e.target.value === "" ? "" : Number(e.target.value))} /><Select value={f.cargo_currency ?? "USD"} onValueChange={(v) => set("cargo_currency", v)}><SelectTrigger className="w-24"><SelectValue /></SelectTrigger><SelectContent>{["USD","EUR","AED","GBP"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div></Fld>
               <Fld label="Total weight (kg)"><Input type="number" step="any" value={f.total_weight_kg} onChange={(e) => set("total_weight_kg", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
               <Fld label="Total volume (m³)"><Input type="number" step="any" value={f.total_volume_cbm} onChange={(e) => set("total_volume_cbm", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
               <Fld label="Total packages"><Input type="number" value={f.total_packages} onChange={(e) => set("total_packages", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
@@ -337,7 +337,7 @@ function AddressBlock({ prefix, f, set }: { prefix: "origin" | "destination"; f:
         <Input type="email" value={f[`${prefix}_contact_email`] || ""} onChange={(e) => set(`${prefix}_contact_email`, e.target.value)} />
       </Fld>
       <Fld label="Country *">
-        <Select value={f[`${prefix}_country`]} onValueChange={(v) => set(`${prefix}_country`, v)}>
+        <Select value={f[`${prefix}_country`] || ""} onValueChange={(v) => set(`${prefix}_country`, v)}>
           <SelectTrigger><SelectValue placeholder="Choose country" /></SelectTrigger>
           <SelectContent className="max-h-[300px]">
             {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}

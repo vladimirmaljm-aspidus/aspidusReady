@@ -73,5 +73,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     offer_id: (offer as any).id, price, currency,
   });
 
+  try {
+    const { logLogisticsEvent } = await import("@/lib/logistics/events");
+    await logLogisticsEvent({
+      tenant_id: lr.tenant_id,
+      logistics_request_id: id,
+      event_type: "converted_to_offer",
+      from_status: lr.status,
+      to_status: "quoted",
+      actor_id: auth.user.id,
+      actor_role: "admin",
+      message: `Converted to Offer (price ${currency} ${price})`,
+      metadata: { offer_id: (offer as any).id, price, currency },
+    });
+  } catch { /* non-critical */ }
+
   return NextResponse.json({ ok: true, offer_id: (offer as any).id });
 }

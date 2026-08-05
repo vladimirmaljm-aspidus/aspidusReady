@@ -58,6 +58,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Notify the client if the quote just became available or status meaningfully changed
   const becameQuoted = row.status !== "quoted" && data.status === "quoted";
   const statusChanged = row.status !== data.status;
+
+  // Timeline event for any status change or quote assignment
+  try {
+    const { logLogisticsEvent } = await import("@/lib/logistics/events");
+    if (statusChanged) {
+      await logLogisticsEvent({
+        tenant_id: data.tenant_id,
+        logistics_request_id: id,
+        event_type: becameQuoted ? "quoted" : (data.status as any),
+        from_status: row.status,
+        to_status: data.status,
+        actor_id: auth.user.id,
+        actor_role: "admin",
+        message: becameQuoted && data.quoted_price != null
+          ? `Quoted ${data.quoted_currency || ""} ${data.quoted_price} · ${data.quoted_transit_days || "?"} days`
+          : `Status changed to ${data.status}`,
+        metadata: becameQuoted ? { price: data.quoted_price, currency: data.quoted_currency, transit_days: data.quoted_transit_days } : {},
+      });
+    } else if (patch.quoted_notes || patch.admin_notes) {
+      await logLogisticsEvent({
+        tenant_id: data.tenant_id,
+        logistics_request_id: id,
+        event_type: "note",
+        actor_id: auth.user.id,
+        actor_role: "admin",
+        message: (patch.quoted_notes as string) || (patch.admin_notes as string) || null,
+      });
+    }
+  } catch { /* non-critical */ }
   if (becameQuoted || statusChanged) {
     try {
       const { getStore } = await import("@/lib/data/store");

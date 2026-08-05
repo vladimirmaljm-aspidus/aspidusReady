@@ -1104,6 +1104,9 @@ export class SupabaseStore implements Store {
     // response so old callers keep working.
     const submission = await this.getKycSubmission(doc.submission_id);
     if (!submission) throw new Error("KYC submission not found");
+    // Schema drift protection: some DBs have `size`, others `size_bytes`
+    // (see supabase-schema.sql). Populate both so an INSERT never fails on a
+    // NOT NULL column that got renamed but not migrated in the target DB.
     const { data, error } = await this.sb().from("portal_uploads").insert({
       tenant_id: submission.tenant_id,
       partner_id: submission.partner_id,
@@ -1115,8 +1118,9 @@ export class SupabaseStore implements Store {
       storage_bucket: "kyc-documents",
       storage_path: doc.storage_path,
       mime_type: doc.mime_type,
+      size: doc.size,
       size_bytes: doc.size,
-    }).select().single();
+    } as any).select().single();
     if (error) throw error;
     return {
       id: (data as any).id,

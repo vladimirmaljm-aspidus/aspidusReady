@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useAppStore } from "@/lib/store/app-store";
+import { useAppStore, useCan } from "@/lib/store/app-store";
 import { EmptyState } from "@/components/common/empty-state";
 import {
   fmtMoney, fmtNumber, fmtDate, fmtDateTime, fmtRelative, fmtBytes,
@@ -1360,6 +1360,17 @@ function PortalTab({
   const [showChangeTier, setShowChangeTier] = useState(false);
   const [nextTier, setNextTier] = useState<string>("");
 
+  // Per-action permission gating. `canAdmin` still guards the whole card,
+  // but individual buttons now respect the fine-grained catalog entries so
+  // users with role="user" and specific grants can be limited to just the
+  // actions they should perform.
+  const canInvite = useCan("portal.invite");
+  const canChangeEmail = useCan("portal.change_email");
+  const canChangeTier = useCan("portal.change_tier");
+  const canResetPw = useCan("portal.reset_password");
+  const canSuspend = useCan("portal.suspend");
+  const canRevoke = useCan("portal.revoke");
+
   const inviteMut = useMutation({
     mutationFn: async () => {
       if (!portalAccess) throw new Error("No portal access record");
@@ -1556,43 +1567,51 @@ function PortalTab({
               {/* Actions */}
               {canAdmin && (
                 <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setInviteSending(true);
-                      inviteMut.mutate();
-                    }}
-                    disabled={inviteSending || portalAccess.status === "active"}
-                  >
-                    <Send className="size-4 mr-1.5" /> Send invite
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setNewEmail(portalAccess.portal_email || ""); setShowChangeEmail(true); }}
-                  >
-                    <Mail className="size-4 mr-1.5" /> Change email
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setNextTier(portalAccess.tier); setShowChangeTier(true); }}
-                  >
-                    <Star className="size-4 mr-1.5" /> Change tier
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (confirm(`Reset password for ${partnerName}? Their current session will be invalidated and they'll have to set a new password from the invite email.`)) {
-                        forceResetMut.mutate();
-                      }
-                    }}
-                    disabled={forceResetMut.isPending}
-                  >
-                    <KeyRound className="size-4 mr-1.5" /> Reset password
-                  </Button>
-                  {portalAccess.status === "active" ? (
+                  {canInvite && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setInviteSending(true);
+                        inviteMut.mutate();
+                      }}
+                      disabled={inviteSending || portalAccess.status === "active"}
+                    >
+                      <Send className="size-4 mr-1.5" /> Send invite
+                    </Button>
+                  )}
+                  {canChangeEmail && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setNewEmail(portalAccess.portal_email || ""); setShowChangeEmail(true); }}
+                    >
+                      <Mail className="size-4 mr-1.5" /> Change email
+                    </Button>
+                  )}
+                  {canChangeTier && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setNextTier(portalAccess.tier); setShowChangeTier(true); }}
+                    >
+                      <Star className="size-4 mr-1.5" /> Change tier
+                    </Button>
+                  )}
+                  {canResetPw && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (confirm(`Reset password for ${partnerName}? Their current session will be invalidated and they'll have to set a new password from the invite email.`)) {
+                          forceResetMut.mutate();
+                        }
+                      }}
+                      disabled={forceResetMut.isPending}
+                    >
+                      <KeyRound className="size-4 mr-1.5" /> Reset password
+                    </Button>
+                  )}
+                  {canSuspend && portalAccess.status === "active" ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1601,7 +1620,7 @@ function PortalTab({
                     >
                       <Ban className="size-4 mr-1.5" /> Suspend access
                     </Button>
-                  ) : portalAccess.status === "suspended" ? (
+                  ) : canSuspend && portalAccess.status === "suspended" ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1611,7 +1630,7 @@ function PortalTab({
                       <CheckCircle2 className="size-4 mr-1.5" /> Reactivate
                     </Button>
                   ) : null}
-                  {portalAccess.status !== "revoked" && (
+                  {canRevoke && portalAccess.status !== "revoked" && (
                     <Button
                       size="sm"
                       variant="outline"

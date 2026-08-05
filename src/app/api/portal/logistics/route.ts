@@ -108,6 +108,21 @@ export async function POST(req: NextRequest) {
   const { data, error } = await sb.from("logistics_requests").insert(insert).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Timeline event: created by the client
+  try {
+    const { logLogisticsEvent } = await import("@/lib/logistics/events");
+    await logLogisticsEvent({
+      tenant_id: access.tenant_id,
+      logistics_request_id: (data as any).id,
+      event_type: "created",
+      to_status: "pending",
+      actor_id: access.id,
+      actor_role: "client",
+      message: `New ${insert.mode} request ${insert.number}`,
+      metadata: { number: insert.number, mode: insert.mode },
+    });
+  } catch { /* non-critical */ }
+
   // Notify tenant admins in-app
   try {
     const store = await getStore();
