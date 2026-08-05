@@ -913,6 +913,9 @@ export class MockStore implements Store {
   async getPortalAccessByEmailAnyTenant(email: string): Promise<PortalAccess | null> {
     return mock.portalAccess.find((p) => p.portal_email === email) || null;
   }
+  async listPortalAccessByEmail(email: string): Promise<PortalAccess[]> {
+    return mock.portalAccess.filter((p) => p.portal_email === email);
+  }
 
   // ---- document templates ----
   async listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]> {

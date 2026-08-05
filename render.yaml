@@ -21,10 +21,17 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
-      # ⚠️  REQUIRED: ADMIN_USERNAME and ADMIN_PASSWORD MUST be set manually
+      # ⚠️  REQUIRED: ADMIN_USERNAME, ADMIN_PASSWORD and ADMIN_EMAIL MUST be set manually
       #     before running POST /api/setup to create the first admin user.
       #     Do NOT deploy without setting these to secure custom values.
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      # ⚠️  CRITICAL: APP_BASE_URL must point to this service's public URL.
+      #     Email links (welcome, password reset, KYC notifications) will be
+      #     broken if this is missing or points to localhost.
+      - key: APP_BASE_URL
         sync: false

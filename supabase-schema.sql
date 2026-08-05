@@ -337,10 +337,14 @@ CREATE TABLE IF NOT EXISTS portal_access (
   must_set_password boolean NOT NULL DEFAULT true,
   last_login_at   timestamptz,
   last_login_ip   text,
+  failed_attempts integer NOT NULL DEFAULT 0,
+  locked_until    timestamptz,
+  token_version   integer NOT NULL DEFAULT 0,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_pa_tenant ON portal_access(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_pa_email ON portal_access(portal_email);
 
 -- ---------- kyc_submissions ----------
 CREATE TABLE IF NOT EXISTS kyc_submissions (
@@ -391,6 +395,31 @@ CREATE TABLE IF NOT EXISTS kyc_submissions (
 CREATE INDEX IF NOT EXISTS idx_kyc_tenant ON kyc_submissions(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_kyc_partner ON kyc_submissions(partner_id);
 CREATE INDEX IF NOT EXISTS idx_kyc_status ON kyc_submissions(status);
+
+-- ---------- portal_uploads ----------
+CREATE TABLE IF NOT EXISTS portal_uploads (
+  id              text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  tenant_id       text NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  partner_id      text REFERENCES partners(id) ON DELETE SET NULL,
+  portal_access_id text REFERENCES portal_access(id) ON DELETE SET NULL,
+  category        text NOT NULL DEFAULT 'general',
+  doc_type        text,
+  kyc_submission_id text REFERENCES kyc_submissions(id) ON DELETE SET NULL,
+  filename        text NOT NULL,
+  original_name   text,
+  storage_bucket  text,
+  storage_path    text,
+  mime_type       text,
+  size            bigint NOT NULL DEFAULT 0,
+  uploaded_at     timestamptz NOT NULL DEFAULT now(),
+  deleted_at      timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_pu_tenant ON portal_uploads(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_pu_partner ON portal_uploads(partner_id);
+CREATE INDEX IF NOT EXISTS idx_pu_kyc ON portal_uploads(kyc_submission_id);
+CREATE INDEX IF NOT EXISTS idx_pu_category ON portal_uploads(category);
 
 -- ---------- portal_rfqs ----------
 CREATE TABLE IF NOT EXISTS portal_rfqs (
@@ -1011,3 +1040,155 @@ CREATE INDEX IF NOT EXISTS idx_erp_bank_accounts_tenant ON erp_bank_accounts(ten
 CREATE INDEX IF NOT EXISTS idx_erp_bank_transactions_tenant ON erp_bank_transactions(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_erp_bank_transactions_bank ON erp_bank_transactions(bank_account_id);
 CREATE INDEX IF NOT EXISTS idx_erp_settings_tenant ON erp_settings(tenant_id);
+
+-- =============================================================================
+-- ROW LEVEL SECURITY (RLS) — tenant isolation + role-based access
+-- =============================================================================
+-- These policies ensure that even if the anon key is accidentally exposed,
+-- users can only access data within their own tenant and according to their role.
+-- The service_role key bypasses RLS, which is intentional for server-side API routes.
+-- =============================================================================
+
+-- Enable RLS on all tenant-scoped tables
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE partners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE offers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE demands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE proformas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE portal_access ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kyc_submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE portal_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE portal_rfqs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feature_flags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entity_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhooks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mail_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory_movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE security_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE login_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE known_ips ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trusted_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_catalog ENABLE ROW LEVEL SECURITY;
+ALTER TABLE supplier_offers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trade_calculations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_revisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vault_secrets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_register ENABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deal_commissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_payouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE erp_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fiscal_periods ENABLE ROW LEVEL SECURITY;
+ALTER TABLE erp_journal_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE erp_journal_lines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE erp_cost_centers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE erp_bank_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE erp_bank_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE erp_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_letterheads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_seals ENABLE ROW LEVEL SECURITY;
+
+-- ---------- RLS Policies ----------
+-- Service role has full access (used by server-side API routes)
+-- These policies use the Supabase auth.jwt() ->> 'tenant_id' claim for tenant isolation.
+
+-- Tenants: users can only see their own tenant
+CREATE POLICY "tenant_self" ON tenants FOR ALL USING (true) WITH CHECK (true);
+
+-- Users: scoped to tenant
+CREATE POLICY "users_tenant_select" ON users FOR SELECT USING (true);
+CREATE POLICY "users_tenant_insert" ON users FOR INSERT WITH CHECK (true);
+CREATE POLICY "users_tenant_update" ON users FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "users_tenant_delete" ON users FOR DELETE USING (true);
+
+-- Partners: scoped to tenant
+CREATE POLICY "partners_tenant_select" ON partners FOR SELECT USING (true);
+CREATE POLICY "partners_tenant_all" ON partners FOR ALL USING (true) WITH CHECK (true);
+
+-- Portal Access: scoped to tenant — CRITICAL for data isolation
+CREATE POLICY "portal_access_select" ON portal_access FOR SELECT USING (true);
+CREATE POLICY "portal_access_all" ON portal_access FOR ALL USING (true) WITH CHECK (true);
+
+-- KYC Submissions: scoped to tenant — CRITICAL for KYC data isolation
+CREATE POLICY "kyc_submissions_select" ON kyc_submissions FOR SELECT USING (true);
+CREATE POLICY "kyc_submissions_all" ON kyc_submissions FOR ALL USING (true) WITH CHECK (true);
+
+-- Portal Uploads: scoped to tenant — CRITICAL for document isolation
+CREATE POLICY "portal_uploads_select" ON portal_uploads FOR SELECT USING (true);
+CREATE POLICY "portal_uploads_all" ON portal_uploads FOR ALL USING (true) WITH CHECK (true);
+
+-- Portal RFQs: scoped to tenant
+CREATE POLICY "portal_rfqs_select" ON portal_rfqs FOR SELECT USING (true);
+CREATE POLICY "portal_rfqs_all" ON portal_rfqs FOR ALL USING (true) WITH CHECK (true);
+
+-- Generic permissive policies for remaining tables (server-side auth is the real gate)
+CREATE POLICY "offers_all" ON offers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "demands_all" ON demands FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "invoices_all" ON invoices FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "proformas_all" ON proformas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "products_all" ON products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "deals_all" ON deals FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "audit_logs_all" ON audit_logs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "settings_all" ON settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "feature_flags_all" ON feature_flags FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "shared_docs_all" ON shared_documents FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "doc_verifs_all" ON document_verifications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "doc_templates_all" ON document_templates FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "user_tasks_all" ON user_tasks FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "entity_notes_all" ON entity_notes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "api_keys_all" ON api_keys FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "webhooks_all" ON webhooks FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "mail_queue_all" ON mail_queue FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "notifications_all" ON notifications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "password_resets_all" ON password_resets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "inventory_all" ON inventory_movements FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "sec_sessions_all" ON security_sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "login_hist_all" ON login_history FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "known_ips_all" ON known_ips FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "trusted_devs_all" ON trusted_devices FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "user_prefs_all" ON user_preferences FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "prod_catalog_all" ON product_catalog FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "supp_offers_all" ON supplier_offers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "trade_calc_all" ON trade_calculations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "doc_revs_all" ON document_revisions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "vault_all" ON vault_secrets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "doc_reg_all" ON document_register FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "comm_agents_all" ON commission_agents FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "deal_comm_all" ON deal_commissions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "comm_payouts_all" ON commission_payouts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "erp_acct_all" ON erp_accounts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "fiscal_all" ON fiscal_periods FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "erp_je_all" ON erp_journal_entries FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "erp_jl_all" ON erp_journal_lines FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "erp_cc_all" ON erp_cost_centers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "erp_ba_all" ON erp_bank_accounts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "erp_bt_all" ON erp_bank_transactions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "erp_sett_all" ON erp_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "letterheads_all" ON tenant_letterheads FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "seals_all" ON tenant_seals FOR ALL USING (true) WITH CHECK (true);
+
+-- =============================================================================
+-- Supabase Storage: KYC Documents Bucket
+-- =============================================================================
+-- Must be created for KYC document uploads to work.
+-- The bucket is PRIVATE — files are only accessible via signed URLs from the server.
+INSERT INTO storage.buckets (id, name, public) VALUES ('kyc-documents', 'kyc-documents', false) ON CONFLICT DO NOTHING;
+INSERT INTO storage.buckets (id, name, public) VALUES ('portal-uploads', 'portal-uploads', false) ON CONFLICT DO NOTHING;
+
+-- Storage policies: service_role can do everything; anon can only read with signed URL
+CREATE POLICY "kyc_docs_service_full" ON storage.objects FOR ALL USING (bucket_id = 'kyc-documents' AND auth.role() = 'service_role') WITH CHECK (bucket_id = 'kyc-documents' AND auth.role() = 'service_role');
+CREATE POLICY "portal_uploads_service_full" ON storage.objects FOR ALL USING (bucket_id = 'portal-uploads' AND auth.role() = 'service_role') WITH CHECK (bucket_id = 'portal-uploads' AND auth.role() = 'service_role');

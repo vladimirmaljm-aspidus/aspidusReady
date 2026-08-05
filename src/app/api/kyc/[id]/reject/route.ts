@@ -40,7 +40,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
   await audit(auth.store, auth.user, req, "kyc.reject", "kyc_submission", id, { reason: body.reason });
 
+  // Update partner.kyc_status to "rejected" to keep partner record in sync
   const partner = await auth.store.getPartner(updated.partner_id);
+  if (partner && partner.kyc_status !== "rejected") {
+    await auth.store.upsertPartner({
+      id: partner.id,
+      kyc_status: "rejected",
+    } as any);
+  }
+
   await notifyKycRejected(auth.tenantId || updated.tenant_id, partner?.name || "Client", id, body.reason);
 
   // Send the rejection email

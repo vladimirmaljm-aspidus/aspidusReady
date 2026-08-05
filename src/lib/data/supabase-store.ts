@@ -963,6 +963,11 @@ export class SupabaseStore implements Store {
     if (error || !data) return null;
     return data as PortalAccess;
   }
+  async listPortalAccessByEmail(email: string): Promise<PortalAccess[]> {
+    const { data, error } = await this.sb().from("portal_access").select("*").eq("portal_email", email);
+    if (error) return [];
+    return (data as PortalAccess[]) || [];
+  }
 
   // ---- document templates ----
   async listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]> {

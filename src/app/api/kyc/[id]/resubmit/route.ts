@@ -42,9 +42,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     reviewed_at: new Date().toISOString(),
   } as any);
 
+  // Update partner.kyc_status to "pending" so the client is unblocked
+  // and can edit & re-submit their KYC data.
+  const partner = await auth.store.getPartner(updated.partner_id);
+  if (partner && partner.kyc_status !== "pending") {
+    await auth.store.upsertPartner({
+      id: partner.id,
+      kyc_status: "pending",
+    } as any);
+  }
+
   await audit(auth.store, auth.user, req, "kyc.resubmit", "kyc_submission", id, { note: body.note });
 
-  const partner = await auth.store.getPartner(updated.partner_id);
   const tenant = await auth.store.getTenant(updated.tenant_id);
   await onKycResubmit({
     store: auth.store,

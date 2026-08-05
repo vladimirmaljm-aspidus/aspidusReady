@@ -17,15 +17,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No KYC draft found. Save first." }, { status: 400 });
   }
 
+  // Merge body fields on top of existing draft so validation checks the
+  // combined data, not just what the client sent in this request.
+  const merged = { ...existing, ...body };
+
   // Validate required fields before submission
   const required = ["legal_name", "tax_id", "address_line", "city", "country", "contact_name", "contact_email"];
-  const missing = required.filter((f) => !body[f]);
+  const missing = required.filter((f) => !merged[f]);
   if (missing.length > 0) {
     return NextResponse.json({ error: `Missing required fields: ${missing.join(", ")}` }, { status: 400 });
   }
 
   const updated = await store.upsertKycSubmission({
-    ...body, id: existing.id, status: "submitted", submitted_at: new Date().toISOString(),
+    ...merged, id: existing.id, status: "submitted", submitted_at: new Date().toISOString(),
   });
 
   // Notify tenant admins

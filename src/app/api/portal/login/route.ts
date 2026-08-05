@@ -22,6 +22,28 @@ export async function POST(req: NextRequest) {
     const store = await getStore();
     const ip = getRequestIp(req);
 
+    // If no tenant_id is provided, look up ALL matching accounts for this email.
+    // If more than one exists (same email across tenants), the client MUST
+    // specify which tenant they are logging into — otherwise we risk
+    // authenticating against the wrong tenant (data leakage).
+    if (!tenant_id) {
+      const allByEmail = await store.listPortalAccessByEmail(email);
+      if (allByEmail.length > 1) {
+        // Return the list of tenant names so the UI can show a picker.
+        const tenants = await Promise.all(
+          allByEmail.map(async (pa) => {
+            const t = await store.getTenant(pa.tenant_id);
+            return { tenant_id: pa.tenant_id, tenant_name: t?.name || "Unknown" };
+          })
+        );
+        return NextResponse.json({
+          error: "This email is registered with multiple organizations. Please select which one to sign into.",
+          multiple_tenants: true,
+          tenants,
+        }, { status: 300 });
+      }
+    }
+
     // Look up the account first (independent of the password check) so a
     // lockout/failure counter can be tracked even on a wrong password.
     const existing = tenant_id

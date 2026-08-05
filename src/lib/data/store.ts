@@ -191,6 +191,8 @@ export interface Store {
   verifyPortalCredentials(tenantId: string, email: string, password: string): Promise<PortalAccess | null>;
   verifyPortalCredentialsByEmail(email: string, password: string): Promise<PortalAccess | null>;
   getPortalAccessByEmailAnyTenant(email: string): Promise<PortalAccess | null>;
+  /** Find all portal access rows matching an email across all tenants (for multi-tenant discrimination). */
+  listPortalAccessByEmail(email: string): Promise<PortalAccess[]>;
 
   // ---- document templates ----
   listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]>;
