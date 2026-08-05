@@ -31,3 +31,30 @@ export async function deleteFile(bucket: string, path: string): Promise<void> {
   const { error } = await sb.storage.from(bucket).remove([path]);
   if (error) console.warn(`[upload] Failed to delete ${path}:`, error.message);
 }
+
+/** Fresh short-lived signed URL for admin download. */
+export async function getSignedDownloadUrl(bucket: string, path: string, ttlSeconds = 300): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabase();
+  const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, ttlSeconds, { download: true });
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
+/** Upload any portal file. Path pattern: <tenant>/<partner>/<category>/<timestamp>-<rand>.<ext> */
+export async function uploadPortalFile(opts: {
+  tenantId: string;
+  partnerId: string;
+  category: string;
+  fileName: string;
+  buffer: Buffer;
+  contentType: string;
+  size: number;
+  bucket?: string;
+}): Promise<UploadResult> {
+  const bucket = opts.bucket || "portal-uploads";
+  const ext = opts.fileName.split(".").pop() || "bin";
+  const safeCat = opts.category.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const path = `${opts.tenantId}/${opts.partnerId}/${safeCat}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  return uploadFile(bucket, path, opts.buffer, opts.contentType, opts.size);
+}

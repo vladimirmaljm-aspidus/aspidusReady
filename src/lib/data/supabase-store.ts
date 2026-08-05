@@ -1078,12 +1078,39 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
   async addKycDocument(doc: Omit<KycDocument, "id" | "uploaded_at">): Promise<KycDocument> {
-    const { data, error } = await this.sb().from("kyc_documents").insert({ ...doc }).select().single();
+    // Legacy path — kyc_documents table doesn't exist. We now record everything
+    // in portal_uploads with category='kyc' and echo back a KycDocument-shaped
+    // response so old callers keep working.
+    const submission = await this.getKycSubmission(doc.submission_id);
+    if (!submission) throw new Error("KYC submission not found");
+    const { data, error } = await this.sb().from("portal_uploads").insert({
+      tenant_id: submission.tenant_id,
+      partner_id: submission.partner_id,
+      portal_access_id: submission.portal_access_id,
+      category: "kyc",
+      doc_type: doc.type,
+      kyc_submission_id: doc.submission_id,
+      filename: doc.filename,
+      storage_bucket: "kyc-documents",
+      storage_path: doc.storage_path,
+      mime_type: doc.mime_type,
+      size_bytes: doc.size,
+    }).select().single();
     if (error) throw error;
-    return data as KycDocument;
+    return {
+      id: (data as any).id,
+      submission_id: doc.submission_id,
+      type: doc.type,
+      filename: doc.filename,
+      storage_path: doc.storage_path,
+      mime_type: doc.mime_type,
+      size: doc.size,
+      uploaded_at: (data as any).uploaded_at,
+    } as KycDocument;
   }
   async removeKycDocument(id: string): Promise<void> {
-    const { error } = await this.sb().from("kyc_documents").delete().eq("id", id);
+    // Legacy: soft-delete the equivalent portal_uploads row.
+    const { error } = await this.sb().from("portal_uploads").update({ deleted_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
   }
   async approveKycAndTransfer(submissionId: string, reviewedBy: string): Promise<{ submission: KycSubmission; partner: Partner }> {

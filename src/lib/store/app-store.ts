@@ -53,6 +53,7 @@ export type ViewKey =
   | "quick-notes"
   | "workspace"
   | "plans"
+  | "portal-uploads"
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"

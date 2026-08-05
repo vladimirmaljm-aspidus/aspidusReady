@@ -98,6 +98,7 @@ const SECTIONS: NavSection[] = [
       { key: "documents", i18nKey: "documents", i18nSection: "administration", icon: FolderOpen, permission: "documents.read" },
       { key: "kyc-review", i18nKey: "kyc-review", i18nSection: "administration", icon: ShieldCheck, permission: "kyc.read", featureFlag: "module_kyc" },
       { key: "portal-rfqs", i18nKey: "portal-rfqs", i18nSection: "administration", icon: Inbox, permission: "portal.rfq_read", featureFlag: "module_portal" },
+      { key: "portal-uploads", i18nKey: "portal-uploads", i18nSection: "administration", icon: FolderOpen, permission: "portal.read", featureFlag: "module_portal" },
       { key: "document-verification", i18nKey: "document-verification", i18nSection: "administration", icon: ShieldCheck, permission: "document-verify.read", featureFlag: "module_document_verification" },
       { key: "document-templates", i18nKey: "document-templates", i18nSection: "administration", icon: FileText, permission: "document-templates.read", featureFlag: "module_document_templates" },
       { key: "security", i18nKey: "security", i18nSection: "administration", icon: ShieldCheck, permission: "security.read", featureFlag: "module_security" },
