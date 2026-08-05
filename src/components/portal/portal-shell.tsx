@@ -212,6 +212,16 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
     };
   }, [portalAccess?.id]);
 
+  // If KYC is required but not yet approved, force the KYC view. Other tabs
+  // are hidden in the sidebar below (see kycBlocking guard).
+  // MUST live above every early return — Rules of Hooks. The body guards
+  // itself so it's cheap when `portalAccess` isn't loaded yet.
+  useEffect(() => {
+    if (kycBlocking && view !== "portal-kyc") {
+      setView("portal-kyc");
+    }
+  }, [kycBlocking, view, setView]);
+
   async function signOut() {
     try {
       await fetch("/api/portal/me", { method: "POST" });
@@ -286,14 +296,6 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   const tier = portalAccess.tier;
   const TierIcon = TIER_META[tier].icon;
   const partnerName = partner?.name || "Client";
-
-  // If KYC is required but not yet approved, force the KYC view. Other tabs
-  // are hidden in the sidebar below (see kycBlocking guard).
-  useEffect(() => {
-    if (kycBlocking && view !== "portal-kyc") {
-      setView("portal-kyc");
-    }
-  }, [kycBlocking, view, setView]);
 
   const activeTitle =
     view === "portal-profile" ? "My Profile" : VIEW_TITLES[view] || "Client Portal";
