@@ -168,6 +168,33 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   useEffect(() => {
     if (initialView) setView(initialView);
   }, [initialView]);
+
+  // Hydrate portalAccess from the server session on first mount. Without
+  // this, a page refresh on /portal/dashboard (or a deep-link into the
+  // portal) leaves the store empty and PortalShell returns null → user
+  // sees a blank white page. If /api/portal/me returns 401 we redirect
+  // back to the login screen instead of hanging.
+  const [hydrating, setHydrating] = useState<boolean>(!portalAccess);
+  useEffect(() => {
+    if (portalAccess) { setHydrating(false); return; }
+    let mounted = true;
+    fetch("/api/portal/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted) return;
+        if (data?.access) {
+          setPortalAccess(data.access);
+          setAppMode("portal");
+        } else if (typeof window !== "undefined") {
+          window.location.href = "/portal/login";
+        }
+      })
+      .catch(() => {
+        if (mounted && typeof window !== "undefined") window.location.href = "/portal/login";
+      })
+      .finally(() => { if (mounted) setHydrating(false); });
+    return () => { mounted = false; };
+  }, [portalAccess, setPortalAccess, setAppMode]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [partner, setPartner] = useState<Partner | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -233,7 +260,16 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
     toast.success("Signed out of the client portal.");
   }
 
-  if (!portalAccess) return null;
+  if (!portalAccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-mesh-portal">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">{hydrating ? "Loading your portal…" : "Redirecting to sign in…"}</p>
+        </div>
+      </div>
+    );
+  }
 
   // Geolocation gate — required for all non-Premium tiers. Block rendering
   // until the browser has granted (or denied) location permission. Premium

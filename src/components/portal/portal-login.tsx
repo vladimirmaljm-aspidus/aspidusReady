@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ export function PortalLogin() {
   const setPortalAccess = useAppStore((s) => s.setPortalAccess);
   const setAppMode = useAppStore((s) => s.setAppMode);
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -148,6 +149,11 @@ export function PortalLogin() {
       setPortalAccess(data.access);
       setAppMode("portal");
       toast.success("Welcome to your client portal.");
+      // Portal login lives at /portal/login — that route always renders
+      // <PortalLogin/> regardless of store state, so we have to navigate
+      // ourselves. Without this the user stays on the login page after
+      // a successful sign-in ('welcome toast but nothing happens').
+      router.push("/portal/dashboard");
     } catch {
       toast.error("Network error. Please try again.");
     } finally {
@@ -187,20 +193,21 @@ export function PortalLogin() {
       }
       // Success — the server auto-signed us in (data.auto_signed_in). Just
       // hydrate the client state and drop the user into their portal.
+      setSetupOpen(false);
+      setAccessId("");
+      setNewPassword("");
       if (data.access) {
         setPortalAccess(data.access);
         setAppMode("portal");
         toast.success("Password set. Welcome!");
+        router.push("/portal/dashboard");
       } else {
         // Rare fallback (server didn't return access): treat as normal login.
         toast.success("Password set. Please sign in.");
         setEmail(searchParams.get("email") || "");
+        // Remove the ?access_id= from the URL so a refresh doesn't re-open the dialog.
+        window.history.replaceState({}, "", "/portal/login");
       }
-      setSetupOpen(false);
-      setAccessId("");
-      setNewPassword("");
-      // Remove the ?access_id= from the URL so a refresh doesn't re-open the dialog.
-      window.history.replaceState({}, "", "/portal/login");
     } catch (err: any) {
       setSetupError("Network error — could not reach the server. Please check your connection and try again.");
     } finally {
