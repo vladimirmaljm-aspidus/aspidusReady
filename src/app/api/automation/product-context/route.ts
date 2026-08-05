@@ -19,9 +19,7 @@ export async function GET(req: NextRequest) {
 
 
   const tenantId = resolveTenantId(auth, req);
-  if (!tenantId) {
-    return NextResponse.json({ error: "Tenant ID is required." }, { status: 400 });
-  }
+  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
 
   const url = new URL(req.url);
   const productId = url.searchParams.get("product_id");

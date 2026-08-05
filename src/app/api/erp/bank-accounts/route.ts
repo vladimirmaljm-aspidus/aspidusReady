@@ -16,9 +16,7 @@ export async function GET(req: NextRequest) {
 
 
   const tenantId = resolveTenantId(auth, req);
-  if (!tenantId) {
-    return NextResponse.json({ error: "Tenant ID required." }, { status: 400 });
-  }
+  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
 
   try {
     const accounts = await auth.store.listErpBankAccounts(tenantId);

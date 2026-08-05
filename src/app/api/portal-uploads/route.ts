@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; }
 
   const tid = resolveTenantId(auth, req);
-  if (!tid) return NextResponse.json({ error: "Tenant context required." }, { status: 400 });
+  if (!tid) return NextResponse.json({ items: [], total: 0, partners: [] });
 
   const url = new URL(req.url);
   if (url.searchParams.get("summary")) {

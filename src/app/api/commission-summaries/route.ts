@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const tenantId = resolveTenantId(auth, req);
-    if (!tenantId) return NextResponse.json({ error: "Tenant ID is required." }, { status: 400 });
+    if (!tenantId) return NextResponse.json({ items: [], total: 0 });
 
     const summaries = await auth.store.getCommissionSummaries(tenantId);
     return NextResponse.json(summaries);

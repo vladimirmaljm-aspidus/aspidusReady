@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   const tenantId = resolveTenantId(auth, req);
-  if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
+  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
   const items = await auth.store.listPortalAccess(tenantId);
   return NextResponse.json({ items: items.map((p) => ({ ...p, password_hash: undefined })) });
 }

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const _f = await requireFeature(auth.tenantId, "module_document_verification", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
-  if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
+  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
 
   const url = new URL(req.url);
   const docType = url.searchParams.get("doc_type");

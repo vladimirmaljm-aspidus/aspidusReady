@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const tenants = await auth.store.listTenants();
     tenantId = tenants[0]?.id || null;
   }
-  if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
+  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
   const url = new URL(req.url);
   const search = url.searchParams.get("search") || undefined;
   const status = url.searchParams.get("status") || undefined;

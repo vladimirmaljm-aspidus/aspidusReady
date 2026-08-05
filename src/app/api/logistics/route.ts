@@ -45,9 +45,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const tenantId = resolveTenantId(auth, req);
-    if (!tenantId) {
-      return NextResponse.json({ error: "No tenant." }, { status: 400 });
-    }
+    if (!tenantId) return NextResponse.json({ items: [], total: 0 });
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");

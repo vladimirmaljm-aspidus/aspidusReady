@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const _f = await requireFeature(auth.tenantId, "module_trade", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
-  if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
+  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
   const url = new URL(req.url);
   const search = url.searchParams.get("search") || undefined;
   const category = url.searchParams.get("category") || undefined;
