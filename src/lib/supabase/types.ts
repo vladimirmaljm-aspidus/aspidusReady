@@ -597,7 +597,7 @@ export interface Tenant {
   logo_url: string | null;
   primary_color: string | null;
   // Subscription
-  plan: "trial" | "starter" | "business" | "enterprise";
+  plan: "trial" | "starter" | "business" | "enterprise" | "custom";
   status: "active" | "suspended" | "cancelled";
   max_users: number;
   // Meta

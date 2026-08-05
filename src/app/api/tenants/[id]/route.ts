@@ -38,8 +38,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const updated = await auth.store.upsertTenant({ ...body, id });
 
-    // If plan changed, update feature flags to match new plan
-    if (body.plan && body.plan !== oldPlan) {
+    // If plan changed to a named preset (Starter/Business/Enterprise/Trial),
+    // sync feature flags to the plan template. If plan === "custom", DON'T
+    // touch feature flags — the super_admin manages them by hand from the
+    // Feature Flags view for that tenant.
+    if (body.plan && body.plan !== oldPlan && body.plan !== "custom") {
       try {
         let plan: any = null;
         if (isSupabaseConfigured()) {

@@ -59,7 +59,7 @@ type Plan = Tenant["plan"];
 type TenantStatus = Tenant["status"];
 
 const PLAN_LABELS: Record<Plan, string> = {
-  trial: "Trial", starter: "Starter", business: "Business", enterprise: "Enterprise",
+  trial: "Trial", starter: "Starter", business: "Business", enterprise: "Enterprise", custom: "Custom",
 };
 
 const PLAN_BADGE: Record<Plan, string> = {
@@ -67,6 +67,7 @@ const PLAN_BADGE: Record<Plan, string> = {
   starter: "bg-chart-4/15 text-chart-4 border-chart-4/30",
   business: "bg-chart-1/15 text-chart-1 border-chart-1/30",
   enterprise: "bg-primary/10 text-primary border-primary/30",
+  custom: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30",
 };
 
 const STATUS_LABELS: Record<TenantStatus, string> = {
@@ -138,7 +139,7 @@ export function TenantsView({ embedded = false }: { embedded?: boolean } = {}) {
   const items = data?.items || [];
   const totalTenants = items.length;
   const activeCount = items.filter((t) => t.status === "active").length;
-  const planBreakdown: Record<Plan, number> = { trial: 0, starter: 0, business: 0, enterprise: 0 };
+  const planBreakdown: Record<Plan, number> = { trial: 0, starter: 0, business: 0, enterprise: 0, custom: 0 };
   items.forEach((t) => { planBreakdown[t.plan]++; });
 
   return (
@@ -575,6 +576,7 @@ function TenantFormDialog({
                         <SelectItem value="starter">Starter</SelectItem>
                         <SelectItem value="business">Business</SelectItem>
                         <SelectItem value="enterprise">Enterprise</SelectItem>
+                        <SelectItem value="custom">Custom (manage flags manually)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
