@@ -34,8 +34,12 @@ export async function GET(req: NextRequest) {
     const daysRemaining = subEnd ? Math.ceil((subEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : null;
     const trialDaysRemaining = trialEnd ? Math.ceil((trialEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : null;
     const isExpired = subEnd ? subEnd < now : false;
-    const isTrialExpired = trialEnd ? trialEnd < now : false;
-    const isTrial = tenant.status === "trial" || (trialEnd !== null && trialEnd > now);
+    const isTrialExpired = tenant.status === "trial" && trialEnd ? trialEnd < now : false;
+    // Trial ONLY when status is explicitly "trial". Do NOT derive from
+    // trial_ends_at alone — an active enterprise tenant may still have a
+    // leftover trial_ends_at from before their upgrade, and we don't want
+    // to show them a trial countdown by accident.
+    const isTrial = tenant.status === "trial";
 
     let warningLevel = "none";
     if (isExpired || isTrialExpired) warningLevel = "expired";
