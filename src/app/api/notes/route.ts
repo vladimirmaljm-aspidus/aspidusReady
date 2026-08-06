@@ -36,7 +36,10 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  body.tenant_id = auth.tenantId!;
+  if (!auth.tenantId) {
+    return NextResponse.json({ error: "tenant_id is required." }, { status: 400 });
+  }
+  body.tenant_id = auth.tenantId;
   if (!body.created_by) body.created_by = auth.user.id;
   const created = await auth.store.upsertNote(body);
   await audit(auth.store, auth.user, req, body.id ? "note.update" : "note.create", "entity_note", created.id);

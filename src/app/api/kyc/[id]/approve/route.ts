@@ -3,6 +3,8 @@ import { requireAuth, audit } from "@/lib/api/helpers";
 import { notifyKycApproved } from "@/lib/notif/helper";
 import { onKycApproved } from "@/lib/kyc/automation";
 
+export const runtime = "nodejs";
+
 /**
  * POST /api/kyc/[id]/approve
  *

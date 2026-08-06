@@ -52,6 +52,7 @@ import { Deal, DealStage, Partner, Offer, CommissionAgent } from "@/lib/supabase
 import { useAppStore } from "@/lib/store/app-store";
 import { CURRENCIES, DEAL_STAGES, COUNTRIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
 
@@ -148,6 +149,7 @@ export function DealsView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [partnerId, setPartnerId] = useState<string>("all");
   const [layout, setLayout] = useState<"pipeline" | "table">("pipeline");
@@ -159,10 +161,10 @@ export function DealsView() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["deals", tenantKey, search, stageFilter, partnerId],
+    queryKey: ["deals", tenantKey, debouncedSearch, stageFilter, partnerId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (stageFilter !== "all") params.set("stage", stageFilter);
       if (partnerId !== "all") params.set("partner_id", partnerId);
       const r = await fetch(api(`/api/deals?${params}`));

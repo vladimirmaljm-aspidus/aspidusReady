@@ -22,6 +22,7 @@ import { useAppStore, ViewKey, isAdmin, isSuperAdmin } from "@/lib/store/app-sto
 import { cn } from "@/lib/utils";
 import { fmtMoney } from "@/lib/utils/format";
 import { toast } from "sonner";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 /* -------------------------------------------------------------------------- */
 /*  Open-state store — so the topbar button can open the palette             */
@@ -189,15 +190,10 @@ function useIsMac(): boolean {
 /* -------------------------------------------------------------------------- */
 /*  Hook: debounce                                                            */
 /* -------------------------------------------------------------------------- */
-
-function useDebounced<T>(value: T, delay = 300): T {
-  const [debounced, setDebounced] = React.useState(value);
-  React.useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
+// `useDebounced` has been extracted to `@/lib/hooks/use-debounced` so all
+// search-bearing views can share it. Kept here as a re-export for backwards
+// compatibility in case other modules imported it from this file.
+export { useDebounced };
 
 /* -------------------------------------------------------------------------- */
 /*  Component                                                                 */

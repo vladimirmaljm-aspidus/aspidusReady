@@ -33,6 +33,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { SharedDocument, Partner } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 type DocCategory = SharedDocument["category"];
 
@@ -65,6 +66,7 @@ export function DocumentsView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
@@ -72,10 +74,10 @@ export function DocumentsView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["documents", tenantKey, search, partnerFilter],
+    queryKey: ["documents", tenantKey, debouncedSearch, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
       const r = await fetch(api(`/api/documents?${params}`));
       if (!r.ok) throw new Error("Failed to load documents");

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
 import { notifyKycSubmitted } from "@/lib/notif/helper";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,19 @@ export async function POST(req: NextRequest) {
   const updated = await store.upsertKycSubmission({
     ...merged, id: existing.id, status: "submitted", submitted_at: new Date().toISOString(),
   });
+
+  // Audit the KYC submission (FLOW-5)
+  try {
+    await audit(
+      store,
+      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      req,
+      "portal.kyc_submitted",
+      "kyc_submission",
+      updated.id,
+      { submission_type: (updated as any)?.entity_type || (body as any)?.submission_type || null },
+    );
+  } catch (e) { console.error("[audit]", e); }
 
   // Notify tenant admins
   const partner = await store.getPartner(access.partner_id);

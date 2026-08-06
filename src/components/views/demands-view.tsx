@@ -43,6 +43,7 @@ import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Demand, DemandItem, DemandStatus, Partner, Product, PortalRfq } from "@/lib/supabase/types";
 import { CURRENCIES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const PAGE_SIZE = 20;
 
@@ -107,6 +108,7 @@ export function DemandsView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editing, setEditing] = useState<Demand | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -117,10 +119,10 @@ export function DemandsView() {
   const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["demands", tenantKey, search, statusFilter, page],
+    queryKey: ["demands", tenantKey, debouncedSearch, statusFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(page * PAGE_SIZE));

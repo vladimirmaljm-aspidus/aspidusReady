@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireSuperAdmin, audit } from "@/lib/api/helpers";
 import { createSession, setSessionCookie, getSessionFromCookie } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export const runtime = "nodejs";
  * Strips the `impersonating` claim from the cookie, restoring the super_admin.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireSuperAdmin();
   if (auth instanceof NextResponse) return auth;
 
   const session = await getSessionFromCookie();

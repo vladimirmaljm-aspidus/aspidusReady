@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
     if (!agent) {
       return NextResponse.json({ error: "Commission agent not found." }, { status: 404 });
     }
+    if (!auth.isSuperAdmin && agent.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Commission agent not found." }, { status: 404 });
+    }
 
     const commission = await auth.store.calculateCommission(
       agent.id,

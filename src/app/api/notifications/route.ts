@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -38,6 +38,9 @@ export async function PUT(req: NextRequest) {
 
   if (markAllRead) {
     await auth.store.markAllNotificationsRead(tenantId, auth.user.id);
+    try {
+      await audit(auth.store, auth.user, req, "notification.mark_all_read", "notification", undefined, {});
+    } catch (e) { console.error("[audit]", e); }
     return NextResponse.json({ ok: true });
   }
 

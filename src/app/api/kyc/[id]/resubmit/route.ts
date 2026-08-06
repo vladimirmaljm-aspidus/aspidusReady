@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { onKycResubmit } from "@/lib/kyc/automation";
 
+export const runtime = "nodejs";
+
 /**
  * POST /api/kyc/[id]/resubmit
  *

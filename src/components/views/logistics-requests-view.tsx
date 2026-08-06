@@ -16,6 +16,7 @@ import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAl
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useCan } from "@/lib/store/app-store";
 import type { Partner } from "@/lib/supabase/types";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
@@ -119,6 +120,7 @@ export function LogisticsRequestsView() {
   const qc = useQueryClient();
 
   const [search, setSearch] = React.useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [toDelete, setToDelete] = React.useState<LogisticsRequest | null>(null);
@@ -133,11 +135,11 @@ export function LogisticsRequestsView() {
   const partnerMap = React.useMemo(() => new Map((partnersQ.data?.items || []).map((p) => [p.id, p])), [partnersQ.data]);
 
   const listQ = useQuery({
-    queryKey: ["logistics-requests", tenantKey, statusFilter, search],
+    queryKey: ["logistics-requests", tenantKey, statusFilter, debouncedSearch],
     queryFn: async () => {
       const q = new URLSearchParams();
       if (statusFilter !== "all") q.set("status", statusFilter);
-      if (search) q.set("search", search);
+      if (debouncedSearch) q.set("search", debouncedSearch);
       q.set("limit", "300");
       const r = await fetch(api(`/api/logistics-requests?${q.toString()}`));
       if (!r.ok) throw new Error("Failed to load logistics requests");

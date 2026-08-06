@@ -11,7 +11,6 @@ import {
   ShoppingCart,
   ShieldCheck,
   User,
-  Building2,
   LogOut,
   Crown,
   Shield,
@@ -107,7 +106,10 @@ const NAV_ITEMS: NavItem[] = [
   { key: "portal-logistics", label: "Logistics", icon: Truck },
   { key: "portal-kyc", label: "KYC Verification", icon: ShieldCheck },
   { key: "portal-profile", label: "My Profile", icon: User, gate: "can_view_profile" },
-  { key: "portal-profile", label: "Company Info", icon: Building2, gate: "can_view_company_info" },
+  // NOTE: "Company Info" removed — no `portal-company` view exists yet, and the
+  // duplicate `key: "portal-profile"` opened the same view as "My Profile" (P1-5).
+  // Re-add as `{ key: "portal-company", label: "Company Info", ... }` once a
+  // dedicated company-info view (or a tab inside PortalProfile) is implemented.
 ];
 
 const TIER_META: Record<

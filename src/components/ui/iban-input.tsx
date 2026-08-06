@@ -58,6 +58,14 @@ export function IbanInput({
   const [country, setCountry] = React.useState("");
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Keep the latest onBankInfo callback in a ref so the validation effect's
+  // timeout closure always calls the freshest handler. The effect itself only
+  // re-runs on `value` changes, but parents typically pass an inline arrow
+  // (new identity every render) — without the ref we'd capture the first
+  // closure and never see updates (stale-closure bug, P1-3).
+  const onBankInfoRef = React.useRef(onBankInfo);
+  onBankInfoRef.current = onBankInfo;
+
   // Validate IBAN on change (debounced)
   React.useEffect(() => {
     const clean = value.replace(/\s/g, "");
@@ -84,8 +92,9 @@ export function IbanInput({
         setSwift(data.swift || "");
         setSepa(data.sepa || false);
         setCountry(data.country || "");
-        if (onBankInfo) {
-          onBankInfo({
+        const cb = onBankInfoRef.current;
+        if (cb) {
+          cb({
             valid: data.valid,
             bankName: data.bankName || "",
             swift: data.swift || "",

@@ -39,7 +39,8 @@ export async function GET(req: NextRequest) {
       language: "en",
     });
     const res = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`
+      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`,
+      { signal: AbortSignal.timeout(8_000) }
     );
     const data = await res.json();
 

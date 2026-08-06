@@ -3,6 +3,7 @@ import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { listThread, insertMessage, markThreadRead, sanitizeMessageBody } from "@/lib/portal/messages";
 import { sendEmail, newMessageEmail } from "@/lib/email/service";
 import { getStore } from "@/lib/data/store";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,24 @@ export async function POST(req: NextRequest) {
       attachment_name: raw?.attachment_name || null,
       attachment_type: raw?.attachment_type || null,
     });
+
+    // Audit the sent message
+    try {
+      const auditStore = await getStore();
+      await audit(
+        auditStore,
+        { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+        req,
+        "portal.message_sent",
+        "portal_message",
+        (msg as any)?.id,
+        {
+          body_preview: body.slice(0, 200),
+          has_attachment: !!(raw?.attachment_url),
+          attachment_name: raw?.attachment_name || null,
+        },
+      );
+    } catch (e) { console.error("[audit]", e); }
 
     // Notify admins in-app + optionally email tenant contact.
     try {

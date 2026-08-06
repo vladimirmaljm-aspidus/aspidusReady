@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const months = Number(body.months || 12);
     const end = new Date();
     end.setMonth(end.getMonth() + months);
-    await sb.from("tenants").update({
+    const { error: tenantErr } = await sb.from("tenants").update({
       plan: (current as any).requested_plan,
       status: "active",
       subscription_start: nowIso,
@@ -54,6 +54,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       trial_ends_at: null,
       updated_at: nowIso,
     }).eq("id", (current as any).tenant_id);
+    if (tenantErr) {
+      return NextResponse.json({ error: "Failed to update tenant plan: " + tenantErr.message }, { status: 500 });
+    }
 
     // Bust the in-memory feature-flag cache so the tenant admin sees the
     // new modules right away without logging out.

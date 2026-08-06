@@ -38,6 +38,7 @@ import {
   DocumentRegisterEntry, DocumentRevision, DocumentType, Partner,
 } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 type DocStatus = "current" | "superseded" | "archived";
 
@@ -112,6 +113,7 @@ export function DocumentRegisterView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
@@ -120,10 +122,10 @@ export function DocumentRegisterView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["document-register", tenantKey, search, typeFilter, statusFilter],
+    queryKey: ["document-register", tenantKey, debouncedSearch, typeFilter, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (statusFilter !== "all") params.set("status", statusFilter);
       const r = await fetch(api(`/api/document-register?${params}`));

@@ -43,13 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const partner = offer.partner_id ? await auth.store.getPartner(offer.partner_id) : null;
 
     // Generate the PDF
-    let tenantId = resolveTenantId(auth, req);
-    if (!tenantId && auth.isSuperAdmin) {
-      const tenants = await auth.store.listTenants();
-      tenantId = tenants[0]?.id || null;
-    }
+    const tenantId = resolveTenantId(auth, req);
     if (!tenantId) {
-      return NextResponse.json({ error: "No tenant." }, { status: 400 });
+      return NextResponse.json({ error: "tenant_id query parameter is required for super-admin actions." }, { status: 400 });
     }
 
     const result = await generatePdf({ docType: "offer", docId: id, tenantId });

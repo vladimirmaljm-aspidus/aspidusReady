@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -39,5 +40,19 @@ export async function PUT(req: NextRequest) {
     phone: body.phone,
   };
   const updated = await store.upsertPartner(allowed);
+
+  // Audit the profile update
+  try {
+    await audit(
+      store,
+      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      req,
+      "portal.profile_update",
+      "portal_access",
+      access.id,
+      { fields: Object.keys(body || {}) },
+    );
+  } catch (e) { console.error("[audit]", e); }
+
   return NextResponse.json(updated);
 }

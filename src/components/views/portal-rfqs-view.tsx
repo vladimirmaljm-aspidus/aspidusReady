@@ -42,6 +42,7 @@ import {
   COUNTRIES, INCOTERMS, PRODUCT_CATEGORIES, UNITS_OF_MEASURE, getCountry, getIncoterm,
 } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 // ---------- static lookups ----------
 
@@ -96,16 +97,17 @@ export function PortalRfqsView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [detailId, setDetailId] = useState<string | null>(null);
 
   // RFQ list
   const { data, isLoading } = useQuery({
-    queryKey: ["portal-rfqs", tenantKey, search, statusFilter, partnerFilter],
+    queryKey: ["portal-rfqs", tenantKey, debouncedSearch, statusFilter, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
       const r = await fetch(api(`/api/portal-rfqs?${params}`));

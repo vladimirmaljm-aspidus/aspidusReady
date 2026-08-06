@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { uploadPortalFile } from "@/lib/upload/service";
 import { recordPortalUpload, PortalUploadCategory } from "@/lib/portal/uploads";
+import { getStore } from "@/lib/data/store";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -70,6 +72,21 @@ export async function POST(req: NextRequest) {
       uploaded_by_email: access.portal_email,
       description,
     });
+
+    // Audit the upload
+    try {
+      const auditStore = await getStore();
+      await audit(
+        auditStore,
+        { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+        req,
+        "portal.document_uploaded",
+        "portal_upload",
+        (row as any)?.id,
+        { filename: file.name, content_type: file.type, size: file.size, category, doc_type: docType },
+      );
+    } catch (e) { console.error("[audit]", e); }
+
     return NextResponse.json(row);
   } catch (e: any) {
     console.error("[portal.upload]", e);

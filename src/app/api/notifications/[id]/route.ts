@@ -67,5 +67,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   await auth.store.deleteNotification(id);
+  try {
+    await audit(auth.store, auth.user, req, "notification.delete", "notification", id, {});
+  } catch (e) { console.error("[audit]", e); }
   return NextResponse.json({ ok: true });
 }

@@ -21,13 +21,10 @@ export async function GET(req: NextRequest) {
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
-  let tenantId = resolveTenantId(auth, req);
-  // Super-admin without tenant_id param: fall back to first tenant (demo)
-  if (!tenantId && auth.isSuperAdmin) {
-    const tenants = await auth.store.listTenants();
-    tenantId = tenants[0]?.id || null;
+  const tenantId = resolveTenantId(auth, req);
+  if (!tenantId) {
+    return NextResponse.json({ error: "tenant_id query parameter is required for super-admin actions." }, { status: 400 });
   }
-  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
   const items = await auth.store.listLetterheads(tenantId);
   return NextResponse.json({ items });
 }
@@ -50,12 +47,10 @@ export async function POST(req: NextRequest) {
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
-  let tenantId = resolveTenantId(auth, req);
-  if (!tenantId && auth.isSuperAdmin) {
-    const tenants = await auth.store.listTenants();
-    tenantId = tenants[0]?.id || null;
+  const tenantId = resolveTenantId(auth, req);
+  if (!tenantId) {
+    return NextResponse.json({ error: "tenant_id query parameter is required for super-admin actions." }, { status: 400 });
   }
-  if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
   let body;
   try {
     body = await req.json();

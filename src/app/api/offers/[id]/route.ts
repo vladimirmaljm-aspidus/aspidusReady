@@ -42,8 +42,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json();
     // Preserve the entity's tenant_id
     body.tenant_id = existing.tenant_id;
-    // recompute totals from items if not provided
-    if (Array.isArray(body.items) && body.items.length > 0 && body.total === undefined) {
+    // Always recompute totals from items when items are provided — never trust
+    // client-supplied totals (FLOW-7: previously skipped when body.total was
+    // present, allowing tampered totals to disagree with line items).
+    if (Array.isArray(body.items) && body.items.length > 0) {
       let subtotal = 0, discountTotal = 0, taxTotal = 0;
       for (const it of body.items) {
         const line = it.quantity * it.unit_price;

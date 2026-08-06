@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
 import { uploadKycDocument } from "@/lib/upload/service";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -58,6 +59,19 @@ export async function POST(req: NextRequest) {
     mime_type: file.type,
     size: file.size,
   });
+
+  // Audit the document upload
+  try {
+    await audit(
+      store,
+      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      req,
+      "portal.kyc_document_uploaded",
+      "kyc_document",
+      (doc as any)?.id,
+      { document_type: docType, filename: file.name, mime_type: file.type, size: file.size, submission_id: existing.id },
+    );
+  } catch (e) { console.error("[audit]", e); }
 
   return NextResponse.json(doc);
 }

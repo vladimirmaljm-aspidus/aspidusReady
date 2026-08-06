@@ -28,15 +28,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   if (!access.portal_email) return NextResponse.json({ error: "No portal email set." }, { status: 400 });
 
-  // Ensure status is "invited"
-  if (access.status !== "active") {
-    await auth.store.upsertPortalAccess({
-      id: access.id,
-      status: "invited",
-      invited_at: new Date().toISOString(),
-      welcome_email_sent: true,
-    });
-  }
+  // Always refresh invite metadata; only downgrade status if not already active
+  // (previously the `if (access.status !== "active")` guard meant re-inviting an
+  // active user silently no-oped on invited_at / welcome_email_sent).
+  const newStatus = access.status === "active" ? "active" : "invited";
+  await auth.store.upsertPortalAccess({
+    ...access,
+    status: newStatus,
+    invited_at: new Date().toISOString(),
+    welcome_email_sent: false,
+  });
 
   const tenant = await auth.store.getTenant(access.tenant_id);
   const partner = await auth.store.getPartner(access.partner_id);

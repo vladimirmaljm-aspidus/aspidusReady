@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/api/helpers";
+import { redactDetails, SUPER_ADMIN_REDACT_KEYS } from "@/lib/api/redact";
 
 export const runtime = "nodejs";
-
-const REDACTED_DETAIL_KEYS = ["reset_token", "password", "token"];
-
-function redactDetails(details: unknown): unknown {
-  if (!details || typeof details !== "object") return details;
-  const copy: Record<string, unknown> = { ...(details as Record<string, unknown>) };
-  for (const k of REDACTED_DETAIL_KEYS) {
-    if (k in copy) copy[k] = "[redacted]";
-  }
-  return copy;
-}
 
 /**
  * GET /api/super-admin/audit
@@ -58,6 +48,6 @@ export async function GET(req: NextRequest) {
     total,
     limit,
     offset,
-    items: paged.map((item) => ({ ...item, details: redactDetails(item.details) })),
+    items: paged.map((item) => ({ ...item, details: redactDetails(item.details, SUPER_ADMIN_REDACT_KEYS) })),
   });
 }

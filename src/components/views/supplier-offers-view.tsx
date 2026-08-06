@@ -45,6 +45,7 @@ import {
   getCountry, getCurrency, getIncoterm,
 } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 function flagEmoji(countryCode: string | null | undefined): string {
   if (!countryCode || countryCode.length !== 2) return "";
@@ -82,6 +83,7 @@ export function SupplierOffersView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [productFilter, setProductFilter] = useState<string>("all");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -91,10 +93,10 @@ export function SupplierOffersView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["supplier-offers", tenantKey, search, productFilter, supplierFilter, statusFilter],
+    queryKey: ["supplier-offers", tenantKey, debouncedSearch, productFilter, supplierFilter, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (productFilter !== "all") params.set("product_id", productFilter);
       if (supplierFilter !== "all") params.set("supplier_id", supplierFilter);
       if (statusFilter !== "all") params.set("status", statusFilter);

@@ -104,10 +104,17 @@ export async function POST(req: NextRequest) {
       items: offer.items,
     };
 
-    // 7. Create the invoice
+    // 7. Enforce monthly_documents quota (parity with POST /api/invoices)
+    {
+      const { enforceQuota } = await import("@/lib/api/plan-limits");
+      const denied = await enforceQuota(tid, "monthly_documents", auth.isSuperAdmin);
+      if (denied) return denied;
+    }
+
+    // 8. Create the invoice
     const created = await store.upsertInvoice(invoiceData);
 
-    // 8. Audit log
+    // 9. Audit log
     await audit(
       store,
       auth.user,

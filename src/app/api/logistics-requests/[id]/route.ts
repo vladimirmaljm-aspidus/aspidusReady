@@ -169,7 +169,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!row) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   const sb = getSupabase();
-  await sb.from("logistics_requests").delete().eq("id", id);
+  const { error: deleteError } = await sb.from("logistics_requests").delete().eq("id", id);
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
   await audit(auth.store, auth.user, req, "logistics.delete", "logistics_request", id, { number: row.number });
   return NextResponse.json({ ok: true });
 }

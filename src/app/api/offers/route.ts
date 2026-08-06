@@ -61,8 +61,10 @@ export async function POST(req: NextRequest) {
   }
   body.tenant_id = tid!;
   if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
-  // recompute totals from items if not provided
-  if (Array.isArray(body.items) && body.items.length > 0 && body.total === undefined) {
+  // Always recompute totals from items when items are provided — never trust
+  // client-supplied totals (FLOW-7: previously skipped when body.total was
+  // present, allowing tampered totals to disagree with line items).
+  if (Array.isArray(body.items) && body.items.length > 0) {
     let subtotal = 0, discountTotal = 0, taxTotal = 0;
     for (const it of body.items) {
       const line = it.quantity * it.unit_price;

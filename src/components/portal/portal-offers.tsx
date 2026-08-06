@@ -45,6 +45,7 @@ import { fmtMoney, fmtDate, fmtMoneyDetailed } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Offer, OfferStatus, OfferLineItem, PortalTier } from "@/lib/supabase/types";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_STYLES: Record<OfferStatus, string> = {
   draft: "bg-secondary text-secondary-foreground",
@@ -73,10 +74,11 @@ const STATUS_ICONS: Record<OfferStatus, React.ComponentType<{ className?: string
 export function PortalOffers() {
   const portalAccess = useAppStore((s) => s.portalAccess) as any;
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const offersQ = useQuery<{ items: Offer[]; total: number }>({
-    queryKey: ["portal-offers", search],
+    queryKey: ["portal-offers", debouncedSearch],
     queryFn: async () => {
       const r = await fetch("/api/portal/offers");
       if (!r.ok) throw new Error("Failed to load offers");
@@ -99,11 +101,11 @@ export function PortalOffers() {
   });
 
   const allItems = offersQ.data?.items || [];
-  const filtered = search
+  const filtered = debouncedSearch
     ? allItems.filter(
         (o) =>
-          o.number.toLowerCase().includes(search.toLowerCase()) ||
-          o.subject.toLowerCase().includes(search.toLowerCase())
+          o.number.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+          o.subject.toLowerCase().includes(debouncedSearch.toLowerCase())
       )
     : allItems;
 

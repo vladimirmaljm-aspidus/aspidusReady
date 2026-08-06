@@ -2407,6 +2407,8 @@ export class PrismaStore implements Store {
     return { ...row, preference_value: row.preference_value, updated_at: dateToISOOrNow(row.updated_at) };
   }
 
+  async deleteUserPreference(_userId: string, _key: string): Promise<void> {}
+
   async listUserPreferences(userId: string): Promise<UserPreference[]> {
     const rows = await db.userPreference.findMany({ where: { user_id: userId } });
     return rows.map((r) => ({ ...r, preference_value: r.preference_value, updated_at: dateToISOOrNow(r.updated_at) }));

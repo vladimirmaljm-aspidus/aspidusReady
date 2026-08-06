@@ -34,6 +34,7 @@ import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { VaultSecret } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 type SecretCategory = VaultSecret["category"];
 type SafeSecret = Omit<VaultSecret, "encrypted_value">;
@@ -70,16 +71,17 @@ export function VaultView() {
   const admin = isAdmin(user);
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [category, setCategory] = useState<string>("all");
   const [editing, setEditing] = useState<SafeSecret | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["vault", tenantKey, search, category],
+    queryKey: ["vault", tenantKey, debouncedSearch, category],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (category !== "all") params.set("category", category);
       const r = await fetch(api(`/api/vault?${params}`));
       if (!r.ok) throw new Error("Failed to load vault");

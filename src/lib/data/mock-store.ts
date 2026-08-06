@@ -2087,6 +2087,8 @@ export class MockStore implements Store {
     return pref;
   }
 
+  async deleteUserPreference(_userId: string, _key: string): Promise<void> {}
+
   async listUserPreferences(userId: string): Promise<UserPreference[]> {
     return Array.from(this.userPreferences.values())
       .filter((p) => p.user_id === userId)

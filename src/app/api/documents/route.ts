@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  body.tenant_id = auth.tenantId!;
+  if (!auth.tenantId) {
+    return NextResponse.json({ error: "tenant_id is required." }, { status: 400 });
+  }
+  body.tenant_id = auth.tenantId;
   if (!body.uploaded_by) body.uploaded_by = auth.user.id;
   const created = await auth.store.upsertDocument(body);
   await audit(auth.store, auth.user, req, body.id ? "document.update" : "document.upload", "document", created.id, { filename: created.filename });

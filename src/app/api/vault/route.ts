@@ -44,7 +44,10 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  body.tenant_id = auth.tenantId!;
+  if (!auth.tenantId) {
+    return NextResponse.json({ error: "tenant_id is required." }, { status: 400 });
+  }
+  body.tenant_id = auth.tenantId;
   const created = await auth.store.upsertVaultSecret(body);
   await audit(auth.store, auth.user, req, body.id ? "vault.update" : "vault.create", "vault_secret", created.id, { key: created.key });
   const { encrypted_value, ...safe } = created;

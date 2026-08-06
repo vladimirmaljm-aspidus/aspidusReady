@@ -49,6 +49,7 @@ import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const PAGE_SIZE = 20;
 
@@ -129,6 +130,7 @@ export function OffersView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [editing, setEditing] = useState<Offer | null>(null);
@@ -140,10 +142,10 @@ export function OffersView() {
   const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["offers", tenantKey, search, statusFilter, partnerFilter, page],
+    queryKey: ["offers", tenantKey, debouncedSearch, statusFilter, partnerFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
       params.set("limit", String(PAGE_SIZE));

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,9 @@ export const runtime = "nodejs";
  * so the AddressAutocomplete component works with both.
  */
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const url = new URL(req.url);
   const q = url.searchParams.get("q") || url.searchParams.get("input") || "";
   const limit = Math.min(Number(url.searchParams.get("limit") || 5), 10);

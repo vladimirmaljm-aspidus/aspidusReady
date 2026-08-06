@@ -41,6 +41,7 @@ import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Proforma, ProformaStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_LABELS: Record<ProformaStatus, string> = {
   draft: "Draft",
@@ -106,6 +107,7 @@ export function ProformasView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [editing, setEditing] = useState<Proforma | null>(null);
@@ -116,10 +118,10 @@ export function ProformasView() {
   const [showFromOffer, setShowFromOffer] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["proformas", tenantKey, search, statusFilter, partnerFilter],
+    queryKey: ["proformas", tenantKey, debouncedSearch, statusFilter, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
       const r = await fetch(api(`/api/proformas?${params}`));

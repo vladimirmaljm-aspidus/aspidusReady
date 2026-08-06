@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api/helpers";
+import { requireAuth, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -17,13 +17,17 @@ export async function POST(req: NextRequest) {
     const _f = await requireFeature(auth.tenantId, "module_document_verification", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   try {
-    const { verification_code, pdf_hash } = await req.json();
+    const body = await req.json();
+    const { verification_code, pdf_hash } = body;
     if (!verification_code || !pdf_hash) {
       return NextResponse.json({ error: "verification_code and pdf_hash required." }, { status: 400 });
     }
     const store = auth.store;
     const v = await store.getDocumentVerificationByCode(verification_code);
     if (!v) {
+      try {
+        await audit(auth.store, auth.user, req, "document.forensic_check", "document", body.document_id, { check_type: body.check_type, verification_code, result: "invalid" });
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({
         match: false,
         result: "invalid",
@@ -32,6 +36,9 @@ export async function POST(req: NextRequest) {
     }
     const computed = pdf_hash.startsWith("sha256:") ? pdf_hash : `sha256:${pdf_hash}`;
     const match = computed === v.pdf_hash;
+    try {
+      await audit(auth.store, auth.user, req, "document.forensic_check", "document", body.document_id, { check_type: body.check_type, verification_code, result: match ? "valid" : "modified" });
+    } catch (e) { console.error("[audit]", e); }
     return NextResponse.json({
       match,
       result: match ? "valid" : "modified",

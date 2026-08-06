@@ -264,6 +264,7 @@ export interface Store {
   // user preferences
   getUserPreference(userId: string, key: string): Promise<UserPreference | null>;
   setUserPreference(userId: string, key: string, value: unknown): Promise<UserPreference>;
+  deleteUserPreference(userId: string, key: string): Promise<void>;
   listUserPreferences(userId: string): Promise<UserPreference[]>;
 
   // dashboard

@@ -45,8 +45,9 @@ export async function POST(req: NextRequest) {
     if (!rfq) {
       return NextResponse.json({ error: "Portal RFQ not found." }, { status: 404 });
     }
-    // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
-    if ("user" in auth && !auth.isSuperAdmin && rfq.tenant_id !== auth.tenantId) {
+    // Tenant ownership check (applies to both session auth and API-key auth)
+    const isSuperAdmin = "user" in auth && auth.isSuperAdmin;
+    if (!isSuperAdmin && rfq.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Portal RFQ not found." }, { status: 404 });
     }
 
