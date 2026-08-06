@@ -54,8 +54,20 @@ export async function GET(req: NextRequest) {
       if (catalogEntry.tenant_id !== tenantId) {
         return NextResponse.json({ error: "Catalog entry not found." }, { status: 404 });
       }
-      // If we have a catalog entry but no product_id, we can still use it
-      // The catalog entry may reference a product_id
+    } else if (product) {
+      // Fallback: match a catalog spec-sheet entry to the selected product by
+      // SKU (case-insensitive) or by exact name. Catalog carries richer trade
+      // metadata (specifications, origin, HS) that Products may not have.
+      try {
+        const cat = await store.listProductCatalog(tenantId, { limit: 500 });
+        const bySku = product.sku
+          ? cat.items.find((c) => c.sku && c.sku.toLowerCase() === product!.sku.toLowerCase())
+          : null;
+        const byName = !bySku
+          ? cat.items.find((c) => c.name.toLowerCase() === product!.name.toLowerCase())
+          : null;
+        catalogEntry = bySku || byName || null;
+      } catch { /* catalog is optional — carry on with just product data */ }
     }
 
     // Determine the effective catalog entry ID for queries

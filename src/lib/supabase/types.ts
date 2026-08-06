@@ -183,6 +183,14 @@ export interface OfferLineItem {
   discount: number;
   tax_rate: number;
   total: number;
+  // Trade metadata carried onto the line so PDFs and downstream conversions
+  // (offer → proforma → invoice) don't need to re-lookup Products.
+  hs_code?: string | null;
+  description?: string | null;
+  detailed_spec?: string | null;
+  brand?: string | null;
+  origin_country?: string | null;
+  specifications?: Array<{ name: string; value: string }> | Record<string, string> | null;
 }
 
 export interface Offer {

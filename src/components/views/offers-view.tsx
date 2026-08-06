@@ -1203,6 +1203,10 @@ function OfferFormDialog({
       sku: p.sku,
       unit_price: p.price,
       unit: p.unit || "pcs",
+      hs_code: (p as any).hs_code ?? null,
+      description: (p as any).description ?? null,
+      detailed_spec: (p as any).detailed_spec ?? null,
+      brand: (p as any).brand ?? null,
     });
 
     setLoadingProductIdx(idx);
@@ -1212,8 +1216,19 @@ function OfferFormDialog({
       const ctx: ProductContext = await r.json();
       setProductContextMap((prev) => ({ ...prev, [idx]: ctx }));
 
-      if (ctx.catalogEntry?.price) {
-        setItem(idx, { unit_price: ctx.catalogEntry.price });
+      // If a matching catalog spec-sheet entry was found, prefer its richer
+      // metadata (HS code, specifications, origin) on the line item.
+      const ce = ctx.catalogEntry;
+      if (ce) {
+        setItem(idx, {
+          hs_code: ce.hs_code ?? (p as any).hs_code ?? null,
+          detailed_spec: ce.detailed_spec ?? (p as any).detailed_spec ?? null,
+          specifications: ce.specifications ?? null,
+          origin_country: ce.origin_country ?? null,
+          brand: ce.brand ?? (p as any).brand ?? null,
+          description: ce.description ?? (p as any).description ?? null,
+        });
+        if (ce.price) setItem(idx, { unit_price: ce.price });
       }
 
       toast.success(`Product loaded: ${p.name}`, { description: `Price: ${fmtMoney(p.price, p.currency)} | SKU: ${p.sku}` });
@@ -1542,22 +1557,28 @@ function OfferFormDialog({
                               value={it.product_name || ""}
                               onChange={(e) => setItem(idx, { product_name: e.target.value })}
                             />
-                            {productContextMap[idx] && (
-                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                {productContextMap[idx].inventoryStatus && (
+                            {(it as any).hs_code || (it as any).brand || productContextMap[idx] ? (
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                                {(it as any).hs_code && (
+                                  <span className="font-mono px-1.5 py-0.5 rounded bg-muted">HS {(it as any).hs_code}</span>
+                                )}
+                                {(it as any).brand && (
+                                  <span>{(it as any).brand}</span>
+                                )}
+                                {productContextMap[idx]?.inventoryStatus && (
                                   <span className="flex items-center gap-0.5">
                                     <Package className="size-2.5" />
                                     Stock: {productContextMap[idx].inventoryStatus!.stock}
                                   </span>
                                 )}
-                                {productContextMap[idx].priceHistory?.length > 0 && (
+                                {productContextMap[idx]?.priceHistory && productContextMap[idx].priceHistory.length > 0 && (
                                   <span className="flex items-center gap-0.5">
                                     <Info className="size-2.5" />
                                     Last: {fmtMoney(productContextMap[idx].priceHistory[0].unit_price, productContextMap[idx].priceHistory[0].currency)}
                                   </span>
                                 )}
                               </div>
-                            )}
+                            ) : null}
                             {loadingProductIdx === idx && (
                               <Loader2 className="size-3 animate-spin text-muted-foreground" />
                             )}

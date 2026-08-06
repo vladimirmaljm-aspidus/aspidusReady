@@ -776,6 +776,10 @@ function ProformaFormDialog({
       sku: p.sku,
       unit: p.unit || "pcs",
       unit_price: p.price,
+      hs_code: (p as any).hs_code ?? null,
+      description: (p as any).description ?? null,
+      detailed_spec: (p as any).detailed_spec ?? null,
+      brand: (p as any).brand ?? null,
     });
   }
 
