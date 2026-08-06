@@ -120,6 +120,8 @@ export interface Product {
   old_id?: string | null;
   shelf_life?: string | null;
   tags?: string[] | null;
+  /** When true, this product is exposed to portal clients under Catalog. */
+  show_in_catalog?: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -128,6 +128,21 @@ export function ProductsView() {
     onError: () => toast.error("Delete failed."),
   });
 
+  async function toggleCatalog(p: Product, next: boolean) {
+    try {
+      const r = await fetch(api(`/api/products`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...p, show_in_catalog: next, force: true }),
+      });
+      if (!r.ok) throw new Error("Update failed");
+      toast.success(next ? "Now visible in portal catalog." : "Hidden from portal catalog.");
+      qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+    } catch (e: any) {
+      toast.error(e.message || "Update failed.");
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -191,6 +206,7 @@ export function ProductsView() {
                       <TableHead className="text-right">Price</TableHead>
                       <TableHead className="text-right">Stock</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-center">In Catalog</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -233,6 +249,13 @@ export function ProductsView() {
                             {p.active
                               ? <Badge>Active</Badge>
                               : <Badge variant="secondary">Inactive</Badge>}
+                          </TableCell>
+                          <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={!!p.show_in_catalog}
+                              onCheckedChange={(v) => toggleCatalog(p, v)}
+                              aria-label="Show in portal catalog"
+                            />
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
@@ -738,6 +761,14 @@ function ProductFormDialog({
                   <div>
                     <p className="text-sm font-medium">Active</p>
                     <p className="text-xs text-muted-foreground">Active products are available for new offers.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
+                  <Switch checked={!!form.show_in_catalog} onCheckedChange={(v) => set("show_in_catalog", v)} />
+                  <div>
+                    <p className="text-sm font-medium">Show in portal catalog</p>
+                    <p className="text-xs text-muted-foreground">Portal clients will see this product under Catalog. Cost, margin and stock stay hidden.</p>
                   </div>
                 </div>
               </div>

@@ -8,10 +8,11 @@ import type { Product, ProductCatalogEntry } from "@/lib/supabase/types";
 export const runtime = "nodejs";
 
 /**
- * Portal catalog = every product the tenant sells.
- * Union of two admin-side sources:
- *   1) product_catalog (spec-sheet: HS code, specifications, images…)
- *   2) products (inventory SKUs; active=true only)
+ * Portal catalog = admin-curated view of what the tenant offers to clients.
+ * Union of two sources:
+ *   1) product_catalog (spec-sheet entries: HS code, specifications, images…)
+ *   2) products where show_in_catalog=true AND active=true — admin opts a
+ *      given inventory SKU in one product at a time.
  * Dedup key: SKU (case-insensitive) if present, else lower-case name.
  * A catalog entry wins on collision because it carries richer metadata.
  * No cost / price / margin is exposed — redactListForPortal strips it.
@@ -65,6 +66,7 @@ export async function GET() {
   }
   for (const p of productsRes.items) {
     if (!p.active) continue;
+    if (!p.show_in_catalog) continue; // admin opt-in per product
     if (p.tenant_id && p.tenant_id !== access.tenant_id) continue;
     const key = (p.sku && p.sku.trim()) ? `sku:${p.sku.toLowerCase()}` : `name:${p.name.toLowerCase()}`;
     if (seen.has(key)) continue;

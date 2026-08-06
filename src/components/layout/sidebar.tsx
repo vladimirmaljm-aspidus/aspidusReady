@@ -76,7 +76,7 @@ const SECTIONS: NavSection[] = [
       { key: "partners", i18nKey: "partners", i18nSection: "crm", icon: Users, permission: "partners.read" },
       { key: "products", i18nKey: "products", i18nSection: "crm", icon: Package, permission: "products.read" },
       { key: "deals", i18nKey: "deals", i18nSection: "crm", icon: Handshake, permission: "deals.read" },
-      { key: "commissions", i18nKey: "commissions", i18nSection: "crm", icon: DollarSign, permission: "commissions.read" },
+      { key: "commissions", i18nKey: "commissions", i18nSection: "crm", icon: DollarSign, permission: "commissions.read", featureFlag: "module_finance" },
       { key: "offers", i18nKey: "offers", i18nSection: "crm", icon: FileText, permission: "offers.read" },
       { key: "demands", i18nKey: "demands", i18nSection: "crm", icon: Inbox, permission: "demands.read" },
       { key: "inventory", i18nKey: "inventory", i18nSection: "crm", icon: Boxes, permission: "inventory.read", featureFlag: "module_inventory" },
@@ -85,9 +85,9 @@ const SECTIONS: NavSection[] = [
   {
     i18nKey: "finance",
     items: [
-      { key: "invoices", i18nKey: "invoices", i18nSection: "finance", icon: Receipt, permission: "invoices.read" },
-      { key: "proformas", i18nKey: "proformas", i18nSection: "finance", icon: FileSignature, permission: "proformas.read" },
-      { key: "document-register", i18nKey: "document-register", i18nSection: "finance", icon: FolderOpen, permission: "document-register.read" },
+      { key: "invoices", i18nKey: "invoices", i18nSection: "finance", icon: Receipt, permission: "invoices.read", featureFlag: "module_finance" },
+      { key: "proformas", i18nKey: "proformas", i18nSection: "finance", icon: FileSignature, permission: "proformas.read", featureFlag: "module_finance" },
+      { key: "document-register", i18nKey: "document-register", i18nSection: "finance", icon: FolderOpen, permission: "document-register.read", featureFlag: "module_finance" },
       { key: "erp", i18nKey: "erp", i18nSection: "finance", icon: BookMarked, permission: "erp.read", featureFlag: "module_finance" },
     ],
   },
