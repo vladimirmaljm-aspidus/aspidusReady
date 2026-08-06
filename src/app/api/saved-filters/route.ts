@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   // Permission gate (settings.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "settings.create"); if (_d) return _d; } /* requirePermission wired */
+    const _d = requirePermission(auth, "settings.update"); if (_d) return _d; } /* requirePermission wired */
 
 
   const body = await req.json();
@@ -83,7 +83,7 @@ export async function DELETE(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   // Permission gate (settings.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "settings.delete"); if (_d) return _d; } /* requirePermission wired */
+    const _d = requirePermission(auth, "settings.update"); if (_d) return _d; } /* requirePermission wired */
 
 
   const url = new URL(req.url);

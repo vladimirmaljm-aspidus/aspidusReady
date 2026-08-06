@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (auth instanceof NextResponse) return auth;
     // Permission gate (portal.update)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "portal.update"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "portal.manage"); if (_d) return _d; } /* requirePermission wired */
   // Feature gate (module_portal)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */

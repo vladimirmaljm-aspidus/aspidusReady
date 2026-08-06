@@ -610,10 +610,14 @@ function OfferDetail({
     queryKey: ["document-revisions", tenantKey, offer.id],
     queryFn: async () => {
       try {
-        const r = await fetch(api(`/api/document-register/${offer.id}`));
+        // /api/document-register/[id] expects the register-entry id, not the
+        // offer id, so we list-and-filter by reference_id instead.
+        const r = await fetch(api(`/api/document-register?type=offer`));
         if (!r.ok) return [];
         const data = await r.json();
-        return (data.items || []) as DocumentRevision[];
+        return ((data.items || []) as any[])
+          .filter((e) => e.reference_id === offer.id && e.type === "offer")
+          .sort((a, b) => (b.version || 0) - (a.version || 0)) as DocumentRevision[];
       } catch {
         return [];
       }
@@ -630,14 +634,19 @@ function OfferDetail({
     }
     setSavingVersion(true);
     try {
-      // 1. Find existing register entries for this offer to determine next version
-      const regRes = await fetch(api(`/api/document-register?reference_id=${offer.id}&type=offer`));
+      // 1. Find existing register entries for THIS offer only.
+      // /api/document-register ignores reference_id/type params and returns
+      // every entry in the tenant — filter client-side so we don't touch
+      // unrelated documents.
+      const regRes = await fetch(api(`/api/document-register?type=offer`));
       const regData = await regRes.json().catch(() => ({ items: [] }));
-      const existingEntries = regData.items || [];
+      const existingEntries = (regData.items || []).filter(
+        (e: any) => e.reference_id === offer.id && e.type === "offer",
+      );
       const maxVersion = existingEntries.reduce((max: number, e: any) => Math.max(max, e.version || 0), 0);
       const nextVersion = maxVersion + 1;
 
-      // 2. Mark previous entries as superseded
+      // 2. Mark previous entries as superseded — scoped strictly to this offer.
       for (const entry of existingEntries) {
         if (entry.status === "current") {
           await fetch(api(`/api/document-register`), {

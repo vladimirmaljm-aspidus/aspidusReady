@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
     // Permission gate (settings.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "settings.create"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "settings.test"); if (_d) return _d; } /* requirePermission wired */
 
 
   let body: {

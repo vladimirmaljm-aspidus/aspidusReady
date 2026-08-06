@@ -512,14 +512,40 @@ function DemandDetail({
           size="sm"
           onClick={async () => {
             try {
-              const res = await fetch(api(`/api/automation/create-offer-from-deal`), {
+              // Build an offer directly from the demand — same partner,
+              // items, subject, and currency. Skips the deal-based
+              // automation which doesn't understand demands.
+              const items = (demand.items || []).map((it: any, i: number) => ({
+                product_id: it.product_id || "",
+                product_name: it.product_name || demand.product_name || `Line ${i + 1}`,
+                sku: it.sku || "",
+                unit: it.unit || "pcs",
+                quantity: Number(it.quantity) || 1,
+                unit_price: Number(it.target_price ?? demand.target_price ?? 0) || 0,
+                discount: 0,
+                tax_rate: 20,
+                total: (Number(it.quantity) || 1) * (Number(it.target_price ?? demand.target_price ?? 0) || 0),
+              }));
+              const subtotal = items.reduce((s, x) => s + x.total, 0);
+              const res = await fetch(api(`/api/offers`), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ demandId: demand.id }),
+                body: JSON.stringify({
+                  partner_id: demand.partner_id,
+                  subject: demand.subject || `Offer for demand ${demand.number}`,
+                  currency: demand.currency || "USD",
+                  status: "draft",
+                  items,
+                  subtotal,
+                  discount_total: 0,
+                  tax_total: subtotal * 0.2,
+                  total: subtotal * 1.2,
+                  notes: demand.description || null,
+                }),
               });
               if (!res.ok) throw new Error("Failed to create offer");
               const data = await res.json();
-              toast.success(`Offer created: ${data.offer?.offer_number || data.id}`);
+              toast.success(`Offer created: ${data.number || data.id}`);
             } catch {
               toast.error("Failed to convert demand to offer");
             }

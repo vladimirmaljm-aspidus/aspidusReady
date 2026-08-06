@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (auth instanceof NextResponse) return auth;
     // Permission gate (kyc.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "kyc.create"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "kyc.approve"); if (_d) return _d; } /* requirePermission wired */
   // Feature gate (module_kyc)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_kyc", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */

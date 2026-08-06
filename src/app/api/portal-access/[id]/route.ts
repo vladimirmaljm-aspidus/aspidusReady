@@ -8,7 +8,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (auth instanceof NextResponse) return auth;
     // Permission gate (portal.delete)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "portal.delete"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "portal.revoke"); if (_d) return _d; } /* requirePermission wired */
   // Feature gate (module_portal)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */

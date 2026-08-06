@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
     // Permission gate (documents.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "documents.read"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; } /* requirePermission wired */
 
 
   try {

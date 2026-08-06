@@ -110,8 +110,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Default done flag
-  if (body.done) body.done = true;
+  // Coerce done to boolean so uncheck (false) actually persists.
+  if (body.done !== undefined) body.done = !!body.done;
 
   const created = await auth.store.upsertTask(body);
   await audit(auth.store, auth.user, req, body.id ? "task.update" : "task.create", "task", created.id, {

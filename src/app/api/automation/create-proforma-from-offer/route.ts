@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
     // Permission gate (dashboard.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "dashboard.create"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "proformas.create"); if (_d) return _d; } /* requirePermission wired */
 
 
   const tid = auth.tenantId!;

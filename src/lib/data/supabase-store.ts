@@ -1570,7 +1570,7 @@ export class SupabaseStore implements Store {
       // Insert new lines
       const linePayloads: SupaRow[] = lines.map((l, idx) => {
         const { id: _lid, ...rest } = l;
-        return { ...rest, journal_entry_id: entry.id, line_number: l.line_number ?? (idx + 1) };
+        return { ...rest, tenant_id: entry.tenant_id, journal_entry_id: entry.id, line_number: l.line_number ?? (idx + 1) };
       });
       const { data: insertedLines, error: linesError } = await this.sb()
         .from("erp_journal_lines")
@@ -1643,6 +1643,7 @@ export class SupabaseStore implements Store {
     // Insert reversed lines (swap debit/credit)
     if (lines.length > 0) {
       const revLines: SupaRow[] = lines.map((l, idx) => ({
+        tenant_id: reversal.tenant_id,
         journal_entry_id: reversal.id,
         account_id: l.account_id,
         line_number: idx + 1,
@@ -2055,8 +2056,8 @@ export class SupabaseStore implements Store {
     const je = data as ErpJournalEntry;
     // Create lines: Debit AR, Credit Revenue
     const linePayloads: SupaRow[] = [
-      { journal_entry_id: je.id, account_id: receivableAccountId, line_number: 1, description: `AR for invoice ${invoice.number}`, debit: invoice.total, credit: 0, currency: invoice.currency, partner_id: invoice.partner_id },
-      { journal_entry_id: je.id, account_id: revenueAccountId, line_number: 2, description: `Revenue for invoice ${invoice.number}`, debit: 0, credit: invoice.total, currency: invoice.currency, partner_id: invoice.partner_id },
+      { tenant_id: tenantId, journal_entry_id: je.id, account_id: receivableAccountId, line_number: 1, description: `AR for invoice ${invoice.number}`, debit: invoice.total, credit: 0, currency: invoice.currency, partner_id: invoice.partner_id },
+      { tenant_id: tenantId, journal_entry_id: je.id, account_id: revenueAccountId, line_number: 2, description: `Revenue for invoice ${invoice.number}`, debit: 0, credit: invoice.total, currency: invoice.currency, partner_id: invoice.partner_id },
     ];
     const { data: insertedLines, error: linesError } = await this.sb().from("erp_journal_lines").insert(linePayloads).select();
     if (linesError) throw linesError;
@@ -2096,15 +2097,15 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     const je = data as ErpJournalEntry;
     const linePayloads: SupaRow[] = [
-      { journal_entry_id: je.id, account_id: receivableAccountId, line_number: 1, description: `AR for deal ${deal.title}`, debit: deal.value, credit: 0, currency: deal.currency, partner_id: deal.partner_id },
-      { journal_entry_id: je.id, account_id: revenueAccountId, line_number: 2, description: `Revenue for deal ${deal.title}`, debit: 0, credit: deal.value, currency: deal.currency, partner_id: deal.partner_id },
+      { tenant_id: tenantId, journal_entry_id: je.id, account_id: receivableAccountId, line_number: 1, description: `AR for deal ${deal.title}`, debit: deal.value, credit: 0, currency: deal.currency, partner_id: deal.partner_id },
+      { tenant_id: tenantId, journal_entry_id: je.id, account_id: revenueAccountId, line_number: 2, description: `Revenue for deal ${deal.title}`, debit: 0, credit: deal.value, currency: deal.currency, partner_id: deal.partner_id },
     ];
     // Add COGS line if deal has buy_cost and expense account configured
     if (deal.buy_cost > 0 && expenseAccountId) {
       const payableAccountId = settings?.payable_account_id || expenseAccountId;
       linePayloads.push(
-        { journal_entry_id: je.id, account_id: expenseAccountId, line_number: 3, description: `COGS for deal ${deal.title}`, debit: deal.buy_cost, credit: 0, currency: deal.currency, partner_id: deal.partner_id },
-        { journal_entry_id: je.id, account_id: payableAccountId, line_number: 4, description: `AP for deal ${deal.title} cost`, debit: 0, credit: deal.buy_cost, currency: deal.currency, partner_id: deal.partner_id },
+        { tenant_id: tenantId, journal_entry_id: je.id, account_id: expenseAccountId, line_number: 3, description: `COGS for deal ${deal.title}`, debit: deal.buy_cost, credit: 0, currency: deal.currency, partner_id: deal.partner_id },
+        { tenant_id: tenantId, journal_entry_id: je.id, account_id: payableAccountId, line_number: 4, description: `AP for deal ${deal.title} cost`, debit: 0, credit: deal.buy_cost, currency: deal.currency, partner_id: deal.partner_id },
       );
       // Adjust totals
       je.debit_total += deal.buy_cost;
@@ -2147,8 +2148,8 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     const je = data as ErpJournalEntry;
     const linePayloads: SupaRow[] = [
-      { journal_entry_id: je.id, account_id: expenseAccountId, line_number: 1, description: `Commission expense`, debit: amount, credit: 0, currency: commission.commission_currency, partner_id: commission.partner_id },
-      { journal_entry_id: je.id, account_id: payableAccountId, line_number: 2, description: `Commission payable`, debit: 0, credit: amount, currency: commission.commission_currency, partner_id: commission.partner_id },
+      { tenant_id: tenantId, journal_entry_id: je.id, account_id: expenseAccountId, line_number: 1, description: `Commission expense`, debit: amount, credit: 0, currency: commission.commission_currency, partner_id: commission.partner_id },
+      { tenant_id: tenantId, journal_entry_id: je.id, account_id: payableAccountId, line_number: 2, description: `Commission payable`, debit: 0, credit: amount, currency: commission.commission_currency, partner_id: commission.partner_id },
     ];
     const { data: insertedLines, error: linesError } = await this.sb().from("erp_journal_lines").insert(linePayloads).select();
     if (linesError) throw linesError;

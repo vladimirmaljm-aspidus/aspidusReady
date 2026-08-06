@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "notes.delete"); if (_d) return _d; }
   if (!auth.tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
 
   const { id } = await params;

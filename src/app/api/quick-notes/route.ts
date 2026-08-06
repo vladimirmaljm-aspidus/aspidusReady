@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 export async function GET() {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "notes.read"); if (_d) return _d; }
   if (!auth.tenantId) return NextResponse.json({ items: [] });
 
   const sb = getSupabase();
@@ -24,6 +26,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "notes.create"); if (_d) return _d; }
   if (!auth.tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
 
   const body = await req.json();

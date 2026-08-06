@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (auth instanceof NextResponse) return auth;
   // Permission gate (notifications.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "notifications.create"); if (_d) return _d; } /* requirePermission wired */
+    const _d = requirePermission(auth, "notifications.update"); if (_d) return _d; } /* requirePermission wired */
 
   const url = new URL(req.url);
   const action = url.searchParams.get("action");

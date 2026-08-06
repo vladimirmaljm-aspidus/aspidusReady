@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "portal.create"); if (_d) return _d; }
+    const _d = requirePermission(auth, "portal.message"); if (_d) return _d; }
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; }
 
