@@ -63,7 +63,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
   const headerTop = mmToPoints(8);
   const headerHeight = 50;
   const footerBottom = mmToPoints(8);
-  const footerHeight = 40;
+  // Footer height accommodates company info + QR code (38pt) + label
+  const footerHeight = 55;
 
   const marginLeft = mmToPoints(tpl?.page_margin_left ?? 18);
   const marginRight = mmToPoints(tpl?.page_margin_right ?? 18);
@@ -81,8 +82,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       fontSize,
       lineHeight,
       // Content area: leave space for header and footer (no overlap)
-      paddingTop: headerTop + headerHeight + 15, // below header line
-      paddingBottom: footerBottom + footerHeight + 15, // above footer line
+      paddingTop: headerTop + headerHeight + 18, // below header line
+      paddingBottom: footerBottom + footerHeight + 18, // above footer line (extra room for QR)
       paddingLeft: marginLeft,
       paddingRight: marginRight,
       fontFamily,
@@ -126,7 +127,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       alignItems: "flex-start",
     },
     footerLeft: { flexDirection: "column", flex: 1 },
-    footerRight: { flexDirection: "column", alignItems: "flex-end" },
+    footerRight: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
+    footerRightInfo: { flexDirection: "column", alignItems: "flex-end" },
     footerCompany: { fontSize: 7.5, fontFamily: headingFontFamily, color: "#555", marginBottom: 1 },
     footerAddr: { fontSize: 7, color: "#888" },
     footerContact: { fontSize: 7, color: "#888" },
@@ -134,17 +136,10 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     footerPage: { fontSize: 8, color: "#666", fontFamily: headingFontFamily },
     footerSys: { fontSize: 6, color: "#bbb", fontStyle: "italic", marginTop: 2, textAlign: "right" },
 
-    // ── QR code (bottom-left corner, inside footer area) ──────────────
-    qrSection: {
-      position: "absolute",
-      bottom: footerBottom + footerHeight + 5,
-      left: marginLeft,
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 2,
-    },
-    qrImage: { width: 45, height: 45 },
-    qrLabel: { fontSize: 5.5, color: "#999", textAlign: "center" },
+    // ── QR code (inside footer, right side — never overlaps content) ──
+    footerQr: { flexDirection: "column", alignItems: "center", gap: 2 },
+    footerQrImage: { width: 38, height: 38 },
+    footerQrLabel: { fontSize: 5.5, color: "#999", textAlign: "center" },
 
     // ── Document title + metadata ──────────────────────────────────────
     docHeader: {
@@ -200,7 +195,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     descText: { fontSize: 8, color: "#555", lineHeight: 1.5 },
 
     // ── Table (line items) — uses flex widths that fit A4 with margins ─
-    table: { marginBottom: 10, borderWidth: 1, borderColor: tableBorderColor, borderRadius: 4, overflow: "hidden" },
+    // overflow removed so rows can flow naturally across page breaks
+    table: { marginBottom: 10, borderWidth: 1, borderColor: tableBorderColor, borderRadius: 4 },
     tableHeader: {
       flexDirection: "row",
       backgroundColor: tableHeaderBg,
@@ -236,6 +232,39 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     remarks: { marginTop: 18 },
     remarksHeader: { fontSize: 9, fontFamily: headingFontFamily, color: "#333", marginBottom: 4, textDecoration: "underline" },
     remarksText: { fontSize: 8, color: "#666", lineHeight: 1.5 },
+
+    // ── Trade Terms (ports / vessel / lead time / packaging) ──────────
+    tradeTerms: { marginBottom: 18, borderWidth: 1, borderColor: tableBorderColor, borderRadius: 4, overflow: "hidden" },
+    tradeTermsRow: { flexDirection: "row", borderBottomWidth: 0.25, borderBottomColor: tableBorderColor },
+    tradeTermsLabel: {
+      width: 90,
+      fontSize: 7,
+      color: "#999",
+      paddingVertical: 5,
+      paddingHorizontal: 8,
+      textTransform: "uppercase",
+      backgroundColor: "fafafa",
+    },
+    tradeTermsValue: {
+      flex: 1,
+      fontSize: 9,
+      fontFamily: headingFontFamily,
+      color: "#333",
+      paddingVertical: 5,
+      paddingHorizontal: 8,
+    },
+
+    // ── Specifications (coa_params + detailed_spec) ───────────────────
+    specSection: { marginTop: 14, marginBottom: 10 },
+    specHeader: { backgroundColor: "#f3f4f6", paddingVertical: 6, paddingHorizontal: 8, borderRadius: 4 },
+    specHeaderText: { fontSize: 9, fontFamily: headingFontFamily, color: "#333" },
+    specItem: { marginTop: 8 },
+    specItemTitle: { fontSize: 9, fontFamily: headingFontFamily, color: primaryColor, marginBottom: 4 },
+    specTable: { borderWidth: 0.5, borderColor: tableBorderColor, borderRadius: 3, overflow: "hidden" },
+    specRow: { flexDirection: "row", borderBottomWidth: 0.25, borderBottomColor: tableBorderColor },
+    specName: { flex: 1, fontSize: 8, paddingVertical: 3, paddingHorizontal: 6, color: "#666", fontFamily: headingFontFamily },
+    specValue: { flex: 1, fontSize: 8, paddingVertical: 3, paddingHorizontal: 6, color: "#333" },
+    specDetail: { fontSize: 7.5, color: "#555", lineHeight: 1.4, marginTop: 4, paddingHorizontal: 6 },
   });
 
   const docTitleMap = { offer: "Offer", invoice: "Invoice", proforma: "Proforma Invoice" };
@@ -285,18 +314,27 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         </Text>
       </View>
       <View style={styles.footerRight}>
-        {verificationCode && (
-          <Text style={styles.footerHash}>Verification: {verificationCode}</Text>
+        {qrCodeDataUrl && verificationCode && (
+          <View style={styles.footerQr}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image style={styles.footerQrImage} src={qrCodeDataUrl} />
+            <Text style={styles.footerQrLabel}>Scan to verify</Text>
+          </View>
         )}
-        <Text
-          style={styles.footerPage}
-          render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-            `Page ${pageNumber} of ${totalPages}`
-          }
-        />
-        <Text style={styles.footerSys}>
-          Generated by {(pdfMeta?.creator || "Aspidus CRM")} · {new Date().toLocaleString("en-GB")}
-        </Text>
+        <View style={styles.footerRightInfo}>
+          {verificationCode && (
+            <Text style={styles.footerHash}>Verification: {verificationCode}</Text>
+          )}
+          <Text
+            style={styles.footerPage}
+            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+              `Page ${pageNumber} of ${totalPages}`
+            }
+          />
+          <Text style={styles.footerSys}>
+            Generated by {(pdfMeta?.creator || "Aspidus CRM")} · {new Date().toLocaleString("en-GB")}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -401,6 +439,28 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
           </View>
         </View>
 
+        {/* Trade Terms */}
+        <View style={styles.tradeTerms} wrap={false}>
+          <View style={styles.tradeTermsRow}>
+            <Text style={styles.tradeTermsLabel}>Loading Port:</Text>
+            <Text style={styles.tradeTermsValue}>{(doc as any).pol || "—"}</Text>
+            <Text style={styles.tradeTermsLabel}>Discharge Port:</Text>
+            <Text style={styles.tradeTermsValue}>{(doc as any).pod || "—"}</Text>
+          </View>
+          <View style={styles.tradeTermsRow}>
+            <Text style={styles.tradeTermsLabel}>Vessel:</Text>
+            <Text style={styles.tradeTermsValue}>{(doc as any).vessel || "—"}</Text>
+            <Text style={styles.tradeTermsLabel}>Container:</Text>
+            <Text style={styles.tradeTermsValue}>{(doc as any).container_no || "—"}</Text>
+          </View>
+          <View style={styles.tradeTermsRow}>
+            <Text style={styles.tradeTermsLabel}>Lead Time:</Text>
+            <Text style={styles.tradeTermsValue}>{(doc as any).lead_time || "—"}</Text>
+            <Text style={styles.tradeTermsLabel}>Packaging:</Text>
+            <Text style={styles.tradeTermsValue}>{(items[0] as any)?.packaging || (doc as any).packaging || "—"}</Text>
+          </View>
+        </View>
+
         {/* Product info grid */}
         <View style={styles.infoGrid}>
           <View style={styles.infoCell}>
@@ -441,9 +501,9 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
           </View>
         )}
 
-        {/* Line Items Table */}
+        {/* Line Items Table — header is `fixed` so it repeats on every page */}
         <View style={styles.table}>
-          <View style={styles.tableHeader}>
+          <View style={styles.tableHeader} fixed>
             <Text style={[styles.th, { flex: 3 }]}>Description</Text>
             <Text style={[styles.th, { flex: 0.8 }]}>HS Code</Text>
             <Text style={[styles.th, { flex: 1.2 }]}>Quantity</Text>
@@ -451,7 +511,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
             <Text style={[styles.th, { flex: 1.2, textAlign: "right" }]}>Total</Text>
           </View>
           {items.map((item, i) => (
-            <View key={i} style={styles.tableRow} break={i > 0 && i % 18 === 0}>
+            <View key={i} style={styles.tableRow}>
               <Text style={[styles.td, { flex: 3 }]}>
                 {item.product_name}
                 {item.sku ? `\nSKU: ${item.sku}` : ""}
@@ -469,6 +529,35 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
             </View>
           ))}
         </View>
+
+        {/* Specifications — coa_params (key/value table) + detailed_spec */}
+        {items.some((it: any) => (it.specifications && it.specifications.length > 0) || it.detailed_spec) && (
+          <View style={styles.specSection}>
+            <View style={styles.specHeader}>
+              <Text style={styles.specHeaderText}>SPECIFICATIONS</Text>
+            </View>
+            {items.map((item: any, i: number) =>
+              ((item.specifications && item.specifications.length > 0) || item.detailed_spec) ? (
+                <View key={`spec-${i}`} style={styles.specItem} wrap={false}>
+                  <Text style={styles.specItemTitle}>{item.product_name}</Text>
+                  {item.specifications && item.specifications.length > 0 && (
+                    <View style={styles.specTable}>
+                      {item.specifications.map((spec: any, j: number) => (
+                        <View key={j} style={styles.specRow}>
+                          <Text style={styles.specName}>{spec.name}</Text>
+                          <Text style={styles.specValue}>{spec.value}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  {item.detailed_spec && (
+                    <Text style={styles.specDetail}>{item.detailed_spec}</Text>
+                  )}
+                </View>
+              ) : null
+            )}
+          </View>
+        )}
 
         {/* Totals */}
         <View style={styles.totals}>
@@ -505,16 +594,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
           </View>
         )}
 
-        {/* QR code — positioned above the footer, inside the content area */}
-        {qrCodeDataUrl && verificationCode && (
-          <View style={styles.qrSection} fixed>
-            {/* eslint-disable-next-line jsx-a11y/alt-text */}
-            <Image style={styles.qrImage} src={qrCodeDataUrl} />
-            <Text style={styles.qrLabel}>Scan to verify</Text>
-          </View>
-        )}
-
-        {/* ── FOOTER (memorandum) ── */}
+        {/* ── FOOTER (memorandum) — contains QR code, no content overlap ── */}
         <FooterContent />
       </Page>
     </Document>

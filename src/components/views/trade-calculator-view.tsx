@@ -33,6 +33,7 @@ import {
   MapPin, Lightbulb, FileText,
 } from "lucide-react";
 import { PortAutocomplete } from "@/components/ui/port-autocomplete";
+import { UnitSelect } from "@/components/common/unit-select";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
@@ -1090,16 +1091,11 @@ function CalcFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Unit</Label>
-            <Select value={form.unit || "MT"} onValueChange={(v) => set("unit", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {UNITS_OF_MEASURE.map((u) => (
-                  <SelectItem key={u.code} value={u.code}>
-                    <span className="font-mono mr-2">{u.code}</span> {u.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnitSelect
+              value={form.unit || "MT"}
+              onChange={(v) => set("unit", v)}
+              className="w-full"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Num containers</Label>

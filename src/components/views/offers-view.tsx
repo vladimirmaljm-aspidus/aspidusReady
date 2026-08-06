@@ -40,16 +40,20 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save,
+  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
-import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision } from "@/lib/supabase/types";
-import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision, SupplierOffer } from "@/lib/supabase/types";
+import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL, INCOTERM_CODES } from "@/lib/data/reference";
+import { UnitSelect } from "@/components/common/unit-select";
+import { CountrySelect } from "@/components/common/country-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { ProductPicker } from "@/components/common/product-picker";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 
@@ -111,10 +115,14 @@ interface PartnerContext {
 interface ProductContext {
   product: Product;
   catalogEntry: any;
-  supplierOffers: any[];
+  supplierOffers: SupplierOffer[];
   tradeCalculations: any[];
   inventoryStatus: { stock: number; reorder_level: number; low_stock: boolean; unit: string } | null;
   priceHistory: Array<{ date: string; source: string; source_number: string; unit_price: number; currency: string; quantity: number }>;
+  /** Latest active supplier offer (sorted by created_at desc). Used by the
+   *  form to auto-fill the unit price + trade fields and shown in the UI as
+   *  the supplier-price indicator below the unit_price input. */
+  latestSupplierOffer?: SupplierOffer | null;
 }
 
 // ─── Helper: 30 days from today ───
@@ -122,6 +130,171 @@ function thirtyDaysFromNow(): string {
   const d = new Date();
   d.setDate(d.getDate() + 30);
   return d.toISOString();
+}
+
+// ─── Helper: normalize specifications (array | record | null) → array ───
+function normalizeSpecs(
+  specs: OfferLineItem["specifications"] | Product["coa_params"]
+): Array<{ name: string; value: string }> {
+  if (!specs) return [];
+  if (Array.isArray(specs)) {
+    return specs.slice(0, 5).map((s: any) => ({
+      name: String(s?.name ?? ""),
+      value: String(s?.value ?? ""),
+    }));
+  }
+  if (typeof specs === "object") {
+    return Object.entries(specs).slice(0, 5).map(([name, value]) => ({
+      name,
+      value: String(value ?? ""),
+    }));
+  }
+  return [];
+}
+
+// ─── Product context preview card ───
+// Shown beneath each line-item's ProductPicker once the product-context API
+// has returned. Surfaces the data the user used to have to dig for manually:
+// supplier offer price, key specs, stock status, last prices from history.
+function ProductContextPreview({
+  ctx,
+  lineItem,
+  partners,
+  currency,
+}: {
+  ctx: ProductContext;
+  lineItem: OfferLineItem;
+  partners: Partner[];
+  currency: string;
+}) {
+  const product = ctx.product;
+  const inv = ctx.inventoryStatus;
+
+  // Supplier offers come back from /api/automation/product-context sorted by
+  // created_at desc (see prisma-store.listSupplierOffers). Prefer the most
+  // recent active one as the price source.
+  const supplierOffers: any[] = ctx.supplierOffers || [];
+  const latestOffer = supplierOffers.find((so) => so.status === "active") || supplierOffers[0] || null;
+  const supplierName = latestOffer
+    ? partners.find((p) => p.id === latestOffer.supplier_id)?.name
+    : null;
+
+  const priceHistory = (ctx.priceHistory || []).slice(0, 3);
+
+  const specsArr = normalizeSpecs(
+    (lineItem as OfferLineItem).specifications || product?.coa_params || null
+  );
+
+  const image =
+    (lineItem as any).image_url ||
+    product?.image_url ||
+    (ctx.catalogEntry?.images?.[0] as string | undefined) ||
+    null;
+
+  return (
+    <div className="rounded-md border border-blue-500/20 bg-blue-50/40 dark:bg-blue-950/10 p-2 space-y-1.5 text-[11px]">
+      {/* Row 1: image thumbnail + trade metadata pills */}
+      <div className="flex items-start gap-2 flex-wrap">
+        {image && (
+          <img
+            src={image}
+            alt={lineItem.product_name || product?.name || "product"}
+            className="size-10 rounded object-cover border shrink-0"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        )}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {lineItem.hs_code && (
+            <span className="font-mono px-1.5 py-0.5 rounded bg-muted text-foreground">
+              HS {lineItem.hs_code}
+            </span>
+          )}
+          {lineItem.brand && (
+            <span className="text-muted-foreground">· {lineItem.brand}</span>
+          )}
+          {inv && (
+            <span
+              className={cn(
+                "flex items-center gap-0.5",
+                inv.low_stock
+                  ? "text-amber-600 dark:text-amber-500"
+                  : "text-emerald-600 dark:text-emerald-500"
+              )}
+            >
+              <Package className="size-2.5" />
+              Stock: {fmtNumber(inv.stock)} {inv.unit}
+              {inv.low_stock && " (low)"}
+            </span>
+          )}
+          {lineItem.origin_country && (
+            <span className="flex items-center gap-0.5 text-muted-foreground">
+              <Globe className="size-2.5" />
+              Origin: {lineItem.origin_country}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: latest supplier offer price (the smart auto-fill source) */}
+      {latestOffer && (
+        <div className="flex items-center gap-1.5 flex-wrap text-amber-700 dark:text-amber-400">
+          <Banknote className="size-3 shrink-0" />
+          <span className="font-medium">
+            Supplier: {fmtMoney(latestOffer.unit_price, latestOffer.currency || currency)}
+          </span>
+          <span className="text-muted-foreground">/{product?.unit || lineItem.unit}</span>
+          {latestOffer.offer_number && (
+            <span className="font-mono text-muted-foreground">({latestOffer.offer_number})</span>
+          )}
+          {supplierName && (
+            <span className="text-muted-foreground">· {supplierName}</span>
+          )}
+          {latestOffer.incoterm && (
+            <span className="text-muted-foreground">· {latestOffer.incoterm}</span>
+          )}
+          {latestOffer.packaging && (
+            <span className="text-muted-foreground">· {latestOffer.packaging}</span>
+          )}
+          {latestOffer.origin_country && !lineItem.origin_country && (
+            <span className="text-muted-foreground">· Origin: {latestOffer.origin_country}</span>
+          )}
+        </div>
+      )}
+
+      {/* Row 3: key specifications */}
+      {specsArr.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap text-muted-foreground">
+          <Info className="size-2.5 shrink-0" />
+          {specsArr.map((s, i) => (
+            <span key={i} className="px-1 py-0 rounded bg-muted/60">
+              {s.name}: <span className="font-medium text-foreground">{s.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Row 4: price history (last 3 entries) */}
+      {priceHistory.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap text-muted-foreground">
+          <History className="size-2.5 shrink-0" />
+          <span>Last prices:</span>
+          {priceHistory.map((h, i) => (
+            <span key={i} className="font-mono">
+              {fmtMoney(h.unit_price, h.currency)}
+              <span className="text-muted-foreground/70 ml-0.5">
+                ×{fmtNumber(h.quantity)}
+              </span>
+              {i < priceHistory.length - 1 && (
+                <span className="text-muted-foreground/50 mx-0.5">·</span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function OffersView() {
@@ -1188,7 +1361,19 @@ function OfferFormDialog({
   const isEditing = !!offer;
 
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
-  const [form, setForm] = useState<Partial<Offer> & { items: OfferLineItem[] }>({ items: [] });
+  // Form state. Extended with three non-DB-column fields used only by the UI:
+  //   - `origin_country` is a real DB column on `offers` (added via migration)
+  //     but is not in the Prisma schema, so we keep it loosely typed.
+  //   - `inspection` and `certificate` are NOT DB columns on `offers` (they
+  //     only exist on `supplier_offers`). We collect them in the form and, on
+  //     save, fold them into the `terms` textarea so the data is preserved
+  //     without a schema migration.
+  const [form, setForm] = useState<Partial<Offer> & {
+    items: OfferLineItem[];
+    origin_country?: string | null;
+    inspection?: string | null;
+    certificate?: string | null;
+  }>({ items: [] });
   const [saving, setSaving] = useState(false);
   const [partnerContext, setPartnerContext] = useState<PartnerContext | null>(null);
   const [loadingPartner, setLoadingPartner] = useState(false);
@@ -1205,22 +1390,30 @@ function OfferFormDialog({
     enabled: open,
   });
 
-  const products = useQuery({
-    queryKey: ["products", tenantKey, "list", "200"],
-    queryFn: async () => {
-      const r = await fetch(api(`/api/products?limit=200`));
-      if (!r.ok) throw new Error("Failed to load products");
-      return r.json() as Promise<{ items: Product[]; total: number }>;
-    },
-    enabled: open,
-  });
-
   // ─── Fix: useMemo → useEffect for form initialization ───
   useEffect(() => {
     if (open) {
       if (offer) {
+        // Parse the [Quality] block back out of notes so the Inspection and
+        // Certificate form fields show their saved values when editing.
+        const rawNotes = (offer.notes as string | null | undefined) || "";
+        const qualityMatch = rawNotes.match(
+          /\[Quality\]\s*Inspection:\s*([^|]+?)(?:\s*\|\s*Certificate:\s*(.+?))?\s*$/m,
+        );
+        const inspection = qualityMatch ? (qualityMatch[1] || "").trim() : null;
+        const certificate = qualityMatch ? (qualityMatch[2] || "").trim() : null;
+        const cleanNotes = rawNotes
+          .replace(/\n*\[Quality\][\s\S]*$/m, "")
+          .trim();
+
         setForm({
           ...offer,
+          notes: cleanNotes,
+          // offer-level origin_country is a real DB column but is not on the
+          // Prisma Offer type, so it round-trips through the untyped spread.
+          origin_country: (offer as any).origin_country ?? null,
+          inspection,
+          certificate,
           items: (offer.items || []).map((i) => ({ ...i })),
         });
         setMoreDetailsOpen(true);
@@ -1232,6 +1425,9 @@ function OfferFormDialog({
           valid_until: thirtyDaysFromNow(),
           notes: "",
           terms: "",
+          origin_country: null,
+          inspection: null,
+          certificate: null,
           items: [],
         });
         setMoreDetailsOpen(false);
@@ -1242,6 +1438,13 @@ function OfferFormDialog({
   }, [open, offer]);
 
   function set<K extends keyof Offer>(k: K, v: Offer[K]) {
+    setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  /** Setter for the extra form-only fields (origin_country, inspection,
+   *  certificate) that are not part of the `Offer` type but live in the same
+   *  form state. */
+  function setExtra(k: "origin_country" | "inspection" | "certificate", v: string | null) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
@@ -1284,10 +1487,18 @@ function OfferFormDialog({
   }, []);
 
   // ─── Product auto-fill ───
-  const selectProduct = useCallback(async (idx: number, productId: string) => {
-    const p = (products.data?.items || []).find((x) => x.id === productId);
-    if (!p) return;
-
+  // Called when the user picks a product from the ProductPicker. We:
+  //   1. Fill the line item with the product's core fields immediately.
+  //   2. Fetch /api/automation/product-context — this returns the catalog
+  //      spec-sheet, supplier offers, inventory & price history in one call.
+  //   3. Override with the catalog spec-sheet's richer metadata (HS code,
+  //      specifications, origin) when present.
+  //   4. If a recent active supplier offer exists, use its unit_price as the
+  //      default (smart auto-fill — "if the product exists in our DB, suggest
+  //      the latest buy price") and copy trade fields onto the offer header
+  //      when the user hasn't filled them in yet.
+  const selectProduct = useCallback(async (idx: number, p: Product) => {
+    // 1. Immediate line-item fill from the product itself.
     setItem(idx, {
       product_id: p.id,
       product_name: p.name,
@@ -1302,13 +1513,12 @@ function OfferFormDialog({
 
     setLoadingProductIdx(idx);
     try {
-      const r = await fetch(api(`/api/automation/product-context?product_id=${productId}`));
+      const r = await fetch(api(`/api/automation/product-context?product_id=${p.id}`));
       if (!r.ok) throw new Error("Failed to load product context");
       const ctx: ProductContext = await r.json();
       setProductContextMap((prev) => ({ ...prev, [idx]: ctx }));
 
-      // If a matching catalog spec-sheet entry was found, prefer its richer
-      // metadata (HS code, specifications, origin) on the line item.
+      // 2. Catalog spec-sheet override — richer trade metadata.
       const ce = ctx.catalogEntry;
       if (ce) {
         setItem(idx, {
@@ -1322,13 +1532,82 @@ function OfferFormDialog({
         if (ce.price) setItem(idx, { unit_price: ce.price });
       }
 
-      toast.success(`Product loaded: ${p.name}`, { description: `Price: ${fmtMoney(p.price, p.currency)} | SKU: ${p.sku}` });
+      // 3. Latest supplier offer — smart price suggestion + trade-term auto-fill.
+      // Sort by created_at desc so "latest" really means most recent, not just
+      // first-in-array. Active offers are preferred over expired/on_hold ones.
+      const supplierOffers: SupplierOffer[] = (ctx.supplierOffers || []) as SupplierOffer[];
+      const activeSorted = [...supplierOffers].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      const latestOffer: SupplierOffer | null =
+        activeSorted.find((so) => so.status === "active") ||
+        activeSorted[0] ||
+        null;
+
+      // Persist the resolved latest offer on the context so the UI can render
+      // the supplier-price indicator below the unit_price input without having
+      // to re-derive it.
+      if (latestOffer) {
+        setProductContextMap((prev) => ({
+          ...prev,
+          [idx]: { ...ctx, latestSupplierOffer: latestOffer },
+        }));
+      }
+
+      if (latestOffer) {
+        // Use the supplier offer's unit_price as the line's default buy price
+        // (only if it's a positive number — guards against bad data).
+        const soPrice = Number(latestOffer.unit_price);
+        if (Number.isFinite(soPrice) && soPrice > 0) {
+          setItem(idx, { unit_price: soPrice });
+        }
+        // Origin country on the line item (prefer the catalog spec-sheet,
+        // then the supplier offer). We only override if the catalog didn't
+        // already provide one — the SO's origin is a fallback.
+        if (latestOffer.origin_country && !(ce && ce.origin_country)) {
+          setItem(idx, { origin_country: latestOffer.origin_country });
+        }
+
+        // Offer-header trade fields — only fill in those the user hasn't set
+        // yet, so we never clobber manual edits. Per task spec we only do this
+        // for the FIRST line item (idx === 0) so adding a second product
+        // doesn't silently re-fill the header.
+        if (idx === 0) {
+          setForm((f) => ({
+            ...f,
+            packaging: f.packaging || latestOffer.packaging || null,
+            incoterm: f.incoterm || latestOffer.incoterm || null,
+            pol: f.pol || latestOffer.loading_port || null,
+            payment_terms: f.payment_terms || latestOffer.payment_terms || f.payment_terms || null,
+            lead_time:
+              f.lead_time ||
+              (latestOffer.lead_time_days
+                ? `${latestOffer.lead_time_days} days`
+                : f.lead_time || null),
+            origin_country:
+              (f as any).origin_country ||
+              latestOffer.origin_country ||
+              null,
+          }));
+        }
+
+        toast.success(`Product loaded: ${p.name}`, {
+          description: `Supplier price: ${fmtMoney(latestOffer.unit_price, latestOffer.currency || p.currency)}${latestOffer.offer_number ? ` · ${latestOffer.offer_number}` : ""} · SKU ${p.sku}`,
+        });
+      } else {
+        toast.success(`Product loaded: ${p.name}`, {
+          description: `Price: ${fmtMoney(p.price, p.currency)} | SKU: ${p.sku}`,
+        });
+      }
     } catch {
-      // Context is optional — basic info already filled
+      // Context is optional — basic info already filled above.
+      toast.success(`Product loaded: ${p.name}`, {
+        description: `Price: ${fmtMoney(p.price, p.currency)} | SKU: ${p.sku}`,
+      });
     } finally {
       setLoadingProductIdx(null);
     }
-  }, [products.data]);
+  }, [api]);
 
   function addItem() {
     setForm((f) => ({
@@ -1360,8 +1639,34 @@ function OfferFormDialog({
     try {
       const method = offer ? "PUT" : "POST";
       const url = offer ? api(`/api/offers/${offer.id}`) : api("/api/offers");
+
+      // `inspection` and `certificate` are NOT DB columns on `offers` (only on
+      // `supplier_offers`). To preserve the data without a schema migration we
+      // fold them into the `notes` field as a "[Quality]" block, replacing any
+      // previously-saved block so re-saving doesn't duplicate it. We then
+      // strip them from the body so Supabase doesn't reject the upsert with an
+      // "unknown column" error.
+      const inspection = (form as any).inspection as string | null | undefined;
+      const certificate = (form as any).certificate as string | null | undefined;
+      const baseNotes = ((form.notes as string | null | undefined) || "")
+        .replace(/\n*\[Quality\][\s\S]*$/m, "")
+        .trim();
+      const qualityParts: string[] = [];
+      if (inspection) qualityParts.push(`Inspection: ${inspection}`);
+      if (certificate) qualityParts.push(`Certificate: ${certificate}`);
+      const combinedNotes =
+        baseNotes || qualityParts.length > 0
+          ? qualityParts.length > 0
+            ? `${baseNotes}\n\n[Quality] ${qualityParts.join(" | ")}`.trim()
+            : baseNotes
+          : "";
+
+      // Strip the extra fields so they aren't sent to the API.
+      const { inspection: _insp, certificate: _cert, ...formRest } = form as any;
+
       const body = {
-        ...form,
+        ...formRest,
+        notes: combinedNotes,
         status: form.status || "draft",
         items: (form.items || []).map((it) => ({ ...it, total: lineTotal(it) })),
         ...computeTotals(form.items || []),
@@ -1391,7 +1696,6 @@ function OfferFormDialog({
   }
 
   const dealList = deals.data?.items || [];
-  const productList = products.data?.items || [];
   const selectedPartner = partnerContext?.partner || partners.find((p) => p.id === form.partner_id);
 
   return (
@@ -1559,24 +1863,165 @@ function OfferFormDialog({
               </div>
             )}
 
-            {/* Valid Until + Payment Terms row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          </div>
+
+          {/* ─── Trade Terms Section (always visible) ─── */}
+          {/* All the import/export fields every offer should carry, in one place
+              rather than scattered across the form. Auto-filled from the latest
+              supplier offer when the user adds the first line item. */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Truck className="h-4 w-4" /> Trade Terms
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Incoterm */}
               <div className="space-y-1.5">
-                <Label>Valid until</Label>
-                <Input
-                  type="date"
-                  value={form.valid_until ? form.valid_until.slice(0, 10) : ""}
-                  onChange={(e) => set("valid_until", e.target.value ? new Date(e.target.value).toISOString() : null)}
-                />
+                <Label>Incoterm *</Label>
+                <Select
+                  value={form.incoterm || "__none__"}
+                  onValueChange={(v) => set("incoterm", v === "__none__" ? null : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select incoterm" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {INCOTERM_CODES.map((code) => (
+                      <SelectItem key={code} value={code}>{code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Payment Terms */}
               <div className="space-y-1.5">
-                <Label>Payment Terms</Label>
+                <Label>Payment Terms *</Label>
                 <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
                   <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
                   <SelectContent>
                     {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Valid Until */}
+              <div className="space-y-1.5">
+                <Label>Valid Until *</Label>
+                <Input
+                  type="date"
+                  value={form.valid_until ? form.valid_until.slice(0, 10) : ""}
+                  onChange={(e) => set("valid_until", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                />
+              </div>
+
+              {/* Loading Port (POL) */}
+              <div className="space-y-1.5">
+                <Label>Loading Port (POL)</Label>
+                <PortAutocomplete
+                  value={form.pol || ""}
+                  onChange={(v) => set("pol", v)}
+                  placeholder="e.g., Hamburg"
+                />
+              </div>
+
+              {/* Discharge Port (POD) */}
+              <div className="space-y-1.5">
+                <Label>Discharge Port (POD)</Label>
+                <PortAutocomplete
+                  value={form.pod || ""}
+                  onChange={(v) => set("pod", v)}
+                  placeholder="e.g., Jebel Ali"
+                />
+              </div>
+
+              {/* Lead Time */}
+              <div className="space-y-1.5">
+                <Label>Lead Time</Label>
+                <Input
+                  value={form.lead_time || ""}
+                  onChange={(e) => set("lead_time", e.target.value)}
+                  placeholder="e.g., 14 days"
+                />
+              </div>
+
+              {/* Packaging */}
+              <div className="space-y-1.5">
+                <Label>Packaging</Label>
+                <Input
+                  value={form.packaging || ""}
+                  onChange={(e) => set("packaging", e.target.value)}
+                  placeholder="e.g., 50kg PP bags"
+                />
+              </div>
+
+              {/* Origin Country */}
+              <div className="space-y-1.5">
+                <Label>Origin Country</Label>
+                <CountrySelect
+                  value={(form as any).origin_country ?? null}
+                  onChange={(v) => setExtra("origin_country", v || null)}
+                  placeholder="Select origin country"
+                />
+              </div>
+
+              {/* Inspection */}
+              <div className="space-y-1.5">
+                <Label>Inspection</Label>
+                <Select
+                  value={(form as any).inspection || "__none__"}
+                  onValueChange={(v) => setExtra("inspection", v === "__none__" ? null : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select inspection" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    <SelectItem value="SGS">SGS</SelectItem>
+                    <SelectItem value="Intertek">Intertek</SelectItem>
+                    <SelectItem value="Bureau Veritas">Bureau Veritas</SelectItem>
+                    <SelectItem value="Cotecna">Cotecna</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Certificate */}
+              <div className="space-y-1.5">
+                <Label>Certificate</Label>
+                <Input
+                  value={(form as any).certificate || ""}
+                  onChange={(e) => setExtra("certificate", e.target.value || null)}
+                  placeholder="e.g., Phytosanitary, ISO 22000, Halal"
+                />
+              </div>
+
+              {/* Bank Details */}
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Bank Details</Label>
+                <Textarea
+                  rows={2}
+                  value={form.bank_details || ""}
+                  onChange={(e) => set("bank_details", e.target.value)}
+                  placeholder="Bank name, IBAN, SWIFT/BIC…"
+                />
+              </div>
+            </div>
+
+            {/* Notes & Terms */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea
+                  rows={2}
+                  value={form.notes || ""}
+                  onChange={(e) => set("notes", e.target.value)}
+                  placeholder="Additional notes visible to the partner…"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Terms &amp; Conditions</Label>
+                <Textarea
+                  rows={2}
+                  value={typeof form.terms === "string" ? form.terms : ""}
+                  onChange={(e) => set("terms", e.target.value)}
+                  placeholder="Delivery time, warranty, dispute resolution…"
+                />
               </div>
             </div>
           </div>
@@ -1626,69 +2071,65 @@ function OfferFormDialog({
                       <TableRow key={idx}>
                         <TableCell>
                           <div className="space-y-1">
-                            <Select
-                              value={it.product_id || "__custom__"}
-                              onValueChange={(v) => {
-                                if (v === "__custom__") {
-                                  // Clear the product selection but keep the
-                                  // current product_name so the user can keep
-                                  // typing manually.
+                            <ProductPicker
+                              value={it.product_id || ""}
+                              fallbackName={it.product_name || ""}
+                              fallbackSku={it.sku || ""}
+                              placeholder="Search products by name, SKU, HS code…"
+                              onSelect={(product) => {
+                                if (product) {
+                                  selectProduct(idx, product);
+                                } else {
                                   setItem(idx, { product_id: "" });
                                   setProductContextMap((prev) => {
                                     const next = { ...prev };
                                     delete next[idx];
                                     return next;
                                   });
-                                  return;
                                 }
-                                selectProduct(idx, v);
                               }}
-                            >
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__custom__">— Manual —</SelectItem>
-                                {productList.map((p) => (
-                                  <SelectItem key={p.id} value={p.id}>
-                                    <div className="flex items-center gap-2">
-                                      <span>{p.name}</span>
-                                      <span className="text-xs text-muted-foreground font-mono">{p.sku}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              onAddCustom={() => {
+                                // "Add custom product" — clear the product_id
+                                // but keep the current product_name so the
+                                // user can keep typing a manual entry.
+                                setItem(idx, { product_id: "" });
+                                setProductContextMap((prev) => {
+                                  const next = { ...prev };
+                                  delete next[idx];
+                                  return next;
+                                });
+                              }}
+                            />
                             <Input
                               className="h-7 text-xs"
-                              placeholder="Product name"
+                              placeholder="Product name (override)"
                               value={it.product_name || ""}
                               onChange={(e) => setItem(idx, { product_name: e.target.value })}
                             />
-                            {(it as any).hs_code || (it as any).brand || productContextMap[idx] ? (
-                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-                                {(it as any).hs_code && (
-                                  <span className="font-mono px-1.5 py-0.5 rounded bg-muted">HS {(it as any).hs_code}</span>
-                                )}
-                                {(it as any).brand && (
-                                  <span>{(it as any).brand}</span>
-                                )}
-                                {productContextMap[idx]?.inventoryStatus && (
-                                  <span className="flex items-center gap-0.5">
-                                    <Package className="size-2.5" />
-                                    Stock: {productContextMap[idx].inventoryStatus!.stock}
-                                  </span>
-                                )}
-                                {productContextMap[idx]?.priceHistory && productContextMap[idx].priceHistory.length > 0 && (
-                                  <span className="flex items-center gap-0.5">
-                                    <Info className="size-2.5" />
-                                    Last: {fmtMoney(productContextMap[idx].priceHistory[0].unit_price, productContextMap[idx].priceHistory[0].currency)}
-                                  </span>
-                                )}
-                              </div>
-                            ) : null}
                             {loadingProductIdx === idx && (
                               <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                            )}
+                            {productContextMap[idx] ? (
+                              <ProductContextPreview
+                                ctx={productContextMap[idx]}
+                                lineItem={it}
+                                partners={partners}
+                                currency={form.currency || "USD"}
+                              />
+                            ) : (
+                              // Lightweight inline metadata shown before the
+                              // full context has loaded (or when the API call
+                              // failed). Keeps the old HS / brand / stock chips.
+                              ((it as any).hs_code || (it as any).brand) ? (
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                                  {(it as any).hs_code && (
+                                    <span className="font-mono px-1.5 py-0.5 rounded bg-muted">HS {(it as any).hs_code}</span>
+                                  )}
+                                  {(it as any).brand && (
+                                    <span>{(it as any).brand}</span>
+                                  )}
+                                </div>
+                              ) : null
                             )}
                           </div>
                         </TableCell>
@@ -1701,10 +2142,11 @@ function OfferFormDialog({
                           />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            className="h-8 text-xs w-16"
-                            value={it.unit || "pcs"}
-                            onChange={(e) => setItem(idx, { unit: e.target.value })}
+                          <UnitSelect
+                            value={it.unit || ""}
+                            onChange={(v) => setItem(idx, { unit: v })}
+                            placeholder="pcs"
+                            className="h-8 text-xs w-24"
                           />
                         </TableCell>
                         <TableCell className="text-right">
@@ -1714,6 +2156,29 @@ function OfferFormDialog({
                             value={it.unit_price}
                             onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
                           />
+                          {productContextMap[idx]?.latestSupplierOffer && (
+                            <div className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-0.5 mt-0.5 justify-end">
+                              <Info className="size-2.5 shrink-0" />
+                              <span className="font-mono">
+                                {fmtMoney(
+                                  productContextMap[idx].latestSupplierOffer!.unit_price,
+                                  productContextMap[idx].latestSupplierOffer!.currency || form.currency || "USD",
+                                )}
+                              </span>
+                              <span className="text-muted-foreground">
+                                /{it.unit || "unit"}
+                              </span>
+                              <span className="text-muted-foreground ml-0.5">
+                                (SO-
+                                {(
+                                  productContextMap[idx].latestSupplierOffer!.offer_number ||
+                                  productContextMap[idx].latestSupplierOffer!.id ||
+                                  ""
+                                ).slice(-6) || "?"}
+                                )
+                              </span>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-right hidden sm:table-cell">
                           <Input
@@ -1808,7 +2273,7 @@ function OfferFormDialog({
                   <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 )}
                 <span className="text-sm font-medium">More Details</span>
-                <span className="text-xs text-muted-foreground">Subject, deal, incoterm, shipping, bank, notes…</span>
+                <span className="text-xs text-muted-foreground">Subject, deal, vessel, container, tax clause…</span>
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -1840,92 +2305,31 @@ function OfferFormDialog({
                   </div>
                 </div>
 
-                {/* Trade fields */}
+                {/* Supplier ref + Selling price */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label>Supplier Ref (offer_no)</Label>
                     <Input value={form.offer_no || ""} onChange={(e) => set("offer_no", e.target.value)} placeholder="SUP-2026-001" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Incoterm</Label>
-                    <Select value={form.incoterm || "__none__"} onValueChange={(v) => set("incoterm", v === "__none__" ? null : v)}>
-                      <SelectTrigger><SelectValue placeholder="Select incoterm" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— None —</SelectItem>
-                        <SelectItem value="EXW">EXW</SelectItem>
-                        <SelectItem value="FOB">FOB</SelectItem>
-                        <SelectItem value="CIF">CIF</SelectItem>
-                        <SelectItem value="CFR">CFR</SelectItem>
-                        <SelectItem value="DDP">DDP</SelectItem>
-                        <SelectItem value="DAP">DAP</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
                     <Label>Selling Price</Label>
                     <Input type="number" value={form.selling_price ?? ""} onChange={(e) => set("selling_price", e.target.value === "" ? null : Number(e.target.value))} placeholder="Per unit" />
                   </div>
-                </div>
-
-                {/* Shipping */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <PortAutocomplete
-                      label="Port of Loading (POL)"
-                      value={form.pol || ""}
-                      onChange={(v) => set("pol", v)}
-                      placeholder="Start typing port name…"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <PortAutocomplete
-                      label="Port of Discharge (POD)"
-                      value={form.pod || ""}
-                      onChange={(v) => set("pod", v)}
-                      placeholder="Start typing port name…"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Vessel</Label>
-                    <Input value={form.vessel || ""} onChange={(e) => set("vessel", e.target.value)} placeholder="MV Ever Given" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Container No.</Label>
-                    <Input value={form.container_no || ""} onChange={(e) => set("container_no", e.target.value)} placeholder="MSKU-1234567" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Lead Time</Label>
-                    <Input value={form.lead_time || ""} onChange={(e) => set("lead_time", e.target.value)} placeholder="14 days" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Packaging</Label>
-                    <Input value={form.packaging || ""} onChange={(e) => set("packaging", e.target.value)} placeholder="50 kg PP bags" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Tax Clause</Label>
                     <Input value={form.tax_clause || ""} onChange={(e) => set("tax_clause", e.target.value)} placeholder="VAT reverse charge" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Bank Details</Label>
-                    <Input value={form.bank_details || ""} onChange={(e) => set("bank_details", e.target.value)} placeholder="Bank name · IBAN" />
-                  </div>
                 </div>
 
-                {/* Notes & Terms */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Shipping specifics — vessel + container */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Notes</Label>
-                    <Textarea rows={2} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder="Additional notes visible to the partner…" />
+                    <Label>Vessel</Label>
+                    <Input value={form.vessel || ""} onChange={(e) => set("vessel", e.target.value)} placeholder="MV Ever Given" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Terms</Label>
-                    <Textarea rows={2} value={typeof form.terms === "string" ? form.terms : ""} onChange={(e) => set("terms", e.target.value)} placeholder="Delivery time, payment terms…" />
+                    <Label>Container No.</Label>
+                    <Input value={form.container_no || ""} onChange={(e) => set("container_no", e.target.value)} placeholder="MSKU-1234567" />
                   </div>
                 </div>
 

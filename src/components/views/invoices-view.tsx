@@ -44,6 +44,7 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Invoice, InvoiceStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, INVOICE_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { UnitSelect } from "@/components/common/unit-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 
@@ -1566,7 +1567,7 @@ function InvoiceFormDialog({
                   <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
                     {(form.items || []).map((it, idx) => (
                       <div key={idx} className="rounded-md border p-2 grid grid-cols-12 gap-1.5 items-end">
-                        <div className="col-span-12 sm:col-span-5 space-y-1">
+                        <div className="col-span-12 sm:col-span-3 space-y-1">
                           <Label className="text-xs">Product</Label>
                           <Select
                             value={it.product_id || "__custom__"}
@@ -1590,13 +1591,21 @@ function InvoiceFormDialog({
                             onChange={(e) => setItem(idx, { product_name: e.target.value })}
                           />
                         </div>
-                        <div className="col-span-3 sm:col-span-2 space-y-1">
+                        <div className="col-span-4 sm:col-span-2 space-y-1">
                           <Label className="text-xs">Qty</Label>
                           <Input
                             type="number"
                             className="h-9"
                             value={it.quantity}
                             onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-4 sm:col-span-2 space-y-1">
+                          <Label className="text-xs">Unit</Label>
+                          <UnitSelect
+                            value={it.unit || ""}
+                            onChange={(v) => setItem(idx, { unit: v })}
+                            placeholder="pcs"
                           />
                         </div>
                         <div className="col-span-4 sm:col-span-2 space-y-1">

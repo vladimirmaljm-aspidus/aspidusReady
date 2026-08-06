@@ -43,8 +43,10 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate } from "@/lib/utils/format";
 import { ProductCatalogEntry, SupplierOffer, Partner } from "@/lib/supabase/types";
 import {
-  PRODUCT_CATEGORIES, UNITS_OF_MEASURE, COUNTRIES, getCountry,
+  PRODUCT_CATEGORIES, UNITS_OF_MEASURE,
 } from "@/lib/data/reference";
+import { getCountry } from "@/lib/data/geo/countries";
+import { CountrySelect } from "@/components/common/country-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
 const PAGE_SIZE = 20;
@@ -755,17 +757,12 @@ function ProductFormDialog({
               <div className="space-y-3 pt-1 pb-2">
                 <div className="space-y-1.5">
                   <Label>Origin country</Label>
-                  <Select value={form.origin_country || "__none__"} onValueChange={(v) => set("origin_country", v === "__none__" ? null : v)}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Not specified" /></SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      <SelectItem value="__none__">Not specified</SelectItem>
-                      {COUNTRIES.map((c) => (
-                        <SelectItem key={c.code} value={c.code}>
-                          <span className="mr-2">{flagEmoji(c.code)}</span>{c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CountrySelect
+                    value={form.origin_country}
+                    onChange={(v) => set("origin_country", v)}
+                    placeholder="Not specified"
+                    className="h-10"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
