@@ -33,7 +33,6 @@ import {
   Download,
   Lock,
   Inbox,
-  Phone,
   Loader2,
   Calendar,
   Clock,

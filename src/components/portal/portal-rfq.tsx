@@ -234,20 +234,15 @@ export function PortalRfq() {
       incoterm: form.incoterm || null,
       specifications: form.specifications.trim() || null,
       notes: form.notes.trim() || null,
-      // Third-party company info (stored in notes if not supported by schema)
+      buyer_type: form.is_third_party ? "third_party" : "self",
       ...(form.is_third_party ? {
-        notes: [
-          form.notes.trim(),
-          "",
-          "=== THIRD-PARTY DELIVERY ===",
-          `Company: ${form.third_party_company_name}`,
-          `Country: ${form.third_party_country}`,
-          form.third_party_address ? `Address: ${form.third_party_address}` : "",
-          form.third_party_contact_name ? `Contact: ${form.third_party_contact_name}` : "",
-          `Email: ${form.third_party_contact_email}`,
-          form.third_party_contact_phone ? `Phone: ${form.third_party_contact_phone}` : "",
-          form.third_party_tax_id ? `Tax ID: ${form.third_party_tax_id}` : "",
-        ].filter(Boolean).join("\n"),
+        third_party_company_name: form.third_party_company_name.trim() || null,
+        third_party_country: form.third_party_country || null,
+        third_party_address: form.third_party_address.trim() || null,
+        third_party_contact_name: form.third_party_contact_name.trim() || null,
+        third_party_contact_email: form.third_party_contact_email.trim() || null,
+        third_party_contact_phone: form.third_party_contact_phone.trim() || null,
+        third_party_tax_id: form.third_party_tax_id.trim() || null,
       } : {}),
     });
   }

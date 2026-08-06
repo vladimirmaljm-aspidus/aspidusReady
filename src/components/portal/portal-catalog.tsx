@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 import { useAppStore } from "@/lib/store/app-store";
 import {
   Select,
@@ -56,7 +55,7 @@ function categoryClass(cat: string): string {
 
 // ISO alpha-2 → flag emoji
 function flagEmoji(code: string | null): string {
-  if (!code || code.length !== 2) return "🏳";
+  if (!code || code.length !== 2) return "";
   const cp = code
     .toUpperCase()
     .split("")

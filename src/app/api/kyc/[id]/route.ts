@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { listPortalUploads } from "@/lib/portal/uploads";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!auth.isSuperAdmin && sub.tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
-  return NextResponse.json(sub);
+  // Attach uploaded KYC documents (portal_uploads with category=kyc + submission link)
+  const { items: uploads } = await listPortalUploads(sub.tenant_id, {
+    partnerId: sub.partner_id,
+    category: "kyc",
+    limit: 500,
+  });
+  const documents = uploads
+    .filter((u: any) => u.kyc_submission_id === sub.id)
+    .map((u: any) => ({
+      id: u.id,
+      type: u.doc_type,
+      filename: u.filename,
+      mime_type: u.mime_type,
+      size: u.size_bytes,
+      uploaded_at: u.uploaded_at,
+      // URL the admin UI can call to open the file in a new tab
+      url: `/api/portal-uploads/${u.id}/download?mode=inline`,
+    }));
+  return NextResponse.json({ ...sub, documents });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

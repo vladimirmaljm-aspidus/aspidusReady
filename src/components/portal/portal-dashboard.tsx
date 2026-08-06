@@ -26,8 +26,6 @@ import {
   FileCheck,
   Activity,
   Mail,
-  MailOpen,
-  ExternalLink,
   MessageSquare,
   CreditCard,
   Info,

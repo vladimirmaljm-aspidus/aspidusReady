@@ -33,7 +33,6 @@ import {
   Download,
   Lock,
   Inbox,
-  Phone,
   Loader2,
   Calendar,
   Clock,
@@ -283,9 +282,6 @@ function EmptyOffers() {
         Your account manager will send your offers here. Reach out to discuss
         your needs.
       </p>
-      <Button variant="outline" size="sm" disabled className="mt-4">
-        <Phone className="size-4 mr-1.5" /> Contact your account manager
-      </Button>
     </div>
   );
 }

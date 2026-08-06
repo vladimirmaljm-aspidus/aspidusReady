@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { getPortalUpload } from "@/lib/portal/uploads";
-import { getSignedDownloadUrl } from "@/lib/upload/service";
+import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
 
@@ -24,9 +24,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   if (upload.deleted_at) return NextResponse.json({ error: "This file was deleted." }, { status: 410 });
 
-  const signed = await getSignedDownloadUrl(upload.storage_bucket, upload.storage_path, 300);
-  if (!signed) return NextResponse.json({ error: "Storage unavailable." }, { status: 502 });
+  const inline = new URL(req.url).searchParams.get("mode") === "inline";
+  const sb = getSupabase();
+  const { data, error } = await sb.storage
+    .from(upload.storage_bucket)
+    .createSignedUrl(upload.storage_path, 300, inline ? undefined : { download: upload.filename || true });
+  if (error || !data?.signedUrl) return NextResponse.json({ error: "Storage unavailable." }, { status: 502 });
 
   await audit(auth.store, auth.user, req, "portal_upload.download", "portal_upload", id, { filename: upload.filename }).catch(() => {});
-  return NextResponse.redirect(signed, 302);
+  return NextResponse.redirect(data.signedUrl, 302);
 }
