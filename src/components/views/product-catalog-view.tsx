@@ -200,7 +200,7 @@ export function ProductCatalogView() {
     <div>
       <PageHeader
         title="Product Catalog"
-        description={`${total} products`}
+        description={`${total} catalog entries · spec-sheet used by Supplier Offers and the client portal (HS codes, specifications, images). The portal also automatically shows every active product from Products, so this catalog is optional.`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
             <Plus className="size-4 mr-1" /> New Product
