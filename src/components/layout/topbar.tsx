@@ -133,7 +133,9 @@ export function Topbar() {
     fetch("/api/notifications?unreadOnly=true")
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setNotifications(data.slice(0, 10));
+        // API returns { items, unread_count } — handle both shapes defensively
+        const items = Array.isArray(data) ? data : (data?.items ?? []);
+        setNotifications(items.slice(0, 10));
       })
       .catch(() => {});
   }, [user]);

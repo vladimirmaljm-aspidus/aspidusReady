@@ -97,7 +97,12 @@ export async function POST(req: NextRequest) {
   const tid = resolveTenantId(auth, req);
   if (!tid) return NextResponse.json({ error: "Tenant required." }, { status: 400 });
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   body.tenant_id = tid;
   body.user_id = body.user_id || auth.user.id; // creator
 

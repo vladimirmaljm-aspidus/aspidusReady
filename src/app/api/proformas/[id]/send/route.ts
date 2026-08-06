@@ -20,7 +20,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  const { email: toEmail } = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  const { email: toEmail } = body;
   if (!toEmail) {
     return NextResponse.json({ error: "Email address is required." }, { status: 400 });
   }

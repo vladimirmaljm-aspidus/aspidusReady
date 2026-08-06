@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 function getAuthUser(auth: AuthContext | ApiKeyAuthContext) {
   if ("user" in auth) return auth.user;
-  return { id: `api:${auth.apiKeyId}`, username: auth.apiKeyName };
+  return { id: `api:${auth.apiKeyId}`, username: auth.apiKeyName, tenant_id: auth.tenantId };
 }
 
 export async function GET(req: NextRequest) {
@@ -53,7 +53,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
   }
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   body.tenant_id = tid!;
   if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
   // recompute totals from items if not provided

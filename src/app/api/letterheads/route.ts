@@ -56,7 +56,12 @@ export async function POST(req: NextRequest) {
     tenantId = tenants[0]?.id || null;
   }
   if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   body.tenant_id = tenantId;
   if (!body.created_by) body.created_by = auth.user.id;
   const created = await auth.store.upsertLetterhead(body);

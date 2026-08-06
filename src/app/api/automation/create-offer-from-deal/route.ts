@@ -18,9 +18,9 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (dashboard.create)
+    // Permission gate (offers.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "dashboard.create"); if (_d) return _d; } } /* requirePermission wired */
+      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "offers.create"); if (_d) return _d; } } /* requirePermission wired */
 
 
   const tid = resolveTenantId(auth, req);

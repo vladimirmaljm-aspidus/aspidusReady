@@ -14,7 +14,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (auth instanceof NextResponse) return auth;
 
   const { id } = await params;
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const decision = body.decision as "approve" | "reject";
   if (decision !== "approve" && decision !== "reject") {
     return NextResponse.json({ error: "decision must be 'approve' or 'reject'." }, { status: 400 });

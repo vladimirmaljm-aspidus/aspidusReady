@@ -33,7 +33,12 @@ export async function POST(req: NextRequest) {
   }
   const store = await getStore();
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   body.partner_id = access.partner_id;
   body.tenant_id = access.tenant_id;
   body.portal_access_id = access.id;

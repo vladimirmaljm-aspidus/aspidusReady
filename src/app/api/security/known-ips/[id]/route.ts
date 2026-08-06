@@ -23,7 +23,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
   }
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   await auth.store.trustIp(id, !!body.trusted);
   await audit(auth.store, auth.user, req, "ip.trust", "known_ip", id, { trusted: body.trusted });
   return NextResponse.json({ ok: true });

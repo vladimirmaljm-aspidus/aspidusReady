@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
-import { Toaster as HotToaster } from "@/components/ui/toaster";
 import { Providers } from "@/components/providers";
 import { ThemeProvider } from "next-themes";
 
@@ -37,7 +36,6 @@ export default function RootLayout({
           <Providers>
             {children}
             <Toaster richColors position="top-right" />
-            <HotToaster />
           </Providers>
         </ThemeProvider>
       </body>

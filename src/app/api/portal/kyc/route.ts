@@ -38,7 +38,12 @@ export async function POST(req: NextRequest) {
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   const store = await getStore();
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   // Ensure partner + tenant are set correctly
   body.partner_id = access.partner_id;
   body.tenant_id = access.tenant_id;

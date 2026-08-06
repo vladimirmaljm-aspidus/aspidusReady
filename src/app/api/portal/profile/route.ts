@@ -24,7 +24,12 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
   const store = await getStore();
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   // Partner can only update limited fields (contact info)
   const allowed = {
     id: access.partner_id,

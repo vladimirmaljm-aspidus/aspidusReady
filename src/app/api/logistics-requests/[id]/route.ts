@@ -40,7 +40,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const row = await loadOwned(id, auth);
   if (!row) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const allow = [
     "status", "quoted_price", "quoted_currency", "quoted_transit_days",
     "quoted_notes", "linked_offer_id", "admin_notes",

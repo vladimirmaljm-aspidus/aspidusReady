@@ -17,9 +17,9 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (dashboard.create)
+    // Permission gate (invoices.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "dashboard.create"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "invoices.create"); if (_d) return _d; } /* requirePermission wired */
 
 
   const tid = auth.tenantId!;

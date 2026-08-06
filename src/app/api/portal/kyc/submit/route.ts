@@ -11,7 +11,12 @@ export async function POST(req: NextRequest) {
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   const store = await getStore();
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const existing = await store.getKycSubmissionByPartner(access.partner_id);
   if (!existing) {
     return NextResponse.json({ error: "No KYC draft found. Save first." }, { status: 400 });

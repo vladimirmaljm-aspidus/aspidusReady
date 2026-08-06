@@ -32,7 +32,12 @@ export async function POST(req: NextRequest) {
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_api_keys", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
 
   // Validate required fields
   if (!body.name || typeof body.name !== "string" || !body.name.trim()) {

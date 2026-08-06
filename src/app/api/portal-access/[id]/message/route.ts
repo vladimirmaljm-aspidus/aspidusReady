@@ -43,7 +43,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  const { message, send_email } = await req.json();
+  let _reqBody;
+  try {
+    _reqBody = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  const { message, send_email } = _reqBody;
   const body = sanitizeMessageBody(message);
   if (!body) return NextResponse.json({ error: "Message is required." }, { status: 400 });
 

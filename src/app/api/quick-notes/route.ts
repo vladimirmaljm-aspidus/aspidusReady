@@ -26,7 +26,12 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   if (!auth.tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const sb = getSupabase();
   const row = {
     id: body.id || undefined,

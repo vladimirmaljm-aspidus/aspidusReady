@@ -19,7 +19,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   // Preserve the entity's tenant_id
   const updated = await auth.store.upsertTask({ ...body, id, tenant_id: existing.tenant_id });
   await audit(auth.store, auth.user, req, "task.update", "task", id, { done: (updated as any).done });

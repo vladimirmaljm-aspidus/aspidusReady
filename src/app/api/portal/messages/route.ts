@@ -30,7 +30,12 @@ export async function POST(req: NextRequest) {
   const access = await getPortalSessionAccess();
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
-  const raw = await req.json().catch(() => ({}));
+  let raw;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const body = sanitizeMessageBody(raw?.body ?? raw?.message);
   if (!body) return NextResponse.json({ error: "Message body is required." }, { status: 400 });
 
