@@ -320,13 +320,13 @@ export function TradeCalculatorView() {
                       {c.margin_percent.toFixed(1)}%
                     </Badge>
                     <div className="flex items-center gap-1 ml-1" onClick={(e) => e.stopPropagation()}>
-                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(c.id)} title="View">
+                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(c.id)} title="View" aria-label="View">
                         <Eye className="size-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(c); setShowForm(true); }} title="Edit">
+                      <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(c); setShowForm(true); }} title="Edit" aria-label="Edit">
                         <Pencil className="size-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(c.id)} title="Delete">
+                      <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(c.id)} title="Delete" aria-label="Delete">
                         <Trash2 className="size-4" />
                       </Button>
                     </div>
@@ -1252,7 +1252,7 @@ function CalcFormDialog({
                       </Select>
                     </div>
                     <div className="col-span-1 flex justify-end">
-                      <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive" onClick={() => removeLine(idx)} title="Remove">
+                      <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive" onClick={() => removeLine(idx)} title="Remove" aria-label="Remove">
                         <X className="size-4" />
                       </Button>
                     </div>

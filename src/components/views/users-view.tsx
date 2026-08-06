@@ -279,7 +279,7 @@ export function UsersView() {
                                 <UserCheck className="size-4" />
                               </Button>
                             )}
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(u); setShowForm(true); }} title="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(u); setShowForm(true); }} title="Edit" aria-label="Edit">
                               <Pencil className="size-4" />
                             </Button>
                             <Button
@@ -552,7 +552,7 @@ function UserFormDialog({
                   size="icon"
                   className="size-7 shrink-0"
                   onClick={() => copyToClipboard(createdPassword)}
-                  title="Copy password"
+                  title="Copy password" aria-label="Copy password"
                 >
                   {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5 text-muted-foreground" />}
                 </Button>
@@ -675,7 +675,7 @@ function UserFormDialog({
                       size="icon"
                       className="size-7 shrink-0"
                       onClick={() => copyToClipboard(form.password)}
-                      title="Copy password"
+                      title="Copy password" aria-label="Copy password"
                     >
                       {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5 text-muted-foreground" />}
                     </Button>
@@ -728,7 +728,7 @@ function UserFormDialog({
                       size="icon"
                       className="size-7 shrink-0"
                       onClick={() => copyToClipboard(form.password)}
-                      title="Copy password"
+                      title="Copy password" aria-label="Copy password"
                     >
                       {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5 text-muted-foreground" />}
                     </Button>

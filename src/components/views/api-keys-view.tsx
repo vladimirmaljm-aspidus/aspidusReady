@@ -237,7 +237,7 @@ export function ApiKeysView() {
                           variant="ghost"
                           className="size-8 text-destructive"
                           onClick={() => setDeleteId(k.id)}
-                          title="Opozovi"
+                          title="Opozovi" aria-label="Opozovi"
                         >
                           <Trash2 className="size-4" />
                         </Button>

@@ -268,7 +268,7 @@ export function DocumentRegisterView() {
                       <TableCell className="hidden xl:table-cell">{fmtDate(e.created_at)}</TableCell>
                       <TableCell className="text-right" onClick={(ev) => ev.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(e.id)} title="View">
+                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(e.id)} title="View" aria-label="View">
                             <Eye className="size-4" />
                           </Button>
                           <Button
@@ -276,11 +276,11 @@ export function DocumentRegisterView() {
                             variant="ghost"
                             className="size-8"
                             onClick={() => openVersion(e)}
-                            title="New version"
+                            title="New version" aria-label="New version"
                           >
                             <GitBranch className="size-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(e.id)} title="Delete">
+                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(e.id)} title="Delete" aria-label="Delete">
                             <Trash2 className="size-4" />
                           </Button>
                         </div>

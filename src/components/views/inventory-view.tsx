@@ -210,7 +210,7 @@ export function InventoryView() {
                         </TableCell>
                         <TableCell className="hidden xl:table-cell font-mono text-xs">{m.reference || "—"}</TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(m.id)} title="View">
+                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(m.id)} title="View" aria-label="View">
                             <Eye className="size-4" />
                           </Button>
                         </TableCell>

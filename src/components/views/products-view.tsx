@@ -234,13 +234,13 @@ export function ProductsView() {
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title="View">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title="View" aria-label="View">
                                 <Eye className="size-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title="Edit">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title="Edit" aria-label="Edit">
                                 <Pencil className="size-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Delete">
+                              <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Delete" aria-label="Delete">
                                 <Trash2 className="size-4" />
                               </Button>
                             </div>

@@ -215,10 +215,10 @@ export function VaultView() {
                         <TableCell className="hidden md:table-cell text-xs">{fmtRelative(s.updated_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(s); setShowForm(true); }} title="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(s); setShowForm(true); }} title="Edit" aria-label="Edit">
                               <Pencil className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(s.id)} title="Delete">
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(s.id)} title="Delete" aria-label="Delete">
                               <Trash2 className="size-4" />
                             </Button>
                           </div>

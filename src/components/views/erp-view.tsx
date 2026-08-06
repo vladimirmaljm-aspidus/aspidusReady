@@ -742,11 +742,11 @@ function ChartOfAccounts() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(account)}>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(account)} title="Edit" aria-label="Edit">
                         <Pencil className="size-4" />
                       </Button>
                       {!account.is_system && (
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(account)}>
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(account)} title="Delete" aria-label="Delete">
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
                       )}
@@ -1077,21 +1077,21 @@ function JournalEntries() {
                   <TableCell className="text-right font-mono">{fmtMoney(entry.credit_total, entry.currency)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => setViewEntry(entry)}>
+                      <Button variant="ghost" size="icon" onClick={() => setViewEntry(entry)} title="View" aria-label="View">
                         <Eye className="size-4" />
                       </Button>
                       {entry.status === "draft" && (
                         <>
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(entry)}>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} title="Edit" aria-label="Edit">
                             <Pencil className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => postMutation.mutate(entry.id)} title="Post">
+                          <Button variant="ghost" size="icon" onClick={() => postMutation.mutate(entry.id)} title="Post" aria-label="Post">
                             <CheckCircle2 className="size-4 text-emerald-600" />
                           </Button>
                         </>
                       )}
                       {entry.status === "posted" && (
-                        <Button variant="ghost" size="icon" onClick={() => reverseMutation.mutate(entry.id)} title="Reverse">
+                        <Button variant="ghost" size="icon" onClick={() => reverseMutation.mutate(entry.id)} title="Reverse" aria-label="Reverse">
                           <RotateCcw className="size-4 text-red-600" />
                         </Button>
                       )}
@@ -1200,7 +1200,7 @@ function JournalEntries() {
                         </TableCell>
                         <TableCell>
                           {form.lines.length > 1 && (
-                            <Button variant="ghost" size="icon" onClick={() => removeLine(idx)}>
+                            <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} title="Remove" aria-label="Remove">
                               <XCircle className="size-4 text-destructive" />
                             </Button>
                           )}

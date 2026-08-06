@@ -6,6 +6,7 @@ import { Topbar } from "./topbar";
 import { GlobalSearch } from "./global-search";
 import { ImpersonateBanner } from "./impersonate-banner";
 import { SubscriptionBanner } from "./subscription-banner";
+import { KeyboardShortcuts } from "./keyboard-shortcuts";
 import { useAppStore, useHydrateViewState } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
 import {
@@ -219,6 +220,7 @@ export function AppShell() {
 
       {/* ── Global overlays ── */}
       <GlobalSearch />
+      <KeyboardShortcuts />
     </div>
   );
 }

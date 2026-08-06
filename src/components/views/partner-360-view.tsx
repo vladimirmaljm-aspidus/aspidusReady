@@ -634,7 +634,7 @@ function Partner360Content({
                           <TableCell className="hidden md:table-cell tabular text-muted-foreground text-xs">{fmtDate(o.created_at)}</TableCell>
                           <TableCell className="text-right tabular">{fmtMoney(o.total, o.currency)}</TableCell>
                           <TableCell className="text-right">
-                            <Button asChild size="icon" variant="ghost" className="size-7">
+                            <Button asChild size="icon" variant="ghost" className="size-7" title="Download" aria-label="Download">
                               <a href={`/api/offers/${o.id}/pdf`} target="_blank" rel="noreferrer" download>
                                 <Download className="size-3.5" />
                               </a>
@@ -691,7 +691,7 @@ function Partner360Content({
                           <TableCell className="hidden md:table-cell tabular text-muted-foreground text-xs">{fmtDate(i.due_date)}</TableCell>
                           <TableCell className="text-right tabular">{fmtMoney(i.total, i.currency)}</TableCell>
                           <TableCell className="text-right">
-                            <Button asChild size="icon" variant="ghost" className="size-7">
+                            <Button asChild size="icon" variant="ghost" className="size-7" title="Download" aria-label="Download">
                               <a href={`/api/invoices/${i.id}/pdf`} target="_blank" rel="noreferrer" download>
                                 <Download className="size-3.5" />
                               </a>
@@ -1039,7 +1039,7 @@ function DocumentsTab({
                       {d.visible_to_partner ? "Visible" : "Hidden"}
                     </Badge>
                     <div className="ml-auto flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="size-7" onClick={() => { if (d.storage_path) { window.open(`/api/documents/${d.id}`, "_blank"); } else { toast.info("No file available for preview"); } }}>
+                      <Button size="icon" variant="ghost" className="size-7" onClick={() => { if (d.storage_path) { window.open(`/api/documents/${d.id}`, "_blank"); } else { toast.info("No file available for preview"); } }} title="View" aria-label="View">
                         <Eye className="size-3.5" />
                       </Button>
                       {canAdmin && (
@@ -1048,6 +1048,8 @@ function DocumentsTab({
                           variant="ghost"
                           className="size-7 text-destructive"
                           onClick={() => setDeleteId(d.id)}
+                          title="Delete"
+                          aria-label="Delete"
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
