@@ -1,3 +1,8 @@
+-- ⚠️ DEPRECATED — This schema file is stale and incomplete.
+-- Source of truth: supabase-schema-live.sql (auto-generated from live DB)
+-- This file is kept for historical reference only.
+-- Generated: 2026-08-06 17:49:18
+
 -- Aspidus Trade Management Platform — Complete Supabase Schema
 -- Auto-generated from actual database state
 

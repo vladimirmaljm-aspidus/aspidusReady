@@ -610,6 +610,14 @@ export interface Tenant {
   plan: "trial" | "starter" | "business" | "enterprise" | "custom";
   status: "active" | "suspended" | "cancelled";
   max_users: number;
+  // Subscription details (live DB columns — CRIT-1)
+  subscription_start?: string | null; // timestamptz
+  subscription_end?: string | null; // timestamptz
+  trial_ends_at?: string | null; // timestamptz
+  billing_cycle?: string | null; // monthly | yearly
+  amount_paid?: number | null; // numeric
+  currency_paid?: string | null; // ISO 4217
+  trial_days?: number | null; // int
   // Meta
   created_at: string;
   updated_at: string;
