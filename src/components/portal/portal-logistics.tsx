@@ -139,7 +139,7 @@ export function PortalLogistics() {
                         size="icon" variant="ghost" title="Duplicate this request"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const { id, number, status, created_at, quoted_price, quoted_currency, quoted_transit_days, ...rest } = r as any;
+                          const { id, number, status, created_at, quoted_price, quoted_currency, quoted_transit_days, tracking_number, tracking_url, carrier, shipped_at, delivered_at, ...rest } = r as any;
                           setPrefill(rest); setShowForm(true);
                         }}
                       ><Copy className="size-4" /></Button>
@@ -185,9 +185,9 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
     const base: any = {
       mode: "sea_fcl", container_type: "20FT", incoterm: "CIF", urgency: "normal",
       origin_country: "", origin_city: "", origin_postal_code: "", origin_address_line: "",
-      origin_company: "", origin_contact_name: "", origin_contact_phone: "", origin_port: "",
+      origin_company: "", origin_contact_name: "", origin_contact_phone: "", origin_contact_email: "", origin_port: "",
       destination_country: "", destination_city: "", destination_postal_code: "", destination_address_line: "",
-      destination_company: "", destination_contact_name: "", destination_contact_phone: "", destination_port: "",
+      destination_company: "", destination_contact_name: "", destination_contact_phone: "", destination_contact_email: "", destination_port: "",
       target_pickup_date: "", target_delivery_date: "",
       cargo_description: "", hs_codes: "", cargo_value: "" as number | "", cargo_currency: "USD",
       total_weight_kg: "" as number | "", total_volume_cbm: "" as number | "", total_packages: "" as number | "",

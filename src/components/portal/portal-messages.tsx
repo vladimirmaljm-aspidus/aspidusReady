@@ -76,12 +76,22 @@ export function PortalMessages() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [items.length]);
 
+  const [attachment, setAttachment] = useState<{ id: string; filename: string; mime_type: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const sendMut = useMutation({
     mutationFn: async (body: string) => {
+      const payload: any = { body };
+      if (attachment) {
+        payload.attachment_url = `/api/portal/upload/${attachment.id}/download?mode=inline`;
+        payload.attachment_name = attachment.filename;
+        payload.attachment_type = attachment.mime_type;
+      }
       const r = await fetch("/api/portal/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify(payload),
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
@@ -91,15 +101,41 @@ export function PortalMessages() {
     },
     onSuccess: () => {
       setInput("");
+      setAttachment(null);
       qc.invalidateQueries({ queryKey: ["portal-messages"] });
     },
     onError: (e: Error) => toast.error(e.message || "Failed to send"),
   });
 
-  const canSend = input.trim().length > 0 && !sendMut.isPending;
+  const canSend = (input.trim().length > 0 || !!attachment) && !sendMut.isPending && !uploading;
 
   function submit() {
     if (canSend) sendMut.mutate(input.trim());
+  }
+
+  async function handleAttach(file: File) {
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error("File too large. Max 25 MB.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("category", "message");
+      const r = await fetch("/api/portal/upload", { method: "POST", body: fd });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Upload failed");
+      }
+      const row = await r.json();
+      setAttachment({ id: row.id, filename: row.filename, mime_type: row.mime_type });
+    } catch (e: any) {
+      toast.error(e.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -157,7 +193,33 @@ export function PortalMessages() {
 
       {/* Composer */}
       <div className="rounded-b-2xl border border-t-0 border-border/60 bg-card p-3 shadow-soft">
+        {attachment && (
+          <div className="mb-2 flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1 text-xs">
+            <Paperclip className="size-3.5 text-primary" />
+            <span className="truncate flex-1">{attachment.filename}</span>
+            <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => setAttachment(null)}>×</button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="sr-only"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAttach(f); }}
+            accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx,text/plain,text/csv"
+          />
+          <Button
+            type="button"
+            size="lg"
+            variant="ghost"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || sendMut.isPending || !!attachment}
+            className="h-[52px] px-3"
+            title="Attach file"
+            aria-label="Attach file"
+          >
+            {uploading ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
+          </Button>
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -173,7 +235,7 @@ export function PortalMessages() {
           </Button>
         </div>
         <p className="text-[11px] text-muted-foreground mt-2 px-1">
-          Messages are private and only visible to your account manager.
+          Messages are private and only visible to your account manager. Attachments up to 25 MB.
         </p>
       </div>
     </div>

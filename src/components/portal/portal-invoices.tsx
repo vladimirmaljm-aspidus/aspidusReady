@@ -111,12 +111,8 @@ export function PortalInvoices() {
   const canDownloadPdf = !!portalAccess?.can_download_pdf;
   const tier = portalAccess?.tier as PortalTier | undefined;
 
-  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
-
   function handleDownloadPdf(invoiceId: string) {
-    setPdfLoading(invoiceId);
     window.open(`/api/portal/invoices/${invoiceId}/pdf`, "_blank");
-    setTimeout(() => setPdfLoading(null), 2000);
   }
 
   return (
@@ -228,11 +224,7 @@ export function PortalInvoices() {
                               }}
                               aria-label="Download PDF"
                             >
-                              {pdfLoading === inv.id ? (
-                                <Loader2 className="size-4 animate-spin" />
-                              ) : (
-                                <Download className="size-4" />
-                              )}
+                              <Download className="size-4" />
                             </Button>
                           ) : (
                             <TooltipProvider delayDuration={200}>
@@ -299,9 +291,6 @@ function EmptyInvoices() {
         Your account manager will send your invoices here. Reach out if you have
         any questions.
       </p>
-      <Button variant="outline" size="sm" disabled className="mt-4">
-        <Phone className="size-4 mr-1.5" /> Contact your account manager
-      </Button>
     </div>
   );
 }
@@ -340,7 +329,9 @@ function InvoiceDetail({
           <SummaryTile icon={Calendar} label="Issue date" value={fmtDate(invoice.issue_date)} />
           <SummaryTile icon={Clock} label="Due date" value={fmtDate(invoice.due_date)} />
           <SummaryTile icon={DollarSign} label="Currency" value={invoice.currency} />
-          <SummaryTile icon={CheckCircle2} label="Paid on" value={fmtDate(invoice.paid_at)} />
+          {invoice.paid_at && (
+            <SummaryTile icon={CheckCircle2} label="Paid on" value={fmtDate(invoice.paid_at)} />
+          )}
         </div>
 
         {/* Line items */}

@@ -111,13 +111,8 @@ export function PortalOffers() {
   const canDownloadPdf = !!portalAccess?.can_download_pdf;
   const tier = portalAccess?.tier as PortalTier | undefined;
 
-  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
-
   function handleDownloadPdf(offerId: string) {
-    setPdfLoading(offerId);
-    // Open PDF in new tab using portal-specific endpoint
     window.open(`/api/portal/offers/${offerId}/pdf`, "_blank");
-    setTimeout(() => setPdfLoading(null), 2000);
   }
 
   return (

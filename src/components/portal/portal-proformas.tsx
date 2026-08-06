@@ -109,12 +109,8 @@ export function PortalProformas() {
   const canDownloadPdf = !!portalAccess?.can_download_pdf;
   const tier = portalAccess?.tier as PortalTier | undefined;
 
-  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
-
   function handleDownloadPdf(proformaId: string) {
-    setPdfLoading(proformaId);
     window.open(`/api/portal/proformas/${proformaId}/pdf`, "_blank");
-    setTimeout(() => setPdfLoading(null), 2000);
   }
 
   return (
@@ -226,11 +222,7 @@ export function PortalProformas() {
                               }}
                               aria-label="Download PDF"
                             >
-                              {pdfLoading === pro.id ? (
-                                <Loader2 className="size-4 animate-spin" />
-                              ) : (
-                                <Download className="size-4" />
-                              )}
+                              <Download className="size-4" />
                             </Button>
                           ) : (
                             <TooltipProvider delayDuration={200}>

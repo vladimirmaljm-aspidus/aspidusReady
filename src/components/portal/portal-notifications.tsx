@@ -19,6 +19,22 @@ import {
 import { fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { Notification, NotificationType } from "@/lib/supabase/types";
+import { useAppStore, ViewKey } from "@/lib/store/app-store";
+
+/** Map a server-issued action_url (often an admin path) to a portal ViewKey. */
+function portalViewForUrl(url: string, type: NotificationType): ViewKey | null {
+  const u = url.toLowerCase();
+  if (u.includes("/portal-access") || type === "portal_message") return "portal-messages";
+  if (u.includes("/logistics")) return "portal-logistics";
+  if (u.includes("/rfq") || type === "rfq_received" || type === "rfq_quoted") return "portal-rfq";
+  if (u.includes("/kyc") || type.startsWith("kyc_")) return "portal-kyc";
+  if (u.includes("/invoice") || type.startsWith("invoice_")) return "portal-invoices";
+  if (u.includes("/offer") || type.startsWith("offer_")) return "portal-offers";
+  if (u.includes("/proforma") || type.startsWith("proforma_")) return "portal-proformas";
+  if (u.includes("/document") || type === "document_shared") return "portal-documents";
+  if (u.includes("/messages")) return "portal-messages";
+  return null;
+}
 
 /** Map notification type to a visual category */
 function getNotifCategory(type: NotificationType): "info" | "warning" | "success" | "error" {
@@ -47,6 +63,7 @@ const CATEGORY_CONFIG: Record<
 
 export function PortalNotifications() {
   const queryClient = useQueryClient();
+  const setView = useAppStore((s) => s.setView);
   const [markingRead, setMarkingRead] = useState<string | null>(null);
 
   const notifsQ = useQuery<{ items: Notification[]; total: number }>({
@@ -167,18 +184,24 @@ export function PortalNotifications() {
                         {notif.type.replace(/_/g, " ")}
                       </Badge>
 
-                      {/* Action link */}
-                      {notif.action_url && (
-                        <a
-                          href={notif.action_url}
-                          className="text-xs text-primary hover:underline inline-flex items-center gap-0.5"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {notif.action_label || "View"}
-                          <ExternalLink className="size-3" />
-                        </a>
-                      )}
+                      {/* Action link — rewritten to portal navigation */}
+                      {notif.action_url && (() => {
+                        const target = portalViewForUrl(notif.action_url, notif.type);
+                        if (!target) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!notif.read) markAsRead(notif.id);
+                              setView(target);
+                            }}
+                            className="text-xs text-primary hover:underline inline-flex items-center gap-0.5"
+                          >
+                            {notif.action_label || "View"}
+                            <ExternalLink className="size-3" />
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
 

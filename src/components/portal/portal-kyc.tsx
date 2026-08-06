@@ -1675,10 +1675,20 @@ function StepDocuments({
     }
   }
 
-  function handleRemove(dt: DocTypeDef) {
-    const filtered = documents.filter((d) => d.type !== dt.type);
-    onChange(filtered);
-    toast.success(`${dt.label} removed.`);
+  async function handleRemove(dt: DocTypeDef) {
+    const existing = documents.find((d) => d.type === dt.type);
+    if (!existing) return;
+    try {
+      const res = await fetch(`/api/portal/kyc/document/${existing.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to remove document.");
+      }
+      onChange(documents.filter((d) => d.type !== dt.type));
+      toast.success(`${dt.label} removed.`);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to remove document.");
+    }
   }
 
   return (
@@ -1776,7 +1786,7 @@ function StepDocuments({
                     }}
                     type="file"
                     className="sr-only"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
                     onChange={(e) =>
                       handleFileSelect(dt, e.target.files?.[0] ?? null)
                     }

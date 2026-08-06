@@ -867,14 +867,15 @@ export function PortalDashboard() {
                 icon={User}
                 onClick={() => setView("portal-profile")}
               />
-              <QuickLink
-                title="Complete KYC"
-                desc="Verify your account"
-                icon={ShieldCheck}
-                onClick={() => setView("portal-kyc")}
-                locked={portalAccess.exempt_kyc}
-                highlight={kycPending}
-              />
+              {!portalAccess.exempt_kyc && (
+                <QuickLink
+                  title="Complete KYC"
+                  desc="Verify your account"
+                  icon={ShieldCheck}
+                  onClick={() => setView("portal-kyc")}
+                  highlight={kycPending}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -995,8 +996,8 @@ function inferActionFromNotif(n: Notification): ViewKey | undefined {
   if (type.startsWith("kyc_")) return "portal-kyc";
   if (type.startsWith("rfq_")) return "portal-rfq";
   if (type === "document_shared") return "portal-documents";
-  if (type.startsWith("portal_")) return "portal-notifications";
   if (type === "portal_message") return "portal-messages";
+  if (type.startsWith("portal_")) return "portal-notifications";
   if (type === "low_stock_alert") return "portal-catalog";
   if (type.startsWith("task_")) return "portal-notifications";
   return "portal-notifications";

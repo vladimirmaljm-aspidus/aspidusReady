@@ -104,7 +104,7 @@ export function PortalProfile() {
           <LockedCard label="My Profile" />
         )}
         {canViewCompany ? (
-          <CompanyColumn portalAccess={portalAccess} onGoProfile={() => setView("portal-profile")} />
+          <CompanyColumn portalAccess={portalAccess} onGoProfile={() => setView("portal-messages")} />
         ) : (
           <LockedCard label="Company Info" />
         )}
@@ -237,7 +237,6 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
               value={partner.entity_type === "individual" ? "Individual" : "Company"}
               icon={Building2}
             />
-            <ReadTile label="Partner ID" value={partner.id} icon={Hash} mono />
           </div>
           {portalAccess.last_login_at && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-4">
