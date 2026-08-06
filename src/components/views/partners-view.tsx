@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
-import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
+import { fmtMoney, fmtDate, fmtRelative, fmtNumber } from "@/lib/utils/format";
 import { Partner, PartnerType, PartnerEntityType, PortalAccess, PortalTier } from "@/lib/supabase/types";
 import { getTierMeta, ORDERED_TIERS } from "@/lib/portal/tiers";
 import { useAppStore } from "@/lib/store/app-store";
@@ -746,7 +746,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Deals</p>
-            <p className="text-2xl font-semibold tabular">{deals.length}</p>
+            <p className="text-2xl font-semibold tabular">{fmtNumber(deals.length)}</p>
           </CardContent>
         </Card>
       </div>

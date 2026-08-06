@@ -11,7 +11,7 @@ import { Sparkles, Zap, Crown, Star, Check, X, TrendingUp, AlertTriangle, Clock,
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
-import { fmtMoney } from "@/lib/utils/format";
+import { fmtMoney, fmtNumber } from "@/lib/utils/format";
 import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
@@ -62,11 +62,11 @@ function SuperAdminSubscriptionsPanel() {
     <div className="mb-6 space-y-4">
       {/* Summary tiles */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div className="rounded-xl border border-border/60 p-3 bg-card"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Tenants</p><p className="text-xl font-bold tabular mt-0.5">{totals.total_tenants}</p></div>
-        <div className="rounded-xl border border-emerald-500/30 p-3 bg-emerald-500/5"><p className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Active</p><p className="text-xl font-bold tabular mt-0.5 text-emerald-700 dark:text-emerald-400">{totals.active}</p></div>
-        <div className="rounded-xl border border-blue-500/30 p-3 bg-blue-500/5"><p className="text-[10px] uppercase tracking-wider text-blue-700 dark:text-blue-400">Trial</p><p className="text-xl font-bold tabular mt-0.5 text-blue-700 dark:text-blue-400">{totals.trial}</p></div>
-        <div className="rounded-xl border border-amber-500/30 p-3 bg-amber-500/5"><p className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400">Exp. ≤7d</p><p className="text-xl font-bold tabular mt-0.5 text-amber-700 dark:text-amber-400">{totals.expiring_within_7d}</p></div>
-        <div className="rounded-xl border border-destructive/30 p-3 bg-destructive/5"><p className="text-[10px] uppercase tracking-wider text-destructive">Expired</p><p className="text-xl font-bold tabular mt-0.5 text-destructive">{totals.expired}</p></div>
+        <div className="rounded-xl border border-border/60 p-3 bg-card"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Tenants</p><p className="text-xl font-bold tabular mt-0.5">{fmtNumber(totals.total_tenants)}</p></div>
+        <div className="rounded-xl border border-emerald-500/30 p-3 bg-emerald-500/5"><p className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Active</p><p className="text-xl font-bold tabular mt-0.5 text-emerald-700 dark:text-emerald-400">{fmtNumber(totals.active)}</p></div>
+        <div className="rounded-xl border border-blue-500/30 p-3 bg-blue-500/5"><p className="text-[10px] uppercase tracking-wider text-blue-700 dark:text-blue-400">Trial</p><p className="text-xl font-bold tabular mt-0.5 text-blue-700 dark:text-blue-400">{fmtNumber(totals.trial)}</p></div>
+        <div className="rounded-xl border border-amber-500/30 p-3 bg-amber-500/5"><p className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400">Exp. ≤7d</p><p className="text-xl font-bold tabular mt-0.5 text-amber-700 dark:text-amber-400">{fmtNumber(totals.expiring_within_7d)}</p></div>
+        <div className="rounded-xl border border-destructive/30 p-3 bg-destructive/5"><p className="text-[10px] uppercase tracking-wider text-destructive">Expired</p><p className="text-xl font-bold tabular mt-0.5 text-destructive">{fmtNumber(totals.expired)}</p></div>
         <div className="rounded-xl border border-border/60 p-3 bg-card"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">MRR</p><p className="text-xl font-bold tabular mt-0.5">{fmtMoney(totals.monthly_recurring_revenue, "EUR")}</p></div>
       </div>
 

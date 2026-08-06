@@ -40,7 +40,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { KpiCard } from "@/components/common/kpi-card";
-import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
+import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Invoice, InvoiceStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, INVOICE_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
@@ -752,7 +752,7 @@ function InvoiceDetail({
                   <div className="text-xs text-muted-foreground sm:hidden">{it.sku || "—"}</div>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell font-mono text-xs">{it.sku || "—"}</TableCell>
-                <TableCell className="text-right tabular">{it.quantity}</TableCell>
+                <TableCell className="text-right tabular">{fmtNumber(it.quantity)}</TableCell>
                 <TableCell className="text-right tabular">{fmtMoney(it.unit_price, invoice.currency)}</TableCell>
                 <TableCell className="text-right tabular hidden sm:table-cell">{it.discount}%</TableCell>
                 <TableCell className="text-right tabular hidden sm:table-cell">{it.tax_rate}%</TableCell>

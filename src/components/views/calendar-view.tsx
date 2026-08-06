@@ -13,6 +13,7 @@ import {
 import { PageHeader } from "@/components/common/page-header";
 import { cn } from "@/lib/utils";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { fmtNumber, fmtMoney } from "@/lib/utils/format";
 
 interface CalendarEvent {
   id: string;
@@ -127,7 +128,7 @@ export function CalendarView() {
               <ListChecks className="size-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold tabular">{stats.task}</p>
+              <p className="text-2xl font-bold tabular">{fmtNumber(stats.task)}</p>
               <p className="text-xs text-muted-foreground">Tasks due</p>
             </div>
           </CardContent>
@@ -138,7 +139,7 @@ export function CalendarView() {
               <Receipt className="size-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold tabular">{stats.invoice}</p>
+              <p className="text-2xl font-bold tabular">{fmtNumber(stats.invoice)}</p>
               <p className="text-xs text-muted-foreground">Invoices due</p>
             </div>
           </CardContent>
@@ -149,7 +150,7 @@ export function CalendarView() {
               <Handshake className="size-5 text-violet-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold tabular">{stats.deal}</p>
+              <p className="text-2xl font-bold tabular">{fmtNumber(stats.deal)}</p>
               <p className="text-xs text-muted-foreground">Deal closes</p>
             </div>
           </CardContent>
@@ -160,7 +161,7 @@ export function CalendarView() {
               <FileText className="size-5 text-cyan-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold tabular">{stats.offer}</p>
+              <p className="text-2xl font-bold tabular">{fmtNumber(stats.offer)}</p>
               <p className="text-xs text-muted-foreground">Offers expire</p>
             </div>
           </CardContent>
