@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -40,20 +40,25 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save, Truck,
+  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, ArrowLeftRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
-import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision, SupplierOffer } from "@/lib/supabase/types";
+import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision, SupplierOffer, Tenant } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL, INCOTERM_CODES } from "@/lib/data/reference";
 import { UnitSelect } from "@/components/common/unit-select";
+import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { CountrySelect } from "@/components/common/country-select";
+import { OfferTextBuilder } from "@/components/common/offer-text-builder";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { ProductPicker } from "@/components/common/product-picker";
 import { cn } from "@/lib/utils";
+import { useEffectiveTenantId } from "@/lib/store/app-store";
+import { checkOfferCompleteness } from "@/lib/utils/completeness-checker";
+import { CompletenessChecker } from "@/components/common/completeness-checker";
 
 const PAGE_SIZE = 20;
 
@@ -1389,6 +1394,12 @@ function OfferFormDialog({
   const [productContextMap, setProductContextMap] = useState<Record<string, ProductContext>>({});
   const [loadingProductIdx, setLoadingProductIdx] = useState<number | null>(null);
 
+  // Ref mirror of `form` so callbacks that need to read the latest items
+  // (e.g. handleUnitChange, selectProduct unit-conversion logic) don't have to
+  // re-create on every keystroke and don't capture stale state.
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; }, [form]);
+
   const deals = useQuery({
     queryKey: ["deals", tenantKey, "list", "100"],
     queryFn: async () => {
@@ -1465,6 +1476,44 @@ function OfferFormDialog({
     });
   }
 
+  /**
+   * Handle a unit-of-measure change on a line item.
+   *
+   * If the new unit is in the same physical category as the old one (e.g.
+   * weight ↔ weight: kg → MT), the unit_price is auto-converted so the line
+   * total stays the same. If the categories differ (e.g. kg → piece) the unit
+   * is still changed but the price is left untouched and the user is warned
+   * — we can't meaningfully convert a per-kg price into a per-piece price.
+   */
+  function handleUnitChange(idx: number, newUnit: string) {
+    const items = formRef.current.items || [];
+    const item = items[idx];
+    if (!item) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+    const oldUnit = item.unit || "";
+
+    if (!oldUnit || oldUnit === newUnit) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+
+    const currentPrice = Number(item.unit_price) || 0;
+    const convertedPrice = convertUnitPrice(currentPrice, oldUnit, newUnit);
+
+    if (convertedPrice != null && currentPrice > 0) {
+      setItem(idx, { unit: newUnit, unit_price: convertedPrice });
+      toast.info(`Price auto-converted: ${currentPrice} ${oldUnit} → ${convertedPrice.toFixed(2)} ${newUnit}`);
+    } else {
+      // Can't convert (different categories) — just change unit, keep price
+      setItem(idx, { unit: newUnit });
+      if (currentPrice > 0) {
+        toast.warning(`Cannot auto-convert price from ${oldUnit} to ${newUnit} (different unit categories). Please enter price manually.`);
+      }
+    }
+  }
+
   // ─── Partner auto-fill ───
   const fetchPartnerContext = useCallback(async (partnerId: string) => {
     if (!partnerId) {
@@ -1508,12 +1557,36 @@ function OfferFormDialog({
   //      when the user hasn't filled them in yet.
   const selectProduct = useCallback(async (idx: number, p: Product) => {
     // 1. Immediate line-item fill from the product itself.
+    //
+    // Unit-conversion aware: if the user already picked a non-default unit on
+    // this line (e.g. they set "MT" while the product is priced per "kg"),
+    // preserve their choice and convert the product's price into that unit so
+    // the form stays internally consistent. If the line still has the default
+    // "pcs" unit (i.e. nothing has been chosen yet) we adopt the product's
+    // native unit instead.
+    const supplierUnit = p.unit || null;
+    const currentLineUnit = formRef.current.items?.[idx]?.unit || null;
+    const preserveLineUnit =
+      currentLineUnit && currentLineUnit !== "pcs" ? currentLineUnit : null;
+    const lineUnit = preserveLineUnit || supplierUnit || "pcs";
+
+    const basePrice = Number(p.price) || 0;
+    let priceToUse = basePrice;
+    if (
+      supplierUnit &&
+      lineUnit !== supplierUnit &&
+      basePrice > 0
+    ) {
+      const converted = convertUnitPrice(basePrice, supplierUnit, lineUnit);
+      if (converted != null) priceToUse = converted;
+    }
+
     setItem(idx, {
       product_id: p.id,
       product_name: p.name,
       sku: p.sku,
-      unit_price: p.price,
-      unit: p.unit || "pcs",
+      unit_price: priceToUse,
+      unit: lineUnit,
       hs_code: (p as any).hs_code ?? null,
       description: (p as any).description ?? null,
       detailed_spec: (p as any).detailed_spec ?? null,
@@ -1566,9 +1639,18 @@ function OfferFormDialog({
       if (latestOffer) {
         // Use the supplier offer's unit_price as the line's default buy price
         // (only if it's a positive number — guards against bad data).
+        // The supplier offer price is in the product's native unit (supplierUnit);
+        // if the line item's unit differs (e.g. user picked MT while supplier
+        // prices per kg), convert the price so it stays consistent with the unit.
         const soPrice = Number(latestOffer.unit_price);
         if (Number.isFinite(soPrice) && soPrice > 0) {
-          setItem(idx, { unit_price: soPrice });
+          const liveLineUnit = formRef.current.items?.[idx]?.unit || lineUnit;
+          let priceToSet = soPrice;
+          if (supplierUnit && liveLineUnit !== supplierUnit) {
+            const converted = convertUnitPrice(soPrice, supplierUnit, liveLineUnit);
+            if (converted != null) priceToSet = converted;
+          }
+          setItem(idx, { unit_price: priceToSet });
         }
         // Origin country on the line item (prefer the catalog spec-sheet,
         // then the supplier offer). We only override if the catalog didn't
@@ -1706,6 +1788,58 @@ function OfferFormDialog({
 
   const dealList = deals.data?.items || [];
   const selectedPartner = partnerContext?.partner || partners.find((p) => p.id === form.partner_id);
+
+  // ─── Tenant (company) record ───
+  // Used by the completeness checker to verify that the seller's legal name,
+  // address, registration number and bank details are present — these end up
+  // on the offer PDF footer and on invoices/proformas spawned from the offer.
+  // For regular users `/api/tenants` returns just their own tenant; for
+  // super-admins it returns every tenant, so we filter by the effective
+  // tenant id (activeTenantId for super-admins, user.tenant_id otherwise).
+  const effectiveTenantId = useEffectiveTenantId();
+  const tenantQuery = useQuery({
+    queryKey: ["tenant", tenantKey, effectiveTenantId, "completeness"],
+    queryFn: async () => {
+      const r = await fetch(api("/api/tenants"));
+      if (!r.ok) throw new Error("Failed to load tenant");
+      const data = (await r.json()) as { items: Tenant[] };
+      const list = data.items || [];
+      const match = effectiveTenantId
+        ? list.find((t) => t.id === effectiveTenantId)
+        : null;
+      return (match || list[0] || null) as Tenant | null;
+    },
+    enabled: open,
+  });
+  const tenant = tenantQuery.data ?? null;
+
+  // ─── Real-time completeness report ───
+  // Recomputed on every keystroke so the panel below the line-items table
+  // always reflects the current form state. The supplier-offers context map
+  // carries the latest active supplier offer for each line item so the
+  // checker can tell the user "this field IS available from supplier X" vs.
+  // "this field is missing — look it up in the product catalog".
+  const supplierOffersContext = useMemo(() => {
+    const map: Record<number, any> = {};
+    for (const [k, v] of Object.entries(productContextMap)) {
+      const ctx = v as ProductContext;
+      map[Number(k)] =
+        ctx.latestSupplierOffer || ctx.supplierOffers?.[0] || null;
+    }
+    return map;
+  }, [productContextMap]);
+
+  const completenessReport = useMemo(
+    () =>
+      checkOfferCompleteness(
+        form,
+        form.items || [],
+        selectedPartner ?? null,
+        tenant,
+        supplierOffersContext,
+      ),
+    [form, selectedPartner, tenant, supplierOffersContext],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2012,8 +2146,8 @@ function OfferFormDialog({
               </div>
             </div>
 
-            {/* Notes & Terms */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Notes & Offer Text */}
+            <div className="grid grid-cols-1 gap-3">
               <div className="space-y-1.5">
                 <Label>Notes</Label>
                 <Textarea
@@ -2024,12 +2158,20 @@ function OfferFormDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Terms &amp; Conditions</Label>
-                <Textarea
-                  rows={2}
+                <Label>Offer Text / Terms &amp; Conditions</Label>
+                <OfferTextBuilder
                   value={typeof form.terms === "string" ? form.terms : ""}
-                  onChange={(e) => set("terms", e.target.value)}
-                  placeholder="Delivery time, warranty, dispute resolution…"
+                  onChange={(text) => set("terms", text)}
+                  currency={form.currency || undefined}
+                  total={computeTotals(form.items || []).total}
+                  validUntil={form.valid_until || undefined}
+                  incoterm={form.incoterm || undefined}
+                  paymentTerms={form.payment_terms || undefined}
+                  leadTime={form.lead_time || undefined}
+                  pol={form.pol || undefined}
+                  pod={form.pod || undefined}
+                  origin={(form as { origin_country?: string | null }).origin_country || undefined}
+                  packaging={form.packaging || undefined}
                 />
               </div>
             </div>
@@ -2153,7 +2295,7 @@ function OfferFormDialog({
                         <TableCell>
                           <UnitSelect
                             value={it.unit || ""}
-                            onChange={(v) => setItem(idx, { unit: v })}
+                            onChange={(v) => handleUnitChange(idx, v)}
                             placeholder="pcs"
                             className="h-8 text-xs w-24"
                           />
@@ -2166,7 +2308,7 @@ function OfferFormDialog({
                             onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
                           />
                           {productContextMap[idx]?.latestSupplierOffer && (
-                            <div className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-0.5 mt-0.5 justify-end">
+                            <div className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-0.5 mt-0.5 justify-end flex-wrap">
                               <Info className="size-2.5 shrink-0" />
                               <span className="font-mono">
                                 {fmtMoney(
@@ -2175,8 +2317,16 @@ function OfferFormDialog({
                                 )}
                               </span>
                               <span className="text-muted-foreground">
-                                /{it.unit || "unit"}
+                                /{productContextMap[idx].product?.unit || "unit"}
                               </span>
+                              {it.unit &&
+                                productContextMap[idx].product?.unit &&
+                                it.unit !== productContextMap[idx].product.unit &&
+                                Number(it.unit_price) > 0 && (
+                                  <span className="text-amber-600 dark:text-amber-400 ml-0.5 font-mono">
+                                    → {fmtMoney(it.unit_price, form.currency || "USD")}/{it.unit}
+                                  </span>
+                                )}
                               <span className="text-muted-foreground ml-0.5">
                                 (SO-
                                 {(
@@ -2188,6 +2338,17 @@ function OfferFormDialog({
                               </span>
                             </div>
                           )}
+                          {it.unit &&
+                            productContextMap[idx]?.product?.unit &&
+                            it.unit !== productContextMap[idx].product.unit &&
+                            describeConversion(productContextMap[idx].product.unit, it.unit) && (
+                              <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 mt-0.5 justify-end">
+                                <ArrowLeftRight className="size-2.5 shrink-0" />
+                                <span>
+                                  {describeConversion(productContextMap[idx].product.unit, it.unit)}
+                                </span>
+                              </div>
+                            )}
                         </TableCell>
                         <TableCell className="text-right hidden sm:table-cell">
                           <Input
@@ -2268,6 +2429,13 @@ function OfferFormDialog({
               </div>
             )}
           </div>
+
+          {/* ─── Data Completeness Checker (real-time) ─── */}
+          {/* Surfaces every field that's still missing from the offer — grouped
+              by offer / line item / buyer / company — so the user knows exactly
+              what to fix or supplement before sending. Recomputed on every
+              keystroke via the `completenessReport` memo above. */}
+          <CompletenessChecker report={completenessReport} />
 
           {/* ─── More Details Section (collapsible) ─── */}
           <Collapsible open={moreDetailsOpen} onOpenChange={setMoreDetailsOpen}>

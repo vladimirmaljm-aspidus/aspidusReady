@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Plus, Search, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, FileCheck, Wallet, AlertCircle,
-  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight, ChevronDown,
+  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight, ArrowLeftRight, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -41,6 +41,7 @@ import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Proforma, ProformaStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { UnitSelect } from "@/components/common/unit-select";
+import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 
@@ -731,6 +732,12 @@ function ProformaFormDialog({
   const isEditing = !!proforma;
 
   const [form, setForm] = useState<Partial<Proforma> & { items: OfferLineItem[] }>({ items: [] });
+
+  // Ref mirror of `form` so event handlers (handleUnitChange, selectProduct)
+  // can read the latest line items without capturing stale state.
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; }, [form]);
+
   const [saving, setSaving] = useState(false);
   const [partnerContext, setPartnerContext] = useState<PartnerContext | null>(null);
   const [loadingPartner, setLoadingPartner] = useState(false);
@@ -804,15 +811,69 @@ function ProformaFormDialog({
     });
   }
 
+  /**
+   * Handle a unit-of-measure change on a line item.
+   *
+   * Same-category changes (e.g. kg → MT) auto-convert the unit_price so the
+   * line total stays the same. Cross-category changes (e.g. kg → piece) leave
+   * the price untouched and warn the user.
+   */
+  function handleUnitChange(idx: number, newUnit: string) {
+    const items = formRef.current.items || [];
+    const item = items[idx];
+    if (!item) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+    const oldUnit = item.unit || "";
+
+    if (!oldUnit || oldUnit === newUnit) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+
+    const currentPrice = Number(item.unit_price) || 0;
+    const convertedPrice = convertUnitPrice(currentPrice, oldUnit, newUnit);
+
+    if (convertedPrice != null && currentPrice > 0) {
+      setItem(idx, { unit: newUnit, unit_price: convertedPrice });
+      toast.info(`Price auto-converted: ${currentPrice} ${oldUnit} → ${convertedPrice.toFixed(2)} ${newUnit}`);
+    } else {
+      setItem(idx, { unit: newUnit });
+      if (currentPrice > 0) {
+        toast.warning(`Cannot auto-convert price from ${oldUnit} to ${newUnit} (different unit categories). Please enter price manually.`);
+      }
+    }
+  }
+
   function selectProduct(idx: number, productId: string) {
     const p = (products.data?.items || []).find((x) => x.id === productId);
     if (!p) return;
+
+    // Unit-conversion aware: if the user already picked a non-default unit on
+    // this line (e.g. they set "MT" while the product is priced per "kg"),
+    // preserve their choice and convert the product price into that unit so
+    // the form stays internally consistent. If the line still has the default
+    // "pcs" unit we adopt the product's native unit instead.
+    const supplierUnit = p.unit || null;
+    const currentLineUnit = formRef.current.items?.[idx]?.unit || null;
+    const preserveLineUnit =
+      currentLineUnit && currentLineUnit !== "pcs" ? currentLineUnit : null;
+    const lineUnit = preserveLineUnit || supplierUnit || "pcs";
+
+    const basePrice = Number(p.price) || 0;
+    let priceToUse = basePrice;
+    if (supplierUnit && lineUnit !== supplierUnit && basePrice > 0) {
+      const converted = convertUnitPrice(basePrice, supplierUnit, lineUnit);
+      if (converted != null) priceToUse = converted;
+    }
+
     setItem(idx, {
       product_id: p.id,
       product_name: p.name,
       sku: p.sku,
-      unit: p.unit || "pcs",
-      unit_price: p.price,
+      unit: lineUnit,
+      unit_price: priceToUse,
       hs_code: (p as any).hs_code ?? null,
       description: (p as any).description ?? null,
       detailed_spec: (p as any).detailed_spec ?? null,
@@ -1142,7 +1203,7 @@ function ProformaFormDialog({
                             <Label className="text-xs">Unit</Label>
                             <UnitSelect
                               value={it.unit || ""}
-                              onChange={(v) => setItem(idx, { unit: v })}
+                              onChange={(v) => handleUnitChange(idx, v)}
                               placeholder="pcs"
                             />
                           </div>
@@ -1154,6 +1215,21 @@ function ProformaFormDialog({
                               value={it.unit_price}
                               onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
                             />
+                            {it.product_id &&
+                              it.unit &&
+                              (() => {
+                                const p = (products.data?.items || []).find((x) => x.id === it.product_id);
+                                const supplierUnit = p?.unit || null;
+                                if (!supplierUnit || supplierUnit === it.unit) return null;
+                                const desc = describeConversion(supplierUnit, it.unit);
+                                if (!desc) return null;
+                                return (
+                                  <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 mt-0.5">
+                                    <ArrowLeftRight className="size-2.5 shrink-0" />
+                                    <span>{desc}</span>
+                                  </div>
+                                );
+                              })()}
                           </div>
                           <div className="col-span-2 sm:col-span-1 space-y-1">
                             <Label className="text-xs">VAT %</Label>
