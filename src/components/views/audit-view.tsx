@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtDateTime } from "@/lib/utils/format";
 import { AuditLog } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 function initials(name?: string | null): string {
   if (!name) return "?";
@@ -53,12 +54,13 @@ export function AuditView() {
   const tenantKey = useTenantKey();
 
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["audit", tenantKey, search],
+    queryKey: ["audit", tenantKey, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       const r = await fetch(api(`/api/audit?${params}`));
       if (!r.ok) throw new Error("Failed to load audit log");
       return r.json() as Promise<{ items: AuditLog[]; total: number }>;

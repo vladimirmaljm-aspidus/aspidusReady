@@ -42,7 +42,12 @@ export async function POST(req: NextRequest) {
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   body.tenant_id = tenantId;
   if (!body.created_by && "user" in auth) body.created_by = auth.user.id;
 
@@ -50,6 +55,13 @@ export async function POST(req: NextRequest) {
   const qty = body.quantity || 0;
   const numContainers = body.num_containers || 1;
   const buyTotal = (body.buy_price_per_unit || 0) * qty;
+  // Exchange rate: sell_currency per buy_currency. When currencies differ,
+  // landed cost (in buy currency) must be converted to sell currency before
+  // subtracting from sell revenue to compute margin. Audit T-series.
+  const fxRate = Number(body.exchange_rate) || 1;
+  const currenciesDiffer =
+    !!body.buy_currency && !!body.sell_currency && body.buy_currency !== body.sell_currency;
+  const effectiveFx = currenciesDiffer ? fxRate : 1;
 
   let landedCost = buyTotal;
   const computedLines: TradeCostLine[] = (body.cost_lines || []).map((line: TradeCostLine) => {
@@ -67,8 +79,10 @@ export async function POST(req: NextRequest) {
   });
 
   const sellTotal = (body.sell_price_per_unit || 0) * qty;
-  const margin = sellTotal - landedCost;
-  const marginPct = landedCost > 0 ? (margin / sellTotal) * 100 : 0;
+  // Convert landed cost (buy currency) → sell currency for the margin math.
+  const landedCostInSellCurrency = landedCost * effectiveFx;
+  const margin = sellTotal - landedCostInSellCurrency;
+  const marginPct = sellTotal > 0 ? (margin / sellTotal) * 100 : 0;
 
   body.cost_lines = computedLines;
   body.total_buy_cost = Math.round(buyTotal * 100) / 100;

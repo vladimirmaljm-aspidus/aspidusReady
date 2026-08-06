@@ -1167,7 +1167,8 @@ export class MockStore implements Store {
       "kyc_submitted", "kyc_approved", "kyc_rejected",
       "rfq_received", "rfq_quoted",
       "offer_sent", "offer_accepted", "offer_rejected", "offer_expired",
-      "invoice_overdue", "invoice_paid",
+      "invoice_sent", "invoice_overdue", "invoice_paid",
+      "proforma_sent",
       "document_shared",
       "portal_access_requested", "portal_access_approved", "portal_invite_sent",
       "portal_message",
@@ -2086,6 +2087,8 @@ export class MockStore implements Store {
     this.userPreferences.set(`${userId}:${key}`, pref);
     return pref;
   }
+
+  async deleteUserPreference(_userId: string, _key: string): Promise<void> {}
 
   async listUserPreferences(userId: string): Promise<UserPreference[]> {
     return Array.from(this.userPreferences.values())

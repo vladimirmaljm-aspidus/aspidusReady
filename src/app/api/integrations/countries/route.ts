@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/api/helpers";
 import { COUNTRIES } from "@/lib/data/geo/countries";
 
 export const runtime = "nodejs";
@@ -22,6 +23,8 @@ export const runtime = "nodejs";
  */
 
 export async function GET() {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
   return NextResponse.json({
     items: COUNTRIES,
     total: COUNTRIES.length,

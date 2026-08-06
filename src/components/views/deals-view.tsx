@@ -52,6 +52,7 @@ import { Deal, DealStage, Partner, Offer, CommissionAgent } from "@/lib/supabase
 import { useAppStore } from "@/lib/store/app-store";
 import { CURRENCIES, DEAL_STAGES, COUNTRIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
 
@@ -140,6 +141,43 @@ function computePartnerQuickStats(ctx: PartnerContext | null): PartnerQuickStats
   return { totalDealsValue, totalDeals, wonDeals, winRate, avgDealSize, currency };
 }
 
+/**
+ * Full deal profit calculation.
+ *
+ * Total cost = (buy_cost + bank_costs + other_costs(jsonb) + commission) × exchange_rate
+ * Profit     = selling_price (or deal.value fallback) − total_cost
+ * Margin %   = profit / selling_price × 100
+ *
+ * `commissionAmount` is the externally-computed commission (from
+ * /api/commission-calculate based on the linked agent's rate). It is used
+ * only if the deal itself does not carry an explicit `commission_amount`
+ * override.
+ */
+function computeDealProfit(deal: Deal, commissionAmount: number = 0) {
+  const buyCost = Number(deal.buy_cost) || 0;
+  const sellingPrice = Number(deal.selling_price) || Number(deal.value) || 0;
+  const bankCosts = Number(deal.bank_costs) || 0;
+  const otherCosts = Array.isArray(deal.costs)
+    ? deal.costs.reduce((s, c) => s + (Number(c?.amount) || 0), 0)
+    : 0;
+  const exchangeRate = Number(deal.exchange_rate) || 1;
+  const commission = Number(deal.commission_amount) || commissionAmount || 0;
+  const totalCost = (buyCost + bankCosts + otherCosts + commission) * exchangeRate;
+  const profit = sellingPrice - totalCost;
+  const marginPct = sellingPrice > 0 ? (profit / sellingPrice) * 100 : 0;
+  return {
+    buyCost,
+    sellingPrice,
+    bankCosts,
+    otherCosts,
+    exchangeRate,
+    commission,
+    totalCost,
+    profit,
+    marginPct,
+  };
+}
+
 const PAGE_SIZE = 20;
 
 export function DealsView() {
@@ -148,6 +186,7 @@ export function DealsView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [partnerId, setPartnerId] = useState<string>("all");
   const [layout, setLayout] = useState<"pipeline" | "table">("pipeline");
@@ -159,10 +198,10 @@ export function DealsView() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["deals", tenantKey, search, stageFilter, partnerId],
+    queryKey: ["deals", tenantKey, debouncedSearch, stageFilter, partnerId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (stageFilter !== "all") params.set("stage", stageFilter);
       if (partnerId !== "all") params.set("partner_id", partnerId);
       const r = await fetch(api(`/api/deals?${params}`));
@@ -589,6 +628,53 @@ function DealDetail({
   const hasExistingOffer = dealOffers && dealOffers.length > 0;
   const quickStats = computePartnerQuickStats(partnerCtx ?? null);
 
+  // Commission agents — loaded so we can resolve the agent's partner name and
+  // rate for display in the detail panel (audit issue D-3: previously showed
+  // the raw UUID).
+  const { data: agentsData } = useQuery({
+    queryKey: ["commission-agents", tenantKey],
+    queryFn: async () => {
+      const r = await fetch(api(`/api/commission-agents?limit=200`));
+      if (!r.ok) throw new Error("Failed to load commission agents");
+      return r.json() as Promise<{ items: CommissionAgent[]; total: number }>;
+    },
+    enabled: !!deal.commission_agent_id,
+  });
+  const commissionAgents = agentsData?.items || [];
+  const commissionAgent = deal.commission_agent_id
+    ? commissionAgents.find((a) => a.id === deal.commission_agent_id) || null
+    : null;
+  const commissionAgentPartnerName = commissionAgent
+    ? partners.find((p) => p.id === commissionAgent.partner_id)?.name || null
+    : null;
+
+  // Commission preview — uses the same /api/commission-calculate endpoint as
+  // the form so the displayed commission matches what will be recorded when
+  // the deal is won.
+  const { data: commissionPreview } = useQuery({
+    queryKey: ["commission-preview", tenantKey, deal.id, deal.commission_agent_id, deal.value, deal.buy_cost, deal.quantity],
+    queryFn: async () => {
+      if (!deal.commission_agent_id) return null;
+      const r = await fetch(api(`/api/commission-calculate`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent_id: deal.commission_agent_id,
+          deal_value: deal.value || 0,
+          deal_profit: (deal.value || 0) - (deal.buy_cost || 0),
+          deal_quantity: deal.quantity || 0,
+          deal_unit: deal.unit || "",
+          currency: deal.currency || "USD",
+        }),
+      });
+      if (!r.ok) return null;
+      return r.json() as Promise<{ calculated_commission: number; currency: string } | null>;
+    },
+    enabled: !!deal.commission_agent_id,
+  });
+  const previewCommission = Number(commissionPreview?.calculated_commission) || 0;
+  const calc = computeDealProfit(deal, previewCommission);
+
   // Create offer from deal mutation
   const createOfferMut = useMutation({
     mutationFn: async () => {
@@ -620,8 +706,6 @@ function DealDetail({
     },
   });
 
-  const profit = deal.value - (deal.buy_cost || 0);
-
   // Core info cards
   const info = [
     { icon: User, label: "Partner", value: partnerName },
@@ -629,13 +713,46 @@ function DealDetail({
     { icon: Calendar, label: "Expected close", value: fmtDate(deal.expected_close) },
   ];
 
-  // Additional deal data
-  const additionalInfo: { icon: typeof DollarSign; label: string; value: string }[] = [];
-  if (deal.buy_cost) additionalInfo.push({ icon: DollarSign, label: "Buy Cost", value: fmtMoney(deal.buy_cost, deal.currency) });
-  if (deal.value && deal.buy_cost) additionalInfo.push({ icon: TrendingUp, label: "Profit", value: fmtMoney(profit, deal.currency) });
+  // Additional deal data — full cost breakdown (audit D-2, D-4)
+  const additionalInfo: { icon: typeof DollarSign; label: string; value: string; accent?: string }[] = [];
+  if (calc.buyCost) additionalInfo.push({
+    icon: DollarSign,
+    label: `Buy Cost${deal.purchase_currency && deal.purchase_currency !== deal.currency ? ` (${deal.purchase_currency})` : ""}`,
+    value: fmtMoney(calc.buyCost, deal.purchase_currency || deal.currency),
+  });
+  if (calc.sellingPrice && calc.sellingPrice !== deal.value) additionalInfo.push({
+    icon: TrendingUp,
+    label: `Selling Price${deal.selling_currency && deal.selling_currency !== deal.currency ? ` (${deal.selling_currency})` : ""}`,
+    value: fmtMoney(calc.sellingPrice, deal.selling_currency || deal.currency),
+  });
+  if (calc.bankCosts) additionalInfo.push({ icon: DollarSign, label: "Bank Costs", value: fmtMoney(calc.bankCosts, deal.currency) });
+  if (calc.otherCosts) additionalInfo.push({ icon: DollarSign, label: "Other Costs", value: fmtMoney(calc.otherCosts, deal.currency) });
+  if (calc.commission) additionalInfo.push({ icon: DollarSign, label: "Commission", value: fmtMoney(calc.commission, commissionPreview?.currency || deal.currency) });
+  if (calc.exchangeRate && calc.exchangeRate !== 1) additionalInfo.push({ icon: ArrowRight, label: "Exchange Rate", value: calc.exchangeRate.toString() });
+  if (calc.totalCost) additionalInfo.push({ icon: BarChart3, label: "Total Cost", value: fmtMoney(calc.totalCost, deal.currency) });
+  if (calc.profit !== 0 || (calc.buyCost && calc.sellingPrice)) additionalInfo.push({
+    icon: TrendingUp,
+    label: "Profit",
+    value: fmtMoney(calc.profit, deal.currency),
+    accent: calc.profit >= 0 ? "text-chart-1" : "text-destructive",
+  });
+  additionalInfo.push({
+    icon: Target,
+    label: "Margin",
+    value: `${calc.marginPct.toFixed(1)}%`,
+    accent: calc.marginPct >= 0 ? "text-chart-1" : "text-destructive",
+  });
   if (deal.quantity) additionalInfo.push({ icon: Package, label: "Quantity", value: `${deal.quantity} ${deal.unit || ""}` });
   if (deal.unit && !deal.quantity) additionalInfo.push({ icon: Scale, label: "Unit", value: deal.unit });
-  if (deal.commission_agent_id) additionalInfo.push({ icon: User, label: "Commission Agent", value: deal.commission_agent_id });
+  if (commissionAgent) {
+    const rateLabel =
+      commissionAgent.commission_type === "profit_percent" ? `${commissionAgent.commission_rate}% profit`
+      : commissionAgent.commission_type === "revenue_percent" ? `${commissionAgent.commission_rate}% revenue`
+      : commissionAgent.commission_type === "per_unit" ? `${commissionAgent.commission_per_unit}/unit`
+      : commissionAgent.commission_type === "fixed" ? `Fixed ${commissionAgent.commission_rate}`
+      : commissionAgent.commission_type;
+    additionalInfo.push({ icon: User, label: "Commission Agent", value: `${commissionAgentPartnerName || "Unknown"} (${rateLabel})` });
+  }
 
   return (
     <div className="px-4 pb-6 space-y-4">
@@ -704,7 +821,7 @@ function DealDetail({
                       <Icon className="size-3 text-muted-foreground" />
                       <p className="text-[10px] text-muted-foreground">{x.label}</p>
                     </div>
-                    <p className="text-xs font-medium font-mono tabular">{x.value}</p>
+                    <p className={`text-xs font-medium font-mono tabular ${x.accent || ""}`}>{x.value}</p>
                   </div>
                 );
               })}
@@ -911,9 +1028,14 @@ function DealFormDialog({
   });
   const commissionAgents = agentsData?.items || [];
 
-  // Commission preview
+  // Commission preview — debounced so we don't fire /api/commission-calculate
+  // on every keystroke (audit D-4: previously fired on every value/buy_cost/
+  // quantity change).
+  const debouncedValue = useDebounced(form.value, 400);
+  const debouncedBuyCost = useDebounced(form.buy_cost, 400);
+  const debouncedQuantity = useDebounced(form.quantity, 400);
   const { data: commissionPreview } = useQuery({
-    queryKey: ["commission-preview", tenantKey, form.commission_agent_id, form.value, form.buy_cost, form.quantity],
+    queryKey: ["commission-preview", tenantKey, form.commission_agent_id, debouncedValue, debouncedBuyCost, debouncedQuantity],
     queryFn: async () => {
       if (!form.commission_agent_id) return null;
       const r = await fetch(api(`/api/commission-calculate`), {
@@ -921,18 +1043,27 @@ function DealFormDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agent_id: form.commission_agent_id,
-          deal_value: form.value || 0,
-          deal_profit: (form.value || 0) - (form.buy_cost || 0),
-          deal_quantity: form.quantity || 0,
+          deal_value: debouncedValue || 0,
+          deal_profit: (debouncedValue || 0) - (debouncedBuyCost || 0),
+          deal_quantity: debouncedQuantity || 0,
           deal_unit: form.unit || "",
           currency: form.currency || "USD",
         }),
       });
       if (!r.ok) return null;
-      return r.json();
+      return r.json() as Promise<{
+        calculated_commission: number;
+        currency: string;
+        commission_type?: string;
+        breakdown?: { formula?: string };
+      } | null>;
     },
     enabled: !!form.commission_agent_id && open,
   });
+  const previewCommission = Number(commissionPreview?.calculated_commission) || 0;
+
+  // Live deal profit calc for the form preview (audit D-2: include all costs).
+  const formCalc = computeDealProfit(form as Deal, previewCommission);
 
   const { data: partnerCtx, isLoading: ctxLoading } = useQuery({
     queryKey: ["partner-context", tenantKey, selectedPartnerId],
@@ -1312,33 +1443,151 @@ function DealFormDialog({
             </CollapsibleContent>
           </Collapsible>
 
-          {/* ===== Line Items (collapsible) ===== */}
+          {/* ===== Costs & Pricing (collapsible) ===== */}
           <Collapsible open={lineItemsOpen} onOpenChange={setLineItemsOpen}>
             <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
               <BarChart3 className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium flex-1 text-left">Line Items</span>
-              <span className="text-xs text-muted-foreground mr-1">Quantity, unit, buy cost</span>
+              <span className="text-sm font-medium flex-1 text-left">Costs &amp; Pricing</span>
+              <span className="text-xs text-muted-foreground mr-1">Quantity, buy cost, fees, FX, profit</span>
               {lineItemsOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3">
-                <div className="space-y-1.5">
-                  <Label>Quantity</Label>
-                  <Input type="number" min={0} step={1} value={form.quantity ?? 0} onChange={(e) => set("quantity", Number(e.target.value))} placeholder="0" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Unit of Measure</Label>
-                  <Input value={form.unit || ""} onChange={(e) => set("unit", e.target.value)} placeholder="pcs, kg, set, etc." />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Buy Cost</Label>
-                  <Input type="number" min={0} step="0.01" value={form.buy_cost ?? 0} onChange={(e) => set("buy_cost", Number(e.target.value))} placeholder="0.00" />
-                  {form.buy_cost && Number(form.buy_cost) > 0 && form.value && Number(form.value) > 0 && (
+              <div className="space-y-3 pt-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Quantity</Label>
+                    <Input type="number" min={0} step={1} value={form.quantity ?? 0} onChange={(e) => set("quantity", Number(e.target.value))} placeholder="0" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Unit of Measure</Label>
+                    <Input value={form.unit || ""} onChange={(e) => set("unit", e.target.value)} placeholder="pcs, kg, set, etc." />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Exchange Rate</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.0001"
+                      value={form.exchange_rate ?? 1}
+                      onChange={(e) => set("exchange_rate", Number(e.target.value) as Deal["exchange_rate"])}
+                      placeholder="1.00"
+                    />
                     <p className="text-[10px] text-muted-foreground">
-                      Profit: {fmtMoney(Number(form.value) - Number(form.buy_cost), form.currency || "USD")}
+                      Multiplier applied to total cost (sell currency per buy currency).
                     </p>
-                  )}
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Buy Cost (total)</Label>
+                    <Input type="number" min={0} step="0.01" value={form.buy_cost ?? 0} onChange={(e) => set("buy_cost", Number(e.target.value))} placeholder="0.00" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Purchase Currency</Label>
+                    <Select value={form.purchase_currency || form.currency || "USD"} onValueChange={(v) => set("purchase_currency", v)}>
+                      <SelectTrigger><SelectValue placeholder="Same as deal currency" /></SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {CURRENCIES_LIST.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Selling Price (total)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.selling_price ?? 0}
+                      onChange={(e) => set("selling_price", Number(e.target.value) as Deal["selling_price"])}
+                      placeholder="0.00 (defaults to deal value)"
+                    />
+                    <p className="text-[10px] text-muted-foreground">If 0, deal value is used as the selling price.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Selling Currency</Label>
+                    <Select value={form.selling_currency || form.currency || "USD"} onValueChange={(v) => set("selling_currency", v)}>
+                      <SelectTrigger><SelectValue placeholder="Same as deal currency" /></SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {CURRENCIES_LIST.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Bank Costs</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.bank_costs ?? 0}
+                      onChange={(e) => set("bank_costs", Number(e.target.value) as Deal["bank_costs"])}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Other Costs</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={Array.isArray(form.costs) && form.costs[0]?.amount != null ? Number(form.costs[0].amount) : 0}
+                      onChange={(e) => set("costs", [{ label: "Other", amount: Number(e.target.value) }] as Deal["costs"])}
+                      placeholder="0.00 (shipping, insurance, duties…)"
+                    />
+                  </div>
+                </div>
+
+                {/* Profit / margin preview (full cost breakdown) */}
+                <Card className="border-border/60 bg-muted/30 shadow-soft rounded-xl">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="size-3.5 text-primary" />
+                      <p className="text-xs font-medium">Profit &amp; Margin Preview</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Buy Cost</p>
+                        <p className="font-mono tabular">{fmtMoney(formCalc.buyCost, form.purchase_currency || form.currency || "USD")}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Selling Price</p>
+                        <p className="font-mono tabular">{fmtMoney(formCalc.sellingPrice, form.selling_currency || form.currency || "USD")}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Bank Costs</p>
+                        <p className="font-mono tabular">{fmtMoney(formCalc.bankCosts, form.currency || "USD")}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Other Costs</p>
+                        <p className="font-mono tabular">{fmtMoney(formCalc.otherCosts, form.currency || "USD")}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Commission</p>
+                        <p className="font-mono tabular">{fmtMoney(formCalc.commission, commissionPreview?.currency || form.currency || "USD")}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Exchange Rate</p>
+                        <p className="font-mono tabular">{formCalc.exchangeRate}</p>
+                      </div>
+                      <div className="border-t pt-1">
+                        <p className="text-[10px] text-muted-foreground">Total Cost</p>
+                        <p className="font-mono tabular font-semibold">{fmtMoney(formCalc.totalCost, form.currency || "USD")}</p>
+                      </div>
+                      <div className="border-t pt-1">
+                        <p className="text-[10px] text-muted-foreground">Profit</p>
+                        <p className={`font-mono tabular font-semibold ${formCalc.profit >= 0 ? "text-chart-1" : "text-destructive"}`}>
+                          {fmtMoney(formCalc.profit, form.currency || "USD")}
+                        </p>
+                      </div>
+                      <div className="border-t pt-1">
+                        <p className="text-[10px] text-muted-foreground">Margin</p>
+                        <p className={`font-mono tabular font-semibold ${formCalc.marginPct >= 0 ? "text-chart-1" : "text-destructive"}`}>
+                          {formCalc.marginPct.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </CollapsibleContent>
           </Collapsible>

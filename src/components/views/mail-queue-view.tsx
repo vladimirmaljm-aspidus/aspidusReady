@@ -38,6 +38,7 @@ import { fmtRelative, fmtDateTime } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { MailQueueEntry, MailStatus } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_META: Record<MailStatus, { label: string; className: string; icon: typeof Clock }> = {
   queued: { label: "Queued", className: "bg-[var(--chart-4)] text-black", icon: Clock },
@@ -70,16 +71,17 @@ export function MailQueueView() {
   const admin = isAdmin(user);
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [status, setStatus] = useState<string>("all");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [showCompose, setShowCompose] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["mail-queue", tenantKey, search, status],
+    queryKey: ["mail-queue", tenantKey, debouncedSearch, status],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (status !== "all") params.set("status", status);
       const r = await fetch(api(`/api/mail-queue?${params}`));
       if (!r.ok) throw new Error("Failed to load mail queue");

@@ -9,7 +9,12 @@ import * as React from "react";
  */
 export function useNewShortcut(onNew: () => void) {
   const ref = React.useRef(onNew);
-  ref.current = onNew;
+  // Keep the ref in sync with the latest `onNew` via an effect rather than a
+  // render-phase write (React 19 anti-pattern, P1-9). The listener below reads
+  // `ref.current` at event-dispatch time, so it always sees the freshest value.
+  React.useEffect(() => {
+    ref.current = onNew;
+  });
   React.useEffect(() => {
     function handle() { ref.current(); }
     window.addEventListener("aspidus:new", handle);

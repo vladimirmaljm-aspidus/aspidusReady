@@ -30,7 +30,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  const { new_email, send_reset_link = true, silent = false } = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  const { new_email, send_reset_link = true, silent = false } = body;
   if (!new_email || typeof new_email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
     return NextResponse.json({ error: "Valid email is required." }, { status: 400 });
   }

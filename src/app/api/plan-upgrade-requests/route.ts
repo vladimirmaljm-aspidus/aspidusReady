@@ -37,7 +37,12 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   if (!auth.tenantId) return NextResponse.json({ error: "Tenant context required." }, { status: 400 });
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   if (!body.requested_plan) {
     return NextResponse.json({ error: "requested_plan is required." }, { status: 400 });
   }

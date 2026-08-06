@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (dashboard.create)
+    // Permission gate (proformas.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "proformas.create"); if (_d) return _d; } /* requirePermission wired */
 
@@ -86,10 +86,17 @@ export async function POST(req: NextRequest) {
       items: offer.items,
     };
 
-    // 6. Create the proforma
+    // 6. Enforce monthly_documents quota (parity with POST /api/proformas)
+    {
+      const { enforceQuota } = await import("@/lib/api/plan-limits");
+      const denied = await enforceQuota(tid, "monthly_documents", auth.isSuperAdmin);
+      if (denied) return denied;
+    }
+
+    // 7. Create the proforma
     const created = await store.upsertProforma(proformaData);
 
-    // 7. Audit log
+    // 8. Audit log
     await audit(
       store,
       auth.user,

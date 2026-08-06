@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (supplier-offers.read)
-    { const { requirePermission } = await import("@/lib/permissions/can");
+    if (!("apiKeyId" in auth)) { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "supplier-offers.read"); if (_d) return _d; } /* requirePermission wired */
   // Feature gate (module_trade)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
-    const _f = await requireFeature(auth.tenantId, "module_trade", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
+    const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(auth.tenantId, "module_trade", isSA); if (_f) return _f; } /* requireFeature wired */
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ items: [], total: 0 });
@@ -36,7 +37,12 @@ export async function POST(req: NextRequest) {
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   body.tenant_id = tenantId;
   const created = await auth.store.upsertSupplierOffer(body);
   await audit(auth.store, auth.user, req, body.id ? "supplier_offer.update" : "supplier_offer.create", "supplier_offer", created.id, {});

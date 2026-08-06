@@ -3,6 +3,7 @@ import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
 import { notifyRfqReceived } from "@/lib/notif/helper";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,12 @@ export async function POST(req: NextRequest) {
   }
   const store = await getStore();
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   body.partner_id = access.partner_id;
   body.tenant_id = access.tenant_id;
   body.portal_access_id = access.id;
@@ -50,6 +56,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const created = await store.upsertPortalRfq(body);
+
+    // Audit the RFQ creation
+    try {
+      await audit(
+        store,
+        { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+        req,
+        "portal.rfq_created",
+        "portal_rfq",
+        (created as any)?.id,
+        { product_name: body.product_name, quantity: body.quantity, number: body.number },
+      );
+    } catch (e) { console.error("[audit]", e); }
 
     // Notify tenant admins
     const partner = await store.getPartner(access.partner_id);

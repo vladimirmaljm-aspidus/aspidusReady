@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollText, Search, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { fmtDateTime } from "@/lib/utils/format";
 import { MapLink } from "@/components/common/map-link";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 interface AuditRow {
   id: string; tenant_id: string | null; user_id: string | null; username: string | null;
@@ -25,6 +26,7 @@ const PAGE_SIZE = 50;
 export function PlatformAuditView() {
   const [tenantId, setTenantId] = React.useState<string>("");
   const [search, setSearch] = React.useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [action, setAction] = React.useState("");
   const [user, setUser] = React.useState("");
   const [page, setPage] = React.useState(0);
@@ -43,12 +45,12 @@ export function PlatformAuditView() {
   if (tenantId) q.set("tenant_id", tenantId);
   if (action) q.set("action", action);
   if (user) q.set("user", user);
-  if (search) q.set("search", search);
+  if (debouncedSearch) q.set("search", debouncedSearch);
   q.set("limit", String(PAGE_SIZE));
   q.set("offset", String(page * PAGE_SIZE));
 
   const auditQ = useQuery({
-    queryKey: ["platform-audit", tenantId, action, user, search, page],
+    queryKey: ["platform-audit", tenantId, action, user, debouncedSearch, page],
     queryFn: async () => {
       const r = await fetch(`/api/super-admin/audit?${q.toString()}`);
       if (!r.ok) throw new Error("Failed to load audit");

@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 function getAuthUser(auth: AuthContext | ApiKeyAuthContext) {
   if ("user" in auth) return auth.user;
-  return { id: `api:${auth.apiKeyId}`, username: auth.apiKeyName };
+  return { id: `api:${auth.apiKeyId}`, username: auth.apiKeyName, tenant_id: auth.tenantId };
 }
 
 export async function GET(req: NextRequest) {
@@ -74,7 +74,34 @@ export async function POST(req: NextRequest) {
       const denied = await enforceQuota(tid, "monthly_documents", isSA);
       if (denied) return denied;
     }
-    const created = await auth.store.upsertInvoice(body);
+
+    // Auto-generate document number if not provided (e.g. manual "Create" click).
+    // Matches the format used by /api/automation/create-invoice-from-offer:
+    //   INV-<year>-<NNN>  (3-digit sequence, total+1)
+    if (!body.id && !body.number) {
+      const year = new Date().getFullYear();
+      const existing = await auth.store.listInvoices(tid!, { limit: 1 });
+      const nextSeq = (existing.total || 0) + 1;
+      body.number = `INV-${year}-${String(nextSeq).padStart(3, "0")}`;
+    }
+
+    let created;
+    try {
+      created = await auth.store.upsertInvoice(body);
+    } catch (e: any) {
+      // Retry once with bumped sequence in case of unique-collision race.
+      if (!body.id && body.number) {
+        const m = body.number.match(/^(INV-\d{4}-)(\d+)$/);
+        if (m) {
+          body.number = `${m[1]}${String(Number(m[2]) + 1).padStart(3, "0")}`;
+          created = await auth.store.upsertInvoice(body);
+        } else {
+          throw e;
+        }
+      } else {
+        throw e;
+      }
+    }
     await audit(auth.store, getAuthUser(auth), req, body.id ? "invoice.update" : "invoice.create", "invoice", created.id, { number: created.number });
     return NextResponse.json(created);
   } catch (error: any) {

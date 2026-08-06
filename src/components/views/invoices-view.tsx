@@ -15,7 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -35,7 +35,7 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, ChevronRight, Sparkles, Zap, FileDown,
+  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, ChevronRight, Sparkles, Zap, FileDown, DollarSign, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -44,7 +44,9 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Invoice, InvoiceStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, INVOICE_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { UnitSelect } from "@/components/common/unit-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_LABELS: Record<InvoiceStatus, string> = {
   draft: "Draft",
@@ -55,13 +57,12 @@ const STATUS_LABELS: Record<InvoiceStatus, string> = {
 };
 
 const PAYMENT_TERMS_OPTIONS = [
-  { value: "Net 15", label: "Net 15" },
-  { value: "Net 30", label: "Net 30" },
-  { value: "Net 45", label: "Net 45" },
-  { value: "Net 60", label: "Net 60" },
-  { value: "Net 90", label: "Net 90" },
-  { value: "Due on Receipt", label: "Due on Receipt" },
-  { value: "Custom", label: "Custom" },
+  { value: "immediate", label: "Immediate" },
+  { value: "net15", label: "Net 15" },
+  { value: "net30", label: "Net 30" },
+  { value: "net45", label: "Net 45" },
+  { value: "net60", label: "Net 60" },
+  { value: "net90", label: "Net 90" },
 ];
 
 function StatusBadge({ status }: { status: InvoiceStatus }) {
@@ -104,13 +105,21 @@ function isOverdue(inv: Invoice): boolean {
 /** Calculate due date from payment terms */
 function calculateDueDate(paymentTerms: string): Date {
   const now = new Date();
-  const match = paymentTerms.match(/Net\s+(\d+)/i);
+  // Handle immediate / advance / due-on-receipt (0 days)
+  const normalized = (paymentTerms || "").toLowerCase().trim();
+  if (
+    normalized === "immediate" ||
+    normalized === "advance" ||
+    normalized === "due on receipt" ||
+    normalized === "cia"
+  ) {
+    return now;
+  }
+  // Match "net30", "Net 30", "net 30", "net15" etc.
+  const match = paymentTerms.match(/net\s*(\d+)/i);
   if (match) {
     const days = parseInt(match[1], 10);
     now.setDate(now.getDate() + days);
-    return now;
-  }
-  if (paymentTerms === "Due on Receipt") {
     return now;
   }
   // Default to Net 30
@@ -124,6 +133,7 @@ export function InvoicesView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [editing, setEditing] = useState<Invoice | null>(null);
@@ -134,10 +144,10 @@ export function InvoicesView() {
   const [showOfferPicker, setShowOfferPicker] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["invoices", tenantKey, search, statusFilter, partnerFilter],
+    queryKey: ["invoices", tenantKey, debouncedSearch, statusFilter, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
       const r = await fetch(api(`/api/invoices?${params}`));
@@ -193,6 +203,29 @@ export function InvoicesView() {
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: () => toast.error("Could not update invoice."),
+  });
+
+  // ─── Send invoice to portal (email + status + portal notification) ───
+  const sendMut = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(api(`/api/invoices/${id}/send`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to send invoice");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Invoice sent to portal");
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["invoice", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to send invoice."),
   });
 
   const markPaidMut = useMutation({
@@ -510,8 +543,10 @@ export function InvoicesView() {
               partnerName={partnerName(detail.data.partner_id)}
               onMarkPaid={() => detailId && markPaidMut.mutate({ id: detailId })}
               onMarkSent={() => detailId && markSentMut.mutate({ id: detailId })}
+              onSend={() => detailId && sendMut.mutate(detailId)}
               markingPaid={markPaidMut.isPending}
               markingSent={markSentMut.isPending}
+              sending={sendMut.isPending}
             />
           ) : null}
         </SheetContent>
@@ -672,17 +707,21 @@ function CreateFromOfferDialog({
 
 // ---- Detail panel ----
 function InvoiceDetail({
-  invoice, partnerName, onMarkPaid, onMarkSent, markingPaid, markingSent,
+  invoice, partnerName, onMarkPaid, onMarkSent, onSend, markingPaid, markingSent, sending,
 }: {
   invoice: Invoice;
   partnerName: string;
   onMarkPaid: () => void;
   onMarkSent: () => void;
+  onSend: () => void;
   markingPaid: boolean;
   markingSent: boolean;
+  sending: boolean;
 }) {
   const totals = computeTotals(invoice.items || []);
   const overdue = isOverdue(invoice);
+
+  const canRecordPayment = invoice.status !== "paid" && invoice.status !== "cancelled" && invoice.status !== "draft";
 
   return (
     <div className="px-4 pb-6">
@@ -694,9 +733,17 @@ function InvoiceDetail({
         </div>
         <div className="flex items-center gap-2">
           {invoice.status === "draft" && (
+            <Button size="sm" onClick={onSend} disabled={sending} variant="default" className="gap-1">
+              {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
+            </Button>
+          )}
+          {invoice.status === "draft" && (
             <Button size="sm" onClick={onMarkSent} disabled={markingSent} variant="outline" className="gap-1">
               <Send className="size-3.5" /> Mark as Sent
             </Button>
+          )}
+          {canRecordPayment && (
+            <RecordPaymentDialog invoice={invoice} />
           )}
           {invoice.status !== "paid" && invoice.status !== "cancelled" && (
             <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700 gap-1">
@@ -801,9 +848,17 @@ function InvoiceDetail({
           </a>
         </Button>
         {invoice.status === "draft" && (
+          <Button size="sm" variant="default" onClick={onSend} disabled={sending} className="gap-1">
+            {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
+          </Button>
+        )}
+        {invoice.status === "draft" && (
           <Button size="sm" variant="outline" onClick={onMarkSent} disabled={markingSent} className="gap-1">
             <Send className="size-3.5" /> Mark as Sent
           </Button>
+        )}
+        {canRecordPayment && (
+          <RecordPaymentDialog invoice={invoice} triggerVariant="footer" />
         )}
         {invoice.status !== "paid" && invoice.status !== "cancelled" && (
           <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700 gap-1">
@@ -814,6 +869,188 @@ function InvoiceDetail({
     </div>
   );
 }
+
+// ---- Record Payment dialog ----
+function RecordPaymentDialog({
+  invoice,
+  triggerVariant = "header",
+}: {
+  invoice: Invoice;
+  triggerVariant?: "header" | "footer";
+}) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState<string>(
+    invoice.total != null ? String(invoice.total) : ""
+  );
+  const [method, setMethod] = useState<string>("bank_transfer");
+  const [reference, setReference] = useState<string>("");
+  const [paymentDate, setPaymentDate] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [submitting, setSubmitting] = useState(false);
+
+  // Re-sync the default amount when the invoice prop changes.
+  useEffect(() => {
+    if (open) {
+      setAmount(invoice.total != null ? String(invoice.total) : "");
+    }
+  }, [invoice.id, invoice.total, open]);
+
+  async function handleSubmit() {
+    const numAmount = Number(amount);
+    if (!Number.isFinite(numAmount) || numAmount <= 0) {
+      toast.error("Enter a valid payment amount.");
+      return;
+    }
+    if (!method) {
+      toast.error("Select a payment method.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const r = await fetch(api(`/api/invoices/${invoice.id}/record-payment`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: numAmount,
+          method,
+          reference: reference || undefined,
+          payment_date: paymentDate || undefined,
+        }),
+      });
+      if (r.ok) {
+        const data = await r.json().catch(() => ({}));
+        toast.success(
+          data?.status === "partial"
+            ? "Partial payment recorded."
+            : "Payment recorded — invoice marked as paid."
+        );
+        qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+        qc.invalidateQueries({ queryKey: ["invoice", tenantKey, invoice.id] });
+        qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+        setOpen(false);
+        setReference("");
+      } else {
+        const e = await r.json().catch(() => ({}));
+        toast.error(e.error || "Failed to record payment.");
+      }
+    } catch (e) {
+      toast.error("Network error — please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const trigger =
+    triggerVariant === "footer" ? (
+      <Button size="sm" variant="outline" className="gap-1">
+        <DollarSign className="size-3.5" /> Record Payment
+      </Button>
+    ) : (
+      <Button size="sm" variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950">
+        <DollarSign className="size-3.5" /> Record Payment
+      </Button>
+    );
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <DollarSign className="size-5 text-emerald-600" />
+            Record Payment — {invoice.number}
+          </DialogTitle>
+          <DialogDescription>
+            Enter the payment details. A bank transaction will be created and
+            the invoice status updated automatically.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-amount">Amount ({invoice.currency || "USD"})</Label>
+              <Input
+                id="pay-amount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Outstanding: {fmtMoney(invoice.total ?? 0, invoice.currency || "USD")}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-date">Payment date</Label>
+              <Input
+                id="pay-date"
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Method</Label>
+            <Select value={method} onValueChange={setMethod}>
+              <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="check">Check</SelectItem>
+                <SelectItem value="card">Card</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-ref">Reference (optional)</Label>
+            <Input
+              id="pay-ref"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Transaction reference, cheque number, etc."
+            />
+          </div>
+
+          {Number(amount) < Number(invoice.total ?? 0) - 0.01 && (
+            <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700/40 p-3 text-xs text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="size-3.5 inline mr-1" />
+              Partial payment — the invoice will be marked as <strong>partial</strong>,
+              not paid.
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="bg-emerald-600 text-white hover:bg-emerald-700 gap-1"
+          >
+            {submitting ? (
+              <><Clock className="size-3.5 animate-spin" /> Recording…</>
+            ) : (
+              <><DollarSign className="size-3.5" /> Record Payment</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 // ---- Form dialog ----
 function InvoiceFormDialog({
@@ -880,11 +1117,11 @@ function InvoiceFormDialog({
         setForm({
           currency: "EUR",
           issue_date: new Date().toISOString(),
-          due_date: calculateDueDate("Net 30").toISOString(),
+          due_date: calculateDueDate("net30").toISOString(),
           notes: "",
           status: "draft",
           items: [],
-          payment_terms: "Net 30",
+          payment_terms: "net30",
         });
         // When creating new, line items open, notes closed
         setLineItemsOpen(true);
@@ -1007,8 +1244,8 @@ function InvoiceFormDialog({
         notes: f.notes
           ? `${f.notes}\n\nAuto-filled from offer: ${offer.number}`
           : `Auto-filled from offer: ${offer.number}`,
-        payment_terms: offer.terms || "Net 30",
-        due_date: calculateDueDate(offer.terms || "Net 30").toISOString(),
+        payment_terms: offer.payment_terms || "net30",
+        due_date: calculateDueDate(offer.payment_terms || "net30").toISOString(),
       }));
 
       // Also trigger partner auto-fill for bank details
@@ -1095,8 +1332,6 @@ function InvoiceFormDialog({
         tax_total: computed.tax_total,
         total: computed.total,
       };
-      // Remove non-invoice fields
-      delete (body as any).payment_terms;
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -1184,7 +1419,7 @@ function InvoiceFormDialog({
                 </span>
               </Label>
               <Select
-                value={form.payment_terms || "Net 30"}
+                value={form.payment_terms || "net30"}
                 onValueChange={handlePaymentTermsChange}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1199,7 +1434,7 @@ function InvoiceFormDialog({
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
                 Due date
-                {form.payment_terms && form.payment_terms !== "Custom" && (
+                {form.payment_terms && (
                   <span className="text-xs text-emerald-600 dark:text-emerald-400">Auto from {form.payment_terms}</span>
                 )}
               </Label>
@@ -1332,7 +1567,7 @@ function InvoiceFormDialog({
                   <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
                     {(form.items || []).map((it, idx) => (
                       <div key={idx} className="rounded-md border p-2 grid grid-cols-12 gap-1.5 items-end">
-                        <div className="col-span-12 sm:col-span-5 space-y-1">
+                        <div className="col-span-12 sm:col-span-3 space-y-1">
                           <Label className="text-xs">Product</Label>
                           <Select
                             value={it.product_id || "__custom__"}
@@ -1356,13 +1591,21 @@ function InvoiceFormDialog({
                             onChange={(e) => setItem(idx, { product_name: e.target.value })}
                           />
                         </div>
-                        <div className="col-span-3 sm:col-span-2 space-y-1">
+                        <div className="col-span-4 sm:col-span-2 space-y-1">
                           <Label className="text-xs">Qty</Label>
                           <Input
                             type="number"
                             className="h-9"
                             value={it.quantity}
                             onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="col-span-4 sm:col-span-2 space-y-1">
+                          <Label className="text-xs">Unit</Label>
+                          <UnitSelect
+                            value={it.unit || ""}
+                            onChange={(v) => setItem(idx, { unit: v })}
+                            placeholder="pcs"
                           />
                         </div>
                         <div className="col-span-4 sm:col-span-2 space-y-1">

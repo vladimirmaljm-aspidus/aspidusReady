@@ -48,6 +48,7 @@ import { useAppStore } from "@/lib/store/app-store";
 import { fmtMoney, fmtDate, fmtMoneyDetailed } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { Proforma, ProformaStatus, OfferLineItem, PortalTier } from "@/lib/supabase/types";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_STYLES: Record<ProformaStatus, string> = {
   draft: "bg-secondary text-secondary-foreground",
@@ -73,10 +74,11 @@ const STATUS_ICONS: Record<ProformaStatus, React.ComponentType<{ className?: str
 export function PortalProformas() {
   const portalAccess = useAppStore((s) => s.portalAccess) as any;
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const proformasQ = useQuery<{ items: Proforma[]; total: number }>({
-    queryKey: ["portal-proformas", search],
+    queryKey: ["portal-proformas", debouncedSearch],
     queryFn: async () => {
       const r = await fetch("/api/portal/proformas");
       if (!r.ok) throw new Error("Failed to load proformas");
@@ -98,11 +100,11 @@ export function PortalProformas() {
   });
 
   const allItems = proformasQ.data?.items || [];
-  const filtered = search
+  const filtered = debouncedSearch
     ? allItems.filter(
         (p) =>
-          p.number.toLowerCase().includes(search.toLowerCase()) ||
-          p.subject.toLowerCase().includes(search.toLowerCase())
+          p.number.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+          p.subject.toLowerCase().includes(debouncedSearch.toLowerCase())
       )
     : allItems;
 

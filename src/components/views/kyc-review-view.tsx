@@ -45,6 +45,7 @@ import {
 } from "@/lib/supabase/types";
 import { getCountry } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 // Local copy of the KycSubmission.status union — there is a pre-existing
 // duplicate `KycStatus` export in supabase/types.ts (Partner.kyc_status uses a
@@ -139,16 +140,17 @@ export function KycReviewView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
 
   // KYC list
   const { data, isLoading } = useQuery({
-    queryKey: ["kyc", tenantKey, search, statusFilter],
+    queryKey: ["kyc", tenantKey, debouncedSearch, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       const r = await fetch(api(`/api/kyc?${params}`));
       if (!r.ok) throw new Error("Failed to load KYC submissions");

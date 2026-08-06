@@ -88,6 +88,13 @@ function SuperAdminSubscriptionsPanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {items.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                      No tenants found.
+                    </TableCell>
+                  </TableRow>
+                )}
                 {items.map((t) => {
                   const endDate = t.is_trial ? t.trial_ends_at : t.subscription_end;
                   return (

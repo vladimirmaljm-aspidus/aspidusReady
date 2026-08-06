@@ -2228,7 +2228,8 @@ export class PrismaStore implements Store {
             "kyc_submitted", "kyc_approved", "kyc_rejected",
             "rfq_received", "rfq_quoted",
             "offer_sent", "offer_accepted", "offer_rejected", "offer_expired",
-            "invoice_overdue", "invoice_paid",
+            "invoice_sent", "invoice_overdue", "invoice_paid",
+            "proforma_sent",
             "document_shared",
             "portal_access_requested", "portal_access_approved", "portal_invite_sent",
             "portal_message",
@@ -2406,6 +2407,8 @@ export class PrismaStore implements Store {
     });
     return { ...row, preference_value: row.preference_value, updated_at: dateToISOOrNow(row.updated_at) };
   }
+
+  async deleteUserPreference(_userId: string, _key: string): Promise<void> {}
 
   async listUserPreferences(userId: string): Promise<UserPreference[]> {
     const rows = await db.userPreference.findMany({ where: { user_id: userId } });

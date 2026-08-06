@@ -44,7 +44,12 @@ export async function PUT(req: NextRequest) {
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "platform.feature_flags.update"); if (_d) return _d; } /* requirePermission wired */
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   if (!body.tenant_id) {
     body.tenant_id = resolveTenantId(auth, req) || undefined;
   }

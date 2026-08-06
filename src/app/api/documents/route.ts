@@ -34,8 +34,16 @@ export async function POST(req: NextRequest) {
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "documents.create"); if (_d) return _d; } /* requirePermission wired */
 
-  const body = await req.json();
-  body.tenant_id = auth.tenantId!;
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  if (!auth.tenantId) {
+    return NextResponse.json({ error: "tenant_id is required." }, { status: 400 });
+  }
+  body.tenant_id = auth.tenantId;
   if (!body.uploaded_by) body.uploaded_by = auth.user.id;
   const created = await auth.store.upsertDocument(body);
   await audit(auth.store, auth.user, req, body.id ? "document.update" : "document.upload", "document", created.id, { filename: created.filename });

@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromCookie, clearSessionCookie } from "@/lib/auth/session";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,28 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+// Portal logout — clears the session cookie. Audited as `portal.logout` so
+// the audit trail captures session-end events for compliance.
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getSessionFromCookie();
+    if (session && session.role === "portal_client") {
+      try {
+        const { getStore } = await import("@/lib/data/store");
+        const store = await getStore();
+        await audit(
+          store,
+          { id: session.sub, username: session.username || "", tenant_id: session.tenant_id || null },
+          req,
+          "portal.logout",
+          "portal_access",
+          session.sub.replace("portal:", ""),
+          {},
+        );
+      } catch (e) { console.error("[audit]", e); }
+    }
+  } catch (e) { console.error("[portal/me.logout]", e); }
+
   await clearSessionCookie();
   return NextResponse.json({ ok: true });
 }

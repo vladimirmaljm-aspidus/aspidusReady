@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -39,12 +39,15 @@ import {
   CheckCircle2,
   XCircle,
   Crown,
+  Check,
+  X,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
 import { fmtMoney, fmtDate, fmtMoneyDetailed } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Offer, OfferStatus, OfferLineItem, PortalTier } from "@/lib/supabase/types";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_STYLES: Record<OfferStatus, string> = {
   draft: "bg-secondary text-secondary-foreground",
@@ -72,11 +75,13 @@ const STATUS_ICONS: Record<OfferStatus, React.ComponentType<{ className?: string
 
 export function PortalOffers() {
   const portalAccess = useAppStore((s) => s.portalAccess) as any;
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const offersQ = useQuery<{ items: Offer[]; total: number }>({
-    queryKey: ["portal-offers", search],
+    queryKey: ["portal-offers", debouncedSearch],
     queryFn: async () => {
       const r = await fetch("/api/portal/offers");
       if (!r.ok) throw new Error("Failed to load offers");
@@ -99,11 +104,11 @@ export function PortalOffers() {
   });
 
   const allItems = offersQ.data?.items || [];
-  const filtered = search
+  const filtered = debouncedSearch
     ? allItems.filter(
         (o) =>
-          o.number.toLowerCase().includes(search.toLowerCase()) ||
-          o.subject.toLowerCase().includes(search.toLowerCase())
+          o.number.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+          o.subject.toLowerCase().includes(debouncedSearch.toLowerCase())
       )
     : allItems;
 
@@ -263,6 +268,10 @@ export function PortalOffers() {
               canDownloadPdf={canDownloadPdf}
               tier={tier}
               onDownload={() => handleDownloadPdf(detailQ.data.id)}
+              onResponded={() => {
+                qc.invalidateQueries({ queryKey: ["portal-offers"] });
+                qc.invalidateQueries({ queryKey: ["portal-offer", detailId] });
+              }}
             />
           ) : null}
         </SheetContent>
@@ -291,13 +300,46 @@ function OfferDetail({
   canDownloadPdf,
   tier,
   onDownload,
+  onResponded,
 }: {
   offer: Offer;
   canDownloadPdf: boolean;
   tier?: PortalTier;
   onDownload: () => void;
+  onResponded: () => void;
 }) {
   const StatusIcon = STATUS_ICONS[offer.status];
+  const [responding, setResponding] = useState(false);
+
+  const canRespond = offer.status === "sent" || (offer.status as string) === "viewed";
+
+  async function handleRespond(decision: "accept" | "reject") {
+    const promptLabel =
+      decision === "accept"
+        ? "Add a note (optional):"
+        : "Reason for rejection (optional):";
+    const note = window.prompt(promptLabel, "") || "";
+    setResponding(true);
+    try {
+      const res = await fetch(`/api/portal/offers/${offer.id}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, note }),
+      });
+      if (res.ok) {
+        toast.success(decision === "accept" ? "Offer accepted." : "Offer rejected.");
+        onResponded();
+      } else {
+        const e = await res.json().catch(() => ({}));
+        toast.error(e.error || "Failed to update offer.");
+      }
+    } catch (e) {
+      toast.error("Network error — please try again.");
+    } finally {
+      setResponding(false);
+    }
+  }
+
   return (
     <>
       <SheetHeader>
@@ -411,6 +453,38 @@ function OfferDetail({
                 <p className="text-sm text-muted-foreground leading-relaxed">{offer.terms}</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Accept / Reject actions — only available when offer is awaiting a response. */}
+        {canRespond && (
+          <div className="border-t border-border/60 pt-4 space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Your response
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={() => handleRespond("accept")}
+                disabled={responding}
+                className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-soft hover:shadow-soft-md smooth"
+              >
+                <Check className="size-4 mr-1.5" />
+                {responding ? "…" : "Accept Offer"}
+              </Button>
+              <Button
+                onClick={() => handleRespond("reject")}
+                disabled={responding}
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 smooth"
+              >
+                <X className="size-4 mr-1.5" />
+                {responding ? "…" : "Reject"}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Accepting this offer confirms the commercial terms. Your account
+              manager will be notified and proceed with the next step.
+            </p>
           </div>
         )}
 

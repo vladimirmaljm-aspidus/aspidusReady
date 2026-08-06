@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
-import { requireAdmin } from "@/lib/api/helpers";
+import { requireAdmin, audit } from "@/lib/api/helpers";
 import { getStore, getStoreSync } from "@/lib/data/store";
 import type { EmailProvider } from "@/lib/email/service";
 
@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           from: `${fromName} <${resendFromEmail}>`,
           to: [body.to],
@@ -157,6 +158,9 @@ export async function POST(req: NextRequest) {
       }
 
       const data = await res.json();
+      try {
+        await audit(auth.store, auth.user, req, "settings.test_email", "setting", undefined, { provider: body.provider, to: body.to });
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({
         ok: true,
         messageId: data.id,
@@ -196,6 +200,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           "X-Postmark-Server-Token": serverToken,
         },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           From: `${fromName} <${postmarkFromEmail}>`,
           To: body.to,
@@ -254,6 +259,9 @@ export async function POST(req: NextRequest) {
       }
 
       const data = await res.json();
+      try {
+        await audit(auth.store, auth.user, req, "settings.test_email", "setting", undefined, { provider: body.provider, to: body.to });
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({
         ok: true,
         messageId: data.MessageID,
@@ -336,6 +344,9 @@ export async function POST(req: NextRequest) {
         `,
       });
 
+      try {
+        await audit(auth.store, auth.user, req, "settings.test_email", "setting", undefined, { provider: body.provider, to: body.to });
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({
         ok: true,
         messageId: info.messageId,

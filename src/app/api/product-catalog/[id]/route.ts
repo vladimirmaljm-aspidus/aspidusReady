@@ -38,7 +38,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const updated = await auth.store.upsertProductCatalogEntry({ ...body, id, tenant_id: existing.tenant_id });
   await audit(auth.store, auth.user, req, "product_catalog.update", "product_catalog", id, { name: updated.name });
   return NextResponse.json(updated);

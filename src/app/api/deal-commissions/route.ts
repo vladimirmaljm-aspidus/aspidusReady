@@ -23,10 +23,22 @@ export async function GET(req: NextRequest) {
     const agentId = url.searchParams.get("agent_id");
 
     if (dealId) {
+      // Verify tenant ownership of the deal before listing its commissions
+      const deal = await auth.store.getDeal(dealId);
+      if (!deal) return NextResponse.json({ items: [], total: 0 });
+      if (!auth.isSuperAdmin && deal.tenant_id !== auth.tenantId) {
+        return NextResponse.json({ items: [], total: 0 });
+      }
       const items = await auth.store.listDealCommissionsByDeal(dealId);
       return NextResponse.json({ items, total: items.length });
     }
     if (agentId) {
+      // Verify tenant ownership of the commission agent before listing its commissions
+      const agent = await auth.store.getCommissionAgent(agentId);
+      if (!agent) return NextResponse.json({ items: [], total: 0 });
+      if (!auth.isSuperAdmin && agent.tenant_id !== auth.tenantId) {
+        return NextResponse.json({ items: [], total: 0 });
+      }
       const items = await auth.store.listDealCommissionsByAgent(agentId);
       return NextResponse.json({ items, total: items.length });
     }

@@ -26,7 +26,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json().catch(() => ({} as any));
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const targetUserId: string | undefined = body?.user_id;
   const tenantId: string | undefined = body?.tenant_id;
   const durationMin = Math.min(

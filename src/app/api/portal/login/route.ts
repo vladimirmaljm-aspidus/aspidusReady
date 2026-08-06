@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,17 @@ export async function POST(req: NextRequest) {
       : await store.getPortalAccessByEmailAnyTenant(email);
 
     if (existing?.locked_until && new Date(existing.locked_until) > new Date()) {
+      try {
+        await audit(
+          store,
+          { id: `portal:${existing.id}`, username: email, tenant_id: existing.tenant_id },
+          req,
+          "portal.login_failed",
+          "portal_access",
+          existing.id,
+          { email, ip, reason: "account_locked" },
+        );
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "Account is temporarily locked. Try again later." }, { status: 423 });
     }
 
@@ -73,11 +85,33 @@ export async function POST(req: NextRequest) {
           await store.upsertPortalAccess({ id: existing.id, failed_attempts: next, locked_until: lockUntil });
         } catch { /* non-critical */ }
       }
+      try {
+        await audit(
+          store,
+          { id: existing ? `portal:${existing.id}` : "portal:unknown", username: email, tenant_id: existing?.tenant_id },
+          req,
+          "portal.login_failed",
+          "portal_access",
+          existing?.id,
+          { email, ip, reason: existing ? "invalid_credentials" : "account_not_found" },
+        );
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "Invalid credentials or account not active." }, { status: 401 });
     }
 
     // Check status is active
     if (access.status !== "active") {
+      try {
+        await audit(
+          store,
+          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          req,
+          "portal.login_failed",
+          "portal_access",
+          access.id,
+          { email, ip, reason: "account_not_active" },
+        );
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "Account is not yet active. Please set up your password first." }, { status: 403 });
     }
 
@@ -85,6 +119,17 @@ export async function POST(req: NextRequest) {
     // its portal clients keep logging in.
     const tenant = await store.getTenant(access.tenant_id) as any;
     if (tenant?.status === "suspended" || tenant?.status === "cancelled") {
+      try {
+        await audit(
+          store,
+          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          req,
+          "portal.login_failed",
+          "portal_access",
+          access.id,
+          { email, ip, reason: "tenant_suspended", tenant_status: tenant.status },
+        );
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({
         error: "This workspace is not currently active. Please contact your account manager.",
         tenant_status: tenant.status,
@@ -94,9 +139,31 @@ export async function POST(req: NextRequest) {
     const subEnd = tenant?.subscription_end ? new Date(tenant.subscription_end) : null;
     const trialEnd = tenant?.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
     if (subEnd && subEnd < now && String(tenant?.status) !== "trial") {
+      try {
+        await audit(
+          store,
+          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          req,
+          "portal.login_failed",
+          "portal_access",
+          access.id,
+          { email, ip, reason: "subscription_expired" },
+        );
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "This workspace's subscription has expired.", subscription_expired: true }, { status: 402 });
     }
     if (String(tenant?.status) === "trial" && trialEnd && trialEnd < now) {
+      try {
+        await audit(
+          store,
+          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          req,
+          "portal.login_failed",
+          "portal_access",
+          access.id,
+          { email, ip, reason: "trial_expired" },
+        );
+      } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "This workspace's trial period has ended.", subscription_expired: true }, { status: 402 });
     }
 
@@ -119,6 +186,18 @@ export async function POST(req: NextRequest) {
         last_login_ip: ip,
       });
     } catch { /* non-critical */ }
+
+    try {
+      await audit(
+        store,
+        { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+        req,
+        "portal.login",
+        "portal_access",
+        access.id,
+        { email, ip },
+      );
+    } catch (e) { console.error("[audit]", e); }
 
     return NextResponse.json({ access: { ...access, password_hash: undefined } });
   } catch (e) {

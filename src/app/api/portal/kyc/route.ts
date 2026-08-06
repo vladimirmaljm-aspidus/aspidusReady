@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -38,7 +39,12 @@ export async function POST(req: NextRequest) {
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   const store = await getStore();
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   // Ensure partner + tenant are set correctly
   body.partner_id = access.partner_id;
   body.tenant_id = access.tenant_id;
@@ -52,5 +58,19 @@ export async function POST(req: NextRequest) {
   }
 
   const saved = await store.upsertKycSubmission(body);
+
+  // Audit the KYC update
+  try {
+    await audit(
+      store,
+      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      req,
+      "portal.kyc_updated",
+      "kyc_submission",
+      (saved as any)?.id,
+      { fields: Object.keys(body || {}) },
+    );
+  } catch (e) { console.error("[audit]", e); }
+
   return NextResponse.json(saved);
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
-import { requireAdmin } from "@/lib/api/helpers";
+import { requireAdmin, audit } from "@/lib/api/helpers";
 import { getStore, getStoreSync } from "@/lib/data/store";
 
 export const runtime = "nodejs";
@@ -150,6 +150,9 @@ export async function POST(req: NextRequest) {
       `,
     });
 
+    try {
+      await audit(auth.store, auth.user, req, "settings.test_smtp", "setting", undefined, { host: body.smtp_host, port: body.smtp_port });
+    } catch (e) { console.error("[audit]", e); }
     return NextResponse.json({
       ok: true,
       messageId: info.messageId,

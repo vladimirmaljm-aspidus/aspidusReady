@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api/helpers";
+import { requireAuth, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -34,6 +34,9 @@ export async function PUT(req: NextRequest) {
     const { key, value } = body;
     if (!key) return NextResponse.json({ error: "Missing key." }, { status: 400 });
     const pref = await auth.store.setUserPreference(auth.user.id, key, value);
+    try {
+      await audit(auth.store, auth.user, req, "user_preference.update", "user_preference", undefined, { keys: Object.keys(body) });
+    } catch (e) { console.error("[audit]", e); }
     return NextResponse.json({ ok: true, preference: pref });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });

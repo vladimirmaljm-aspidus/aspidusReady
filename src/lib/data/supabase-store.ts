@@ -1258,7 +1258,8 @@ export class SupabaseStore implements Store {
       "kyc_submitted", "kyc_approved", "kyc_rejected",
       "rfq_received", "rfq_quoted",
       "offer_sent", "offer_accepted", "offer_rejected", "offer_expired",
-      "invoice_overdue", "invoice_paid",
+      "invoice_sent", "invoice_overdue", "invoice_paid",
+      "proforma_sent",
       "document_shared",
       "portal_access_requested", "portal_access_approved", "portal_invite_sent",
       "portal_message",
@@ -1371,13 +1372,32 @@ export class SupabaseStore implements Store {
       updated_at: new Date().toISOString(),
     };
     if (payoutReference) update.payout_reference = payoutReference;
+    // Only update if the commission is NOT already paid — prevents the
+    // double-payment vector flagged in FLOW-3 (a payout that re-includes an
+    // already-paid commission id would otherwise overwrite paid_at and
+    // payout_reference, masking the duplicate).
     const { data, error } = await this.sb()
       .from("deal_commissions")
       .update(update)
       .eq("id", id)
+      .neq("status", "paid")
       .select()
-      .single();
+      .maybeSingle();
     if (error) throw error;
+    if (!data) {
+      // No row updated — either the commission doesn't exist OR it was
+      // already paid. Log a warning and fetch the current row so callers
+      // still receive a DealCommission (signature unchanged).
+      console.warn(`[markDealCommissionPaid] Commission ${id} was not updated — already paid or missing.`);
+      const { data: existing, error: fetchErr } = await this.sb()
+        .from("deal_commissions")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!existing) throw new Error(`DealCommission ${id} not found`);
+      return existing as DealCommission;
+    }
     return data as DealCommission;
   }
 
@@ -2185,6 +2205,15 @@ export class SupabaseStore implements Store {
       .single();
     if (error) throw error;
     return data as UserPreference;
+  }
+
+  async deleteUserPreference(userId: string, key: string): Promise<void> {
+    const { error } = await this.sb()
+      .from("user_preferences")
+      .delete()
+      .eq("user_id", userId)
+      .eq("preference_key", key);
+    if (error) throw error;
   }
 
   async listUserPreferences(userId: string): Promise<UserPreference[]> {

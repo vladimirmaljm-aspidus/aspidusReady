@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api/helpers";
+import { requireAuth, audit } from "@/lib/api/helpers";
 import { getStore } from "@/lib/data/store";
 
 export const runtime = "nodejs";
@@ -60,20 +60,31 @@ export async function POST(req: NextRequest) {
     const _d = requirePermission(auth, "settings.update"); if (_d) return _d; } /* requirePermission wired */
 
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   const { module, name, filters, columns, is_default } = body;
 
   if (!module || !name) {
     return NextResponse.json({ error: "module and name are required." }, { status: 400 });
   }
 
-  // Generate ID from name (slugify)
-  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  // Generate ID from name (slugify) + short random suffix to avoid collisions
+  // (non-Latin names slugify to ""; same-name filters would otherwise collide)
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "filter";
+  const id = `${slug}-${crypto.randomUUID().slice(0, 8)}`;
   const key = `saved_filter:${module}:${id}`;
 
   const store = await getStore();
   const value = JSON.stringify({ name, filters, columns, is_default: !!is_default });
   await store.setUserPreference(auth.user.id, key, value);
+
+  try {
+    await audit(auth.store, auth.user, req, "saved_filter.create", "user_preference", id, { module: body.module, name: body.name });
+  } catch (e) { console.error("[audit]", e); }
 
   return NextResponse.json({ id, module, name, filters, columns, is_default });
 }
@@ -96,8 +107,13 @@ export async function DELETE(req: NextRequest) {
 
   const key = `saved_filter:${mod}:${id}`;
   const store = await getStore();
-  // Mark as deleted by setting value to null
-  await store.setUserPreference(auth.user.id, key, null);
+  // Actually delete the preference row (setUserPreference with null would
+  // stringify to "null" and leave a ghost row that GET would still return).
+  await store.deleteUserPreference(auth.user.id, key);
+
+  try {
+    await audit(auth.store, auth.user, req, "saved_filter.delete", "user_preference", undefined, { key: key });
+  } catch (e) { console.error("[audit]", e); }
 
   return NextResponse.json({ ok: true });
 }

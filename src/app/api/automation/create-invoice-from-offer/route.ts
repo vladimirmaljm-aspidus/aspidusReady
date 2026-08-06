@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (dashboard.create)
+    // Permission gate (invoices.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "invoices.create"); if (_d) return _d; } /* requirePermission wired */
 
@@ -74,10 +74,12 @@ export async function POST(req: NextRequest) {
     let dueDate = new Date(issueDate);
 
     // Parse payment terms to determine due date
-    const paymentTerms = offer.terms || partner.preferred_payment_terms || "Net 30";
-    const netMatch = paymentTerms.match(/Net\s+(\d+)/i);
+    const paymentTerms = offer.payment_terms || partner.preferred_payment_terms || "net30";
+    const netMatch = paymentTerms.match(/net\s*(\d+)/i);
     if (netMatch) {
       dueDate.setDate(dueDate.getDate() + parseInt(netMatch[1], 10));
+    } else if (paymentTerms.toLowerCase().trim() === "immediate" || paymentTerms.toLowerCase().trim() === "advance") {
+      // Due immediately (issue date)
     } else {
       // Default to 30 days
       dueDate.setDate(dueDate.getDate() + 30);
@@ -98,16 +100,24 @@ export async function POST(req: NextRequest) {
       total: offer.total,
       issue_date: issueDate.toISOString().split("T")[0],
       due_date: dueDate.toISOString().split("T")[0],
+      payment_terms: paymentTerms,
       notes: offer.notes
         ? `Auto-generated from offer: ${offer.number}. ${offer.notes}`
         : `Auto-generated from offer: ${offer.number}`,
       items: offer.items,
     };
 
-    // 7. Create the invoice
+    // 7. Enforce monthly_documents quota (parity with POST /api/invoices)
+    {
+      const { enforceQuota } = await import("@/lib/api/plan-limits");
+      const denied = await enforceQuota(tid, "monthly_documents", auth.isSuperAdmin);
+      if (denied) return denied;
+    }
+
+    // 8. Create the invoice
     const created = await store.upsertInvoice(invoiceData);
 
-    // 8. Audit log
+    // 9. Audit log
     await audit(
       store,
       auth.user,

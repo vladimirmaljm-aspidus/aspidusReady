@@ -18,7 +18,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (dashboard.create)
+    // Permission gate (offers.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "offers.create"); if (_d) return _d; } } /* requirePermission wired */
 
@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
     if (!deal) {
       return NextResponse.json({ error: "Deal not found." }, { status: 404 });
     }
-    // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
-    if ("user" in auth && !auth.isSuperAdmin && deal.tenant_id !== auth.tenantId) {
+    // Tenant ownership check (applies to both session auth and API-key auth)
+    const isSuperAdmin = "user" in auth && auth.isSuperAdmin;
+    if (!isSuperAdmin && deal.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Deal not found." }, { status: 404 });
     }
 
@@ -117,10 +118,19 @@ export async function POST(req: NextRequest) {
       items,
     };
 
-    // 8. Create the offer
+    // 8. Enforce monthly_documents quota (parity with POST /api/offers)
+    //    API keys are tenant-scoped → never super-admin.
+    {
+      const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+      const { enforceQuota } = await import("@/lib/api/plan-limits");
+      const denied = await enforceQuota(tid, "monthly_documents", isSA);
+      if (denied) return denied;
+    }
+
+    // 9. Create the offer
     const created = await store.upsertOffer(offerData);
 
-    // 9. Audit log
+    // 10. Audit log
     const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
     await audit(
       store,

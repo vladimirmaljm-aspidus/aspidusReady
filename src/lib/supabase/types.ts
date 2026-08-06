@@ -147,11 +147,16 @@ export interface Deal {
   unit: string; // unit of measure
   // Additional DB fields
   associates?: string[] | null;
-  bank_costs?: Record<string, unknown> | null;
+  /** Bank charges/fees associated with this deal (numeric in DB). */
+  bank_costs?: number | null;
+  /** Optional commission amount override; if absent, commission is derived
+   *  from the linked CommissionAgent's rate via /api/commission-calculate. */
+  commission_amount?: number | null;
   buyer_id?: string | null;
   buyer_paid_on?: string | null;
   contract_id?: string | null;
-  costs?: Record<string, unknown> | null;
+  /** JSONB array of arbitrary cost lines, e.g. `[{ label: "Shipping", amount: 500 }]`. */
+  costs?: Array<{ label?: string | null; amount?: number | null }> | Record<string, unknown> | null;
   delivery_date?: string | null;
   delivery_location?: string | null;
   documents?: string[] | null;
@@ -191,6 +196,9 @@ export interface OfferLineItem {
   brand?: string | null;
   origin_country?: string | null;
   specifications?: Array<{ name: string; value: string }> | Record<string, string> | null;
+  /** Per-line buy cost (per unit) used for margin display. Optional —
+   *  legacy line items created before this field will not have it. */
+  cost?: number | null;
 }
 
 export interface Offer {
@@ -610,6 +618,14 @@ export interface Tenant {
   plan: "trial" | "starter" | "business" | "enterprise" | "custom";
   status: "active" | "suspended" | "cancelled";
   max_users: number;
+  // Subscription details (live DB columns — CRIT-1)
+  subscription_start?: string | null; // timestamptz
+  subscription_end?: string | null; // timestamptz
+  trial_ends_at?: string | null; // timestamptz
+  billing_cycle?: string | null; // monthly | yearly
+  amount_paid?: number | null; // numeric
+  currency_paid?: string | null; // ISO 4217
+  trial_days?: number | null; // int
   // Meta
   created_at: string;
   updated_at: string;
@@ -1227,8 +1243,10 @@ export type NotificationType =
   | "offer_accepted"
   | "offer_rejected"
   | "offer_expired"
+  | "invoice_sent"
   | "invoice_overdue"
   | "invoice_paid"
+  | "proforma_sent"
   | "document_shared"
   | "portal_access_requested"
   | "portal_access_approved"

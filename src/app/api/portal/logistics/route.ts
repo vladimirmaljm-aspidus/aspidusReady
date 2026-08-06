@@ -51,7 +51,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Portal account is not linked to a partner. Ask your admin to link it before submitting a request." }, { status: 400 });
   }
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   // Server-imposed fields — never trust the client on tenant/partner/status/number
   const insert = {
     tenant_id: access.tenant_id,

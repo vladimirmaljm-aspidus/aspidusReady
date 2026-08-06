@@ -46,6 +46,7 @@ import { useAppStore } from "@/lib/store/app-store";
 import { fmtMoney, fmtDate, fmtMoneyDetailed } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { Invoice, InvoiceStatus, OfferLineItem, PortalTier } from "@/lib/supabase/types";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_STYLES: Record<InvoiceStatus, string> = {
   draft: "bg-secondary text-secondary-foreground",
@@ -74,10 +75,11 @@ const STATUS_ICONS: Record<InvoiceStatus, React.ComponentType<{ className?: stri
 export function PortalInvoices() {
   const portalAccess = useAppStore((s) => s.portalAccess) as any;
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const invoicesQ = useQuery<{ items: Invoice[]; total: number }>({
-    queryKey: ["portal-invoices", search],
+    queryKey: ["portal-invoices", debouncedSearch],
     queryFn: async () => {
       const r = await fetch("/api/portal/invoices");
       if (!r.ok) throw new Error("Failed to load invoices");
@@ -99,11 +101,11 @@ export function PortalInvoices() {
   });
 
   const allItems = invoicesQ.data?.items || [];
-  const filtered = search
+  const filtered = debouncedSearch
     ? allItems.filter(
         (i) =>
-          i.number.toLowerCase().includes(search.toLowerCase()) ||
-          i.subject.toLowerCase().includes(search.toLowerCase())
+          i.number.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+          i.subject.toLowerCase().includes(debouncedSearch.toLowerCase())
       )
     : allItems;
 

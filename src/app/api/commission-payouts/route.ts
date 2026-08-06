@@ -54,6 +54,16 @@ export async function POST(req: NextRequest) {
 
     // Mark all included deal commissions as paid
     if (created.commission_ids && created.status === "completed") {
+      // Verify all commission IDs belong to this tenant before marking paid
+      for (const commissionId of created.commission_ids) {
+        const commission = await auth.store.getDealCommission(commissionId);
+        if (!commission) {
+          return NextResponse.json({ error: `Commission ${commissionId} not found.` }, { status: 404 });
+        }
+        if (!auth.isSuperAdmin && commission.tenant_id !== auth.tenantId) {
+          return NextResponse.json({ error: "Commission does not belong to tenant." }, { status: 403 });
+        }
+      }
       for (const commissionId of created.commission_ids) {
         await auth.store.markDealCommissionPaid(commissionId, created.payment_reference || undefined);
       }

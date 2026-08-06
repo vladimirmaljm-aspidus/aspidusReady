@@ -17,13 +17,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   try {
-    // Tenant Ownership check
-    const all = await auth.store.listErpBankTransactions(auth.tenantId ?? "", undefined, { limit: 100000 });
-    const existing = all.items.find((t) => t.id === id);
-    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
-    if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
-      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Tenant ownership check — fetch the single row by id (tenant-scoped)
+    // instead of listing up to 100k transactions and searching client-side
+    // (API P1 #14). Also guards against missing tenant_id.
+    if (!auth.tenantId) {
+      return NextResponse.json({ error: "tenant_id is required." }, { status: 400 });
     }
+    const { getSupabase } = await import("@/lib/supabase/client");
+    const sb = getSupabase();
+    const { data: existing, error: fetchErr } = await sb
+      .from("erp_bank_transactions")
+      .select("*")
+      .eq("id", id)
+      .eq("tenant_id", auth.tenantId)
+      .maybeSingle();
+    if (fetchErr) {
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    }
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Super-admin override: if a super-admin is reconciling a txn outside
+    // their own tenant, the tenant-scoped query above will have returned 404.
+    // We don't need an additional check here — the tenant_id filter already
+    // enforces isolation.
 
     const body = await req.json();
     if (!body.journal_entry_id) {

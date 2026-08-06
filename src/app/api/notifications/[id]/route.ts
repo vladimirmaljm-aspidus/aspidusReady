@@ -11,7 +11,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const _d = requirePermission(auth, "notifications.update"); if (_d) return _d; } /* requirePermission wired */
 
   const { id } = await params;
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
   if (body.read) {
     // Tenant ownership check: listNotifications ignores tenantId in the store,
     // so we fetch all and filter for non-super_admin.
@@ -62,5 +67,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   await auth.store.deleteNotification(id);
+  try {
+    await audit(auth.store, auth.user, req, "notification.delete", "notification", id, {});
+  } catch (e) { console.error("[audit]", e); }
   return NextResponse.json({ ok: true });
 }

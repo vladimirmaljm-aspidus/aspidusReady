@@ -13,6 +13,7 @@ import { FolderOpen, Download, Trash2, Search, RefreshCw, ChevronLeft, Building2
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 import type { Partner } from "@/lib/supabase/types";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,7 @@ export function PortalUploadsView() {
 
   const [openPartner, setOpenPartner] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [catFilter, setCatFilter] = React.useState<string>("all");
   const [includeDeleted, setIncludeDeleted] = React.useState(false);
   const [toDelete, setToDelete] = React.useState<PortalUpload | null>(null);
@@ -95,12 +97,12 @@ export function PortalUploadsView() {
 
   // Detail listing (when a partner folder is opened)
   const detailQ = useQuery({
-    queryKey: ["portal-uploads-detail", tenantKey, openPartner, search, catFilter, includeDeleted],
+    queryKey: ["portal-uploads-detail", tenantKey, openPartner, debouncedSearch, catFilter, includeDeleted],
     queryFn: async () => {
       const q = new URLSearchParams();
       if (openPartner) q.set("partner_id", openPartner);
       if (catFilter !== "all") q.set("category", catFilter);
-      if (search) q.set("search", search);
+      if (debouncedSearch) q.set("search", debouncedSearch);
       if (includeDeleted) q.set("include_deleted", "1");
       q.set("limit", "500");
       const r = await fetch(api(`/api/portal-uploads?${q.toString()}`));

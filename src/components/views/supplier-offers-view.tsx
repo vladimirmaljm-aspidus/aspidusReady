@@ -41,10 +41,13 @@ import {
   SupplierOffer, SupplierOfferStatus, ProductCatalogEntry, Partner,
 } from "@/lib/supabase/types";
 import {
-  INCOTERMS, CURRENCIES, COUNTRIES, PAYMENT_TERMS,
-  getCountry, getCurrency, getIncoterm,
+  INCOTERMS, CURRENCIES, PAYMENT_TERMS,
+  getCurrency, getIncoterm,
 } from "@/lib/data/reference";
+import { getCountry } from "@/lib/data/geo/countries";
+import { CountrySelect } from "@/components/common/country-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 function flagEmoji(countryCode: string | null | undefined): string {
   if (!countryCode || countryCode.length !== 2) return "";
@@ -82,6 +85,7 @@ export function SupplierOffersView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [productFilter, setProductFilter] = useState<string>("all");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -91,10 +95,10 @@ export function SupplierOffersView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["supplier-offers", tenantKey, search, productFilter, supplierFilter, statusFilter],
+    queryKey: ["supplier-offers", tenantKey, debouncedSearch, productFilter, supplierFilter, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (productFilter !== "all") params.set("product_id", productFilter);
       if (supplierFilter !== "all") params.set("supplier_id", supplierFilter);
       if (statusFilter !== "all") params.set("status", statusFilter);
@@ -670,17 +674,11 @@ function OfferFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Origin country</Label>
-            <Select value={form.origin_country || "__none__"} onValueChange={(v) => set("origin_country", v === "__none__" ? null : v)}>
-              <SelectTrigger><SelectValue placeholder="Not specified" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value="__none__">Not specified</SelectItem>
-                {COUNTRIES.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    <span className="mr-2">{flagEmoji(c.code)}</span>{c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CountrySelect
+              value={form.origin_country}
+              onChange={(v) => set("origin_country", v)}
+              placeholder="Not specified"
+            />
           </div>
 
           <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Trade Terms</p></div>

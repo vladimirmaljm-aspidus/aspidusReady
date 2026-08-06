@@ -68,7 +68,7 @@ export function PortAutocomplete({
         const r = await fetch(`/api/integrations/ports?q=${encodeURIComponent(search)}&limit=10`);
         const data = await r.json();
         setResults(data.items || []);
-        setOpen(results.length > 0 || (data.items || []).length > 0);
+        setOpen((data.items || []).length > 0);
       } catch {
         setResults([]);
       } finally {

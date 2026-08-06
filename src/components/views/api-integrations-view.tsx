@@ -71,6 +71,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { useI18nStore, useT } from "@/lib/i18n/store";
 import { fmtRelative, fmtDateTime } from "@/lib/utils/format";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
 
@@ -501,13 +502,14 @@ function CustomsTab({
   const tenantKey = useTenantKey();
 
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [regionFilter, setRegionFilter] = useState<string>("all");
 
   const { data, isLoading, error, refetch } = useQuery<CustomsResponse>({
-    queryKey: ["customs", tenantKey, search, regionFilter],
+    queryKey: ["customs", tenantKey, debouncedSearch, regionFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("q", search);
+      if (debouncedSearch) params.set("q", debouncedSearch);
       if (regionFilter !== "all") params.set("region", regionFilter);
       params.set("type", "hs");
       const r = await fetch(api(`/api/customs?${params.toString()}`));

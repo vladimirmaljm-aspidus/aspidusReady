@@ -33,12 +33,14 @@ import {
   MapPin, Lightbulb, FileText,
 } from "lucide-react";
 import { PortAutocomplete } from "@/components/ui/port-autocomplete";
+import { UnitSelect } from "@/components/common/unit-select";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtNumber } from "@/lib/utils/format";
 import {
-  TradeCalculation, TradeCostLine, ProductCatalogEntry, SupplierOffer, Partner,
+  TradeCalculation, TradeCostLine, SupplierOffer, Partner,
+  Product,
 } from "@/lib/supabase/types";
 import {
   TRADE_COST_TYPES, INCOTERMS, CURRENCIES, UNITS_OF_MEASURE,
@@ -137,6 +139,13 @@ function computeTotals(form: Partial<TradeCalculation>) {
   const qty = form.quantity || 0;
   const numContainers = form.num_containers || 1;
   const buyTotal = (form.buy_price_per_unit || 0) * qty;
+  // Exchange rate: sell_currency per buy_currency. When currencies differ,
+  // landed cost (in buy currency) must be converted to sell currency before
+  // subtracting from sell revenue.
+  const fxRate = Number(form.exchange_rate) || 1;
+  const currenciesDiffer =
+    !!form.buy_currency && !!form.sell_currency && form.buy_currency !== form.sell_currency;
+  const effectiveFx = currenciesDiffer ? fxRate : 1;
 
   let landedCost = buyTotal;
   const lines = (form.cost_lines || []).filter(
@@ -153,11 +162,14 @@ function computeTotals(form: Partial<TradeCalculation>) {
   });
 
   const sellTotal = (form.sell_price_per_unit || 0) * qty;
-  const margin = sellTotal - landedCost;
+  // Convert landed cost (buy currency) → sell currency for the margin math.
+  const landedCostInSellCurrency = landedCost * effectiveFx;
+  const margin = sellTotal - landedCostInSellCurrency;
   const marginPct = sellTotal > 0 ? (margin / sellTotal) * 100 : 0;
   return {
     buyTotal: Math.round(buyTotal * 100) / 100,
     landedCost: Math.round(landedCost * 100) / 100,
+    landedCostInSellCurrency: Math.round(landedCostInSellCurrency * 100) / 100,
     sellTotal: Math.round(sellTotal * 100) / 100,
     margin: Math.round(margin * 100) / 100,
     marginPct: Math.round(marginPct * 100) / 100,
@@ -185,11 +197,11 @@ export function TradeCalculatorView() {
   });
 
   const catalog = useQuery({
-    queryKey: ["product-catalog", tenantKey, "all"],
+    queryKey: ["products", tenantKey, "trade-calc"],
     queryFn: async () => {
-      const r = await fetch(api("/api/product-catalog?limit=500"));
-      if (!r.ok) throw new Error("Failed to load product catalog");
-      return r.json() as Promise<{ items: ProductCatalogEntry[] }>;
+      const r = await fetch(api("/api/products?limit=500"));
+      if (!r.ok) throw new Error("Failed to load products");
+      return r.json() as Promise<{ items: Product[]; total: number }>;
     },
   });
   const offers = useQuery({
@@ -432,7 +444,7 @@ function CalcDetail({
   calc, product, offer, supplier, buyer,
 }: {
   calc: TradeCalculation;
-  product?: ProductCatalogEntry;
+  product?: Product;
   offer?: SupplierOffer;
   supplier?: Partner;
   buyer?: Partner;
@@ -441,6 +453,16 @@ function CalcDetail({
   const displayCurrency = calc.sell_currency || calc.buy_currency || "USD";
   const lines = (calc.cost_lines || []);
   const totalForBar = Math.max(calc.total_landed_cost, 1);
+  // When buy and sell currencies differ, the landed cost (stored in buy
+  // currency) must be converted to sell currency to compare against sell
+  // revenue. The backend already applies exchange_rate to gross_margin and
+  // margin_percent, so we mirror that here for the displayed converted cost.
+  const currenciesDiffer =
+    !!calc.buy_currency && !!calc.sell_currency && calc.buy_currency !== calc.sell_currency;
+  const fxRate = Number(calc.exchange_rate) || 1;
+  const landedCostInSellCurrency = currenciesDiffer
+    ? calc.total_landed_cost * fxRate
+    : calc.total_landed_cost;
 
   // For the bar, show buy price + each cost line. BUY_PRICE/SELL_PRICE may exist in seed data.
   const barSegments: { label: string; amount: number; color: string }[] = [];
@@ -488,10 +510,15 @@ function CalcDetail({
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Landed Cost</p>
-            <p className="text-lg font-semibold tabular">{fmtMoney(calc.total_landed_cost, displayCurrency)}</p>
+            <p className="text-lg font-semibold tabular">{fmtMoney(calc.total_landed_cost, calc.buy_currency)}</p>
             <p className="text-[11px] text-muted-foreground tabular">
-              {fmtMoney(calc.total_landed_cost / Math.max(calc.quantity, 1), displayCurrency)} / {calc.unit}
+              {fmtMoney(calc.total_landed_cost / Math.max(calc.quantity, 1), calc.buy_currency)} / {calc.unit}
             </p>
+            {currenciesDiffer && (
+              <p className="text-[11px] tabular text-muted-foreground border-t pt-1 mt-1">
+                ≈ {fmtMoney(landedCostInSellCurrency, calc.sell_currency)} @ {fxRate}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="border-border/60 shadow-soft rounded-xl">
@@ -617,7 +644,7 @@ function CalcFormDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   calc: TradeCalculation | null;
-  catalog: ProductCatalogEntry[];
+  catalog: Product[];
   offers: SupplierOffer[];
   partners: Partner[];
   onSaved: () => void;
@@ -666,8 +693,12 @@ function CalcFormDialog({
     ? offers.filter((o) => o.product_id === form.product_id)
     : offers;
   const selectedSupplier = form.supplier_id ? partners.find((p) => p.id === form.supplier_id) : undefined;
-  const buyerPartners = partners.filter((p) => p.type === "buyer" || p.type === "both");
-  const supplierPartners = partners.filter((p) => p.type === "supplier" || p.type === "both");
+  // Show all partners in both dropdowns — the partner.type field is advisory
+  // (and can be localized, e.g. "Kupac" = buyer in Serbian), so filtering by
+  // type would exclude valid partners. Let the user pick any partner as
+  // supplier or buyer.
+  const buyerPartners = partners;
+  const supplierPartners = partners;
 
   // ─── Supplier auto-fill ───
   const fetchSupplierContext = useCallback(async (supplierId: string) => {
@@ -713,14 +744,14 @@ function CalcFormDialog({
         ...f,
         product_id: productId,
         supplier_offer_id: offerStillValid ? f.supplier_offer_id : null,
-        unit: catEntry?.base_unit || f.unit,
+        unit: catEntry?.unit || f.unit,
       };
     });
 
     // Fetch product context for richer data
     if (productId) {
       setLoadingProduct(true);
-      fetch(api(`/api/automation/product-context?catalog_entry_id=${productId}`))
+      fetch(api(`/api/automation/product-context?product_id=${productId}`))
         .then((r) => {
           if (!r.ok) throw new Error("Failed to load product context");
           return r.json() as Promise<ProductContext>;
@@ -765,7 +796,7 @@ function CalcFormDialog({
         buy_currency: offer.currency,
         buy_incoterm: offer.incoterm,
         loading_port: f.loading_port || offer.loading_port || "",
-        unit: catalog.find((p) => p.id === offer.product_id)?.base_unit || f.unit,
+        unit: catalog.find((p) => p.id === offer.product_id)?.unit || f.unit,
       };
     });
   }
@@ -1060,16 +1091,11 @@ function CalcFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Unit</Label>
-            <Select value={form.unit || "MT"} onValueChange={(v) => set("unit", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {UNITS_OF_MEASURE.map((u) => (
-                  <SelectItem key={u.code} value={u.code}>
-                    <span className="font-mono mr-2">{u.code}</span> {u.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnitSelect
+              value={form.unit || "MT"}
+              onChange={(v) => set("unit", v)}
+              className="w-full"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Num containers</Label>
@@ -1266,9 +1292,15 @@ function CalcFormDialog({
           <div className="md:col-span-2">
             <Separator className="my-2" />
             <p className="text-xs text-muted-foreground mb-2">Live preview (auto-calculated)</p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 rounded-md bg-muted/30 border border-border/60">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2 p-3 rounded-md bg-muted/30 border border-border/60">
               <PreviewCell label="Buy Total" value={fmtMoney(preview.buyTotal, form.buy_currency || "USD")} />
               <PreviewCell label="Landed Cost" value={fmtMoney(preview.landedCost, form.buy_currency || "USD")} />
+              {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
+                <PreviewCell
+                  label={`Landed (${form.sell_currency})`}
+                  value={fmtMoney(preview.landedCostInSellCurrency, form.sell_currency || "USD")}
+                />
+              )}
               <PreviewCell label="Sell Revenue" value={fmtMoney(preview.sellTotal, form.sell_currency || "USD")} />
               <PreviewCell
                 label="Margin"
@@ -1283,6 +1315,9 @@ function CalcFormDialog({
             </div>
             <p className="text-[11px] text-muted-foreground mt-1.5">
               Backend recomputes final totals on save using the same algorithm.
+              {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
+                <> Landed cost is converted from {form.buy_currency} to {form.sell_currency} at the configured exchange rate before margin is computed.</>
+              )}
             </p>
           </div>
         </div>

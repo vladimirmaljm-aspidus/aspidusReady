@@ -16,20 +16,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
       message: "Verification code not found. This document may be fraudulent.",
     });
   }
-  // log the verification
+  // log the verification (best-effort — DB write failure must not crash the
+  // public verification endpoint and turn a valid doc into a 500)
   const logResult: "valid" | "invalid" | "revoked" | "modified" =
     v.status === "active" ? "valid" :
     v.status === "revoked" ? "revoked" :
     v.status === "superseded" ? "modified" :
     "invalid";
-  await store.logVerification({
-    verification_id: v.id,
-    code: v.verification_code,
-    ip: _req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-    user_agent: _req.headers.get("user-agent") || null,
-    result: logResult,
-    details: null,
-  });
+  try {
+    await store.logVerification({
+      verification_id: v.id,
+      code: v.verification_code,
+      ip: _req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      user_agent: _req.headers.get("user-agent") || null,
+      result: logResult,
+      details: null,
+    });
+  } catch (e) {
+    console.error("[verify] logVerification failed:", e);
+  }
 
   if (v.status !== "active") {
     return NextResponse.json({

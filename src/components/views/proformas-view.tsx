@@ -40,7 +40,9 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Proforma, ProformaStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
+import { UnitSelect } from "@/components/common/unit-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_LABELS: Record<ProformaStatus, string> = {
   draft: "Draft",
@@ -106,6 +108,7 @@ export function ProformasView() {
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [editing, setEditing] = useState<Proforma | null>(null);
@@ -116,10 +119,10 @@ export function ProformasView() {
   const [showFromOffer, setShowFromOffer] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["proformas", tenantKey, search, statusFilter, partnerFilter],
+    queryKey: ["proformas", tenantKey, debouncedSearch, statusFilter, partnerFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
       const r = await fetch(api(`/api/proformas?${params}`));
@@ -188,6 +191,29 @@ export function ProformasView() {
       setDeleteId(null);
     },
     onError: () => toast.error("Delete failed."),
+  });
+
+  // ─── Send proforma to portal (email + status + portal notification) ───
+  const sendMut = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(api(`/api/proformas/${id}/send`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to send proforma");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Proforma sent to portal");
+      qc.invalidateQueries({ queryKey: ["proformas", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["proforma", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to send proforma."),
   });
 
   const items = data?.items || [];
@@ -399,7 +425,9 @@ export function ProformasView() {
               proforma={detail.data}
               partnerName={partnerName(detail.data.partner_id)}
               onMarkPaid={() => detailId && markPaidMut.mutate({ id: detailId })}
+              onSend={() => detailId && sendMut.mutate(detailId)}
               markingPaid={markPaidMut.isPending}
+              sending={sendMut.isPending}
             />
           ) : null}
         </SheetContent>
@@ -431,12 +459,14 @@ export function ProformasView() {
 
 // ---- Detail panel ----
 function ProformaDetail({
-  proforma, partnerName, onMarkPaid, markingPaid,
+  proforma, partnerName, onMarkPaid, onSend, markingPaid, sending,
 }: {
   proforma: Proforma;
   partnerName: string;
   onMarkPaid: () => void;
+  onSend: () => void;
   markingPaid: boolean;
+  sending: boolean;
 }) {
   const totals = computeTotals(proforma.items || []);
   const expired = isExpired(proforma);
@@ -448,11 +478,18 @@ function ProformaDetail({
           <StatusBadge status={proforma.status} />
           <span className="text-sm text-muted-foreground">{partnerName}</span>
         </div>
-        {proforma.status !== "paid" && proforma.status !== "expired" && (
-          <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700">
-            <CheckCircle2 className="size-4 mr-1" /> Mark as paid
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {proforma.status === "draft" && (
+            <Button size="sm" onClick={onSend} disabled={sending} variant="default" className="gap-1">
+              {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
+            </Button>
+          )}
+          {proforma.status !== "paid" && proforma.status !== "expired" && (
+            <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <CheckCircle2 className="size-4 mr-1" /> Mark as paid
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Key-value header */}
@@ -1068,7 +1105,7 @@ function ProformaFormDialog({
                     <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
                       {(form.items || []).map((it, idx) => (
                         <div key={idx} className="rounded-md border p-2.5 grid grid-cols-12 gap-1.5 items-end">
-                          <div className="col-span-12 sm:col-span-5 space-y-1">
+                          <div className="col-span-12 sm:col-span-4 space-y-1">
                             <Label className="text-xs">Description</Label>
                             <Select
                               value={it.product_id || "__custom__"}
@@ -1099,6 +1136,14 @@ function ProformaFormDialog({
                               className="h-9"
                               value={it.quantity}
                               onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="col-span-4 sm:col-span-2 space-y-1">
+                            <Label className="text-xs">Unit</Label>
+                            <UnitSelect
+                              value={it.unit || ""}
+                              onChange={(v) => setItem(idx, { unit: v })}
+                              placeholder="pcs"
                             />
                           </div>
                           <div className="col-span-4 sm:col-span-2 space-y-1">
