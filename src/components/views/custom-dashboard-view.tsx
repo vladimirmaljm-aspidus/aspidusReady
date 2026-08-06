@@ -612,7 +612,7 @@ function PipelineWidgetContent() {
               <span className="text-[10px] font-semibold text-muted-foreground truncate w-full text-center">
                 {name}
               </span>
-              <span className="text-sm font-bold tabular">{count}</span>
+              <span className="text-sm font-bold tabular">{fmtNumber(count)}</span>
             </div>
           );
         })}
@@ -922,7 +922,7 @@ function LogisticsWidgetContent() {
               className={`text-[10px] font-semibold gap-1 ${cfg.color}`}
             >
               <Icon className="size-3" />
-              {cfg.label}: {count}
+              {cfg.label}: {fmtNumber(count)}
             </Badge>
           );
         })}

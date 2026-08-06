@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
-import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
+import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
@@ -911,7 +911,7 @@ function OfferDetail({
                   <div className="text-xs text-muted-foreground sm:hidden">{it.sku || "—"}</div>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell font-mono text-xs tabular">{it.sku || "—"}</TableCell>
-                <TableCell className="text-right font-mono tabular">{it.quantity}</TableCell>
+                <TableCell className="text-right font-mono tabular">{fmtNumber(it.quantity)}</TableCell>
                 <TableCell className="hidden sm:table-cell">{it.unit || "—"}</TableCell>
                 <TableCell className="text-right font-mono tabular">{fmtMoney(it.unit_price, offer.currency)}</TableCell>
                 <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.discount}%</TableCell>

@@ -722,7 +722,7 @@ function ActionRow({
         <p className="text-xs text-muted-foreground">{hint}</p>
       </div>
       <span className="inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-md bg-foreground text-background text-xs font-semibold tabular shrink-0">
-        {count}
+        {fmtNumber(count)}
       </span>
       <ChevronRight className="size-4 text-muted-foreground shrink-0" />
     </button>

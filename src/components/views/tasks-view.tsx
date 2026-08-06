@@ -26,7 +26,7 @@ import { Plus, Pencil, Trash2, ListChecks, CheckCircle2, Link2 } from "lucide-re
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
-import { fmtDate, fmtRelative } from "@/lib/utils/format";
+import { fmtDate, fmtRelative, fmtNumber, fmtMoney } from "@/lib/utils/format";
 import { UserTask } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 
@@ -228,7 +228,7 @@ function TaskColumn({
       <div className="flex items-center gap-2 mb-3 px-1">
         <span className="text-muted-foreground">{icon}</span>
         <h2 className="text-sm font-semibold uppercase tracking-wide">{title}</h2>
-        <Badge variant="secondary" className="ml-1 tabular">{count}</Badge>
+        <Badge variant="secondary" className="ml-1 tabular">{fmtNumber(count)}</Badge>
       </div>
       <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll pr-1">
         {tasks.length === 0 ? (

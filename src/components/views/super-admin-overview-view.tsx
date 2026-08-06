@@ -732,142 +732,34 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
         </CardContent>
       </Card>
 
-      {/* Two-column: activity + platform health */}
+      {/* Deep-dive shortcuts — the full audit trail lives in the dedicated
+          Platform Audit view, and full health metrics live in Platform Health.
+          Keeping just link cards here to avoid duplicating those pages. */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {/* Recent activity */}
-        <Card className="border-border/60 shadow-soft rounded-xl">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="size-4 text-primary" /> Platform Activity
-              </CardTitle>
-              <Badge variant="outline" className="text-xs">Last {recentActivity.length}</Badge>
-            </div>
-            <CardDescription className="text-xs">Recent audit log entries across the platform.</CardDescription>
+        <Card
+          className="border-border/60 shadow-soft rounded-xl cursor-pointer hover:border-primary/40 smooth"
+          onClick={() => setView("platform-dashboard")}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="size-4 text-primary" /> Platform Activity
+            </CardTitle>
+            <CardDescription className="text-xs">Full cross-tenant audit log — filter by user, action, entity. Live.</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            {recentActivity.length === 0 ? (
-              <div className="p-6">
-                <EmptyState
-                  icon={<Activity className="size-5" />}
-                  title="No recent activity"
-                  description="Audit log entries will appear here."
-                />
-              </div>
-            ) : (
-              <div className="max-h-96 overflow-y-auto custom-scroll">
-                <ul className="divide-y divide-border/60">
-                  {recentActivity.map((a) => (
-                    <li key={a.id} className="px-4 py-3 hover:bg-muted/40 transition-colors">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="secondary" className="text-[10px] font-mono">{a.action}</Badge>
-                            {a.entity_type && (
-                              <span className="text-xs text-muted-foreground">
-                                on <span className="font-mono">{a.entity_type}</span>
-                                {a.entity_id && <span className="font-mono ml-1 text-[10px]">#{a.entity_id.slice(0, 8)}</span>}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs mt-1 flex items-center gap-2 flex-wrap text-muted-foreground">
-                            <span className="font-medium text-foreground/80">{a.username || "system"}</span>
-                            <span>·</span>
-                            <span className="tabular">{fmtDateTime(a.created_at)}</span>
-                            {a.ip && (
-                              <>
-                                <span>·</span>
-                                <span className="font-mono text-[10px]">{a.ip}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground tabular shrink-0">
-                          {fmtRelative(a.created_at)}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
+          <CardContent className="text-xs text-muted-foreground">Open Platform Audit →</CardContent>
         </Card>
 
-        {/* Platform Health */}
-        <Card className="border-border/60 shadow-soft rounded-xl">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Heart className="size-4 text-primary" /> Platform Health
-              </CardTitle>
-              <Badge variant="outline" className="text-xs tabular">{data.tenants.length} tenants</Badge>
-            </div>
-            <CardDescription className="text-xs">Active/inactive tenants, plan distribution, storage.</CardDescription>
+        <Card
+          className="border-border/60 shadow-soft rounded-xl cursor-pointer hover:border-primary/40 smooth"
+          onClick={() => setView("platform-dashboard")}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Heart className="size-4 text-primary" /> Platform Health
+            </CardTitle>
+            <CardDescription className="text-xs">Active/inactive tenants, plan distribution, storage, DB status.</CardDescription>
           </CardHeader>
-          <CardContent>
-            {data.tenants.length === 0 ? (
-              <EmptyState
-                icon={<Building2 className="size-5" />}
-                title="No tenants yet"
-                description="Create a tenant to populate this dashboard."
-              />
-            ) : (
-              <div className="space-y-5">
-                {/* Active vs Inactive */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Tenant Status</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-chart-1/10 border border-chart-1/20 p-3">
-                      <div className="text-2xl font-bold tabular text-chart-1">{data.active_tenants}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">Active Tenants</div>
-                    </div>
-                    <div className="rounded-lg bg-muted/40 border border-border/40 p-3">
-                      <div className="text-2xl font-bold tabular text-muted-foreground">{inactiveTenants}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">Inactive / Suspended</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Plan Distribution */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
-                    <PieChart className="size-3" /> Subscription Plan Distribution
-                  </p>
-                  <div className="space-y-2">
-                    {planDistribution.map(({ plan, count, label }) => {
-                      const pct = data.total_tenants > 0 ? Math.round((count / data.total_tenants) * 100) : 0;
-                      return (
-                        <div key={plan} className="flex items-center gap-3">
-                          <Badge variant="outline" className={`w-24 justify-center text-[10px] ${PLAN_BADGE[plan] || ""}`}>
-                            {label}
-                          </Badge>
-                          <div className="flex-1 h-2 rounded-full bg-muted/50 overflow-hidden">
-                            <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-xs tabular text-muted-foreground w-16 text-right">{count} ({pct}%)</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Storage Estimate */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
-                    <HardDrive className="size-3" /> Estimated Storage
-                  </p>
-                  <div className="rounded-lg bg-muted/30 border border-border/40 p-3 flex items-center gap-3">
-                    <HardDrive className="size-5 text-muted-foreground" />
-                    <div>
-                      <div className="text-sm font-semibold tabular">{storageEstimate}</div>
-                      <div className="text-xs text-muted-foreground">Approximate total usage</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
+          <CardContent className="text-xs text-muted-foreground">Open Platform Health →</CardContent>
         </Card>
       </div>
 
