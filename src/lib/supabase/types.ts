@@ -147,11 +147,16 @@ export interface Deal {
   unit: string; // unit of measure
   // Additional DB fields
   associates?: string[] | null;
-  bank_costs?: Record<string, unknown> | null;
+  /** Bank charges/fees associated with this deal (numeric in DB). */
+  bank_costs?: number | null;
+  /** Optional commission amount override; if absent, commission is derived
+   *  from the linked CommissionAgent's rate via /api/commission-calculate. */
+  commission_amount?: number | null;
   buyer_id?: string | null;
   buyer_paid_on?: string | null;
   contract_id?: string | null;
-  costs?: Record<string, unknown> | null;
+  /** JSONB array of arbitrary cost lines, e.g. `[{ label: "Shipping", amount: 500 }]`. */
+  costs?: Array<{ label?: string | null; amount?: number | null }> | Record<string, unknown> | null;
   delivery_date?: string | null;
   delivery_location?: string | null;
   documents?: string[] | null;
@@ -191,6 +196,9 @@ export interface OfferLineItem {
   brand?: string | null;
   origin_country?: string | null;
   specifications?: Array<{ name: string; value: string }> | Record<string, string> | null;
+  /** Per-line buy cost (per unit) used for margin display. Optional —
+   *  legacy line items created before this field will not have it. */
+  cost?: number | null;
 }
 
 export interface Offer {
@@ -1235,8 +1243,10 @@ export type NotificationType =
   | "offer_accepted"
   | "offer_rejected"
   | "offer_expired"
+  | "invoice_sent"
   | "invoice_overdue"
   | "invoice_paid"
+  | "proforma_sent"
   | "document_shared"
   | "portal_access_requested"
   | "portal_access_approved"

@@ -87,7 +87,45 @@ export async function POST(req: NextRequest) {
     const denied = await enforceQuota(body.tenant_id, "monthly_documents", isSA);
     if (denied) return denied;
   }
-  const created = await auth.store.upsertOffer(body);
+
+  // Auto-generate document number if not provided (e.g. manual "Create" click).
+  // Matches the format used by /api/automation/create-offer-from-deal:
+  //   OF-<year>-<NNN>  (3-digit sequence, total+1)
+  if (!body.id && !body.number) {
+    const year = new Date().getFullYear();
+    try {
+      const existing = await auth.store.listOffers(tid!, { limit: 1 });
+      const nextSeq = (existing.total || 0) + 1;
+      body.number = `OF-${year}-${String(nextSeq).padStart(3, "0")}`;
+    } catch (e) {
+      console.error("[offers.post] number auto-gen failed:", e);
+      return NextResponse.json({ error: "Failed to auto-generate offer number." }, { status: 500 });
+    }
+  }
+
+  let created;
+  try {
+    created = await auth.store.upsertOffer(body);
+  } catch (e: any) {
+    // Retry once with bumped sequence in case of unique-collision race.
+    if (!body.id && body.number) {
+      try {
+        const m = body.number.match(/^(OF-\d{4}-)(\d+)$/);
+        if (m) {
+          body.number = `${m[1]}${String(Number(m[2]) + 1).padStart(3, "0")}`;
+          created = await auth.store.upsertOffer(body);
+        } else {
+          throw e;
+        }
+      } catch (e2: any) {
+        console.error("[offers.post] upsert retry failed:", e2);
+        return NextResponse.json({ error: e2.message || "Failed to create offer." }, { status: 500 });
+      }
+    } else {
+      console.error("[offers.post] upsert failed:", e);
+      return NextResponse.json({ error: e.message || "Failed to create offer." }, { status: 500 });
+    }
+  }
   await audit(auth.store, getAuthUser(auth), req, body.id ? "offer.update" : "offer.create", "offer", created.id, { number: created.number });
   return NextResponse.json(created);
 }

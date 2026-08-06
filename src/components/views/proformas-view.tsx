@@ -192,6 +192,29 @@ export function ProformasView() {
     onError: () => toast.error("Delete failed."),
   });
 
+  // ─── Send proforma to portal (email + status + portal notification) ───
+  const sendMut = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(api(`/api/proformas/${id}/send`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to send proforma");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Proforma sent to portal");
+      qc.invalidateQueries({ queryKey: ["proformas", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["proforma", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to send proforma."),
+  });
+
   const items = data?.items || [];
   const partnerList = partners.data?.items || [];
   const partnerName = (id: string) => partnerList.find((p) => p.id === id)?.name || "—";
@@ -401,7 +424,9 @@ export function ProformasView() {
               proforma={detail.data}
               partnerName={partnerName(detail.data.partner_id)}
               onMarkPaid={() => detailId && markPaidMut.mutate({ id: detailId })}
+              onSend={() => detailId && sendMut.mutate(detailId)}
               markingPaid={markPaidMut.isPending}
+              sending={sendMut.isPending}
             />
           ) : null}
         </SheetContent>
@@ -433,12 +458,14 @@ export function ProformasView() {
 
 // ---- Detail panel ----
 function ProformaDetail({
-  proforma, partnerName, onMarkPaid, markingPaid,
+  proforma, partnerName, onMarkPaid, onSend, markingPaid, sending,
 }: {
   proforma: Proforma;
   partnerName: string;
   onMarkPaid: () => void;
+  onSend: () => void;
   markingPaid: boolean;
+  sending: boolean;
 }) {
   const totals = computeTotals(proforma.items || []);
   const expired = isExpired(proforma);
@@ -450,11 +477,18 @@ function ProformaDetail({
           <StatusBadge status={proforma.status} />
           <span className="text-sm text-muted-foreground">{partnerName}</span>
         </div>
-        {proforma.status !== "paid" && proforma.status !== "expired" && (
-          <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700">
-            <CheckCircle2 className="size-4 mr-1" /> Mark as paid
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {proforma.status === "draft" && (
+            <Button size="sm" onClick={onSend} disabled={sending} variant="default" className="gap-1">
+              {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
+            </Button>
+          )}
+          {proforma.status !== "paid" && proforma.status !== "expired" && (
+            <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <CheckCircle2 className="size-4 mr-1" /> Mark as paid
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Key-value header */}

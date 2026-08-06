@@ -66,6 +66,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const buyPrice = body.buy_price_per_unit ?? (existing as any).buy_price_per_unit ?? 0;
     const sellPrice = body.sell_price_per_unit ?? (existing as any).sell_price_per_unit ?? 0;
     const buyTotal = buyPrice * qty;
+    // Apply exchange_rate when buy/sell currencies differ (audit T-series).
+    const buyCurrency = body.buy_currency || (existing as any).buy_currency;
+    const sellCurrency = body.sell_currency || (existing as any).sell_currency;
+    const fxRate = Number(body.exchange_rate ?? (existing as any).exchange_rate) || 1;
+    const currenciesDiffer =
+      !!buyCurrency && !!sellCurrency && buyCurrency !== sellCurrency;
+    const effectiveFx = currenciesDiffer ? fxRate : 1;
 
     let landedCost = buyTotal;
     const computedLines: TradeCostLine[] = (body.cost_lines || (existing as any).cost_lines || []).map((line: TradeCostLine) => {
@@ -82,8 +89,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     const sellTotal = sellPrice * qty;
-    const margin = sellTotal - landedCost;
-    const marginPct = landedCost > 0 ? (margin / sellTotal) * 100 : 0;
+    // Convert landed cost (buy currency) → sell currency for the margin math.
+    const landedCostInSellCurrency = landedCost * effectiveFx;
+    const margin = sellTotal - landedCostInSellCurrency;
+    const marginPct = sellTotal > 0 ? (margin / sellTotal) * 100 : 0;
 
     body.cost_lines = computedLines;
     body.total_buy_cost = Math.round(buyTotal * 100) / 100;

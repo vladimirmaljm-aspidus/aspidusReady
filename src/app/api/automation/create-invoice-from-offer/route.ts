@@ -74,10 +74,12 @@ export async function POST(req: NextRequest) {
     let dueDate = new Date(issueDate);
 
     // Parse payment terms to determine due date
-    const paymentTerms = offer.terms || partner.preferred_payment_terms || "Net 30";
-    const netMatch = paymentTerms.match(/Net\s+(\d+)/i);
+    const paymentTerms = offer.payment_terms || partner.preferred_payment_terms || "net30";
+    const netMatch = paymentTerms.match(/net\s*(\d+)/i);
     if (netMatch) {
       dueDate.setDate(dueDate.getDate() + parseInt(netMatch[1], 10));
+    } else if (paymentTerms.toLowerCase().trim() === "immediate" || paymentTerms.toLowerCase().trim() === "advance") {
+      // Due immediately (issue date)
     } else {
       // Default to 30 days
       dueDate.setDate(dueDate.getDate() + 30);
@@ -98,6 +100,7 @@ export async function POST(req: NextRequest) {
       total: offer.total,
       issue_date: issueDate.toISOString().split("T")[0],
       due_date: dueDate.toISOString().split("T")[0],
+      payment_terms: paymentTerms,
       notes: offer.notes
         ? `Auto-generated from offer: ${offer.number}. ${offer.notes}`
         : `Auto-generated from offer: ${offer.number}`,

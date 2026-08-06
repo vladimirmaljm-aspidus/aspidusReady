@@ -6,6 +6,10 @@ import { redactListForPortal } from "@/lib/portal/redact";
 
 export const runtime = "nodejs";
 
+// Portal clients must never see draft proformas. Allowed:
+// sent | paid | expired
+const PORTAL_PROFORMA_STATUSES = new Set(["sent", "paid", "expired"]);
+
 /**
  * GET /api/portal/proformas
  *
@@ -23,6 +27,10 @@ export async function GET(req: NextRequest) {
     }
 
     const statusFilter = req.nextUrl.searchParams.get("status") || undefined;
+    // If the client requests a status explicitly, still block drafts.
+    if (statusFilter && !PORTAL_PROFORMA_STATUSES.has(String(statusFilter).toLowerCase())) {
+      return NextResponse.json({ error: "Not permitted." }, { status: 403 });
+    }
 
     const _kycBlock = await requireKycApproved(access);
   if (_kycBlock) return _kycBlock;
@@ -34,7 +42,12 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(redactListForPortal(result));
+    // Defense-in-depth: strip drafts even if the store returns them.
+    const visible = (result.items || []).filter((p) =>
+      PORTAL_PROFORMA_STATUSES.has(String(p.status || "").toLowerCase())
+    );
+
+    return NextResponse.json(redactListForPortal({ ...result, items: visible, total: visible.length }));
   } catch (e: any) {
     console.error("[portal.proformas]", e);
     return NextResponse.json({ error: e.message }, { status: 500 });

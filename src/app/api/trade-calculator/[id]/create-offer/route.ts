@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const currency = (calc as any).currency || "USD";
   const qty = (calc as any).quantity || 0;
-  const unit = (calc as any).unit || "kg";
+  const unit = (calc as any).unit || "MT";
   const sellPrice = (calc as any).sell_price_per_unit || 0;
   const totalSell = (calc as any).total_sell_revenue || qty * sellPrice;
 
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     items,
     notes,
     valid_until: body.valid_until || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-    payment_terms: body.payment_terms || (calc as any).payment_terms || "T/T in Advance",
+    payment_terms: body.payment_terms || (calc as any).payment_terms || "net30",
     incoterm: (calc as any).incoterm || "CIF",
     pol: (calc as any).pol || null,
     pod: (calc as any).pod || null,

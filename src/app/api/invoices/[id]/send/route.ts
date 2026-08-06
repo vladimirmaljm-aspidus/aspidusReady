@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
 import { sendEmail, documentEmail } from "@/lib/email/service";
 import { generatePdf } from "@/lib/pdf/generator";
+import { notify } from "@/lib/notif/helper";
 
 export const runtime = "nodejs";
 
@@ -20,16 +21,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  let body;
+  let body: any = {};
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    // Body is optional — empty body means "send to portal only, no email"
   }
-  const { email: toEmail } = body;
-  if (!toEmail) {
-    return NextResponse.json({ error: "Email address is required." }, { status: 400 });
-  }
+  const toEmail: string | undefined = body?.email;
 
   try {
     // Fetch the invoice
@@ -42,40 +40,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
     }
 
-    // Fetch partner for email info
+    // Fetch partner for email info / portal notification
     const partner = invoice.partner_id ? await auth.store.getPartner(invoice.partner_id) : null;
 
-    // Generate the PDF
+    // Resolve tenant (required for PDF generation and notification)
     const tenantId = resolveTenantId(auth, req);
     if (!tenantId) {
       return NextResponse.json({ error: "tenant_id query parameter is required for super-admin actions." }, { status: 400 });
     }
 
-    const result = await generatePdf({ docType: "invoice", docId: id, tenantId });
-    const pdfBuffer = Buffer.from(result.buffer);
+    // ─── Email send (optional) ───
+    // If `email` is provided in the body, generate a PDF and email it to the
+    // recipient. If `email` is missing, we skip the email step and only mark
+    // the invoice as sent + push a portal notification.
+    let emailResult: { success: boolean; skipped?: boolean; error?: string } = { success: true, skipped: true };
+    if (toEmail) {
+      const result = await generatePdf({ docType: "invoice", docId: id, tenantId });
+      const pdfBuffer = Buffer.from(result.buffer);
 
-    // Send email with PDF attachment
-    const { subject, html } = documentEmail({
-      partnerName: partner?.name || "Client",
-      docType: "invoice",
-      docNumber: invoice.number || id,
-      tenantName: (await auth.store.getTenant(tenantId))?.name || "Aspidus Trade",
-      amount: invoice.total != null ? String(invoice.total) : undefined,
-      currency: invoice.currency || undefined,
-      dueDate: invoice.due_date || undefined,
-    });
+      const { subject, html } = documentEmail({
+        partnerName: partner?.name || "Client",
+        docType: "invoice",
+        docNumber: invoice.number || id,
+        tenantName: (await auth.store.getTenant(tenantId))?.name || "Aspidus Trade",
+        amount: invoice.total != null ? String(invoice.total) : undefined,
+        currency: invoice.currency || undefined,
+        dueDate: invoice.due_date || undefined,
+      });
 
-    const emailResult = await sendEmail({
-      to: toEmail,
-      subject,
-      html,
-      tenantId,
-      attachments: [{
-        filename: `invoice-${invoice.number || id}.pdf`,
-        content: pdfBuffer,
-        contentType: "application/pdf",
-      }],
-    });
+      emailResult = await sendEmail({
+        to: toEmail,
+        subject,
+        html,
+        tenantId,
+        attachments: [{
+          filename: `invoice-${invoice.number || id}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        }],
+      });
+    }
 
     // Promote status draft→sent and stamp sent_at (only on first successful send).
     if (emailResult.success) {
@@ -84,7 +88,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } catch (e) { console.warn("[invoice.send] status bump failed:", e); }
     }
 
-    await audit(auth.store, auth.user, req, "invoice.send_email", "invoice", id, { to: toEmail });
+    // ─── Portal notification ───
+    // Notify the partner's portal client that a new invoice is available.
+    if (emailResult.success && invoice.partner_id) {
+      try {
+        await notify({
+          tenantId: invoice.tenant_id,
+          userId: null,
+          partnerId: invoice.partner_id,
+          type: "invoice_sent",
+          title: `New invoice: ${invoice.number || id}`,
+          message: invoice.subject || `Invoice ${invoice.number || id} has been sent to you`,
+          entityType: "invoice",
+          entityId: invoice.id,
+          actionLabel: "View",
+        });
+      } catch (e) {
+        console.error("[invoice.send] portal notification failed:", e);
+        // Don't fail the send if notification fails
+      }
+    }
+
+    await audit(auth.store, auth.user, req, "invoice.send_email", "invoice", id, { to: toEmail || "(portal only)" });
 
     return NextResponse.json(emailResult);
   } catch (e) {

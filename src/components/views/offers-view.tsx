@@ -208,6 +208,29 @@ export function OffersView() {
     onError: () => toast.error("Delete failed."),
   });
 
+  // ─── Send offer to portal ───
+  const sendMut = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(api(`/api/offers/${id}/send`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to send offer");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Offer sent to portal");
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["offer", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to send offer."),
+  });
+
   // ─── Create Offer from Deal ───
   const createFromDealMut = useMutation({
     mutationFn: async (deal_id: string) => {
@@ -452,6 +475,8 @@ export function OffersView() {
               offer={detail.data}
               partnerName={partnerName(detail.data.partner_id)}
               onStatusChange={(status) => detailId && statusMut.mutate({ id: detailId, status })}
+              onSend={() => detailId && sendMut.mutate(detailId)}
+              isSending={sendMut.isPending}
               onCreateInvoice={() => detailId && createInvoiceMut.mutate(detailId)}
               onCreateProforma={() => detailId && createProformaMut.mutate(detailId)}
               isCreatingInvoice={createInvoiceMut.isPending}
@@ -586,11 +611,13 @@ function DealPickerDialog({
 
 // ─── Detail panel ───
 function OfferDetail({
-  offer, partnerName, onStatusChange, onCreateInvoice, onCreateProforma, isCreatingInvoice, isCreatingProforma,
+  offer, partnerName, onStatusChange, onSend, isSending, onCreateInvoice, onCreateProforma, isCreatingInvoice, isCreatingProforma,
 }: {
   offer: Offer;
   partnerName: string;
   onStatusChange: (s: OfferStatus) => void;
+  onSend: () => void;
+  isSending: boolean;
   onCreateInvoice: () => void;
   onCreateProforma: () => void;
   isCreatingInvoice: boolean;
@@ -737,6 +764,24 @@ function OfferDetail({
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-2 mb-4">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onSend}
+              disabled={isSending || offer.status !== "draft"}
+            >
+              {isSending ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Send className="size-4 mr-1" />}
+              Send
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {offer.status !== "draft"
+              ? "Only draft offers can be sent"
+              : "Send this offer to the partner portal (and email if configured)"}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -898,31 +943,75 @@ function OfferDetail({
               <TableHead className="text-right">Unit price</TableHead>
               <TableHead className="text-right hidden sm:table-cell">Discount %</TableHead>
               <TableHead className="text-right hidden sm:table-cell">Tax %</TableHead>
+              <TableHead className="text-right hidden md:table-cell">Cost</TableHead>
+              <TableHead className="text-right hidden md:table-cell">Margin</TableHead>
               <TableHead className="text-right">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {(offer.items || []).length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-6">
+                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-6">
                   No line items.
                 </TableCell>
               </TableRow>
-            ) : (offer.items || []).map((it, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <div className="font-medium">{it.product_name || "—"}</div>
-                  <div className="text-xs text-muted-foreground sm:hidden">{it.sku || "—"}</div>
+            ) : (offer.items || []).map((it, i) => {
+              const cost = Number(it.cost) || 0;
+              const unitPrice = Number(it.unit_price) || 0;
+              const marginPerUnit = unitPrice - cost;
+              const marginPct = unitPrice > 0 ? (marginPerUnit / unitPrice) * 100 : 0;
+              const hasCost = cost > 0;
+              return (
+                <TableRow key={i}>
+                  <TableCell>
+                    <div className="font-medium">{it.product_name || "—"}</div>
+                    <div className="text-xs text-muted-foreground sm:hidden">{it.sku || "—"}</div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell font-mono text-xs tabular">{it.sku || "—"}</TableCell>
+                  <TableCell className="text-right font-mono tabular">{fmtNumber(it.quantity)}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{it.unit || "—"}</TableCell>
+                  <TableCell className="text-right font-mono tabular">{fmtMoney(it.unit_price, offer.currency)}</TableCell>
+                  <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.discount}%</TableCell>
+                  <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.tax_rate}%</TableCell>
+                  <TableCell className="text-right font-mono tabular hidden md:table-cell">
+                    {hasCost ? fmtMoney(cost, offer.currency) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular hidden md:table-cell">
+                    {hasCost ? (
+                      <span className={marginPct > 20 ? "text-chart-1" : marginPct > 0 ? "text-amber-600 dark:text-amber-500" : "text-destructive"}>
+                        {marginPct.toFixed(0)}%
+                      </span>
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular font-medium">{fmtMoney(lineTotal(it), offer.currency)}</TableCell>
+                </TableRow>
+              );
+            })}
+            {/* Total margin row — only when at least one line has a cost */}
+            {(offer.items || []).some((it) => Number(it.cost) > 0) && (
+              <TableRow className="font-semibold bg-muted/40">
+                <TableCell colSpan={9} className="text-right text-xs text-muted-foreground">
+                  Total Margin
                 </TableCell>
-                <TableCell className="hidden sm:table-cell font-mono text-xs tabular">{it.sku || "—"}</TableCell>
-                <TableCell className="text-right font-mono tabular">{fmtNumber(it.quantity)}</TableCell>
-                <TableCell className="hidden sm:table-cell">{it.unit || "—"}</TableCell>
-                <TableCell className="text-right font-mono tabular">{fmtMoney(it.unit_price, offer.currency)}</TableCell>
-                <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.discount}%</TableCell>
-                <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.tax_rate}%</TableCell>
-                <TableCell className="text-right font-mono tabular font-medium">{fmtMoney(lineTotal(it), offer.currency)}</TableCell>
+                <TableCell className="text-right font-mono tabular">
+                  {(() => {
+                    const totalRevenue = (offer.items || []).reduce((s, it) => s + lineTotal(it), 0);
+                    const totalCost = (offer.items || []).reduce(
+                      (s, it) => s + (Number(it.cost) || 0) * (Number(it.quantity) || 0),
+                      0,
+                    );
+                    const totalMargin = totalRevenue - totalCost;
+                    const totalMarginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0;
+                    const accent = totalMargin >= 0 ? "text-chart-1" : "text-destructive";
+                    return (
+                      <span className={accent}>
+                        {fmtMoney(totalMargin, offer.currency)} ({totalMarginPct.toFixed(1)}%)
+                      </span>
+                    );
+                  })()}
+                </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </div>
@@ -1522,19 +1611,36 @@ function OfferFormDialog({
                       <TableHead className="w-28 text-right">Unit Price</TableHead>
                       <TableHead className="w-16 text-right hidden sm:table-cell">Disc%</TableHead>
                       <TableHead className="w-16 text-right hidden sm:table-cell">Tax%</TableHead>
+                      <TableHead className="w-24 text-right hidden md:table-cell">Cost/unit</TableHead>
                       <TableHead className="w-28 text-right">Line Total</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(form.items || []).map((it, idx) => (
+                    {(form.items || []).map((it, idx) => {
+                      const lineCost = (Number(it.cost) || 0) * (Number(it.quantity) || 0);
+                      const lineRevenue = lineTotal(it);
+                      const lineMargin = lineRevenue - lineCost;
+                      const lineMarginPct = lineRevenue > 0 ? (lineMargin / lineRevenue) * 100 : 0;
+                      return (
                       <TableRow key={idx}>
                         <TableCell>
                           <div className="space-y-1">
                             <Select
                               value={it.product_id || "__custom__"}
                               onValueChange={(v) => {
-                                if (v === "__custom__") return;
+                                if (v === "__custom__") {
+                                  // Clear the product selection but keep the
+                                  // current product_name so the user can keep
+                                  // typing manually.
+                                  setItem(idx, { product_id: "" });
+                                  setProductContextMap((prev) => {
+                                    const next = { ...prev };
+                                    delete next[idx];
+                                    return next;
+                                  });
+                                  return;
+                                }
                                 selectProduct(idx, v);
                               }}
                             >
@@ -1625,6 +1731,20 @@ function OfferFormDialog({
                             onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
                           />
                         </TableCell>
+                        <TableCell className="text-right hidden md:table-cell">
+                          <Input
+                            type="number"
+                            className="h-8 text-xs w-20 text-right"
+                            value={Number(it.cost) || 0}
+                            onChange={(e) => setItem(idx, { cost: Number(e.target.value) })}
+                            placeholder="0.00"
+                          />
+                          {Number(it.cost) > 0 && (
+                            <p className={`text-[10px] mt-0.5 ${lineMargin >= 0 ? "text-chart-1" : "text-destructive"}`}>
+                              {lineMarginPct.toFixed(0)}% margin
+                            </p>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right font-mono tabular text-sm">
                           {fmtMoney(lineTotal(it), form.currency || "USD")}
                         </TableCell>
@@ -1641,7 +1761,8 @@ function OfferFormDialog({
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
