@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -127,6 +128,7 @@ export function InvoicesView() {
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [showForm, setShowForm] = useState(false);
+  useNewShortcut(() => { setEditing(null); setShowForm(true); });
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showOfferPicker, setShowOfferPicker] = useState(false);
