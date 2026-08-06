@@ -6,7 +6,7 @@ import { Topbar } from "./topbar";
 import { GlobalSearch } from "./global-search";
 import { ImpersonateBanner } from "./impersonate-banner";
 import { SubscriptionBanner } from "./subscription-banner";
-import { useAppStore } from "@/lib/store/app-store";
+import { useAppStore, useHydrateViewState } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -141,6 +141,7 @@ function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenChange: (v
 /* -------------------------------------------------------------------------- */
 
 export function AppShell() {
+  useHydrateViewState();
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Truck, Ship, Plane, Train, Package, Plus, Send, Trash2, MapPin, ArrowRight, Loader2, FileText, ChevronDown, ChevronRight, Copy, History, CheckCircle2, XCircle, Play, MessageSquare, ArrowRightCircle } from "lucide-react";
 import { toast } from "sonner";
 import { COUNTRIES, INCOTERMS } from "@/lib/data/reference";
+import { fmtMoney, fmtNumber } from "@/lib/utils/format";
 
 type LogisticsMode = "sea_fcl" | "sea_lcl" | "road_ftl" | "road_ltl" | "air" | "rail" | "courier" | "multimodal";
 interface PackingLine {
@@ -118,7 +119,10 @@ export function PortalLogistics() {
                       <div>
                         <Badge variant="outline" className="capitalize">{r.status.replace(/_/g, " ")}</Badge>
                         {r.quoted_price != null && (
-                          <p className="text-xs font-medium mt-1 tabular">{r.quoted_currency} {r.quoted_price} · {r.quoted_transit_days}d</p>
+                          <p className="text-xs font-medium mt-1 tabular">
+                            {fmtMoney(r.quoted_price, r.quoted_currency || "USD")}
+                            {r.quoted_transit_days != null && ` · ${r.quoted_transit_days}d`}
+                          </p>
                         )}
                       </div>
                       <a
