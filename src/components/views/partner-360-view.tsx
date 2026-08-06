@@ -573,7 +573,7 @@ function Partner360Content({
                             {d.expected_close ? fmtDate(d.expected_close) : "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button size="icon" variant="ghost" className="size-7">
+                            <Button size="icon" variant="ghost" className="size-7" aria-label="View" title="View">
                               <Eye className="size-3.5" />
                             </Button>
                           </TableCell>

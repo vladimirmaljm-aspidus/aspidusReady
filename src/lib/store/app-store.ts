@@ -138,10 +138,23 @@ export const useAppStore = create<AppState>((set) => ({
   // and clearing selectedId inside setView made the target view render empty
   // (Partner 360 falls back to "no selection" → user bounces to the list).
   // Views that need a clean state should reset selectedId themselves.
-  setView: (v) => set({ view: v }),
+  setView: (v) => {
+    set({ view: v });
+    if (typeof window !== "undefined") {
+      try { sessionStorage.setItem("aspidus_view", v); } catch { /* ignore */ }
+    }
+  },
 
   selectedId: null,
-  setSelectedId: (id) => set({ selectedId: id }),
+  setSelectedId: (id) => {
+    set({ selectedId: id });
+    if (typeof window !== "undefined") {
+      try {
+        if (id) sessionStorage.setItem("aspidus_selected_id", id);
+        else sessionStorage.removeItem("aspidus_selected_id");
+      } catch { /* ignore */ }
+    }
+  },
 
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -177,6 +190,25 @@ export function useHydrateActiveTenant() {
       setActiveTenant(t.id, t.name);
     }
   }, [setActiveTenant]);
+}
+
+/**
+ * Hydrate the current view + selected entity id from sessionStorage on mount.
+ * Without this a page refresh drops the user back to the Dashboard and blanks
+ * out any drill-down view (Partner 360, deal detail, etc.).
+ */
+export function useHydrateViewState() {
+  const setView = useAppStore((s) => s.setView);
+  const setSelectedId = useAppStore((s) => s.setSelectedId);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = sessionStorage.getItem("aspidus_view");
+      const sid = sessionStorage.getItem("aspidus_selected_id");
+      if (v) setView(v as ViewKey);
+      if (sid) setSelectedId(sid);
+    } catch { /* ignore */ }
+  }, [setView, setSelectedId]);
 }
 
 /**
