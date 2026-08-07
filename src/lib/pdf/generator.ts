@@ -29,12 +29,21 @@ export interface GeneratePdfResult {
  *     fall back to the original URL if signing fails.
  *  3. Relative storage path (e.g. "tenant-id/logo.png") → build a signed URL;
  *     fall back to constructing the public URL from SUPABASE_URL.
+ *
+ * After resolving the URL, we also fetch the bytes and re-encode as a data: URL.
+ * This is critical because @react-pdf/renderer has no error boundary around the
+ * <Image> component — if the remote URL returns a 404, a non-image content type,
+ * or the network is unreachable, the entire PDF render throws and the user sees
+ * a 500 instead of a PDF. By converting to a data: URL ourselves we can detect
+ * failures early and gracefully fall back to the no-logo layout.
  */
 async function resolveLogoUrl(logoUrl: string | null | undefined): Promise<string | null> {
   if (!logoUrl) return null;
 
   // If Supabase is not configured, return the URL as-is (dev/mock mode)
-  if (!isSupabaseConfigured()) return logoUrl;
+  if (!isSupabaseConfigured()) return fetchAsDataUrl(logoUrl);
+
+  let resolvedUrl: string | null = null;
 
   try {
     const sb = getSupabase();
@@ -58,33 +67,67 @@ async function resolveLogoUrl(logoUrl: string | null | undefined): Promise<strin
         storagePath = decodeURIComponent(logoUrl.substring(idx2 + signedPrefix.length)).split("?")[0];
       } else {
         // Not a Supabase storage URL — return as-is (could be an external logo)
-        return logoUrl;
+        resolvedUrl = logoUrl;
       }
     } else {
       // Relative path — e.g. "tenant-id/logo.png"
       storagePath = logoUrl;
     }
 
-    if (storagePath) {
+    if (storagePath && !resolvedUrl) {
       // Try to get a signed URL (works for both public and private buckets)
       const { data, error } = await sb.storage
         .from("tenant-logos")
         .createSignedUrl(storagePath, 3600); // 1 hour expiry
 
       if (!error && data?.signedUrl) {
-        return data.signedUrl;
+        resolvedUrl = data.signedUrl;
+      } else {
+        // Fallback: construct the public URL manually
+        console.warn(`[PDF] Signed URL failed for logo path "${storagePath}": ${error?.message}. Falling back to public URL.`);
+        resolvedUrl = `${supabaseUrl}/storage/v1/object/public/tenant-logos/${storagePath}`;
       }
-
-      // Fallback: construct the public URL manually
-      console.warn(`[PDF] Signed URL failed for logo path "${storagePath}": ${error?.message}. Falling back to public URL.`);
-      return `${supabaseUrl}/storage/v1/object/public/tenant-logos/${storagePath}`;
     }
   } catch (err) {
     console.warn("[PDF] Error resolving logo URL:", err);
+    resolvedUrl = logoUrl;
   }
 
   // Last resort — return the original URL
-  return logoUrl;
+  if (!resolvedUrl) resolvedUrl = logoUrl;
+
+  // Fetch the bytes and re-encode as data: URL so @react-pdf/renderer doesn't
+  // have to perform a network fetch during render (which would throw on 404).
+  return fetchAsDataUrl(resolvedUrl);
+}
+
+/**
+ * Fetch a remote image URL and re-encode it as a base64 data: URL.
+ * Returns null on any failure (HTTP error, network error, non-image content)
+ * so the caller can gracefully skip rendering the logo.
+ */
+async function fetchAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { redirect: "follow" });
+    if (!res.ok) {
+      console.warn(`[PDF] Logo fetch returned ${res.status} for ${url}`);
+      return null;
+    }
+    const contentType = (res.headers.get("content-type") || "image/png").split(";")[0].trim();
+    if (!contentType.startsWith("image/")) {
+      console.warn(`[PDF] Logo URL returned non-image content-type ${contentType} — skipping`);
+      return null;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0) {
+      console.warn(`[PDF] Logo URL returned empty body — skipping`);
+      return null;
+    }
+    return `data:${contentType};base64,${buf.toString("base64")}`;
+  } catch (err) {
+    console.warn(`[PDF] Logo fetch failed for ${url}:`, err);
+    return null;
+  }
 }
 
 export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdfResult> {
@@ -118,7 +161,14 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     } else {
       verificationCode = generateVerificationCode(opts.docType, doc.number);
     }
-    qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+    // Wrap QR generation in try/catch — if the qrcode lib fails (corrupt input,
+    // native module crash, etc.) we still produce a valid PDF without the QR.
+    try {
+      qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+    } catch (qrErr) {
+      console.warn("[PDF] QR code generation failed — continuing without QR:", qrErr);
+      qrCodeDataUrl = undefined;
+    }
   } else {
     // Even when NOT creating a new verification (portal-side PDF re-download),
     // if the admin already issued a verification for this document, we STILL
@@ -128,7 +178,12 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     if (existing && existing.status === "active") {
       verificationCode = existing.verification_code;
       verificationId = existing.id;
-      qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+      try {
+        qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+      } catch (qrErr) {
+        console.warn("[PDF] QR code generation failed — continuing without QR:", qrErr);
+        qrCodeDataUrl = undefined;
+      }
     }
   }
 

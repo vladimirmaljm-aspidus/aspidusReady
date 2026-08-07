@@ -1375,6 +1375,11 @@ function OfferFormDialog({
   const isEditing = !!offer;
 
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
+  // Completeness checker is collapsed by default — the score + critical count
+  // is always visible in the trigger, and the user expands to drill into the
+  // per-field list. Keeps the offer form compact instead of always showing a
+  // tall scrollable list right below the line items.
+  const [completenessOpen, setCompletenessOpen] = useState(false);
   // Form state. Extended with three non-DB-column fields used only by the UI:
   //   - `origin_country` is a real DB column on `offers` (added via migration)
   //     but is not in the Prisma schema, so we keep it loosely typed.
@@ -2293,12 +2298,30 @@ function OfferFormDialog({
                           />
                         </TableCell>
                         <TableCell>
-                          <UnitSelect
-                            value={it.unit || ""}
-                            onChange={(v) => handleUnitChange(idx, v)}
-                            placeholder="pcs"
-                            className="h-8 text-xs w-24"
-                          />
+                          <div
+                            className="w-24"
+                            title={
+                              it.unit &&
+                              productContextMap[idx]?.product?.unit &&
+                              it.unit !== productContextMap[idx].product.unit &&
+                              describeConversion(
+                                productContextMap[idx].product!.unit,
+                                it.unit,
+                              )
+                                ? `Unit conversion: ${describeConversion(
+                                    productContextMap[idx].product!.unit,
+                                    it.unit,
+                                  )}`
+                                : undefined
+                            }
+                          >
+                            <UnitSelect
+                              value={it.unit || ""}
+                              onChange={(v) => handleUnitChange(idx, v)}
+                              placeholder="pcs"
+                              className="h-8 text-xs w-24"
+                            />
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <Input
@@ -2306,49 +2329,47 @@ function OfferFormDialog({
                             className="h-8 text-xs w-24 text-right"
                             value={it.unit_price}
                             onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
+                            title={
+                              productContextMap[idx]?.latestSupplierOffer
+                                ? (() => {
+                                    const so = productContextMap[idx].latestSupplierOffer!;
+                                    const soPrice = fmtMoney(
+                                      so.unit_price,
+                                      so.currency || form.currency || "USD",
+                                    );
+                                    const soUnit = productContextMap[idx].product?.unit || "unit";
+                                    const soRef =
+                                      (
+                                        so.offer_number ||
+                                        so.id ||
+                                        ""
+                                      ).slice(-6) || "?";
+                                    const conv =
+                                      it.unit &&
+                                      productContextMap[idx].product?.unit &&
+                                      it.unit !== productContextMap[idx].product.unit &&
+                                      describeConversion(
+                                        productContextMap[idx].product.unit,
+                                        it.unit,
+                                      )
+                                        ? ` · ${describeConversion(
+                                            productContextMap[idx].product!.unit,
+                                            it.unit!,
+                                          )}`
+                                        : "";
+                                    return `Supplier offer: ${soPrice}/${soUnit} (SO-${soRef})${conv}`;
+                                  })()
+                                : undefined
+                            }
                           />
                           {productContextMap[idx]?.latestSupplierOffer && (
-                            <div className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-0.5 mt-0.5 justify-end flex-wrap">
-                              <Info className="size-2.5 shrink-0" />
-                              <span className="font-mono">
-                                {fmtMoney(
-                                  productContextMap[idx].latestSupplierOffer!.unit_price,
-                                  productContextMap[idx].latestSupplierOffer!.currency || form.currency || "USD",
-                                )}
-                              </span>
-                              <span className="text-muted-foreground">
-                                /{productContextMap[idx].product?.unit || "unit"}
-                              </span>
-                              {it.unit &&
-                                productContextMap[idx].product?.unit &&
-                                it.unit !== productContextMap[idx].product.unit &&
-                                Number(it.unit_price) > 0 && (
-                                  <span className="text-amber-600 dark:text-amber-400 ml-0.5 font-mono">
-                                    → {fmtMoney(it.unit_price, form.currency || "USD")}/{it.unit}
-                                  </span>
-                                )}
-                              <span className="text-muted-foreground ml-0.5">
-                                (SO-
-                                {(
-                                  productContextMap[idx].latestSupplierOffer!.offer_number ||
-                                  productContextMap[idx].latestSupplierOffer!.id ||
-                                  ""
-                                ).slice(-6) || "?"}
-                                )
-                              </span>
+                            <div className="text-[10px] text-muted-foreground mt-0.5 text-right truncate">
+                              Supplier {fmtMoney(
+                                productContextMap[idx].latestSupplierOffer!.unit_price,
+                                productContextMap[idx].latestSupplierOffer!.currency || form.currency || "USD",
+                              )}/{productContextMap[idx].product?.unit || "unit"}
                             </div>
                           )}
-                          {it.unit &&
-                            productContextMap[idx]?.product?.unit &&
-                            it.unit !== productContextMap[idx].product.unit &&
-                            describeConversion(productContextMap[idx].product.unit, it.unit) && (
-                              <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 mt-0.5 justify-end">
-                                <ArrowLeftRight className="size-2.5 shrink-0" />
-                                <span>
-                                  {describeConversion(productContextMap[idx].product.unit, it.unit)}
-                                </span>
-                              </div>
-                            )}
                         </TableCell>
                         <TableCell className="text-right hidden sm:table-cell">
                           <Input
@@ -2375,12 +2396,22 @@ function OfferFormDialog({
                             placeholder="0.00"
                           />
                           {Number(it.cost) > 0 && (
-                            <p className={`text-[10px] mt-0.5 ${lineMargin >= 0 ? "text-chart-1" : "text-destructive"}`}>
+                            <p
+                              className={`text-[10px] mt-0.5 text-right ${lineMargin >= 0 ? "text-chart-1" : "text-destructive"}`}
+                              title={`Margin: ${fmtMoney(lineMargin, form.currency || "USD")} (${lineMarginPct.toFixed(0)}%)`}
+                            >
                               {lineMarginPct.toFixed(0)}% margin
                             </p>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-mono tabular text-sm">
+                        <TableCell
+                          className="text-right font-mono tabular text-sm"
+                          title={
+                            Number(it.cost) > 0
+                              ? `Line total: ${fmtMoney(lineTotal(it), form.currency || "USD")} · Margin: ${fmtMoney(lineMargin, form.currency || "USD")} (${lineMarginPct.toFixed(0)}%)`
+                              : undefined
+                          }
+                        >
                           {fmtMoney(lineTotal(it), form.currency || "USD")}
                         </TableCell>
                         <TableCell>
@@ -2430,12 +2461,61 @@ function OfferFormDialog({
             )}
           </div>
 
-          {/* ─── Data Completeness Checker (real-time) ─── */}
+          {/* ─── Data Completeness Checker (real-time, collapsible) ─── */}
           {/* Surfaces every field that's still missing from the offer — grouped
               by offer / line item / buyer / company — so the user knows exactly
               what to fix or supplement before sending. Recomputed on every
-              keystroke via the `completenessReport` memo above. */}
-          <CompletenessChecker report={completenessReport} />
+              keystroke via the `completenessReport` memo above.
+              Collapsed by default — the score + critical count always shows in
+              the trigger, expand to drill into the per-field list. */}
+          <Collapsible open={completenessOpen} onOpenChange={setCompletenessOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors"
+              >
+                {completenessOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                )}
+                <CheckCircle2 className="size-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium">Data Completeness</span>
+                <Badge
+                  variant={
+                    completenessReport.criticalCount > 0
+                      ? "destructive"
+                      : completenessReport.warningCount > 0
+                        ? "secondary"
+                        : "default"
+                  }
+                  className="ml-auto"
+                >
+                  {completenessReport.completenessScore}%
+                </Badge>
+                {completenessReport.criticalCount > 0 && (
+                  <span className="text-xs text-destructive">
+                    {completenessReport.criticalCount} critical
+                  </span>
+                )}
+                {completenessReport.criticalCount === 0 &&
+                  completenessReport.warningCount > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {completenessReport.warningCount} to review
+                    </span>
+                  )}
+                {completenessReport.criticalCount === 0 &&
+                  completenessReport.warningCount === 0 && (
+                    <span className="text-xs text-emerald-600">All complete</span>
+                  )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pt-3">
+                <CompletenessChecker report={completenessReport} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* ─── More Details Section (collapsible) ─── */}
           <Collapsible open={moreDetailsOpen} onOpenChange={setMoreDetailsOpen}>

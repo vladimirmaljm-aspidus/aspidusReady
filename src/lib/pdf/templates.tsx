@@ -2,7 +2,15 @@ import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image, Font, Link } from "@react-pdf/renderer";
 import type { Offer, Invoice, Proforma, OfferLineItem, Partner, Tenant, DocumentTemplate } from "@/lib/supabase/types";
 
-Font.registerHyphenationCallback((word) => [word]);
+// Allow very long "words" (SKUs, HS codes like 1006.30.10.00, IBANs) to break
+// across lines. Short words are kept intact so normal prose still looks clean.
+Font.registerHyphenationCallback((word) => {
+  if (word.length > 18) {
+    const parts = word.match(/.{1,18}/g);
+    return parts && parts.length > 1 ? parts : [word];
+  }
+  return [word];
+});
 
 interface PdfDocData {
   doc: Offer | Invoice | Proforma;
@@ -284,7 +292,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       backgroundColor: tableHeaderBg,
       paddingVertical: 7,
     },
-    th: { fontSize: 8.5, fontFamily: headingFontFamily, color: tableHeaderColor, paddingHorizontal: 6 },
+    th: { fontSize: 8.5, fontFamily: headingFontFamily, color: tableHeaderColor, paddingHorizontal: 4 },
     tableRow: {
       flexDirection: "row",
       paddingVertical: 6,
@@ -292,7 +300,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       borderBottomColor: tableBorderColor,
       alignItems: "stretch",
     },
-    td: { fontSize: 8.5, paddingHorizontal: 6, color: "#333" },
+    td: { fontSize: 8.5, paddingHorizontal: 4, color: "#333" },
 
     // ── Specifications (per product key/value table + free text) ──────
     specSection: { marginTop: 12, marginBottom: 10 },
@@ -675,31 +683,31 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         <Text style={styles.sectionHeader}>Line Items</Text>
         <View style={styles.table}>
           <View style={styles.tableHeader} fixed>
-            <Text style={[styles.th, { flex: 0.4 }]}>#</Text>
+            <Text style={[styles.th, { flex: 0.3 }]}>#</Text>
             <Text style={[styles.th, { flex: 3 }]}>Description</Text>
-            <Text style={[styles.th, { flex: 0.9 }]}>HS Code</Text>
+            <Text style={[styles.th, { flex: 1.1 }]}>HS Code</Text>
             <Text style={[styles.th, { flex: 0.9 }]}>Origin</Text>
-            <Text style={[styles.th, { flex: 1.2 }]}>Quantity</Text>
-            <Text style={[styles.th, { flex: 1.1, textAlign: "right" }]}>Unit Price</Text>
-            <Text style={[styles.th, { flex: 1.2, textAlign: "right" }]}>Total</Text>
+            <Text style={[styles.th, { flex: 1.1 }]}>Quantity</Text>
+            <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>Unit Price</Text>
+            <Text style={[styles.th, { flex: 1.1, textAlign: "right" }]}>Total</Text>
           </View>
           {items.map((item, i) => (
             <View key={i} style={styles.tableRow}>
-              <Text style={[styles.td, { flex: 0.4 }]}>{i + 1}</Text>
+              <Text style={[styles.td, { flex: 0.3 }]}>{i + 1}</Text>
               <Text style={[styles.td, { flex: 3 }]}>
                 {item.product_name}
                 {item.sku ? `\nSKU: ${item.sku}` : ""}
                 {item.brand ? `\nBrand: ${item.brand}` : ""}
               </Text>
-              <Text style={[styles.td, { flex: 0.9 }]}>{(item as any).hs_code || "—"}</Text>
+              <Text style={[styles.td, { flex: 1.1 }]}>{(item as any).hs_code || "—"}</Text>
               <Text style={[styles.td, { flex: 0.9 }]}>{(item as any).origin_country || "—"}</Text>
-              <Text style={[styles.td, { flex: 1.2 }]}>
+              <Text style={[styles.td, { flex: 1.1 }]}>
                 {item.quantity} {item.unit || "kg"}
               </Text>
-              <Text style={[styles.td, { flex: 1.1, textAlign: "right" }]}>
+              <Text style={[styles.td, { flex: 1, textAlign: "right" }]}>
                 {fmtMoney(item.unit_price, currency)}
               </Text>
-              <Text style={[styles.td, { flex: 1.2, textAlign: "right", fontFamily: headingFontFamily }]}>
+              <Text style={[styles.td, { flex: 1.1, textAlign: "right", fontFamily: headingFontFamily }]}>
                 {fmtMoney(item.total, currency)}
               </Text>
             </View>
@@ -724,18 +732,20 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
                     ? Object.entries(specs).map(([k, v]) => ({ name: k, value: String(v) }))
                     : []);
               return (specArray.length > 0 || item.detailed_spec) ? (
-                <View key={`spec-${i}`} style={styles.specItem} wrap={false}>
-                  <Text style={styles.specItemTitle}>{item.product_name}</Text>
-                  {specArray.length > 0 && (
-                    <View style={styles.specTable}>
-                      {specArray.map((spec, j) => (
-                        <View key={j} style={styles.specRow}>
-                          <Text style={styles.specName}>{spec.name}</Text>
-                          <Text style={styles.specValue}>{spec.value}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
+                <View key={`spec-${i}`} style={styles.specItem}>
+                  <View wrap={false}>
+                    <Text style={styles.specItemTitle}>{item.product_name}</Text>
+                    {specArray.length > 0 && (
+                      <View style={styles.specTable}>
+                        {specArray.map((spec, j) => (
+                          <View key={j} style={styles.specRow}>
+                            <Text style={styles.specName}>{spec.name}</Text>
+                            <Text style={styles.specValue}>{spec.value}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                   {item.detailed_spec && (
                     <Text style={styles.specDetail}>{item.detailed_spec}</Text>
                   )}
@@ -775,8 +785,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
 
         {/* OFFER TEXT / TERMS & CONDITIONS */}
         {((doc as any).terms || doc.notes) && (
-          <View style={styles.termsBox} wrap={false}>
-            <Text style={styles.sectionHeader}>
+          <View style={styles.termsBox}>
+            <Text style={styles.sectionHeader} wrap={false}>
               {docType === "offer" ? "Offer Text / Terms" : "Terms & Conditions"}
             </Text>
             {(doc as any).terms && <Text style={styles.termsText}>{(doc as any).terms}</Text>}
@@ -788,8 +798,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
 
         {/* BANK DETAILS — seller bank info + optional per-doc bank_details string */}
         {(tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift || tenant?.bank_accounts || bankDetails) && (
-          <View style={styles.termsBox} wrap={false}>
-            <Text style={styles.sectionHeader}>Bank Details</Text>
+          <View style={styles.termsBox}>
+            <Text style={styles.sectionHeader} wrap={false}>Bank Details</Text>
             <View style={styles.bankGrid}>
               {tenant?.bank_name && (
                 <View style={styles.bankCell}>
