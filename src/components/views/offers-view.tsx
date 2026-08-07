@@ -102,6 +102,130 @@ function computeTotals(items: OfferLineItem[]) {
   return { subtotal, discount_total, tax_total, total };
 }
 
+// ─── Bank account shape (tenant.bank_accounts JSON array) ───
+// The DB column is typed as `string | null` (jsonb), but in practice it holds
+// a JSON array of { bankName, currency, swiftCode, accountNumber, holder }.
+// Accept both camelCase and snake_case keys so we're resilient to legacy data.
+interface TenantBankAccount {
+  bankName?: string;
+  bank_name?: string;
+  accountNumber?: string;
+  account_number?: string;
+  swiftCode?: string;
+  swift_code?: string;
+  iban?: string;
+  currency?: string;
+  holder?: string;
+  account_holder?: string;
+}
+
+function parseTenantBankAccounts(raw: string | null | undefined): TenantBankAccount[] {
+  if (!raw) return [];
+  if (Array.isArray(raw as any)) return raw as unknown as TenantBankAccount[];
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Format a single bank account as the multi-line string saved into the
+ *  offer's `bank_details` column. The PDF renders this verbatim. */
+function formatBankDetailsForOffer(acct: TenantBankAccount): string {
+  const bankName = acct.bankName || acct.bank_name || "";
+  const accountNumber = acct.accountNumber || acct.account_number || acct.iban || "";
+  const swift = acct.swiftCode || acct.swift_code || "";
+  const holder = acct.holder || acct.account_holder || "";
+  const currency = acct.currency || "";
+  const lines: string[] = [];
+  if (bankName) lines.push(bankName);
+  if (holder) lines.push(`Account holder: ${holder}`);
+  if (accountNumber) lines.push(`Account: ${accountNumber}`);
+  if (swift) lines.push(`SWIFT: ${swift}`);
+  if (currency) lines.push(`Currency: ${currency}`);
+  return lines.join("\n");
+}
+
+// ─── Convert a numeric amount to English words (e.g. 171000 → "One Hundred
+//     Seventy-One Thousand US Dollars"). Mirrors the PDF generator's
+//     amountInWords helper so the offer form's "Amount in Words" line matches
+//     exactly what will print on the PDF. Handles up to billions + cents.
+function amountInWords(amount: number, currency = "USD"): string {
+  const currName =
+    currency === "USD" ? "US Dollars"
+    : currency === "EUR" ? "Euros"
+    : currency === "GBP" ? "Pounds Sterling"
+    : currency === "CHF" ? "Swiss Francs"
+    : currency === "AED" ? "UAE Dirhams"
+    : currency === "CNY" ? "Chinese Yuan"
+    : currency === "INR" ? "Indian Rupees"
+    : currency === "RUB" ? "Russian Rubles"
+    : currency === "JPY" ? "Japanese Yen"
+    : currency === "SAR" ? "Saudi Riyals"
+    : currency === "BRL" ? "Brazilian Real"
+    : currency === "ZAR" ? "South African Rand"
+    : currency === "TRY" ? "Turkish Lira"
+    : currency === "SGD" ? "Singapore Dollars"
+    : currency === "HKD" ? "Hong Kong Dollars"
+    : currency;
+
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  function threeDigitsToWords(n: number): string {
+    if (n === 0) return "";
+    let str = "";
+    const hundred = Math.floor(n / 100);
+    const remainder = n % 100;
+    if (hundred > 0) str += ones[hundred] + " Hundred";
+    if (remainder > 0) {
+      if (str) str += " ";
+      if (remainder < 10) str += ones[remainder];
+      else if (remainder < 20) str += teens[remainder - 10];
+      else {
+        const t = Math.floor(remainder / 10);
+        const o = remainder % 10;
+        str += tens[t];
+        if (o > 0) str += "-" + ones[o];
+      }
+    }
+    return str;
+  }
+
+  if (!isFinite(amount)) return `Zero ${currName} Only`;
+  const negative = amount < 0;
+  const absAmount = Math.abs(amount);
+  const whole = Math.floor(absAmount);
+  const cents = Math.round((absAmount - whole) * 100);
+
+  let words: string;
+  if (whole === 0) {
+    words = "Zero";
+  } else {
+    const billions = Math.floor(whole / 1000000000);
+    const millions = Math.floor((whole % 1000000000) / 1000000);
+    const thousands = Math.floor((whole % 1000000) / 1000);
+    const remainder = whole % 1000;
+    const parts: string[] = [];
+    if (billions > 0) parts.push(threeDigitsToWords(billions) + " Billion");
+    if (millions > 0) parts.push(threeDigitsToWords(millions) + " Million");
+    if (thousands > 0) parts.push(threeDigitsToWords(thousands) + " Thousand");
+    if (remainder > 0) parts.push(threeDigitsToWords(remainder));
+    words = parts.join(" ");
+  }
+
+  let result = words + " " + currName;
+  if (cents > 0) {
+    const c = cents < 10 ? "0" + cents : String(cents);
+    result += ` and ${c}/100`;
+  }
+  result += " Only";
+  return negative ? `Minus ${result}` : result;
+}
+
 // ─── Partner context type ───
 interface PartnerContext {
   partner: Partner;
@@ -836,6 +960,25 @@ function OfferDetail({
 
   const revisionList = revisions.data || [];
 
+  // ─── Auto-saved revisions (written by recordRevision on every PUT) ───
+  const autoRevisions = useQuery({
+    queryKey: ["document-revisions-auto", tenantKey, offer.id],
+    queryFn: async () => {
+      try {
+        const r = await fetch(api(`/api/document-revisions/${offer.id}`));
+        if (!r.ok) return [];
+        const data = await r.json();
+        return ((data.items || []) as any[]).sort(
+          (a, b) => (b.version || 0) - (a.version || 0),
+        );
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!offer.id,
+  });
+  const autoRevisionList = autoRevisions.data || [];
+
   async function handleSaveVersion() {
     if (!changeNote.trim()) {
       toast.error("Please enter a change note.");
@@ -912,6 +1055,7 @@ function OfferDetail({
       setChangeNote("");
       setShowVersionDialog(false);
       qc.invalidateQueries({ queryKey: ["document-revisions", tenantKey, offer.id] });
+      qc.invalidateQueries({ queryKey: ["document-revisions-auto", tenantKey, offer.id] });
     } catch (e: any) {
       toast.error(e.message || "Failed to save version.");
     } finally {
@@ -1312,6 +1456,92 @@ function OfferDetail({
         )}
       </div>
 
+      {/* Auto-Saved Revisions (from recordRevision on every PUT) */}
+      <div className="pt-4 mt-4 border-t">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold flex items-center gap-1.5">
+            <History className="size-4" /> Auto-Saved Revisions
+            <Badge variant="outline" className="ml-1 font-mono text-xs">
+              v{(offer as any).version || 1}
+            </Badge>
+          </h4>
+        </div>
+
+        {autoRevisions.isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : autoRevisionList.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
+            <History className="size-6 text-muted-foreground/40 mx-auto mb-1" />
+            <p className="text-sm text-muted-foreground">No auto-saved revisions yet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Every edit to this offer is automatically saved as a version with a per-field diff.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border/60 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-20">Version</TableHead>
+                  <TableHead>Changes</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
+                  <TableHead className="w-36">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {autoRevisionList.map((rev: any, i: number) => {
+                  const fields: any[] = Array.isArray(rev.changed_fields) ? rev.changed_fields : [];
+                  return (
+                    <TableRow key={rev.id || i}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs">V{rev.version}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm align-top">
+                        {rev.change_note ? (
+                          <p className="mb-1">{rev.change_note}</p>
+                        ) : null}
+                        {fields.length > 0 ? (
+                          <div className="space-y-1">
+                            {fields.slice(0, 4).map((c: any, idx: number) => (
+                              <div key={idx} className="text-xs">
+                                <span className="font-medium">{c.field}:</span>{" "}
+                                <span className="text-red-600 dark:text-red-400 line-through">
+                                  {String(c.before ?? "").slice(0, 40) || "∅"}
+                                </span>{" "}
+                                →{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">
+                                  {String(c.after ?? "").slice(0, 40) || "∅"}
+                                </span>
+                              </div>
+                            ))}
+                            {fields.length > 4 ? (
+                              <div className="text-xs text-muted-foreground">
+                                +{fields.length - 4} more field{fields.length - 4 === 1 ? "" : "s"}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground align-top">
+                        {rev.changed_by_username || rev.created_by || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground tabular-nums align-top">
+                        {fmtDateTime(rev.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
       {/* Save Version Dialog */}
       <Dialog open={showVersionDialog} onOpenChange={setShowVersionDialog}>
         <DialogContent>
@@ -1415,6 +1645,13 @@ function OfferFormDialog({
   const [loadingPartner, setLoadingPartner] = useState(false);
   const [productContextMap, setProductContextMap] = useState<Record<string, ProductContext>>({});
   const [loadingProductIdx, setLoadingProductIdx] = useState<number | null>(null);
+  // Index (into the tenant's parsed `bank_accounts` JSON array) of the bank
+  // account the user picked for this offer's payment. null = no selection —
+  // the user can still type custom bank details into the textarea below.
+  const [selectedBankAccountIdx, setSelectedBankAccountIdx] = useState<number | null>(null);
+  // True while we wait for the user to confirm the choice in the bank account
+  // dropdown (purely cosmetic — the textarea updates instantly).
+  const [manualBankOverride, setManualBankOverride] = useState(false);
 
   // Ref mirror of `form` so callbacks that need to read the latest items
   // (e.g. handleUnitChange, selectProduct unit-conversion logic) don't have to
@@ -1476,6 +1713,12 @@ function OfferFormDialog({
       }
       setPartnerContext(null);
       setProductContextMap({});
+      // Reset the bank-account picker. When editing an existing offer we
+      // don't try to reverse-match the saved `bank_details` text back to a
+      // tenant account (it may have been edited manually) — we just leave
+      // the picker empty so the user can re-select if needed.
+      setSelectedBankAccountIdx(null);
+      setManualBankOverride(false);
     }
   }, [open, offer]);
 
@@ -1777,8 +2020,26 @@ function OfferFormDialog({
       // Strip the extra fields so they aren't sent to the API.
       const { inspection: _insp, certificate: _cert, ...formRest } = form as any;
 
+      // ─── Bank details: re-derive from the selected account when the user
+      //     hasn't manually overridden the textarea. This keeps the saved
+      //     `bank_details` string in sync even if the live form-state somehow
+      //     drifted (e.g. the user picked an account then edited another field
+      //     without touching the textarea). When `manualBankOverride` is true
+      //     we keep the user's edited text verbatim. */
+      let bankDetailsToSave = (form.bank_details as string | null | undefined) ?? null;
+      if (
+        selectedBankAccountIdx !== null &&
+        !manualBankOverride &&
+        tenantBankAccounts[selectedBankAccountIdx]
+      ) {
+        bankDetailsToSave = formatBankDetailsForOffer(
+          tenantBankAccounts[selectedBankAccountIdx],
+        );
+      }
+
       const body = {
         ...formRest,
+        bank_details: bankDetailsToSave,
         notes: combinedNotes,
         status: form.status || "draft",
         items: (form.items || []).map((it) => ({ ...it, total: lineTotal(it) })),
@@ -1835,6 +2096,16 @@ function OfferFormDialog({
   });
   const tenant = tenantQuery.data ?? null;
 
+  // ─── Tenant bank accounts (parsed from the JSON column) ───
+  // The tenant's `bank_accounts` field holds a JSON array of
+  // { bankName, accountNumber, swiftCode, currency, holder } records. We
+  // expose them as a clean array so the bank-account picker in the form
+  // can render a dropdown without re-parsing on every render.
+  const tenantBankAccounts = useMemo(
+    () => parseTenantBankAccounts(tenant?.bank_accounts ?? null),
+    [tenant?.bank_accounts],
+  );
+
   // ─── Real-time completeness report ───
   // Recomputed on every keystroke so the panel below the line-items table
   // always reflects the current form state. The supplier-offers context map
@@ -1880,19 +2151,22 @@ function OfferFormDialog({
 
         <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4 py-2">
 
-          {/* ─── Essential Section (always visible) ─── */}
-          <div className="space-y-3">
+          {/* ─── Partner Selection (top — auto-fill partner details) ─── */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Building2 className="h-4 w-4" /> Partner
+              {partnerContext && !loadingPartner && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5 ml-1">
+                  <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                </Badge>
+              )}
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Partner select */}
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   Partner *
                   {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-                  {partnerContext && !loadingPartner && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                      <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
-                    </Badge>
-                  )}
                 </Label>
                 <Select
                   value={form.partner_id || ""}
@@ -1927,7 +2201,7 @@ function OfferFormDialog({
               </div>
             </div>
 
-            {/* Partner context panel */}
+            {/* Partner context panel — auto-pulled details */}
             {selectedPartner && partnerContext && (
               <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 p-3">
                 <div className="flex items-center gap-2 mb-2">
@@ -1940,6 +2214,12 @@ function OfferFormDialog({
                     <div className="flex items-start gap-1.5">
                       <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
                       <span className="text-muted-foreground">{[selectedPartner.address_line, selectedPartner.city, selectedPartner.country].filter(Boolean).join(", ")}</span>
+                    </div>
+                  )}
+                  {selectedPartner.tax_id && (
+                    <div className="flex items-center gap-1.5">
+                      <Hash className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">Tax ID: {selectedPartner.tax_id}</span>
                     </div>
                   )}
                   {selectedPartner.vat_number && (
@@ -2037,6 +2317,7 @@ function OfferFormDialog({
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Truck className="h-4 w-4" /> Trade Terms
+              <span className="text-xs text-muted-foreground font-normal">Incoterm · POL · POD · Payment · Validity · Lead time</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Incoterm */}
@@ -2155,91 +2436,47 @@ function OfferFormDialog({
                   placeholder="e.g., Phytosanitary, ISO 22000, Halal"
                 />
               </div>
-
-              {/* Bank Details */}
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Bank Details</Label>
-                <Textarea
-                  rows={2}
-                  value={form.bank_details || ""}
-                  onChange={(e) => set("bank_details", e.target.value)}
-                  placeholder="Bank name, IBAN, SWIFT/BIC…"
-                />
-              </div>
-            </div>
-
-            {/* Notes & Offer Text */}
-            <div className="grid grid-cols-1 gap-3">
-              <div className="space-y-1.5">
-                <Label>Notes</Label>
-                <Textarea
-                  rows={2}
-                  value={form.notes || ""}
-                  onChange={(e) => set("notes", e.target.value)}
-                  placeholder="Additional notes visible to the partner…"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Offer Text / Terms &amp; Conditions</Label>
-                <OfferTextBuilder
-                  value={typeof form.terms === "string" ? form.terms : ""}
-                  onChange={(text) => set("terms", text)}
-                  currency={form.currency || undefined}
-                  total={computeTotals(form.items || []).total}
-                  validUntil={form.valid_until || undefined}
-                  incoterm={form.incoterm || undefined}
-                  paymentTerms={form.payment_terms || undefined}
-                  leadTime={form.lead_time || undefined}
-                  pol={form.pol || undefined}
-                  pod={form.pod || undefined}
-                  origin={(form as { origin_country?: string | null }).origin_country || undefined}
-                  packaging={form.packaging || undefined}
-                />
-              </div>
             </div>
           </div>
 
           {/* ─── Line Items Section (inline table) ─── */}
-          <div className="space-y-3">
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-medium">Line Items</span>
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Package className="h-4 w-4" /> Line Items
                 <Sparkles className="size-3.5 text-amber-500" />
-                <span className="text-xs text-muted-foreground">Auto-fill enabled</span>
-              </div>
+                <span className="text-xs text-muted-foreground font-normal">Auto-fill from catalog & supplier offers</span>
+              </h3>
               <Button type="button" size="sm" variant="outline" onClick={addItem}>
                 <Plus className="size-4 mr-1" /> Add item
               </Button>
             </div>
 
             {(form.items || []).length === 0 ? (
-              <div className="border rounded-md border-dashed border-border/60 p-6 text-center">
+              <div className="border rounded-md border-dashed border-border/60 p-6 text-center bg-card">
                 <Package className="size-8 text-muted-foreground/40 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No line items yet</p>
                 <p className="text-xs text-muted-foreground mt-1">Click &ldquo;Add item&rdquo; to add products or services</p>
               </div>
             ) : (
-              <div className="rounded-md border border-border/60 overflow-x-auto">
+              <div className="rounded-md border border-border/60 overflow-x-auto bg-card">
                 <Table>
                   <TableHeader className="bg-muted/30">
                     <TableRow>
-                      <TableHead className="min-w-[180px]">Product</TableHead>
+                      <TableHead className="min-w-[200px]">Product</TableHead>
+                      <TableHead className="w-24 hidden md:table-cell">HS Code</TableHead>
                       <TableHead className="w-20 text-right">Qty</TableHead>
-                      <TableHead className="w-20">Unit</TableHead>
-                      <TableHead className="w-28 text-right">Unit Price</TableHead>
+                      <TableHead className="w-24">Unit</TableHead>
+                      <TableHead className="w-32 text-right">Unit Price</TableHead>
                       <TableHead className="w-16 text-right hidden sm:table-cell">Disc%</TableHead>
                       <TableHead className="w-16 text-right hidden sm:table-cell">Tax%</TableHead>
-                      <TableHead className="w-24 text-right hidden md:table-cell">Cost/unit</TableHead>
                       <TableHead className="w-28 text-right">Line Total</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(form.items || []).map((it, idx) => {
-                      const lineCost = (Number(it.cost) || 0) * (Number(it.quantity) || 0);
                       const lineRevenue = lineTotal(it);
-                      const lineMargin = lineRevenue - lineCost;
-                      const lineMarginPct = lineRevenue > 0 ? (lineMargin / lineRevenue) * 100 : 0;
                       return (
                       <TableRow key={idx}>
                         <TableCell>
@@ -2292,19 +2529,24 @@ function OfferFormDialog({
                             ) : (
                               // Lightweight inline metadata shown before the
                               // full context has loaded (or when the API call
-                              // failed). Keeps the old HS / brand / stock chips.
-                              ((it as any).hs_code || (it as any).brand) ? (
+                              // failed). Keeps the old brand chip available
+                              // even when HS code is shown in its own column.
+                              (it as any).brand ? (
                                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-                                  {(it as any).hs_code && (
-                                    <span className="font-mono px-1.5 py-0.5 rounded bg-muted">HS {(it as any).hs_code}</span>
-                                  )}
-                                  {(it as any).brand && (
-                                    <span>{(it as any).brand}</span>
-                                  )}
+                                  <span>{(it as any).brand}</span>
                                 </div>
                               ) : null
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {it.hs_code ? (
+                            <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted text-foreground tabular">
+                              {it.hs_code}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <Input
@@ -2343,7 +2585,7 @@ function OfferFormDialog({
                         <TableCell className="text-right">
                           <Input
                             type="number"
-                            className="h-8 text-xs w-24 text-right"
+                            className="h-8 text-xs w-28 text-right"
                             value={it.unit_price}
                             onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
                             title={
@@ -2379,13 +2621,20 @@ function OfferFormDialog({
                                 : undefined
                             }
                           />
+                          {/* Compact supplier-price badge (replaces the old
+                              verbose paragraph). Only shown when a latest
+                              supplier offer exists for this line. */}
                           {productContextMap[idx]?.latestSupplierOffer && (
-                            <div className="text-[10px] text-muted-foreground mt-0.5 text-right truncate">
-                              Supplier {fmtMoney(
+                            <Badge
+                              variant="outline"
+                              className="mt-0.5 text-[10px] h-4 px-1 font-mono border-blue-500/30 bg-blue-50/60 text-blue-700 dark:bg-blue-950/20 dark:text-blue-300"
+                              title={`Auto-filled from supplier offer${productContextMap[idx].latestSupplierOffer!.offer_number ? ` ${productContextMap[idx].latestSupplierOffer!.offer_number}` : ""}`}
+                            >
+                              Supplier: {fmtMoney(
                                 productContextMap[idx].latestSupplierOffer!.unit_price,
                                 productContextMap[idx].latestSupplierOffer!.currency || form.currency || "USD",
                               )}/{productContextMap[idx].product?.unit || "unit"}
-                            </div>
+                            </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right hidden sm:table-cell">
@@ -2404,32 +2653,11 @@ function OfferFormDialog({
                             onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
                           />
                         </TableCell>
-                        <TableCell className="text-right hidden md:table-cell">
-                          <Input
-                            type="number"
-                            className="h-8 text-xs w-20 text-right"
-                            value={Number(it.cost) || 0}
-                            onChange={(e) => setItem(idx, { cost: Number(e.target.value) })}
-                            placeholder="0.00"
-                          />
-                          {Number(it.cost) > 0 && (
-                            <p
-                              className={`text-[10px] mt-0.5 text-right ${lineMargin >= 0 ? "text-chart-1" : "text-destructive"}`}
-                              title={`Margin: ${fmtMoney(lineMargin, form.currency || "USD")} (${lineMarginPct.toFixed(0)}%)`}
-                            >
-                              {lineMarginPct.toFixed(0)}% margin
-                            </p>
-                          )}
-                        </TableCell>
                         <TableCell
-                          className="text-right font-mono tabular text-sm"
-                          title={
-                            Number(it.cost) > 0
-                              ? `Line total: ${fmtMoney(lineTotal(it), form.currency || "USD")} · Margin: ${fmtMoney(lineMargin, form.currency || "USD")} (${lineMarginPct.toFixed(0)}%)`
-                              : undefined
-                          }
+                          className="text-right font-mono tabular text-sm font-medium"
+                          title={`Line total: ${fmtMoney(lineRevenue, form.currency || "USD")}`}
                         >
-                          {fmtMoney(lineTotal(it), form.currency || "USD")}
+                          {fmtMoney(lineRevenue, form.currency || "USD")}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -2450,10 +2678,161 @@ function OfferFormDialog({
                 </Table>
               </div>
             )}
+          </div>
 
-            {/* Auto-calculated totals */}
-            {(form.items || []).length > 0 && (
-              <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
+          {/* ─── Bank Account for Payment (NEW) ─── */}
+          {/* The tenant's `bank_accounts` JSON array is presented as a
+              dropdown. Picking one auto-fills the offer's `bank_details`
+              string (which the PDF renders verbatim). The user can still
+              override the auto-filled text manually — typing into the
+              textarea below flips the picker to "custom" (no highlight). */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Landmark className="h-4 w-4" /> Bank Account for Payment
+            </h3>
+            {tenantBankAccounts.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground bg-card">
+                No bank accounts are configured on this tenant. Add them in the tenant settings to enable quick bank-account selection.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  Bank Account
+                  {selectedBankAccountIdx !== null && !manualBankOverride && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                      <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                    </Badge>
+                  )}
+                </Label>
+                <Select
+                  value={selectedBankAccountIdx === null ? "__none__" : String(selectedBankAccountIdx)}
+                  onValueChange={(v) => {
+                    if (v === "__none__") {
+                      setSelectedBankAccountIdx(null);
+                      // Don't clear the textarea — let the user keep the
+                      // previously-auto-filled text if they want.
+                      setManualBankOverride(false);
+                    } else {
+                      const idx = Number(v);
+                      setSelectedBankAccountIdx(idx);
+                      setManualBankOverride(false);
+                      const acct = tenantBankAccounts[idx];
+                      if (acct) {
+                        const formatted = formatBankDetailsForOffer(acct);
+                        setForm((f) => ({ ...f, bank_details: formatted }));
+                        toast.success("Bank details auto-filled", {
+                          description: acct.bankName || acct.bank_name || "Selected account",
+                        });
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a bank account (or use custom text below)…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— No selection (use text below) —</SelectItem>
+                    {tenantBankAccounts.map((acct, idx) => {
+                      const bankName = acct.bankName || acct.bank_name || "Bank";
+                      const accountNumber = acct.accountNumber || acct.account_number || acct.iban || "—";
+                      const currency = acct.currency || "";
+                      const swift = acct.swiftCode || acct.swift_code || "";
+                      return (
+                        <SelectItem key={idx} value={String(idx)}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{bankName}</span>
+                            {currency && (
+                              <Badge variant="secondary" className="text-[10px] h-4 px-1">{currency}</Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground font-mono">{accountNumber}</span>
+                            {swift && (
+                              <span className="text-xs text-muted-foreground font-mono">· {swift}</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Bank Details (editable — shown verbatim on the offer PDF)
+              </Label>
+              <Textarea
+                rows={3}
+                className="font-mono text-xs"
+                value={form.bank_details || ""}
+                onChange={(e) => {
+                  set("bank_details", e.target.value);
+                  // User typed something manually → mark the picker as overridden
+                  // so the "Auto-filled" badge disappears. They can still re-pick
+                  // from the dropdown to re-fill from a tenant account.
+                  setManualBankOverride(true);
+                }}
+                placeholder="Bank name, account number, IBAN, SWIFT/BIC…"
+              />
+              {manualBankOverride && selectedBankAccountIdx !== null && (
+                <p className="text-[11px] text-muted-foreground italic">
+                  Customized — changes here won&rsquo;t affect the saved tenant bank account.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ─── Offer Text / Notes / Terms (template builder) ─── */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Offer Text
+              <span className="text-xs text-muted-foreground font-normal">Template builder + free-form notes</span>
+            </h3>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea
+                rows={2}
+                value={form.notes || ""}
+                onChange={(e) => set("notes", e.target.value)}
+                placeholder="Additional notes visible to the partner…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Offer Text / Terms &amp; Conditions</Label>
+              <OfferTextBuilder
+                value={typeof form.terms === "string" ? form.terms : ""}
+                onChange={(text) => set("terms", text)}
+                currency={form.currency || undefined}
+                total={computeTotals(form.items || []).total}
+                validUntil={form.valid_until || undefined}
+                incoterm={form.incoterm || undefined}
+                paymentTerms={form.payment_terms || undefined}
+                leadTime={form.lead_time || undefined}
+                pol={form.pol || undefined}
+                pod={form.pod || undefined}
+                origin={(form as { origin_country?: string | null }).origin_country || undefined}
+                packaging={form.packaging || undefined}
+              />
+            </div>
+          </div>
+
+          {/* ─── Totals (auto-calculated, read-only) ─── */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Receipt className="h-4 w-4" /> Totals
+              <span className="text-xs text-muted-foreground font-normal">Auto-calculated from line items</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Amount in words */}
+              <div className="rounded-md border border-border/60 bg-card p-3">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                  Amount in Words
+                </p>
+                <p className="text-xs font-medium leading-snug">
+                  {amountInWords(totals.total, form.currency || "USD")}
+                </p>
+              </div>
+              {/* Numeric totals */}
+              <div className="space-y-1 text-sm ml-auto w-full sm:w-72">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Sparkles className="size-3 text-amber-500" />
                   <span className="text-xs text-muted-foreground">Auto-calculated</span>
@@ -2470,12 +2849,12 @@ function OfferFormDialog({
                   <span className="text-muted-foreground">Tax</span>
                   <span className="font-mono tabular">{fmtMoney(totals.tax_total, form.currency || "USD")}</span>
                 </div>
-                <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
-                  <span>Total</span>
+                <div className="flex justify-between border-t pt-1.5 mt-1 text-base font-bold">
+                  <span>Grand Total</span>
                   <span className="font-mono tabular">{fmtMoney(totals.total, form.currency || "USD")}</span>
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           {/* ─── Data Completeness Checker (real-time, collapsible) ─── */}

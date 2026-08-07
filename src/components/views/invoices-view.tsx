@@ -35,7 +35,7 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, ChevronRight, Sparkles, Zap, FileDown, DollarSign, Loader2, ArrowLeftRight, Info,
+  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, ChevronRight, Sparkles, Zap, FileDown, DollarSign, Loader2, ArrowLeftRight, Info, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -765,11 +765,31 @@ function InvoiceDetail({
   sending: boolean;
 }) {
   const api = useApiUrl();
+  const tenantKey = useTenantKey();
   const [downloading, setDownloading] = useState(false);
   const totals = computeTotals(invoice.items || []);
   const overdue = isOverdue(invoice);
 
   const canRecordPayment = invoice.status !== "paid" && invoice.status !== "cancelled" && invoice.status !== "draft";
+
+  // ─── Auto-saved revisions (from recordRevision in the API layer) ───
+  const revisions = useQuery({
+    queryKey: ["document-revisions", tenantKey, invoice.id],
+    queryFn: async () => {
+      try {
+        const r = await fetch(api(`/api/document-revisions/${invoice.id}`));
+        if (!r.ok) return [];
+        const data = await r.json();
+        return ((data.items || []) as any[]).sort(
+          (a, b) => (b.version || 0) - (a.version || 0),
+        );
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!invoice.id,
+  });
+  const revisionList = revisions.data || [];
 
   return (
     <div className="px-4 pb-6">
@@ -927,6 +947,91 @@ function InvoiceDetail({
           <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700 gap-1">
             <CheckCircle2 className="size-3.5" /> Mark as Paid
           </Button>
+        )}
+      </div>
+
+      {/* Version History (auto-saved revisions) */}
+      <div className="pt-4 mt-4 border-t">
+        <h4 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
+          <History className="size-4" /> Version History
+          <Badge variant="outline" className="ml-1 font-mono text-xs">
+            v{(invoice as any).version || 1}
+          </Badge>
+        </h4>
+        {revisions.isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : revisionList.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
+            <History className="size-6 text-muted-foreground/40 mx-auto mb-1" />
+            <p className="text-sm text-muted-foreground">No revisions yet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Every edit to this invoice is automatically saved as a version.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border/60 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-20">Version</TableHead>
+                  <TableHead>Changes</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
+                  <TableHead className="w-36">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {revisionList.map((rev: any, i: number) => {
+                  const fields: any[] = Array.isArray(rev.changed_fields) ? rev.changed_fields : [];
+                  return (
+                    <TableRow key={rev.id || i}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          V{rev.version}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm align-top">
+                        {rev.change_note ? (
+                          <p className="mb-1">{rev.change_note}</p>
+                        ) : null}
+                        {fields.length > 0 ? (
+                          <div className="space-y-1">
+                            {fields.slice(0, 4).map((c: any, idx: number) => (
+                              <div key={idx} className="text-xs">
+                                <span className="font-medium">{c.field}:</span>{" "}
+                                <span className="text-red-600 dark:text-red-400 line-through">
+                                  {String(c.before ?? "").slice(0, 40) || "∅"}
+                                </span>{" "}
+                                →{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">
+                                  {String(c.after ?? "").slice(0, 40) || "∅"}
+                                </span>
+                              </div>
+                            ))}
+                            {fields.length > 4 ? (
+                              <div className="text-xs text-muted-foreground">
+                                +{fields.length - 4} more field{fields.length - 4 === 1 ? "" : "s"}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground align-top">
+                        {rev.changed_by_username || rev.created_by || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground tabular-nums align-top">
+                        {fmtDateTime(rev.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
     </div>

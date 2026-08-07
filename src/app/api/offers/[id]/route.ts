@@ -70,6 +70,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: "offer", documentId: id, tenantId: existing.tenant_id,
         before: existing as any, after: updated as any,
         userId: auth.user.id, username: auth.user.username,
+        changeNote: (body as any)?._changeNote || null,
       });
     } catch (e) { console.warn("[offer.update] revision failed:", e); }
     // If this update transitioned the offer to a cancelling status, void

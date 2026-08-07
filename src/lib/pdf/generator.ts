@@ -4,7 +4,7 @@ import { buildPdfDocument } from "./templates";
 import { generateQrCodeDataUrl, generateVerificationCode, computePdfHash } from "./qr";
 import { getStore } from "@/lib/data/store";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import type { Offer, Invoice, Proforma, Partner, Tenant, DocumentTemplate, TenantLetterhead, TenantSeal } from "@/lib/supabase/types";
+import type { Offer, Invoice, Proforma, Partner, Tenant, MemorandumSettings, TenantSeal } from "@/lib/supabase/types";
 
 export interface GeneratePdfOptions {
   docType: "offer" | "invoice" | "proforma";
@@ -21,34 +21,35 @@ export interface GeneratePdfResult {
 }
 
 /**
- * Resolve an image URL (tenant logo, letterhead logo, or seal image) into a
- * form that @react-pdf/renderer can fetch reliably.
+ * Resolve an image URL (tenant logo or seal image) into a form that
+ * @react-pdf/renderer can fetch reliably.
  *
  * Cases handled:
  *  1. null / undefined → null
  *  2. data: URL → return as-is. <Image> handles these natively and re-fetching
- *     a large base64 payload is wasteful (letterhead logos & seals uploaded via
- *     the UI are stored as data: URLs).
+ *     a large base64 payload is wasteful (logos & seals uploaded via the UI
+ *     are stored as data: URLs).
  *  3. Full public URL (http…) → try to get a signed URL (works for private
  *     buckets); fall back to the original URL if signing fails.
  *  4. Relative storage path (e.g. "tenant-id/logo.png") → build a signed URL;
  *     fall back to constructing the public URL from SUPABASE_URL.
  *
  * For non-data: URLs we also fetch the bytes and re-encode as a data: URL.
- * This is critical because @react-pdf/renderer has no error boundary around the
- * <Image> component — if the remote URL returns a 404, a non-image content type,
- * or the network is unreachable, the entire PDF render throws and the user sees
- * a 500 instead of a PDF. By converting to a data: URL ourselves we can detect
- * failures early and gracefully fall back to the no-logo layout.
+ * This is critical because @react-pdf/renderer has no error boundary around
+ * the <Image> component — if the remote URL returns a 404, a non-image
+ * content type, or the network is unreachable, the entire PDF render throws
+ * and the user sees a 500 instead of a PDF. By converting to a data: URL
+ * ourselves we can detect failures early and gracefully fall back to the
+ * no-logo layout.
  */
 async function resolveLogoUrl(logoUrl: string | null | undefined): Promise<string | null> {
   if (!logoUrl) return null;
 
-  // data: URLs (letterhead logos & seals uploaded via the UI) work natively
-  // with @react-pdf/renderer — pass them straight through.
+  // data: URLs (logos & seals uploaded via the UI) work natively with
+  // @react-pdf/renderer — pass them straight through.
   if (logoUrl.startsWith("data:")) return logoUrl;
 
-  // If Supabase is not configured, return the URL as-is (dev/mock mode)
+  // If Supabase is not configured, fetch as data URL (dev/mock mode)
   if (!isSupabaseConfigured()) return fetchAsDataUrl(logoUrl);
 
   let resolvedUrl: string | null = null;
@@ -138,6 +139,48 @@ async function fetchAsDataUrl(url: string): Promise<string | null> {
   }
 }
 
+/**
+ * Fetch the per-tenant MemorandumSettings row. Auto-creates a default row
+ * when none exists so a fresh tenant still gets a branded PDF without any
+ * setup. Returns null on any error (missing table, network failure, etc.)
+ * — the PDF renderer falls back to built-in defaults in that case.
+ */
+async function getMemorandumSettings(tenantId: string): Promise<MemorandumSettings | null> {
+  // If Supabase isn't configured (dev/mock mode), there's no row to fetch.
+  if (!isSupabaseConfigured()) return null;
+
+  const sb = getSupabase();
+
+  const { data, error } = await sb
+    .from("memorandum_settings")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (error) {
+    // The most common cause: the `memorandum_settings` table hasn't been
+    // migrated yet. Log + fall back to defaults — don't crash the PDF.
+    console.warn("[getMemorandumSettings] error:", error.message);
+    return null;
+  }
+
+  // Auto-create defaults if none exist
+  if (!data) {
+    const { data: created, error: insErr } = await sb
+      .from("memorandum_settings")
+      .insert({ tenant_id: tenantId })
+      .select("*")
+      .maybeSingle();
+    if (insErr) {
+      console.warn("[getMemorandumSettings] auto-create failed:", insErr.message);
+      return null;
+    }
+    return (created as MemorandumSettings | null) ?? null;
+  }
+
+  return data as MemorandumSettings;
+}
+
 export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdfResult> {
   const store = await getStore();
 
@@ -149,86 +192,16 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
 
   if (!doc) throw new Error(`${opts.docType} not found`);
 
-  // Fetch partner + tenant + template
+  // Fetch partner + tenant + memorandum settings
   const partner = doc.partner_id ? await store.getPartner(doc.partner_id) : null;
   const tenant = await store.getTenant(opts.tenantId);
-  let template = await store.getDefaultDocumentTemplate(opts.tenantId, opts.docType);
 
-  // ── Template enrichment / fallback ───────────────────────────────────
-  // The store's getDefaultDocumentTemplate normally returns a template whose
-  // nested `letterhead` + `seal` rows are joined in. But mock/prisma stores or
-  // older schema versions may not join them — and if NO template exists at all
-  // (e.g. mock mode), we still want PDFs to use the tenant's configured
-  // letterhead + seal rather than the bare default styling.
+  let memorandumSettings: MemorandumSettings | null = null;
   try {
-    if (template) {
-      // If the template references a letterhead/seal but the join didn't populate
-      // (e.g. the store implementation doesn't join), fetch them explicitly.
-      if (template.letterhead_id && !template.letterhead) {
-        const lh = await store.getLetterhead(template.letterhead_id);
-        if (lh) template = { ...template, letterhead: lh };
-      }
-      if (template.seal_id && !template.seal) {
-        const s = await store.getSeal(template.seal_id);
-        if (s) template = { ...template, seal: s };
-      }
-    } else {
-      // No template at all — build a synthetic one from the tenant's default
-      // (or first) letterhead + seal so PDFs still get branded.
-      const letterheads = await store.listLetterheads(opts.tenantId);
-      const seals = await store.listSeals(opts.tenantId);
-      const activeLetterhead: TenantLetterhead | null =
-        letterheads.find((l) => l.is_default) || letterheads[0] || null;
-      const activeSeal: TenantSeal | null =
-        seals.find((s) => s.is_default) || seals[0] || null;
-
-      if (activeLetterhead || activeSeal) {
-        const now = new Date().toISOString();
-        template = {
-          id: "auto",
-          tenant_id: opts.tenantId,
-          name: "Auto (from active letterhead + seal)",
-          type: opts.docType,
-          is_default: false,
-          page_size: activeLetterhead?.page_size || "A4",
-          page_margin_top: activeLetterhead?.margin_top_mm ?? 25,
-          page_margin_bottom: activeLetterhead?.margin_bottom_mm ?? 25,
-          page_margin_left: activeLetterhead?.margin_left_mm ?? 20,
-          page_margin_right: activeLetterhead?.margin_right_mm ?? 20,
-          header_enabled: true,
-          header_height: activeLetterhead?.header_height_mm ?? 20,
-          header_content: "",
-          header_show_logo: activeLetterhead?.header_show_logo ?? true,
-          header_show_company_name: activeLetterhead?.header_show_company_name ?? true,
-          header_show_contact: activeLetterhead?.header_show_contact ?? true,
-          footer_enabled: true,
-          footer_height: activeLetterhead?.footer_height_mm ?? 15,
-          footer_content: "",
-          footer_show_page_number: activeLetterhead?.footer_show_page_number ?? true,
-          footer_show_bank_details: activeLetterhead?.footer_show_bank_details ?? true,
-          footer_show_tax_id: activeLetterhead?.footer_show_tax_id ?? true,
-          body_font_family: activeLetterhead?.body_font_family || "Helvetica",
-          body_font_size: activeLetterhead?.body_font_size_pt ?? 10,
-          body_line_height: 1.4,
-          primary_color: activeLetterhead?.primary_color || "#0d9488",
-          accent_color: activeLetterhead?.accent_color || "#0d9488",
-          table_header_bg: activeLetterhead?.primary_color || "#0d9488",
-          table_header_color: "#ffffff",
-          table_border_color: "#e5e7eb",
-          table_stripe: true,
-          letterhead_id: activeLetterhead?.id || null,
-          seal_id: activeSeal?.id || null,
-          seal_enabled: !!activeSeal,
-          letterhead: activeLetterhead,
-          seal: activeSeal,
-          created_by: null,
-          created_at: now,
-          updated_at: now,
-        } as DocumentTemplate;
-      }
-    }
-  } catch (tplErr) {
-    console.warn("[PDF] Template enrichment failed — continuing with bare template:", tplErr);
+    memorandumSettings = await getMemorandumSettings(opts.tenantId);
+  } catch (memoErr) {
+    // Don't fail the whole PDF — fall back to built-in defaults.
+    console.warn("[PDF] MemorandumSettings fetch failed — continuing with defaults:", memoErr);
   }
 
   // Handle verification
@@ -246,8 +219,9 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     } else {
       verificationCode = generateVerificationCode(opts.docType, doc.number);
     }
-    // Wrap QR generation in try/catch — if the qrcode lib fails (corrupt input,
-    // native module crash, etc.) we still produce a valid PDF without the QR.
+    // Wrap QR generation in try/catch — if the qrcode lib fails (corrupt
+    // input, native module crash, etc.) we still produce a valid PDF
+    // without the QR.
     try {
       qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
     } catch (qrErr) {
@@ -272,16 +246,22 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     }
   }
 
-  // Resolve the logo URL so @react-pdf/renderer can fetch it.
-  // Prefer the letterhead's own logo when a template + letterhead are present
-  // (the tenant logo is the fallback used by the memorandum header).
-  const letterheadLogoUrl = template?.letterhead_id ? template?.letterhead?.logo_url : null;
-  const resolvedLogoUrl = await resolveLogoUrl(letterheadLogoUrl || tenant?.logo_url);
+  // Resolve the logo URL — memorandum_settings uses the tenant's own logo
+  // (tenant.logo_url). Resolution converts the storage path into a data:
+  // URL so @react-pdf/renderer can render it without a network round-trip.
+  const resolvedLogoUrl = await resolveLogoUrl(tenant?.logo_url);
 
-  // Resolve the seal image URL (if a seal is linked + enabled).
-  const sealImageUrl = template?.seal_enabled
-    ? await resolveLogoUrl(template?.seal?.image_url)
-    : null;
+  // ── Seal (optional, branded stamp) ────────────────────────────────
+  // The seal isn't part of memorandum_settings (memorandum_settings is
+  // purely header/footer/body layout). We fall back to the tenant's default
+  // seal (the existing tenant_seals table) so branded PDFs keep their stamp.
+  let seal: TenantSeal | null = null;
+  try {
+    seal = await store.getDefaultSeal(opts.tenantId);
+  } catch (sealErr) {
+    console.warn("[PDF] Seal fetch failed — continuing without seal:", sealErr);
+  }
+  const sealImageUrl = seal ? await resolveLogoUrl(seal.image_url) : null;
 
   // Build PDF metadata (visible in the PDF document properties dialog)
   const docTitleLabel = opts.docType === "offer" ? "Offer" : opts.docType === "invoice" ? "Invoice" : "Proforma";
@@ -299,11 +279,12 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     docType: opts.docType,
     partner,
     tenant,
-    template,
+    memorandumSettings,
     verificationCode,
     qrCodeDataUrl,
     logoUrl: resolvedLogoUrl,
     sealImageUrl,
+    seal,
     pdfMeta,
   });
   const buffer = await renderToBuffer(element as any);

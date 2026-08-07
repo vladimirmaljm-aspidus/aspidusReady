@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { notify } from "@/lib/notif/helper";
+import { recordRevision } from "@/lib/api/doc-revisions";
 
 export const runtime = "nodejs";
 
@@ -202,6 +203,107 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
       } catch (e) {
         console.warn("[record-payment] commission cascade lookup failed:", e);
+      }
+    }
+
+    // ── Cascade: auto-mark the linked proforma as paid ──────────────────
+    // Linear flow: Offer → Proforma → Invoice. When the invoice is paid in
+    // full, the originating proforma should also be marked "paid".
+    //
+    // The `invoices` table has no `proforma_id` column, so we resolve the
+    // linked proforma via:
+    //   1. `invoice.proforma_id` if it ever exists (forward-compat), else
+    //   2. the most recent non-paid proforma linked to `invoice.offer_id`
+    //      (skipped when offer_id is null — no way to know which proforma).
+    if (isFullPayment) {
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+        const paidAtIso = nowIso;
+
+        let proformaId: string | null = (invoice as any).proforma_id || null;
+
+        if (!proformaId && invoice.offer_id) {
+          // Resolve the latest "accepted"/"sent" proforma linked to the
+          // same offer — that's almost certainly the one this invoice was
+          // generated from.
+          const { data: linked, error: lErr } = await sb
+            .from("proformas")
+            .select("id, status, tenant_id")
+            .eq("offer_id", invoice.offer_id)
+            .eq("tenant_id", tid)
+            .order("created_at", { ascending: false })
+            .limit(5);
+          if (lErr) {
+            console.warn("[proforma auto-paid] lookup failed:", lErr.message);
+          } else if (linked && linked.length > 0) {
+            // Prefer a non-paid one; fall back to the most recent overall.
+            const target =
+              linked.find((p: any) => p.status !== "paid" && p.status !== "expired") ||
+              linked[0];
+            proformaId = target?.id || null;
+          }
+        }
+
+        if (proformaId) {
+          // Fetch the BEFORE snapshot so we can record a proper revision.
+          const { data: beforeProforma } = await sb
+            .from("proformas")
+            .select("*")
+            .eq("id", proformaId)
+            .eq("tenant_id", tid)
+            .maybeSingle();
+
+          const { error: updErr } = await sb
+            .from("proformas")
+            .update({
+              status: "paid",
+              paid_at: paidAtIso,
+              updated_at: paidAtIso,
+            })
+            .eq("id", proformaId)
+            .eq("tenant_id", tid);
+          if (updErr) {
+            console.warn("[proforma auto-paid] update failed:", updErr.message);
+          } else {
+            // Fetch the AFTER snapshot for the revision diff.
+            const { data: afterProforma } = await sb
+              .from("proformas")
+              .select("*")
+              .eq("id", proformaId)
+              .eq("tenant_id", tid)
+              .maybeSingle();
+
+            // Record revision (auto-versioning) — fire-and-forget.
+            recordRevision({
+              docType: "proforma",
+              documentId: proformaId,
+              tenantId: tid,
+              before: (beforeProforma as Record<string, unknown>) || {},
+              after: (afterProforma as Record<string, unknown>) || {},
+              userId: auth.user.id,
+              username: auth.user.username,
+              changeNote: `Auto-marked paid when invoice ${invoice.number} was paid`,
+            }).catch((e) => console.warn("[proforma auto-paid] revision:", e));
+
+            // Audit the cascade so we have a paper trail.
+            audit(
+              auth.store,
+              auth.user,
+              req,
+              "proforma.auto_paid_from_invoice",
+              "proforma",
+              proformaId,
+              {
+                invoice_id: id,
+                invoice_number: invoice.number,
+                paid_at: paidAtIso,
+              },
+            ).catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.error("[proforma auto-paid] failed:", e);
       }
     }
 

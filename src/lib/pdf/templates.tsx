@@ -1,14 +1,6 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet, Image, Font, Link } from "@react-pdf/renderer";
-import type { Offer, Invoice, Proforma, OfferLineItem, Partner, Tenant, DocumentTemplate, TenantLetterhead } from "@/lib/supabase/types";
-import {
-  parseContentConfig,
-  substitutePlaceholders,
-  hasPagePlaceholders,
-  type ContentSegment,
-  type PlaceholderData,
-} from "@/lib/utils/content-config";
-import { fmtDate as formatDate } from "@/lib/utils/format";
+import { Document, Page, Text, View, StyleSheet, Image, Font } from "@react-pdf/renderer";
+import type { Offer, Invoice, Proforma, OfferLineItem, Partner, Tenant, MemorandumSettings, TenantSeal } from "@/lib/supabase/types";
 
 // Allow very long "words" (SKUs, HS codes like 1006.30.10.00, IBANs) to break
 // across lines. Short words are kept intact so normal prose still looks clean.
@@ -25,7 +17,11 @@ interface PdfDocData {
   docType: "offer" | "invoice" | "proforma";
   partner: Partner | null;
   tenant: Tenant | null;
-  template: DocumentTemplate | null;
+  /** Per-tenant header/footer/body configuration. Replaces the legacy
+   *  DocumentTemplate. When null the renderer falls back to built-in defaults
+   *  so PDFs still render in mock/dev mode or when the row hasn't been
+   *  migrated yet. */
+  memorandumSettings: MemorandumSettings | null;
   verificationCode?: string;
   qrCodeDataUrl?: string;
   logoUrl?: string | null;
@@ -33,6 +29,9 @@ interface PdfDocData {
    *  seal is configured or the seal image couldn't be loaded — the renderer
    *  must skip the seal element entirely in that case. */
   sealImageUrl?: string | null;
+  /** Optional TenantSeal row (used for placement / opacity / rotation).
+   *  Null when the tenant has no seal configured. */
+  seal?: TenantSeal | null;
   /** Optional metadata for PDF properties (Author, Title, Subject, etc.) */
   pdfMeta?: {
     author?: string;
@@ -44,6 +43,35 @@ interface PdfDocData {
 }
 
 const mmToPoints = (mm: number) => mm * 2.83465;
+
+/**
+ * Map a CSS font stack (e.g. "Inter, system-ui, sans-serif") to a single
+ * PDF-safe family. react-pdf only ships Helvetica, Times-Roman and Courier
+ * built-in — any custom font would need Font.register() first.
+ */
+const FONT_MAP: Record<string, string> = {
+  "helvetica": "Helvetica",
+  "inter": "Helvetica",
+  "system-ui": "Helvetica",
+  "sans-serif": "Helvetica",
+  "arial": "Helvetica",
+  "times": "Times-Roman",
+  "times-new-roman": "Times-Roman",
+  "serif": "Times-Roman",
+  "courier": "Courier",
+  "monospace": "Courier",
+};
+
+function mapFont(fontStack: string | null | undefined, fallback = "Helvetica"): string {
+  if (!fontStack) return fallback;
+  const first = fontStack.split(",")[0].trim().replace(/['"]/g, "").toLowerCase();
+  return FONT_MAP[first] || fallback;
+}
+
+/** Derive the heading variant of a font family (e.g. "Helvetica" → "Helvetica-Bold"). */
+function boldVariant(family: string): string {
+  return family.endsWith("Bold") || family.endsWith("Italic") ? family : `${family}-Bold`;
+}
 
 /**
  * Lighten a hex color by blending it towards white.
@@ -172,80 +200,112 @@ function amountInWords(amount: number, currency = "USD"): string {
   return result;
 }
 
-export function buildPdfDocument({ doc, docType, partner, tenant, template, verificationCode, qrCodeDataUrl, logoUrl, sealImageUrl, pdfMeta }: PdfDocData) {
-  const tpl = template;
-  const primaryColor = tpl?.primary_color || "#0d9488";
-  const accentColor = tpl?.accent_color || "#666666";
+export function buildPdfDocument({
+  doc,
+  docType,
+  partner,
+  tenant,
+  memorandumSettings,
+  verificationCode,
+  qrCodeDataUrl,
+  logoUrl,
+  sealImageUrl,
+  seal,
+  pdfMeta,
+}: PdfDocData) {
+  // ── Memorandum settings (with built-in defaults) ───────────────────
+  // Every field has a sensible fallback so the PDF still renders when the
+  // tenant has no memorandum_settings row (mock/dev mode, fresh tenant,
+  // migration pending, etc.). Fields NOT in the migration (page_size,
+  // page margins, accent_color, table styling, selected_bank_accounts,
+  // seal_enabled/seal_id) use built-in defaults — they're intentionally
+  // out of memorandum_settings' scope so the schema stays simple.
+  const m = memorandumSettings;
+  const primaryColor = m?.primary_color || "#0d9488";
+  const accentColor = "#666666"; // secondary accent (footer divider)
+  const bodyTextColor = m?.body_text_color || "#1a1a1a";
 
-  // ── Corporate typography ────────────────────────────────────────────
-  // react-pdf only has Helvetica, Times-Roman, Courier built-in.
-  // Any custom font (Inter, Roboto, etc.) would need Font.register() first.
-  // Map common web font names to their PDF-safe equivalents so templates
-  // that specify "Inter" or "system-ui" don't crash the render.
-  const FONT_MAP: Record<string, string> = {
-    "inter": "Helvetica",
-    "system-ui": "Helvetica",
-    "sans-serif": "Helvetica",
-    "arial": "Helvetica",
-    "helvetica": "Helvetica",
-    "times": "Times-Roman",
-    "times-new-roman": "Times-Roman",
-    "serif": "Times-Roman",
-    "courier": "Courier",
-    "monospace": "Courier",
-  };
-  // Template stores a CSS font stack like "Inter, system-ui, sans-serif".
-  // react-pdf needs a single registered family. Take the first font in the
-  // comma-separated list, trim it, and map to a PDF-safe equivalent.
-  const rawFontStack = tpl?.body_font_family || "Helvetica";
-  const firstFont = rawFontStack.split(",")[0].trim().replace(/['"]/g, "");
-  const fontFamily = FONT_MAP[firstFont.toLowerCase()] || firstFont;
-  const headingFontFamily =
-    fontFamily.endsWith("Bold") || fontFamily.endsWith("Italic")
-      ? fontFamily
-      : `${fontFamily}-Bold`;
-  const fontSize = tpl?.body_font_size ?? 9;
-  const lineHeight = tpl?.body_line_height ?? 1.4;
+  // ── Typography ──────────────────────────────────────────────────────
+  const fontFamily = mapFont(m?.body_font_family, "Helvetica");
+  const headingFontFamily = boldVariant(fontFamily);
+  // Header company-name font (header_left_*). Defaults to the body font.
+  const headerFontBase = mapFont(m?.header_left_font_family, fontFamily);
+  const companyNameFontFamily = m?.header_left_font_bold === false
+    ? headerFontBase
+    : boldVariant(headerFontBase);
+  const companyNameColor = m?.header_left_font_color || primaryColor;
+  const companyNameSize = m?.header_left_font_size ?? 14;
+
+  // Footer column fonts (footer_center_* / footer_right_*).
+  const footerCenterFontFamily = mapFont(m?.footer_center_font_family, fontFamily);
+  const footerCenterFontSize = m?.footer_center_font_size ?? 8;
+  const footerCenterFontColor = m?.footer_center_font_color || "#666666";
+  const footerRightFontFamily = mapFont(m?.footer_right_font_family, fontFamily);
+  const footerRightFontSize = m?.footer_right_font_size ?? 8;
+  const footerRightFontColor = m?.footer_right_font_color || "#666666";
+
+  const fontSize = m?.body_font_size ?? 9;
+  const lineHeight = m?.body_line_height ?? 1.4;
 
   // ── Page size ──────────────────────────────────────────────────────
-  // react-pdf's <Page size=...> accepts "A4", "LETTER", or a [w,h] tuple.
-  const pageSize = tpl?.page_size === "Letter" ? "LETTER" : "A4";
+  // Page size + margins aren't part of memorandum_settings — they're
+  // hardcoded sensible defaults so the schema stays simple.
+  const pageSize = "A4";
 
   // ── Page margins (mm → points) ──────────────────────────────────────
-  const marginTop = mmToPoints(tpl?.page_margin_top ?? 20);
-  const marginBottom = mmToPoints(tpl?.page_margin_bottom ?? 20);
-  const marginLeft = mmToPoints(tpl?.page_margin_left ?? 15);
-  const marginRight = mmToPoints(tpl?.page_margin_right ?? 15);
+  const marginTop = mmToPoints(20);
+  const marginBottom = mmToPoints(20);
+  const marginLeft = mmToPoints(15);
+  const marginRight = mmToPoints(15);
 
   // ── Header (memorandum — repeats on every page) ────────────────────
-  // Default to enabled=true when undefined; only disabled when explicitly false.
-  const headerEnabled = tpl?.header_enabled !== false;
-  const headerHeightPts = headerEnabled ? mmToPoints(tpl?.header_height ?? 20) : 0;
-  const headerShowLogo = tpl?.header_show_logo !== false;
-  const headerShowCompanyName = tpl?.header_show_company_name !== false;
-  const headerShowContact = tpl?.header_show_contact !== false;
+  // 2 columns: company name (left) + logo (right). Disabled when explicitly
+  // turned off OR when the tenant has neither a name nor a logo to show.
+  const headerEnabled = m?.header_enabled !== false;
+  const headerHeightPts = headerEnabled ? mmToPoints(m?.header_height_mm ?? 22) : 0;
+
+  // ── Logo (header right column) ──────────────────────────────────────
+  // Logo is NEVER distorted — objectFit: "contain" preserves aspect ratio.
+  // Dimensions come from settings (mm → pts); position offsets are also mm.
+  const logoEnabled = m?.logo_enabled !== false;
+  const logoWidthPts = mmToPoints(m?.logo_max_width_mm ?? 30);
+  const logoHeightPts = mmToPoints(m?.logo_max_height_mm ?? 20);
+  const logoOffsetXPts = mmToPoints(m?.logo_position_x_mm ?? 0);
+  const logoOffsetYPts = mmToPoints(m?.logo_position_y_mm ?? 0);
+  const showLogo = logoEnabled && !!logoUrl;
 
   // ── Footer (memorandum — repeats on every page) ────────────────────
-  const footerEnabled = tpl?.footer_enabled !== false;
-  const footerHeightPts = footerEnabled ? mmToPoints(tpl?.footer_height ?? 15) : 0;
-  const footerShowPageNumber = tpl?.footer_show_page_number !== false;
-  const footerShowBankDetails = tpl?.footer_show_bank_details === true;
-  const footerShowTaxId = tpl?.footer_show_tax_id === true;
+  // 3 columns: QR (left) + tenant address/website/email (center) + page#
+  // (right). Column widths are percentages of the footer content width and
+  // are normalised so they always sum to 1 (a misconfigured tenant still
+  // renders cleanly).
+  const footerEnabled = m?.footer_enabled !== false;
+  const footerHeightPts = footerEnabled ? mmToPoints(m?.footer_height_mm ?? 18) : 0;
 
-  // ── Table styling ──────────────────────────────────────────────────
-  const tableHeaderBg = tpl?.table_header_bg || primaryColor;
-  const tableHeaderColor = tpl?.table_header_color || "#ffffff";
-  const tableBorderColor = tpl?.table_border_color || "#e5e7eb";
-  const tableStripe = tpl?.table_stripe === true;
+  const rawL = m?.footer_left_width_pct ?? 25;
+  const rawC = m?.footer_center_width_pct ?? 50;
+  const rawR = m?.footer_right_width_pct ?? 25;
+  const sumPct = Math.max(1, rawL + rawC + rawR);
+  const footerLeftPct = rawL / sumPct;
+  const footerCenterPct = rawC / sumPct;
+  const footerRightPct = rawR / sumPct;
+
+  // ── QR code (footer left column) ───────────────────────────────────
+  const qrEnabled = m?.qr_enabled !== false;
+  const qrSizePts = mmToPoints(m?.qr_size_mm ?? 15);
+  const showQr = qrEnabled && !!qrCodeDataUrl;
+
+  // ── Table styling (built-in defaults — not in memorandum_settings) ──
+  const tableHeaderBg = primaryColor;
+  const tableHeaderColor = "#ffffff";
+  const tableBorderColor = "#e5e7eb";
+  const tableStripe = true;
   // Stripe row background: a very light tint of the header color so it
   // matches the document's branding instead of being a flat grey.
   const stripeBg = lightenHex(tableHeaderBg, 0.92);
 
   // ── Derived layout — content area must clear the absolutely ─────────
-  //    positioned header/footer. When the header/footer is disabled the
-  //    configured page margin applies directly; otherwise the content
-  //    padding is whichever is larger of (margin) and (header/footer height
-  //    plus a small breathing gap).
+  //    positioned header/footer.
   const headerGap = 6;  // breathing room between header bottom and body
   const footerGap = 6;  // breathing room between body and footer top
   const paddingTop = headerEnabled
@@ -264,13 +324,12 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       paddingLeft: marginLeft,
       paddingRight: marginRight,
       fontFamily,
-      color: "#1a1a1a",
+      color: bodyTextColor,
     },
 
     // ── HEADER (memorandum — repeats on every page) ────────────────────
-    // [Logo]  COMPANY NAME
-    //         Address · Phone · Email · Website
-    //         Reg# · VAT# · Tax#
+    // [Company Name]                [LOGO]
+    // Bottom border in primary_color separates the memorandum from the body.
     header: {
       position: "absolute",
       top: 0,
@@ -285,18 +344,42 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       borderBottomWidth: 2,
       borderBottomColor: primaryColor,
     },
-    headerLogoWrap: { flexDirection: "column", justifyContent: "center", alignItems: "flex-start", width: 90 },
-    headerLogo: { width: 80, height: 50, objectFit: "contain" },
-    headerLeft: { flexDirection: "column", flex: 1, justifyContent: "center", paddingLeft: 12 },
-    companyName: { fontSize: 14, fontFamily: headingFontFamily, color: primaryColor, marginBottom: 2 },
-    companyAddr: { fontSize: 7.5, color: "#555", marginBottom: 1 },
-    companyContact: { fontSize: 7.5, color: "#555", marginBottom: 1 },
-    companyReg: { fontSize: 7.5, color: "#888", fontFamily: headingFontFamily },
+    headerLeft: {
+      flex: 1,
+      flexDirection: "column",
+      justifyContent: "center",
+      paddingRight: 12,
+    },
+    companyName: {
+      fontSize: companyNameSize,
+      fontFamily: companyNameFontFamily,
+      color: companyNameColor,
+      marginBottom: 2,
+    },
+    // Right column wraps the logo. Width is fixed to the configured logo
+    // width so the logo sits at the right edge of the header without
+    // pushing the company name off to the left.
+    headerLogoWrap: {
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "flex-end",
+      width: logoWidthPts,
+      // Offset the logo within the header (position_x_mm / position_y_mm).
+      // translate is supported by react-pdf via the `transform` style.
+      marginLeft: logoOffsetXPts,
+      marginTop: logoOffsetYPts,
+    },
+    // objectFit: "contain" is THE key — it preserves aspect ratio and
+    // never distorts the logo even when width/height don't match the
+    // image's intrinsic dimensions.
+    headerLogo: {
+      width: logoWidthPts,
+      height: logoHeightPts,
+      objectFit: "contain",
+    },
 
     // ── FOOTER (memorandum — repeats on every page) ────────────────────
-    // Top row: Company Name · Reg# · VAT#
-    // Bottom row: Page X of Y (left)  [QR] (right)  Generated by (left under page)
-    // Verification code is intentionally NOT shown — it lives in PDF metadata only.
+    // 3 columns: [QR]  [Address / Website / Email]  [Page X of Y]
     footer: {
       position: "absolute",
       bottom: 0,
@@ -306,37 +389,60 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       paddingTop: 6,
       borderTopWidth: 1,
       borderTopColor: accentColor,
-      flexDirection: "column",
-    },
-    footerTopRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-    footerCompanyLine: { fontSize: 7, color: "#666", fontFamily: headingFontFamily },
-    footerBottomRow: {
       flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "flex-end",
-      marginTop: 4,
-      // No flex on the row itself — children manage their own flex sizing.
-      // This prevents the QR View from being squashed/overlapped by the
-      // flex:1 page-info View (the "QR glued to half the edge" bug).
-      gap: 8,
+      alignItems: "flex-start",
     },
-    footerLeftInfo: { flexDirection: "column", flex: 1, justifyContent: "flex-end" },
-    footerPage: { fontSize: 7.5, color: "#666", fontFamily: headingFontFamily },
-    footerSys: { fontSize: 6.5, color: "#aaa", fontStyle: "italic", marginTop: 2 },
-    // Compact one-line text used for the optional bank-details and tax-id
-    // rows in the footer (toggled by footer_show_bank_details / footer_show_tax_id).
-    footerBankLine: { fontSize: 7, color: "#666" },
-    // Column wrapper that holds user-defined segments (TemplateContentEditor).
-    footerCustomSegmentCol: { flexDirection: "column", marginBottom: 4 },
-    // QR wrapper — uses a fixed-size Image (size set inline via qrSizePts)
-    // so it can't push the page-info View off the edge. Align items so the
-    // "Scan to verify" label sits neatly under the QR.
-    footerQr: { flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 },
-    // footerQrImage is kept for backwards-compat with any external code
-    // that references it — the actual QR image now uses inline styles
-    // (width/height/opacity) derived from qr_size_mm + qr_opacity.
-    footerQrImage: { width: 35, height: 35 },
+    footerColLeft: {
+      flexDirection: "column",
+      alignItems: "flex-start",
+      justifyContent: "center",
+      flexBasis: `${footerLeftPct * 100}%`,
+      flexGrow: 0,
+      flexShrink: 0,
+    },
+    footerColCenter: {
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      flexBasis: `${footerCenterPct * 100}%`,
+      flexGrow: 1,
+      flexShrink: 1,
+      paddingHorizontal: 4,
+    },
+    footerColRight: {
+      flexDirection: "column",
+      alignItems: "flex-end",
+      justifyContent: "center",
+      flexBasis: `${footerRightPct * 100}%`,
+      flexGrow: 0,
+      flexShrink: 0,
+    },
+    footerQrWrap: {
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 2,
+    },
     footerQrLabel: { fontSize: 5.5, color: "#aaa", textAlign: "center" },
+    footerAddrLine: {
+      fontSize: footerCenterFontSize,
+      color: footerCenterFontColor,
+      fontFamily: footerCenterFontFamily,
+      textAlign: "center",
+      marginBottom: 1,
+    },
+    footerPage: {
+      fontSize: footerRightFontSize,
+      color: footerRightFontColor,
+      fontFamily: footerRightFontFamily,
+      textAlign: "right",
+    },
+    footerSys: {
+      fontSize: Math.max(5, footerRightFontSize - 1.5),
+      color: "#aaa",
+      fontStyle: "italic",
+      marginTop: 2,
+      textAlign: "right",
+    },
 
     // ── Document title block ──────────────────────────────────────────
     docTitleRow: {
@@ -367,9 +473,6 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     proformaBannerText: { fontSize: 8, fontFamily: headingFontFamily, color: "#cc0000", textTransform: "uppercase", textAlign: "center", letterSpacing: 0.5 },
 
     // ── Section header (FROM/TO/TRADE TERMS/LINE ITEMS/SPECIFICATIONS/...)
-    // Color uses accent_color (a "secondary" brand color) so the section
-    // headings form a visual hierarchy below the primary call-outs (grand
-    // total, company name) which keep using primary_color.
     sectionHeader: {
       fontSize: 9,
       fontFamily: headingFontFamily,
@@ -415,7 +518,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       alignItems: "stretch",
     },
     // Zebra-stripe background — applied to every other data row when
-    // tpl.table_stripe is true. Uses a very light tint of the header
+    // table_stripe is true. Uses a very light tint of the header
     // background so it blends with the document's branding.
     tableRowEven: {
       backgroundColor: stripeBg,
@@ -571,441 +674,101 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     return [];
   })();
 
-  // ── Filter bank accounts by template's `selected_bank_accounts` ────
-  // If the template specifies a non-empty list of indexes (into the
-  // tenant.bank_accounts array), only those accounts are shown in the PDF.
-  // null/empty = show all accounts (default behaviour).
-  const bankAccountsList: any[] =
-    tpl?.selected_bank_accounts && tpl.selected_bank_accounts.length > 0
-      ? parsedBankAccounts.filter((_, i) => tpl.selected_bank_accounts!.includes(i))
-      : parsedBankAccounts;
-
-  // ── Letterhead bank details (preferred source when a letterhead is ─
-  //    linked — overrides tenant.bank_accounts for the BANK DETAILS body
-  //    section and the footer's compact bank line). Only populated when
-  //    the linked letterhead actually has at least one bank field set.
-  const lh = tpl?.letterhead;
-  const letterheadBank =
-    lh && (lh.bank_name || lh.bank_iban || lh.bank_swift || lh.bank_account_holder)
-      ? {
-          bankName: lh.bank_name,
-          iban: lh.bank_iban,
-          swift: lh.bank_swift,
-          holder: lh.bank_account_holder,
-        }
-      : null;
-
-  // ── Custom header/footer content segments ──────────────────────────
-  // The user may have defined rich multi-segment content via the
-  // TemplateContentEditor (stored as a JSON {segments:[…]} string in
-  // header_content / footer_content). When present, those segments replace
-  // the default address/contact/reg block in the header (and the default
-  // company/bank/tax lines in the footer). When absent, the legacy default
-  // rendering is used. Backwards-compatible: legacy plain-text content is
-  // wrapped into a single muted segment by parseContentConfig().
-  const placeholderData: PlaceholderData = {
-    company_name: tenant?.legal_name || tenant?.name || "",
-    company_address: tenant?.address_line || "",
-    company_city: tenant?.city || "",
-    company_country: tenant?.country || "",
-    company_reg: tenant?.registration_number || "",
-    company_vat: tenant?.vat_number || "",
-    company_tax_id: tenant?.tax_id || "",
-    company_phone: tenant?.phone || "",
-    company_email: tenant?.email || "",
-    company_website: tenant?.website || "",
-    bank_name: letterheadBank?.bankName || tenant?.bank_name || "",
-    bank_iban: letterheadBank?.iban || tenant?.bank_iban || "",
-    bank_swift: letterheadBank?.swift || tenant?.bank_swift || "",
-    doc_number: doc.number || "",
-    doc_date: formatDate((doc as any).issue_date || doc.created_at),
-    valid_until: formatDate((doc as any).valid_until),
-    due_date: formatDate((doc as any).due_date),
-    partner_name: partner?.name || "",
-    partner_address: partner?.address_line || "",
-    total: fmtMoney(doc.total, doc.currency),
-    currency: doc.currency || "",
-    // page_number / total_pages intentionally left undefined — react-pdf
-    // fills them at page render time via the <Text render={…}> callback.
-  };
-
-  const headerSegments: ContentSegment[] = (() => {
-    const cfg = parseContentConfig(tpl?.header_content);
-    if (!cfg) return [];
-    return cfg.segments.map((s) => ({ ...s, text: substitutePlaceholders(s.text, placeholderData) }));
-  })();
-  const footerSegments: ContentSegment[] = (() => {
-    const cfg = parseContentConfig(tpl?.footer_content);
-    if (!cfg) return [];
-    return cfg.segments.map((s) => ({ ...s, text: substitutePlaceholders(s.text, placeholderData) }));
-  })();
-
-  // ── QR code placement ──────────────────────────────────────────────
-  // Stored inside footer_content as a reserved `_qrConfig` JSON sub-key
-  // (see src/components/views/document-templates-view.tsx → writeQrConfig).
-  // Falls back to "footer-right" / 15 mm / opacity 1 when missing.
-  const qrConfig = (() => {
-    const fallback = { position: "footer-right", size: 15, opacity: 1 };
-    if (!tpl?.footer_content) return fallback;
-    try {
-      const parsed = JSON.parse(tpl.footer_content);
-      const q = parsed?._qrConfig;
-      if (q && typeof q === "object") {
-        return {
-          position: typeof q.position === "string" ? q.position : fallback.position,
-          size: typeof q.size === "number" ? q.size : fallback.size,
-          opacity: typeof q.opacity === "number" ? q.opacity : fallback.opacity,
-        };
-      }
-    } catch {
-      // footer_content might be legacy plain text — keep defaults.
-    }
-    return fallback;
-  })();
-  // Whether to render the QR at all (false when position === "none" or no
-  // qrCodeDataUrl was supplied by the generator).
-  const showQr = !!qrCodeDataUrl && qrConfig.position !== "none";
-  // Convert mm → points for the QR image dimensions.
-  const qrSizePts = mmToPoints(qrConfig.size);
-  // Clamp opacity 0..1.
-  const qrOpacity = Math.max(0, Math.min(1, qrConfig.opacity));
-
-  // ── Letterhead takes priority for the header (memorandum) ─────────
-  // When a letterhead is linked to the template AND the joined letterhead
-  // row is present, the letterhead's company identity / address / contact
-  // IS the memorandum — rendering header_content segments on top of it
-  // would duplicate the company name, address, etc. In that case we drop
-  // the user-defined header segments entirely and render the letterhead's
-  // own header block (logo + name + address + reg/vat).
-  const useLetterheadHeader = !!(tpl?.letterhead_id && tpl?.letterhead);
-  const effectiveHeaderSegments: ContentSegment[] = useLetterheadHeader
-    ? []
-    : headerSegments;
+  // ── Bank accounts list ────────────────────────────────────────────
+  // memorandum_settings doesn't carry a per-document bank-account filter
+  // (that's now done at the document level). All tenant accounts are shown.
+  const bankAccountsList: any[] = parsedBankAccounts;
 
   // ── HEADER (memorandum — repeats on every page) ────────────────────
-  // Rendered only when tpl.header_enabled !== false. Within the header,
-  // individual elements are toggled by header_show_logo / _show_company_name /
-  // _show_contact (all default to true when undefined).
-  //
-  // When header_content contains user-defined segments (from the
-  // TemplateContentEditor), those segments replace the default
-  // address/contact/reg block — giving the user full control over what
-  // appears under the company name. When no segments are defined, the
-  // legacy default block is rendered.
+  // 2 columns: company name (left) + logo (right). The logo uses
+  // objectFit: "contain" so it is NEVER distorted — it preserves its
+  // aspect ratio even when width/height don't match.
   const HeaderContent = () => {
     if (!headerEnabled) return null;
-    // When a letterhead is linked, the letterhead IS the memorandum — pull
-    // every field from the letterhead row and DROP any header_content
-    // segments (they'd duplicate the company name / address / reg info).
-    // When no letterhead is linked, fall back to tenant fields + the user's
-    // custom header_content segments (existing behaviour).
-    const lhForHeader = useLetterheadHeader ? (tpl?.letterhead as TenantLetterhead | null) : null;
-    const companyName =
-      lhForHeader?.company_name ||
-      lhForHeader?.company_legal_name ||
-      tenant?.legal_name ||
-      tenant?.name ||
-      "Company";
-    const contactParts = [
-      lhForHeader?.company_phone || tenant?.phone,
-      lhForHeader?.company_email || tenant?.email,
-      lhForHeader?.company_website || tenant?.website,
-    ].filter(Boolean);
-    const regParts = [
-      (lhForHeader?.company_registration_number || tenant?.registration_number) &&
-        `Reg# ${lhForHeader?.company_registration_number || tenant?.registration_number}`,
-      (lhForHeader?.company_vat_number || tenant?.vat_number) &&
-        `VAT# ${lhForHeader?.company_vat_number || tenant?.vat_number}`,
-      (lhForHeader?.company_tax_id || tenant?.tax_id) &&
-        `Tax# ${lhForHeader?.company_tax_id || tenant?.tax_id}`,
-    ].filter(Boolean);
-    const hasAddr = !!(
-      lhForHeader?.company_address_line ||
-      lhForHeader?.company_city ||
-      lhForHeader?.company_country ||
-      tenant?.address_line ||
-      tenant?.city ||
-      tenant?.country
-    );
-    // effectiveHeaderSegments is already [] when useLetterheadHeader is true
-    // (see its definition above), so the "user-defined segments" branch is
-    // automatically skipped when a letterhead is linked.
-    const hasCustomSegments = effectiveHeaderSegments.length > 0;
+    const companyName = tenant?.legal_name || tenant?.name || "Company";
     return (
       <View style={styles.header} fixed>
-        {headerShowLogo && logoUrl ? (
+        <View style={styles.headerLeft}>
+          <Text style={styles.companyName}>{companyName}</Text>
+        </View>
+        {showLogo && logoUrl ? (
           <View style={styles.headerLogoWrap}>
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
             <Image style={styles.headerLogo} src={logoUrl} />
           </View>
         ) : null}
-        <View style={styles.headerLeft}>
-          {headerShowCompanyName && (
-            <Text style={styles.companyName}>
-              {companyName}
-            </Text>
-          )}
-          {hasCustomSegments ? (
-            // ── User-defined segments (TemplateContentEditor) ──
-            effectiveHeaderSegments.map((seg) => {
-              const segStyle: any = {
-                fontSize: seg.fontSize || 8,
-                color: seg.color || "#555",
-                fontWeight: seg.bold ? 700 : 400,
-                fontStyle: seg.italic ? "italic" : "normal",
-                textAlign: seg.alignment === "center" ? "center" : seg.alignment === "right" ? "right" : "left",
-                marginBottom: 1,
-              };
-              // Segments containing {page_number}/{total_pages} need react-pdf's
-              // render callback so the per-page values are filled at render time.
-              if (/\{page_number\}|\{total_pages\}/.test(seg.text)) {
-                return (
-                  <Text
-                    key={seg.id}
-                    style={segStyle}
-                    render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-                      seg.text
-                        .replace(/\{page_number\}/g, String(pageNumber))
-                        .replace(/\{total_pages\}/g, String(totalPages))
-                    }
-                  />
-                );
-              }
-              return (
-                <Text key={seg.id} style={segStyle}>
-                  {seg.text}
-                </Text>
-              );
-            })
-          ) : (
-            <>
-              {headerShowContact && hasAddr && (
-                <Text style={styles.companyAddr}>
-                  {(() => {
-                    // Build the address string WITHOUT duplicating city/country when
-                    // they already appear inside `address_line`. E.g. tenant has
-                    //   address_line = "GoldCrest..., JLT Cluster C, Dubai, UAE"
-                    //   city = "Dubai"   country = "AE"
-                    // → must render "GoldCrest..., JLT Cluster C, Dubai, UAE" (not "..., Dubai, UAE, Dubai, AE")
-                    const addrLine = (
-                      lhForHeader?.company_address_line ||
-                      tenant?.address_line ||
-                      ""
-                    ).trim();
-                    const city = (
-                      lhForHeader?.company_city ||
-                      tenant?.city ||
-                      ""
-                    ).trim();
-                    const postal = (
-                      lhForHeader?.company_postal_code ||
-                      tenant?.postal_code ||
-                      ""
-                    ).trim();
-                    const country = (
-                      lhForHeader?.company_country ||
-                      tenant?.country ||
-                      ""
-                    ).trim();
-                    const addrLower = addrLine.toLowerCase();
-
-                    const parts: string[] = [];
-                    if (addrLine) parts.push(addrLine);
-
-                    // postal + city — only append if city isn't already in address_line
-                    const cityAndPostal = [postal, city].filter(Boolean).join(" ");
-                    if (cityAndPostal && !(city && addrLower.includes(city.toLowerCase()))) {
-                      parts.push(cityAndPostal);
-                    }
-                    // country — only append if not already mentioned in address_line
-                    // (covers both full names like "UAE" and ISO codes like "AE")
-                    if (country && !addrLower.includes(country.toLowerCase())) {
-                      parts.push(country);
-                    }
-                    return parts.join(", ");
-                  })()}
-                </Text>
-              )}
-              {headerShowContact && contactParts.length > 0 && (
-                <Text style={styles.companyContact}>
-                  {contactParts.join("  ·  ")}
-                </Text>
-              )}
-              {headerShowContact && regParts.length > 0 && (
-                <Text style={styles.companyReg}>
-                  {regParts.join("  ·  ")}
-                </Text>
-              )}
-            </>
-          )}
-        </View>
       </View>
     );
   };
 
   // ── FOOTER (memorandum — repeats on every page) ────────────────────
-  // NOTE: verification code is intentionally NOT rendered here — it is
-  // embedded into the PDF Document metadata (subject/keywords) instead.
-  // Rendered only when tpl.footer_enabled !== false. Within the footer:
-  //   • footer_show_page_number toggles "Page X of Y" (default true)
-  //   • footer_show_bank_details toggles a compact bank line (default false)
-  //   • footer_show_tax_id toggles Reg# / VAT# / Tax# (default false)
-  //
-  // When footer_content has user-defined segments (TemplateContentEditor),
-  // those replace the default top rows (company name / bank / tax). The
-  // bottom row (page-number / QR / generated-by) is preserved for legal
-  // attribution and verification.
+  // 3 columns: QR (left) + tenant address/website/email (center) + page#
+  // (right). The verification code is intentionally NOT rendered here — it
+  // lives in the PDF metadata only (subject / keywords).
   const FooterContent = () => {
     if (!footerEnabled) return null;
 
-    // Compact bank details line — uses the letterhead's bank info when a
-    // letterhead is linked, otherwise falls back to the tenant's single-bank
-    // fields. Kept short so it fits on one line in the footer.
-    const footerBankLine = (() => {
-      const bankName = letterheadBank?.bankName || tenant?.bank_name;
-      const iban = letterheadBank?.iban || tenant?.bank_iban;
-      const swift = letterheadBank?.swift || tenant?.bank_swift;
-      const parts: string[] = [];
-      if (bankName) parts.push(bankName);
-      if (iban) parts.push(`IBAN: ${iban}`);
-      if (swift) parts.push(`SWIFT: ${swift}`);
-      return parts.join("  ·  ");
-    })();
+    // Center column — tenant address + website + email (from tenant record).
+    const addrParts: string[] = [];
+    if (tenant?.address_line) addrParts.push(tenant.address_line);
+    const cityBits = [tenant?.postal_code, tenant?.city].filter(Boolean).join(" ");
+    if (cityBits) addrParts.push(cityBits);
+    if (tenant?.country) addrParts.push(tenant.country);
+    const addrLine = addrParts.join(", ");
 
-    // Tax / Reg line — shown only when footer_show_tax_id is true.
-    const footerTaxLine = [
-      tenant?.registration_number && `Reg# ${tenant.registration_number}`,
-      tenant?.vat_number && `VAT# ${tenant.vat_number}`,
-      tenant?.tax_id && `Tax# ${tenant.tax_id}`,
-    ].filter(Boolean).join("  ·  ");
+    const contactParts = [
+      tenant?.website,
+      tenant?.email,
+      tenant?.phone,
+    ].filter(Boolean);
 
-    const hasCustomSegments = footerSegments.length > 0;
+    return (
+      <View style={styles.footer} fixed>
+        {/* Left column — QR code (size from settings) */}
+        <View style={styles.footerColLeft}>
+          {showQr && qrCodeDataUrl ? (
+            <View style={styles.footerQrWrap}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image
+                style={{
+                  width: qrSizePts,
+                  height: qrSizePts,
+                  objectFit: "contain",
+                }}
+                src={qrCodeDataUrl}
+              />
+              <Text style={styles.footerQrLabel}>Scan to verify</Text>
+            </View>
+          ) : null}
+        </View>
 
-    // ── QR rendering (positioned via footer_content._qrConfig) ──────
-    // The QR's image dimensions are derived from `qr_size_mm` (mm → pts)
-    // and the opacity is applied directly to the <Image>. Position is one
-    // of: "footer-right" (default) | "footer-left" | "footer-center" |
-    // "none". We compose the bottom row so the QR sits in its chosen
-    // column and the page-number/sys-info fills the remaining space —
-    // this avoids the "QR glued to half the edge" overlap the user saw.
-    const qrView = showQr && qrCodeDataUrl ? (
-      <View style={styles.footerQr}>
-        {/* eslint-disable-next-line jsx-a11y/alt-text */}
-        <Image
-          style={{
-            width: qrSizePts,
-            height: qrSizePts,
-            opacity: qrOpacity,
-            objectFit: "contain",
-          }}
-          src={qrCodeDataUrl}
-        />
-        <Text style={styles.footerQrLabel}>Scan to verify</Text>
-      </View>
-    ) : null;
+        {/* Center column — tenant address / website / email */}
+        <View style={styles.footerColCenter}>
+          {addrLine ? (
+            <Text style={styles.footerAddrLine}>{addrLine}</Text>
+          ) : null}
+          {contactParts.length > 0 ? (
+            <Text style={styles.footerAddrLine}>{contactParts.join("  ·  ")}</Text>
+          ) : null}
+          {tenant?.legal_name || tenant?.name ? (
+            <Text style={styles.footerAddrLine}>
+              {tenant?.legal_name || tenant?.name}
+            </Text>
+          ) : null}
+        </View>
 
-    // Page-number + generated-by info (always present unless both flags
-    // are off — but footerSys is always shown for legal attribution).
-    const footerPageInfo = (
-      <View style={styles.footerLeftInfo}>
-        {footerShowPageNumber && (
+        {/* Right column — page number + generated-by line */}
+        <View style={styles.footerColRight}>
           <Text
             style={styles.footerPage}
             render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
               `Page ${pageNumber} of ${totalPages}`
             }
           />
-        )}
-        <Text style={styles.footerSys}>
-          Generated by {pdfMeta?.creator || "Aspidus CRM"} · {new Date().toLocaleString("en-GB")}
-        </Text>
-      </View>
-    );
-
-    // Compose the bottom row depending on QR position.
-    let bottomRow: React.ReactNode;
-    if (!showQr) {
-      bottomRow = footerPageInfo;
-    } else if (qrConfig.position === "footer-left") {
-      bottomRow = (
-        <>
-          {qrView}
-          {footerPageInfo}
-        </>
-      );
-    } else if (qrConfig.position === "footer-center") {
-      bottomRow = (
-        <>
-          {footerPageInfo}
-          {qrView}
-          {/* Symmetric filler so the QR truly sits in the centre. */}
-          <View style={{ flex: 1 }} />
-        </>
-      );
-    } else {
-      // "footer-right" (default)
-      bottomRow = (
-        <>
-          {footerPageInfo}
-          {qrView}
-        </>
-      );
-    }
-
-    return (
-      <View style={styles.footer} fixed>
-        {hasCustomSegments ? (
-          // ── User-defined segments (TemplateContentEditor) ──
-          <View style={styles.footerCustomSegmentCol}>
-            {footerSegments.map((seg) => {
-              const segStyle: any = {
-                fontSize: seg.fontSize || 7.5,
-                color: seg.color || "#666",
-                fontWeight: seg.bold ? 700 : 400,
-                fontStyle: seg.italic ? "italic" : "normal",
-                textAlign: seg.alignment === "center" ? "center" : seg.alignment === "right" ? "right" : "left",
-                marginBottom: 2,
-              };
-              if (/\{page_number\}|\{total_pages\}/.test(seg.text)) {
-                return (
-                  <Text
-                    key={seg.id}
-                    style={segStyle}
-                    render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-                      seg.text
-                        .replace(/\{page_number\}/g, String(pageNumber))
-                        .replace(/\{total_pages\}/g, String(totalPages))
-                    }
-                  />
-                );
-              }
-              return (
-                <Text key={seg.id} style={segStyle}>
-                  {seg.text}
-                </Text>
-              );
-            })}
-          </View>
-        ) : (
-          <>
-            <View style={styles.footerTopRow}>
-              <Text style={styles.footerCompanyLine}>
-                {tenant?.legal_name || tenant?.name || "Company"}
-              </Text>
-            </View>
-            {footerShowBankDetails && footerBankLine && (
-              <View style={styles.footerTopRow}>
-                <Text style={styles.footerBankLine}>{footerBankLine}</Text>
-              </View>
-            )}
-            {footerShowTaxId && footerTaxLine && (
-              <View style={styles.footerTopRow}>
-                <Text style={styles.footerBankLine}>{footerTaxLine}</Text>
-              </View>
-            )}
-          </>
-        )}
-        <View style={styles.footerBottomRow}>{bottomRow}</View>
+          <Text style={styles.footerSys}>
+            Generated by {pdfMeta?.creator || "Aspidus CRM"} · {new Date().toLocaleString("en-GB")}
+          </Text>
+        </View>
       </View>
     );
   };
@@ -1339,44 +1102,17 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         )}
 
         {/* BANK DETAILS — show as a clean vertical list, not a cramped grid.
-            Preferred: letterhead's bank_name/iban/swift/holder (when a
-              letterhead is linked and has bank info configured).
             Modern: tenant.bank_accounts JSON array → one row per account
-              (optionally filtered by tpl.selected_bank_accounts).
-            Legacy: if no letterhead bank and no bank_accounts array, fall
-              back to tenant's single-bank fields.
+              (optionally filtered by memorandum_settings.selected_bank_accounts).
+            Legacy: if no bank_accounts array, fall back to tenant's
+              single-bank fields.
             Per-doc bank_details override always appended at the bottom. */}
-        {(letterheadBank || tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift ||
+        {(tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift ||
           bankAccountsList.length > 0 || bankDetails) && (
           <View style={styles.termsBox}>
             <Text style={styles.sectionHeader} wrap={false}>Bank Details</Text>
 
-            {letterheadBank ? (
-              /* Preferred: letterhead's bank details. Shows bank name + holder
-                 + IBAN + SWIFT in a single, clean block (no per-account grid). */
-              <View style={styles.bankList}>
-                <View style={styles.bankAccountRow} wrap={false}>
-                  <Text style={styles.bankAccountName}>
-                    {letterheadBank.bankName || "Bank"}
-                  </Text>
-                  {letterheadBank.holder && (
-                    <Text style={styles.bankAccountDetails}>
-                      Account Holder: {letterheadBank.holder}
-                    </Text>
-                  )}
-                  {letterheadBank.iban && (
-                    <Text style={styles.bankAccountDetails}>
-                      IBAN: {letterheadBank.iban}
-                    </Text>
-                  )}
-                  {letterheadBank.swift && (
-                    <Text style={styles.bankAccountDetails}>
-                      SWIFT/BIC: {letterheadBank.swift}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ) : bankAccountsList.length > 0 ? (
+            {bankAccountsList.length > 0 ? (
               /* Modern: render every (optionally filtered) account as its own
                  row. Each row shows the bank name + currency on line 1, and
                  the account number + SWIFT on line 2. */
@@ -1446,17 +1182,19 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
 
           {/* Company seal (zigled) — only rendered when a seal image is
               available. Placement / opacity / rotation come from the
-              TenantSeal relation, with sensible defaults. */}
-          {sealImageUrl && tpl?.seal_enabled && (() => {
-            const seal = tpl?.seal;
-            const position = seal?.position || "bottom-right";
-            const opacity = typeof seal?.opacity === "number" ? seal.opacity : 1;
-            const rotation = typeof seal?.rotation_deg === "number" ? seal.rotation_deg : 0;
+              TenantSeal relation (passed in via the `seal` prop), with
+              sensible defaults. memorandum_settings doesn't carry a
+              seal_enabled flag — the seal is rendered whenever the tenant
+              has a default seal configured (resolved by the generator). */}
+          {sealImageUrl && seal && (() => {
+            const position = seal.position || "bottom-right";
+            const opacity = typeof seal.opacity === "number" ? seal.opacity : 1;
+            const rotation = typeof seal.rotation_deg === "number" ? seal.rotation_deg : 0;
             // Seal dimensions in mm → points; fall back to a 30mm square.
-            const wPts = mmToPoints(seal?.image_width_mm || 30);
-            const hPts = mmToPoints(seal?.image_height_mm || 30);
-            const offXPts = mmToPoints(seal?.offset_x_mm || 0);
-            const offYPts = mmToPoints(seal?.offset_y_mm || 0);
+            const wPts = mmToPoints(seal.image_width_mm || 30);
+            const hPts = mmToPoints(seal.image_height_mm || 30);
+            const offXPts = mmToPoints(seal.offset_x_mm || 0);
+            const offYPts = mmToPoints(seal.offset_y_mm || 0);
 
             // Translate position + offset into left/top/right/bottom anchors.
             const placement: Record<string, any> = {

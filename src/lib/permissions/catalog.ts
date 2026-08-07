@@ -281,6 +281,11 @@ export const LETTERHEADS = {
   DELETE: "letterheads.delete",
 } as const;
 
+export const MEMORANDUM_SETTINGS = {
+  READ: "memorandum_settings.read",
+  UPDATE: "memorandum_settings.update",
+} as const;
+
 export const SEALS = {
   READ: "seals.read",
   CREATE: "seals.create",
@@ -365,6 +370,7 @@ export const ALL_PERMISSIONS = [
   ...Object.values(MAIL_QUEUE),
   ...Object.values(EMAIL_TEMPLATES),
   ...Object.values(LETTERHEADS),
+  ...Object.values(MEMORANDUM_SETTINGS),
   ...Object.values(SEALS),
   ...Object.values(NOTIFICATIONS),
   ...Object.values(INTEGRATIONS),

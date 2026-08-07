@@ -1011,6 +1011,13 @@ export interface TenantSeal {
 }
 
 // ============================================================
+// MemorandumSettings — per-tenant header/footer/body configuration
+// ============================================================
+// NOTE: the canonical MemorandumSettings interface is defined at the bottom
+// of this file (matches supabase/migrations/003_memorandum_settings.sql).
+// The PDF generator + renderer read it via `import { MemorandumSettings }`.
+
+// ============================================================
 // Document verification (QR + hash forensics)
 // ============================================================
 export interface DocumentVerification {
@@ -1678,4 +1685,73 @@ export interface RecurringExpense {
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ============================================================
+// Memorandum Settings (per-tenant PDF header/footer config)
+// ------------------------------------------------------------
+// One row per tenant (UNIQUE(tenant_id)). The GET
+// /api/memorandum-settings endpoint auto-creates a row with
+// all defaults on first fetch, so tenants never have to "save"
+// before they can preview. The PDF generator reads these to
+// render the memorandum (header + footer) on every page.
+// ============================================================
+export interface MemorandumSettings {
+  id: string;
+  tenant_id: string;
+  created_at: string;
+  updated_at: string;
+
+  // Header
+  header_enabled: boolean;
+  header_height_mm: number;
+  header_bg_color: string;
+
+  // Header left (company name)
+  header_left_font_family: string;
+  header_left_font_size: number;
+  header_left_font_color: string;
+  header_left_font_bold: boolean;
+
+  // Header right (logo)
+  logo_enabled: boolean;
+  logo_max_width_mm: number;
+  logo_max_height_mm: number;
+  logo_position_x_mm: number;
+  logo_position_y_mm: number;
+  logo_fit_mode: string;
+
+  // Footer
+  footer_enabled: boolean;
+  footer_height_mm: number;
+  footer_bg_color: string;
+
+  // Footer left (QR)
+  qr_enabled: boolean;
+  qr_size_mm: number;
+  qr_position_x_mm: number;
+  qr_position_y_mm: number;
+
+  // Footer center (address)
+  footer_center_font_family: string;
+  footer_center_font_size: number;
+  footer_center_font_color: string;
+  footer_center_alignment: string;
+
+  // Footer right (page number)
+  footer_right_font_family: string;
+  footer_right_font_size: number;
+  footer_right_font_color: string;
+
+  // Column widths (percentages — should sum to 100)
+  footer_left_width_pct: number;
+  footer_center_width_pct: number;
+  footer_right_width_pct: number;
+
+  // Body
+  body_font_family: string;
+  body_font_size: number;
+  body_line_height: number;
+  body_text_color: string;
+  primary_color: string;
 }

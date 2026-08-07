@@ -14,12 +14,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
-import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle, Zap, AlertTriangle, Globe, Info } from "lucide-react";
+import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle, Zap, AlertTriangle, Globe, Info, FileText, Palette, QrCode, Save } from "lucide-react";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import { CURRENCIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import type { MemorandumSettings, Tenant } from "@/lib/supabase/types";
 
 type CompanyForm = {
   name: string;
@@ -140,12 +143,13 @@ export function SettingsView() {
     <div>
       <PageHeader title="Settings" description="Configure company, security, and communications." />
       <Tabs defaultValue="company">
-        <TabsList className="grid w-full max-w-2xl grid-cols-5">
+        <TabsList className="grid w-full max-w-2xl grid-cols-6">
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="comms">Communications</TabsTrigger>
           <TabsTrigger value="integrations">API Keys</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="memorandum">Memorandum</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="mt-4">
@@ -162,6 +166,9 @@ export function SettingsView() {
         </TabsContent>
         <TabsContent value="preferences" className="mt-4">
           <PreferencesTab />
+        </TabsContent>
+        <TabsContent value="memorandum" className="mt-4">
+          <MemorandumTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -1548,5 +1555,843 @@ function PreferencesTab() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Memorandum (PDF header/footer) Tab ────────────────────────────────────
+// Per-tenant memorandum config — header (logo + company name) + footer
+// (QR + address + page number) + body defaults. The PDF generator reads
+// these settings to render the memorandum on every page.
+
+const FONT_FAMILY_OPTIONS: { label: string; value: string; css: string }[] = [
+  { label: "Helvetica", value: "Helvetica", css: "Helvetica, Arial, sans-serif" },
+  { label: "Times-Roman", value: "Times-Roman", css: "'Times New Roman', Times, serif" },
+  { label: "Courier", value: "Courier", css: "'Courier New', Courier, monospace" },
+];
+
+const FIT_MODE_OPTIONS = [
+  { label: "Contain (no distortion)", value: "contain" },
+  { label: "Cover (fills area, crops)", value: "cover" },
+  { label: "Fill (stretches)", value: "fill" },
+];
+
+const ALIGN_OPTIONS = [
+  { label: "Left", value: "left" },
+  { label: "Center", value: "center" },
+  { label: "Right", value: "right" },
+];
+
+/** Map a PDF font family to a CSS-equivalent stack for the live preview. */
+function fontCss(pdfFont: string): string {
+  return (
+    FONT_FAMILY_OPTIONS.find((f) => f.value === pdfFont)?.css ??
+    "Helvetica, Arial, sans-serif"
+  );
+}
+
+/** Convert a CSS alignment string to a literal union type. */
+function alignCss(a: string): "left" | "center" | "right" {
+  return a === "left" ? "left" : a === "right" ? "right" : "center";
+}
+
+// A4 page is 210mm wide × 297mm tall. We render the preview in a container
+// with `container-type: inline-size` so we can express any mm measurement as
+// `cqw` (1% of container width = 2.1mm). Because the container preserves the
+// A4 aspect ratio, this works for BOTH horizontal and vertical sizes — a
+// 30mm-tall header is `30 * (100/210) cqw` ≈ 14.3cqw, which renders as 10.1%
+// of the page height (correct).
+const MM = 100 / 210; // cqw per mm
+const mm = (n: number): string => `${n * MM}cqw`;
+// 1pt = 0.353mm (PDF points)
+const pt = (n: number): string => mm(n * 0.353);
+
+function MemorandumTab() {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+
+  const [settings, setSettings] = useState<MemorandumSettings | null>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    Promise.all([
+      fetch(api("/api/memorandum-settings"))
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(api("/api/tenants"))
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]).then(([s, t]) => {
+      if (!active) return;
+      if (s) setSettings(s as MemorandumSettings);
+      if (t?.items?.length) setTenant(t.items[0] as Tenant);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantKey]);
+
+  function set<K extends keyof MemorandumSettings>(k: K, v: MemorandumSettings[K]) {
+    setSettings((prev) => (prev ? { ...prev, [k]: v } : prev));
+  }
+
+  async function save() {
+    if (!settings) return;
+    setSaving(true);
+    try {
+      const r = await fetch(api("/api/memorandum-settings"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to save");
+      }
+      const updated = await r.json();
+      setSettings(updated as MemorandumSettings);
+      toast.success("Memorandum settings saved.");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card className="border-border/60 shadow-soft rounded-xl">
+        <CardContent className="p-6 space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!settings) {
+    // Super-admin without an active tenant context.
+    return (
+      <Card className="border-border/60 shadow-soft rounded-xl">
+        <CardContent className="p-6 flex items-center gap-3">
+          <Info className="size-5 text-muted-foreground shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            Select a tenant context to configure memorandum settings.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const colSum =
+    settings.footer_left_width_pct +
+    settings.footer_center_width_pct +
+    settings.footer_right_width_pct;
+
+  return (
+    <Card className="border-border/60 shadow-soft rounded-xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="size-5" /> Memorandum
+        </CardTitle>
+        <CardDescription>
+          Configure the header & footer of all PDF documents (offers, invoices, proformas).
+          The company name &amp; logo come from your Company tab.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* ── Left: Settings ─────────────────────────────────────────── */}
+          <div className="space-y-4">
+            {/* Header */}
+            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className="size-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Header</h3>
+                </div>
+                <Switch
+                  checked={settings.header_enabled}
+                  onCheckedChange={(v) => set("header_enabled", v)}
+                />
+              </div>
+              {settings.header_enabled && (
+                <>
+                  <SliderField
+                    label={`Height (${settings.header_height_mm}mm)`}
+                    min={20} max={50} step={1}
+                    value={settings.header_height_mm}
+                    onChange={(v) => set("header_height_mm", v)}
+                  />
+                  <ColorField
+                    label="Background"
+                    value={settings.header_bg_color}
+                    onChange={(v) => set("header_bg_color", v)}
+                  />
+                  <Separator />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Company name (left column)
+                  </p>
+                  <FontField
+                    label="Font"
+                    value={settings.header_left_font_family}
+                    onChange={(v) => set("header_left_font_family", v)}
+                  />
+                  <SliderField
+                    label={`Size (${settings.header_left_font_size}pt)`}
+                    min={10} max={20} step={1}
+                    value={settings.header_left_font_size}
+                    onChange={(v) => set("header_left_font_size", v)}
+                  />
+                  <ColorField
+                    label="Color"
+                    value={settings.header_left_font_color}
+                    onChange={(v) => set("header_left_font_color", v)}
+                  />
+                  <ToggleRow
+                    label="Bold"
+                    checked={settings.header_left_font_bold}
+                    onCheckedChange={(v) => set("header_left_font_bold", v)}
+                  />
+                </>
+              )}
+            </section>
+
+            {/* Logo */}
+            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="size-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Logo</h3>
+                </div>
+                <Switch
+                  checked={settings.logo_enabled}
+                  onCheckedChange={(v) => set("logo_enabled", v)}
+                />
+              </div>
+              {settings.logo_enabled && (
+                <>
+                  <SliderField
+                    label={`Max width (${settings.logo_max_width_mm}mm)`}
+                    min={30} max={80} step={1}
+                    value={settings.logo_max_width_mm}
+                    onChange={(v) => set("logo_max_width_mm", v)}
+                  />
+                  <SliderField
+                    label={`Max height (${settings.logo_max_height_mm}mm)`}
+                    min={10} max={30} step={1}
+                    value={settings.logo_max_height_mm}
+                    onChange={(v) => set("logo_max_height_mm", v)}
+                  />
+                  <SliderField
+                    label={`Position X (${settings.logo_position_x_mm}mm)`}
+                    min={-20} max={20} step={1}
+                    value={settings.logo_position_x_mm}
+                    onChange={(v) => set("logo_position_x_mm", v)}
+                  />
+                  <SliderField
+                    label={`Position Y (${settings.logo_position_y_mm}mm)`}
+                    min={-10} max={10} step={1}
+                    value={settings.logo_position_y_mm}
+                    onChange={(v) => set("logo_position_y_mm", v)}
+                  />
+                  <SelectField
+                    label="Fit mode"
+                    value={settings.logo_fit_mode}
+                    options={FIT_MODE_OPTIONS}
+                    onChange={(v) => set("logo_fit_mode", v)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use <strong>Contain</strong> to prevent distortion.
+                  </p>
+                </>
+              )}
+            </section>
+
+            {/* Footer */}
+            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="size-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Footer</h3>
+                </div>
+                <Switch
+                  checked={settings.footer_enabled}
+                  onCheckedChange={(v) => set("footer_enabled", v)}
+                />
+              </div>
+              {settings.footer_enabled && (
+                <>
+                  <SliderField
+                    label={`Height (${settings.footer_height_mm}mm)`}
+                    min={15} max={40} step={1}
+                    value={settings.footer_height_mm}
+                    onChange={(v) => set("footer_height_mm", v)}
+                  />
+                  <ColorField
+                    label="Background"
+                    value={settings.footer_bg_color}
+                    onChange={(v) => set("footer_bg_color", v)}
+                  />
+
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <QrCode className="size-4 text-muted-foreground" />
+                      <p className="text-xs font-medium">QR code (left)</p>
+                    </div>
+                    <Switch
+                      checked={settings.qr_enabled}
+                      onCheckedChange={(v) => set("qr_enabled", v)}
+                    />
+                  </div>
+                  {settings.qr_enabled && (
+                    <>
+                      <SliderField
+                        label={`Size (${settings.qr_size_mm}mm)`}
+                        min={10} max={25} step={1}
+                        value={settings.qr_size_mm}
+                        onChange={(v) => set("qr_size_mm", v)}
+                      />
+                      <SliderField
+                        label={`Position X (${settings.qr_position_x_mm}mm)`}
+                        min={-20} max={20} step={1}
+                        value={settings.qr_position_x_mm}
+                        onChange={(v) => set("qr_position_x_mm", v)}
+                      />
+                      <SliderField
+                        label={`Position Y (${settings.qr_position_y_mm}mm)`}
+                        min={-10} max={10} step={1}
+                        value={settings.qr_position_y_mm}
+                        onChange={(v) => set("qr_position_y_mm", v)}
+                      />
+                    </>
+                  )}
+
+                  <Separator />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Address (center column)
+                  </p>
+                  <FontField
+                    label="Font"
+                    value={settings.footer_center_font_family}
+                    onChange={(v) => set("footer_center_font_family", v)}
+                  />
+                  <SliderField
+                    label={`Size (${settings.footer_center_font_size}pt)`}
+                    min={6} max={12} step={1}
+                    value={settings.footer_center_font_size}
+                    onChange={(v) => set("footer_center_font_size", v)}
+                  />
+                  <ColorField
+                    label="Color"
+                    value={settings.footer_center_font_color}
+                    onChange={(v) => set("footer_center_font_color", v)}
+                  />
+                  <SelectField
+                    label="Alignment"
+                    value={settings.footer_center_alignment}
+                    options={ALIGN_OPTIONS}
+                    onChange={(v) => set("footer_center_alignment", v)}
+                  />
+
+                  <Separator />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Page number (right column)
+                  </p>
+                  <FontField
+                    label="Font"
+                    value={settings.footer_right_font_family}
+                    onChange={(v) => set("footer_right_font_family", v)}
+                  />
+                  <SliderField
+                    label={`Size (${settings.footer_right_font_size}pt)`}
+                    min={6} max={12} step={1}
+                    value={settings.footer_right_font_size}
+                    onChange={(v) => set("footer_right_font_size", v)}
+                  />
+                  <ColorField
+                    label="Color"
+                    value={settings.footer_right_font_color}
+                    onChange={(v) => set("footer_right_font_color", v)}
+                  />
+
+                  <Separator />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Column widths
+                  </p>
+                  <SliderField
+                    label={`Left (${settings.footer_left_width_pct}%)`}
+                    min={10} max={70} step={5}
+                    value={settings.footer_left_width_pct}
+                    onChange={(v) => set("footer_left_width_pct", v)}
+                  />
+                  <SliderField
+                    label={`Center (${settings.footer_center_width_pct}%)`}
+                    min={10} max={80} step={5}
+                    value={settings.footer_center_width_pct}
+                    onChange={(v) => set("footer_center_width_pct", v)}
+                  />
+                  <SliderField
+                    label={`Right (${settings.footer_right_width_pct}%)`}
+                    min={10} max={70} step={5}
+                    value={settings.footer_right_width_pct}
+                    onChange={(v) => set("footer_right_width_pct", v)}
+                  />
+                  <div
+                    className={
+                      "text-xs font-medium " +
+                      (colSum === 100
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-amber-600 dark:text-amber-400")
+                    }
+                  >
+                    Sum: {colSum}% {colSum === 100 ? "✓" : "(should be 100)"}
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Body */}
+            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+              <div className="flex items-center gap-2">
+                <Palette className="size-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Body defaults</h3>
+              </div>
+              <FontField
+                label="Font"
+                value={settings.body_font_family}
+                onChange={(v) => set("body_font_family", v)}
+              />
+              <SliderField
+                label={`Size (${settings.body_font_size}pt)`}
+                min={8} max={12} step={1}
+                value={settings.body_font_size}
+                onChange={(v) => set("body_font_size", v)}
+              />
+              <SliderField
+                label={`Line height (${settings.body_line_height.toFixed(2)})`}
+                min={1} max={2} step={0.05}
+                value={settings.body_line_height}
+                onChange={(v) => set("body_line_height", v)}
+              />
+              <ColorField
+                label="Text color"
+                value={settings.body_text_color}
+                onChange={(v) => set("body_text_color", v)}
+              />
+              <ColorField
+                label="Primary color (accents)"
+                value={settings.primary_color}
+                onChange={(v) => set("primary_color", v)}
+              />
+            </section>
+
+            <div className="flex justify-end">
+              <Button onClick={save} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="size-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Save className="size-4 mr-1.5" />
+                )}
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+
+          {/* ── Right: Live preview (sticky on desktop) ──────────────── */}
+          <div className="lg:sticky lg:top-4 h-fit">
+            <MemorandumPreview settings={settings} tenant={tenant} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Scaled A4 page showing the configured header (logo + company name),
+ * sample body content, and footer (QR + address + page number). Sizes are
+ * expressed in `cqw` units (1% of the container's width = 2.1mm of A4 width),
+ * so the whole page scales responsively without distorting the logo
+ * (objectFit: contain).
+ */
+function MemorandumPreview({
+  settings,
+  tenant,
+}: {
+  settings: MemorandumSettings;
+  tenant: Tenant | null;
+}) {
+  const companyName =
+    tenant?.legal_name || tenant?.name || "Acme Trade DMCC";
+  const logoUrl = tenant?.logo_url
+    ? resolveLogoUrlForDisplay(tenant.logo_url)
+    : null;
+  const addrLine1 =
+    [tenant?.address_line, tenant?.city].filter(Boolean).join(", ") ||
+    "Office 1234, DMCC, Dubai";
+  const addrLine2 = tenant?.website || "www.example.com";
+  const addrLine3 = tenant?.email || "info@example.com";
+
+  const headerLeftFont = fontCss(settings.header_left_font_family);
+  const footerCenterFont = fontCss(settings.footer_center_font_family);
+  const footerRightFont = fontCss(settings.footer_right_font_family);
+  const bodyFont = fontCss(settings.body_font_family);
+
+  const colL = `${settings.footer_left_width_pct}%`;
+  const colC = `${settings.footer_center_width_pct}%`;
+  const colR = `${settings.footer_right_width_pct}%`;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+        <FileText className="size-3.5" />
+        Live preview — A4 page
+      </p>
+      <div
+        className="relative mx-auto bg-white shadow-soft border border-border/60 rounded-sm overflow-hidden"
+        style={{
+          aspectRatio: "210 / 297",
+          maxWidth: "30rem",
+          width: "100%",
+          containerType: "inline-size",
+        }}
+      >
+        <div className="absolute inset-0 flex flex-col">
+          {/* HEADER */}
+          {settings.header_enabled && (
+            <div
+              className="flex items-stretch border-b border-border/30 shrink-0"
+              style={{
+                height: mm(settings.header_height_mm),
+                backgroundColor: settings.header_bg_color,
+              }}
+            >
+              {/* Left: company name */}
+              <div
+                className="flex-1 flex items-center"
+                style={{ padding: mm(8) }}
+              >
+                <span
+                  style={{
+                    fontFamily: headerLeftFont,
+                    fontSize: pt(settings.header_left_font_size),
+                    color: settings.header_left_font_color,
+                    fontWeight: settings.header_left_font_bold ? 700 : 400,
+                    lineHeight: 1.1,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {companyName}
+                </span>
+              </div>
+              {/* Right: logo */}
+              <div className="flex-1 relative flex items-center justify-center">
+                {settings.logo_enabled && logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="Logo"
+                    style={{
+                      maxWidth: mm(settings.logo_max_width_mm),
+                      maxHeight: mm(settings.logo_max_height_mm),
+                      objectFit: settings.logo_fit_mode as React.CSSProperties["objectFit"],
+                      transform: `translate(${mm(settings.logo_position_x_mm)}, ${mm(settings.logo_position_y_mm)})`,
+                    }}
+                  />
+                ) : settings.logo_enabled ? (
+                  <div
+                    className="flex items-center justify-center text-muted-foreground/40 border border-dashed border-border/40"
+                    style={{
+                      width: mm(settings.logo_max_width_mm),
+                      height: mm(settings.logo_max_height_mm),
+                      fontSize: pt(6),
+                    }}
+                  >
+                    Logo
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* BODY */}
+          <div
+            className="flex-1 overflow-hidden"
+            style={{
+              padding: mm(10),
+              fontFamily: bodyFont,
+              fontSize: pt(settings.body_font_size),
+              lineHeight: settings.body_line_height,
+              color: settings.body_text_color,
+            }}
+          >
+            <div
+              className="font-bold mb-1"
+              style={{
+                fontSize: pt(11),
+                color: settings.primary_color,
+              }}
+            >
+              OFFER #ASP-OF26-001
+            </div>
+            <div
+              className="mb-2"
+              style={{
+                fontSize: pt(7),
+                color: settings.body_text_color,
+                opacity: 0.7,
+              }}
+            >
+              Date: 2025-11-12 · Valid until: 2025-12-12
+            </div>
+            <div
+              className="mb-1.5"
+              style={{ fontWeight: 600 }}
+            >
+              1. Refined Sunflower Oil — 50 MT
+            </div>
+            <p style={{ fontSize: pt(7), opacity: 0.85 }}>
+              High-oleic refined sunflower oil, packed in 1L PET bottles
+              (12 per carton). Origin: Ukraine. Conforms to EU regulations
+              for human consumption.
+            </p>
+            <div
+              className="mt-2 grid grid-cols-3 gap-1"
+              style={{ fontSize: pt(7) }}
+            >
+              <div className="font-semibold">Quantity</div>
+              <div className="font-semibold">Unit Price</div>
+              <div className="font-semibold text-right">Total</div>
+              <div>50 MT</div>
+              <div>$1,250.00</div>
+              <div className="text-right">$62,500.00</div>
+            </div>
+            <p
+              style={{
+                fontSize: pt(7),
+                marginTop: mm(2),
+                opacity: 0.6,
+              }}
+            >
+              Payment: 30% advance, 70% against B/L copy. Delivery: CIF Jebel Ali.
+            </p>
+          </div>
+
+          {/* FOOTER */}
+          {settings.footer_enabled && (
+            <div
+              className="flex items-stretch border-t border-border/30 shrink-0"
+              style={{
+                height: mm(settings.footer_height_mm),
+                backgroundColor: settings.footer_bg_color,
+              }}
+            >
+              {/* Left: QR */}
+              <div
+                className="relative flex items-center justify-center"
+                style={{ width: colL, padding: mm(3) }}
+              >
+                {settings.qr_enabled && (
+                  <div
+                    style={{
+                      width: mm(settings.qr_size_mm),
+                      height: mm(settings.qr_size_mm),
+                      transform: `translate(${mm(settings.qr_position_x_mm)}, ${mm(settings.qr_position_y_mm)})`,
+                    }}
+                  >
+                    <QrPlaceholder />
+                  </div>
+                )}
+              </div>
+              {/* Center: address */}
+              <div
+                className="flex flex-col justify-center"
+                style={{
+                  width: colC,
+                  padding: mm(3),
+                  fontFamily: footerCenterFont,
+                  fontSize: pt(settings.footer_center_font_size),
+                  color: settings.footer_center_font_color,
+                  textAlign: alignCss(settings.footer_center_alignment),
+                  lineHeight: 1.3,
+                }}
+              >
+                <div>{addrLine1}</div>
+                <div>{addrLine2}</div>
+                <div>{addrLine3}</div>
+              </div>
+              {/* Right: page number */}
+              <div
+                className="flex flex-col justify-center items-end"
+                style={{
+                  width: colR,
+                  padding: mm(3),
+                  fontFamily: footerRightFont,
+                  fontSize: pt(settings.footer_right_font_size),
+                  color: settings.footer_right_font_color,
+                  textAlign: "right",
+                  lineHeight: 1.3,
+                }}
+              >
+                <div>Page 1 of 1</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground/80 text-center">
+        Visual approximation — actual PDF rendering may differ slightly.
+      </p>
+    </div>
+  );
+}
+
+/** 5×5 deterministic SVG mock — visual stand-in for the real QR the PDF renders. */
+function QrPlaceholder() {
+  const pattern = ["11101", "10111", "00010", "11011", "01101"];
+  return (
+    <svg viewBox="0 0 5 5" className="w-full h-full" preserveAspectRatio="none">
+      <rect width="5" height="5" fill="white" />
+      {pattern.map((row, y) =>
+        row.split("").map((cell, x) =>
+          cell === "1" ? (
+            <rect
+              key={`${x}-${y}`}
+              x={x}
+              y={y}
+              width="1"
+              height="1"
+              fill="black"
+            />
+          ) : null
+        )
+      )}
+    </svg>
+  );
+}
+
+// ─── Small field helpers (MemorandumTab-local) ─────────────────────────────
+
+function SliderField({
+  label,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={(v) => onChange(v[0])}
+      />
+    </div>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value || "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className="size-8 rounded-md border border-border/60 cursor-pointer bg-card p-0.5"
+        />
+        <Input
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 font-mono text-xs flex-1"
+        />
+      </div>
+    </div>
+  );
+}
+
+function FontField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {FONT_FAMILY_OPTIONS.map((f) => (
+            <SelectItem key={f.value} value={f.value}>
+              {f.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

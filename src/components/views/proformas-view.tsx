@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Plus, Search, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, FileCheck, Wallet, AlertCircle,
-  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight, ArrowLeftRight, ChevronDown,
+  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight, ArrowLeftRight, ChevronDown, FileText, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -216,6 +216,28 @@ export function ProformasView() {
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: (e: any) => toast.error(e.message || "Failed to send proforma."),
+  });
+
+  // ─── Create invoice from proforma (linear flow: Offer → Proforma → Invoice) ───
+  const createInvoiceMut = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(api(`/api/automation/create-invoice-from-proforma`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proforma_id: id }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to create invoice");
+      }
+      return r.json();
+    },
+    onSuccess: (data: any) => {
+      toast.success(`Invoice ${data?.number || ""} created from proforma`);
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to create invoice."),
   });
 
   const items = data?.items || [];
@@ -428,8 +450,10 @@ export function ProformasView() {
               partnerName={partnerName(detail.data.partner_id)}
               onMarkPaid={() => detailId && markPaidMut.mutate({ id: detailId })}
               onSend={() => detailId && sendMut.mutate(detailId)}
+              onCreateInvoice={() => detailId && createInvoiceMut.mutate(detailId)}
               markingPaid={markPaidMut.isPending}
               sending={sendMut.isPending}
+              creatingInvoice={createInvoiceMut.isPending}
             />
           ) : null}
         </SheetContent>
@@ -461,19 +485,46 @@ export function ProformasView() {
 
 // ---- Detail panel ----
 function ProformaDetail({
-  proforma, partnerName, onMarkPaid, onSend, markingPaid, sending,
+  proforma, partnerName, onMarkPaid, onSend, onCreateInvoice, markingPaid, sending, creatingInvoice,
 }: {
   proforma: Proforma;
   partnerName: string;
   onMarkPaid: () => void;
   onSend: () => void;
+  onCreateInvoice: () => void;
   markingPaid: boolean;
   sending: boolean;
+  creatingInvoice: boolean;
 }) {
   const api = useApiUrl();
+  const tenantKey = useTenantKey();
   const [downloading, setDownloading] = useState(false);
   const totals = computeTotals(proforma.items || []);
   const expired = isExpired(proforma);
+
+  // Proformas have no "accepted" status — the closest analog is "sent"
+  // (i.e. the customer has received it). Also allow invoicing from a
+  // "paid" proforma for retroactive record-keeping.
+  const canCreateInvoice = proforma.status === "sent" || proforma.status === "paid";
+
+  // ─── Auto-saved revisions (from recordRevision in the API layer) ───
+  const revisions = useQuery({
+    queryKey: ["document-revisions", tenantKey, proforma.id],
+    queryFn: async () => {
+      try {
+        const r = await fetch(api(`/api/document-revisions/${proforma.id}`));
+        if (!r.ok) return [];
+        const data = await r.json();
+        return ((data.items || []) as any[]).sort(
+          (a, b) => (b.version || 0) - (a.version || 0),
+        );
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!proforma.id,
+  });
+  const revisionList = revisions.data || [];
 
   return (
     <div className="px-4 pb-6">
@@ -488,6 +539,24 @@ function ProformaDetail({
               {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="default"
+            onClick={onCreateInvoice}
+            disabled={creatingInvoice || !canCreateInvoice}
+            title={
+              canCreateInvoice
+                ? "Create a new invoice from this proforma"
+                : "Proforma must be sent before an invoice can be created"
+            }
+          >
+            {creatingInvoice ? (
+              <Loader2 className="size-4 mr-1 animate-spin" />
+            ) : (
+              <FileText className="size-4 mr-1" />
+            )}
+            Create Invoice
+          </Button>
           {proforma.status !== "paid" && proforma.status !== "expired" && (
             <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700">
               <CheckCircle2 className="size-4 mr-1" /> Mark as paid
@@ -605,6 +674,91 @@ function ProformaDetail({
           {downloading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Download className="size-4 mr-1" />}
           Download PDF
         </Button>
+      </div>
+
+      {/* Version History (auto-saved revisions) */}
+      <div className="pt-4 mt-4 border-t">
+        <h4 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
+          <History className="size-4" /> Version History
+          <Badge variant="outline" className="ml-1 font-mono text-xs">
+            v{(proforma as any).version || 1}
+          </Badge>
+        </h4>
+        {revisions.isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : revisionList.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
+            <History className="size-6 text-muted-foreground/40 mx-auto mb-1" />
+            <p className="text-sm text-muted-foreground">No revisions yet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Every edit to this proforma is automatically saved as a version.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border/60 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-20">Version</TableHead>
+                  <TableHead>Changes</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
+                  <TableHead className="w-36">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {revisionList.map((rev: any, i: number) => {
+                  const fields: any[] = Array.isArray(rev.changed_fields) ? rev.changed_fields : [];
+                  return (
+                    <TableRow key={rev.id || i}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          V{rev.version}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm align-top">
+                        {rev.change_note ? (
+                          <p className="mb-1">{rev.change_note}</p>
+                        ) : null}
+                        {fields.length > 0 ? (
+                          <div className="space-y-1">
+                            {fields.slice(0, 4).map((c: any, idx: number) => (
+                              <div key={idx} className="text-xs">
+                                <span className="font-medium">{c.field}:</span>{" "}
+                                <span className="text-red-600 dark:text-red-400 line-through">
+                                  {String(c.before ?? "").slice(0, 40) || "∅"}
+                                </span>{" "}
+                                →{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">
+                                  {String(c.after ?? "").slice(0, 40) || "∅"}
+                                </span>
+                              </div>
+                            ))}
+                            {fields.length > 4 ? (
+                              <div className="text-xs text-muted-foreground">
+                                +{fields.length - 4} more field{fields.length - 4 === 1 ? "" : "s"}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground align-top">
+                        {rev.changed_by_username || rev.created_by || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground tabular-nums align-top">
+                        {fmtDateTime(rev.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
     </div>
   );
