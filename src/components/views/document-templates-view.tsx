@@ -34,19 +34,39 @@ import {
   Plus, Pencil, Trash2, FileText, Star, Copy, Save, Eye, LayoutTemplate,
   Type, Palette, Table as TableIcon, AlignCenter, AlignJustify,
   Building2, Stamp, ShieldCheck, Upload, ImageIcon, X, Lock,
-  Waves, Droplet, RotateCw, MapPin, Pen, Layers,
+  Waves, Droplet, RotateCw, MapPin, Pen, Layers, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { TemplateVisualEditor } from "@/components/common/template-visual-editor";
 import { BankAccountSelector } from "@/components/common/bank-account-selector";
+import {
+  TemplateContentEditor,
+  parseContentConfig,
+  substitutePlaceholders,
+  DEFAULT_HEADER_CONTENT_JSON,
+  DEFAULT_FOOTER_CONTENT_JSON,
+  type ContentSegment,
+} from "@/components/common/template-content-editor";
 import { fmtDate } from "@/lib/utils/format";
 import {
   DocumentTemplate, TenantLetterhead, TenantSeal, Tenant,
 } from "@/lib/supabase/types";
 import { useAppStore, isAdmin, isSuperAdmin } from "@/lib/store/app-store";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import {
+  STARTER_TEMPLATES,
+  type StarterTemplate,
+} from "@/lib/data/starter-templates";
 
 // ============================================================
 // Constants
@@ -131,6 +151,62 @@ function substituteForPreview(text: string): string {
     .replace(/{{payment_terms}}/g, "30% advance, 70% before shipment")
     .replace(/{{page_number}}/g, "1")
     .replace(/{{doc_number}}/g, "OF-2026-0014");
+}
+
+// Sample data used by the live preview to substitute the new {placeholder}
+// tokens introduced by the TemplateContentEditor. The legacy {{token}}
+// syntax is handled by substituteForPreview() above.
+const PREVIEW_PLACEHOLDER_DATA = {
+  company_name: "Aspidus Trading",
+  company_address: "Trg Republike 5, Belgrade",
+  company_city: "Belgrade",
+  company_country: "Serbia",
+  company_reg: "RS-12345678",
+  company_vat: "RS123456789",
+  company_tax_id: "Tax-001",
+  company_phone: "+381 11 555 0100",
+  company_email: "office@aspidus.com",
+  company_website: "aspidus.com",
+  bank_name: "Raiffeisen Bank",
+  bank_iban: "RS35 2600 0560 0012 3456 78",
+  bank_swift: "RAFRCSBG",
+  doc_number: "OF-2026-0014",
+  doc_date: "14 Mar 2026",
+  valid_until: "14 Apr 2026",
+  due_date: "14 Apr 2026",
+  partner_name: "Mediterra Exports GmbH",
+  partner_address: "Hafenstraße 4, 20457 Hamburg, Germany",
+  total: "$1,601,316",
+  currency: "USD",
+  page_number: 1,
+  total_pages: 1,
+};
+
+/**
+ * Resolve raw `header_content` / `footer_content` (which may be either the
+ * new JSON {segments:[…]} format or the legacy plain-text format) into a
+ * list of styled segments with placeholders substituted for the live preview.
+ */
+function resolvePreviewSegments(content: string): ContentSegment[] {
+  const cfg = parseContentConfig(content);
+  if (cfg) {
+    return cfg.segments.map((s) => ({
+      ...s,
+      text: substitutePlaceholders(s.text, PREVIEW_PLACEHOLDER_DATA),
+    }));
+  }
+  // Fallback: legacy plain text — render as one muted line.
+  return [
+    {
+      id: "legacy",
+      text: substituteForPreview(content || ""),
+      fontSize: 8,
+      bold: false,
+      italic: false,
+      color: "#64748b",
+      alignment: "left",
+    },
+  ];
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -264,13 +340,13 @@ function defaultTemplate(name = "Untitled template"): TemplateFormState {
     page_margin_right: 18,
     header_enabled: true,
     header_height: 24,
-    header_content: "{{company_name}}\n{{company_address}} · {{company_email}} · {{company_phone}}",
+    header_content: DEFAULT_HEADER_CONTENT_JSON,
     header_show_logo: true,
     header_show_company_name: true,
     header_show_contact: true,
     footer_enabled: true,
     footer_height: 18,
-    footer_content: "{{company_bank}} — IBAN: {{company_iban}} — SWIFT: {{company_swift}}",
+    footer_content: DEFAULT_FOOTER_CONTENT_JSON,
     footer_show_page_number: true,
     footer_show_bank_details: true,
     footer_show_tax_id: true,
@@ -823,6 +899,56 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
 // Tab 3: Templates (Offers / Invoices / Proformas / etc.)
 // ============================================================
 
+/**
+ * "New Template" dropdown button — exposes a blank template option plus
+ * the three professional starter templates (offer / invoice / proforma).
+ * Used in both the page header and the empty-state CTA so users always
+ * have the same starter-picker available.
+ */
+function NewTemplateDropdown({
+  onBlank,
+  onStarter,
+}: {
+  onBlank: () => void;
+  onStarter: (starter: StarterTemplate) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button>
+          <Plus className="size-4 mr-1" /> New Template
+          <ChevronDown className="size-4 ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuItem onClick={onBlank}>
+          <FileText className="size-4 mr-2" />
+          <span>Blank template</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Start from a starter
+        </DropdownMenuLabel>
+        {STARTER_TEMPLATES.map((starter) => (
+          <DropdownMenuItem
+            key={starter.type}
+            onClick={() => onStarter(starter)}
+            className="items-start py-2"
+          >
+            <LayoutTemplate className="size-4 mr-2 mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-medium leading-tight">{starter.name}</span>
+              <span className="text-xs text-muted-foreground leading-snug">
+                {starter.description}
+              </span>
+            </div>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
@@ -834,9 +960,30 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<DocumentTemplate | null>(null);
+  // `draft` holds the initial form values for a brand-new template that
+  // was created from a starter (e.g. "Professional Offer Template"). When
+  // set, the editor dialog seeds the form from `draft` instead of the
+  // built-in `defaultTemplate()`. Cleared on dialog close.
+  const [draft, setDraft] = useState<TemplateFormState | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<DocumentTemplate | null>(null);
+
+  // Open the editor with a blank form (uses defaultTemplate()).
+  function handleNewBlank() {
+    setEditing(null);
+    setDraft(null);
+    setShowForm(true);
+  }
+
+  // Open the editor pre-filled with a starter template's settings.
+  // `starter.template` is a `Partial<DocumentTemplate>` containing every
+  // TemplateFormState field, so a cast is safe here.
+  function handleNewFromStarter(starter: StarterTemplate) {
+    setEditing(null);
+    setDraft(starter.template as TemplateFormState);
+    setShowForm(true);
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["document-templates", tenantKey, tenantQuery],
@@ -953,9 +1100,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
             {items.length} template{items.length === 1 ? "" : "s"} configured
           </p>
         </div>
-        <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-          <Plus className="size-4 mr-1" /> New Template
-        </Button>
+        <NewTemplateDropdown onBlank={handleNewBlank} onStarter={handleNewFromStarter} />
       </div>
 
       {isLoading ? (
@@ -970,9 +1115,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
           title="No document templates"
           description="Create your first template to start generating branded PDFs for offers, invoices, and proformas."
           action={
-            <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New Template
-            </Button>
+            <NewTemplateDropdown onBlank={handleNewBlank} onStarter={handleNewFromStarter} />
           }
         />
       ) : (
@@ -1054,14 +1197,19 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
 
       <TemplateEditorDialog
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={(o) => {
+          setShowForm(o);
+          if (!o) setDraft(null);
+        }}
         template={editing}
+        draft={draft}
         tenantQuery={tenantQuery}
         tenant={tenant}
         letterheads={letterheads}
         seals={seals}
         onSaved={() => {
           setShowForm(false);
+          setDraft(null);
           qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
         }}
       />
@@ -2054,11 +2202,17 @@ function SealPreview({ form }: { form: SealFormState }) {
 // ============================================================
 
 function TemplateEditorDialog({
-  open, onOpenChange, template, tenantQuery, tenant, letterheads, seals, onSaved,
+  open, onOpenChange, template, draft, tenantQuery, tenant, letterheads, seals, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   template: DocumentTemplate | null;
+  /**
+   * Optional initial form values for a brand-new template created from a
+   * starter (e.g. "Professional Offer Template"). Only consulted when
+   * `template` is null. Ignored when editing an existing template.
+   */
+  draft?: TemplateFormState | null;
   tenantQuery: string;
   tenant: Tenant | null;
   letterheads: TenantLetterhead[];
@@ -2073,9 +2227,10 @@ function TemplateEditorDialog({
 
   useEffect(() => {
     if (open) {
-      setForm(template ? { ...template } : defaultTemplate());
+      // Edit-existing takes priority, then starter draft, then blank default.
+      setForm(template ? { ...template } : draft ? { ...draft } : defaultTemplate());
     }
-  }, [open, template]);
+  }, [open, template, draft]);
 
   function set<K extends keyof TemplateFormState>(k: K, v: TemplateFormState[K]) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -2254,9 +2409,17 @@ function TemplateEditorDialog({
                         {form.header_enabled && (
                           <>
                             <Field label="Height (mm)"><NumberInput value={form.header_height} onChange={(v) => set("header_height", v)} min={5} max={80} /></Field>
-                            <Field label="Header content">
-                              <Textarea value={form.header_content} onChange={(e) => set("header_content", e.target.value)} rows={3} placeholder="{{company_name}} — {{company_address}}" className="font-mono text-xs" />
-                            </Field>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Header content</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Define what text appears in the document header. Use placeholders to auto-fill company data.
+                              </p>
+                              <TemplateContentEditor
+                                value={form.header_content || DEFAULT_HEADER_CONTENT_JSON}
+                                onChange={(val) => set("header_content", val)}
+                                label="Header Content"
+                              />
+                            </div>
                             <div className="grid grid-cols-3 gap-2">
                               <ToggleField label="Logo" checked={form.header_show_logo} onChange={(v) => set("header_show_logo", v)} />
                               <ToggleField label="Name" checked={form.header_show_company_name} onChange={(v) => set("header_show_company_name", v)} />
@@ -2281,9 +2444,17 @@ function TemplateEditorDialog({
                         {form.footer_enabled && (
                           <>
                             <Field label="Height (mm)"><NumberInput value={form.footer_height} onChange={(v) => set("footer_height", v)} min={5} max={60} /></Field>
-                            <Field label="Footer content">
-                              <Textarea value={form.footer_content} onChange={(e) => set("footer_content", e.target.value)} rows={3} placeholder="{{company_bank}} — IBAN {{company_iban}}" className="font-mono text-xs" />
-                            </Field>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Footer content</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Define what text appears in the document footer. Use placeholders to auto-fill company data.
+                              </p>
+                              <TemplateContentEditor
+                                value={form.footer_content || DEFAULT_FOOTER_CONTENT_JSON}
+                                onChange={(val) => set("footer_content", val)}
+                                label="Footer Content"
+                              />
+                            </div>
                             <div className="grid grid-cols-3 gap-2">
                               <ToggleField label="Page #" checked={form.footer_show_page_number} onChange={(v) => set("footer_show_page_number", v)} />
                               <ToggleField label="Bank" checked={form.footer_show_bank_details} onChange={(v) => set("footer_show_bank_details", v)} />
@@ -2398,6 +2569,7 @@ function TemplateEditorDialog({
               template={form}
               onChange={(updates) => setForm((p) => ({ ...p, ...updates }))}
               pageSize={form.page_size === "Letter" ? "Letter" : "A4"}
+              letterhead={linkedLetterhead}
             />
           </TabsContent>
         </Tabs>
@@ -2428,8 +2600,8 @@ function TemplatePreview({
   const pageHeightPx = Math.round(pageWidthPx * 1.414);
   const mmToPx = (mm: number) => (mm / 210) * pageWidthPx;
 
-  const headerText = useMemo(() => substituteForPreview(form.header_content), [form.header_content]);
-  const footerText = useMemo(() => substituteForPreview(form.footer_content), [form.footer_content]);
+  const headerSegments = useMemo(() => resolvePreviewSegments(form.header_content), [form.header_content]);
+  const footerSegments = useMemo(() => resolvePreviewSegments(form.footer_content), [form.footer_content]);
 
   // Resolve brand colors: template overrides letterhead
   const primaryColor = form.primary_color || letterhead?.primary_color || "#0f766e";
@@ -2518,8 +2690,24 @@ function TemplatePreview({
             {form.header_show_company_name && (
               <div className="min-w-0">
                 <div style={{ color: primaryColor, fontWeight: 700, fontSize: 14 }}>{companyName}</div>
-                {form.header_show_contact && (
-                  <div style={{ fontSize: 8, color: "#64748b", whiteSpace: "pre-line" }}>{headerText}</div>
+                {form.header_show_contact && headerSegments.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {headerSegments.map((seg) => (
+                      <div
+                        key={seg.id}
+                        style={{
+                          fontSize: seg.fontSize,
+                          fontWeight: seg.bold ? 700 : 400,
+                          fontStyle: seg.italic ? "italic" : "normal",
+                          color: seg.color,
+                          textAlign: seg.alignment,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {seg.text}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -2599,7 +2787,23 @@ function TemplatePreview({
             gap: 8,
           }}
         >
-          <div style={{ whiteSpace: "pre-line", flex: 1 }}>{footerText}</div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            {footerSegments.map((seg) => (
+              <div
+                key={seg.id}
+                style={{
+                  fontSize: seg.fontSize,
+                  fontWeight: seg.bold ? 700 : 400,
+                  fontStyle: seg.italic ? "italic" : "normal",
+                  color: seg.color,
+                  textAlign: seg.alignment,
+                  lineHeight: 1.3,
+                }}
+              >
+                {seg.text}
+              </div>
+            ))}
+          </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
             {form.footer_show_tax_id && <div>VAT: RS123456789</div>}
             {form.footer_show_page_number && <div style={{ color: accentColor, fontWeight: 600 }}>Page 1 of 1</div>}

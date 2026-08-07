@@ -4,6 +4,7 @@
 
 import { Store, ListParams, ListResult } from "./store";
 import { getSupabase } from "@/lib/supabase/client";
+import { ensureStarterTemplates } from "./starter-templates";
 import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
@@ -1038,8 +1039,27 @@ export class SupabaseStore implements Store {
 
     // 3) Auto-create a default template from the tenant's default (or first)
     //    letterhead + seal so PDFs actually use the configured branding. This
-    //    is idempotent: we only get here when NO template exists yet.
+    //    is idempotent: we only get here when NO default template exists yet.
     try {
+      // 3a) If the tenant has zero templates at all, seed the professional
+      //     starter pack (offer / invoice / proforma). This gives brand-new
+      //     tenants a sensible default for every document type without
+      //     requiring them to visit the Templates view first. The starter
+      //     templates are is_default=true for their respective types, so
+      //     after seeding we can short-circuit and return the matching one.
+      const allTemplates = await this.listDocumentTemplates(tenantId);
+      if (allTemplates.length === 0) {
+        await ensureStarterTemplates(tenantId, this);
+        const { data: starterMatch } = await this.sb()
+          .from("document_templates")
+          .select(SupabaseStore.TEMPLATE_SELECT)
+          .eq("tenant_id", tenantId)
+          .eq("type", type)
+          .eq("is_default", true)
+          .maybeSingle();
+        if (starterMatch) return starterMatch as DocumentTemplate;
+      }
+
       const letterheads = await this.listLetterheads(tenantId);
       const seals = await this.listSeals(tenantId);
       const activeLetterhead =

@@ -1,6 +1,14 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image, Font, Link } from "@react-pdf/renderer";
 import type { Offer, Invoice, Proforma, OfferLineItem, Partner, Tenant, DocumentTemplate } from "@/lib/supabase/types";
+import {
+  parseContentConfig,
+  substitutePlaceholders,
+  hasPagePlaceholders,
+  type ContentSegment,
+  type PlaceholderData,
+} from "@/lib/utils/content-config";
+import { fmtDate as formatDate } from "@/lib/utils/format";
 
 // Allow very long "words" (SKUs, HS codes like 1006.30.10.00, IBANs) to break
 // across lines. Short words are kept intact so normal prose still looks clean.
@@ -309,6 +317,8 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     // Compact one-line text used for the optional bank-details and tax-id
     // rows in the footer (toggled by footer_show_bank_details / footer_show_tax_id).
     footerBankLine: { fontSize: 7, color: "#666" },
+    // Column wrapper that holds user-defined segments (TemplateContentEditor).
+    footerCustomSegmentCol: { flexDirection: "column", marginBottom: 4 },
     footerQr: { flexDirection: "column", alignItems: "center", gap: 2 },
     footerQrImage: { width: 35, height: 35 },
     footerQrLabel: { fontSize: 5.5, color: "#aaa", textAlign: "center" },
@@ -570,10 +580,61 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         }
       : null;
 
+  // ── Custom header/footer content segments ──────────────────────────
+  // The user may have defined rich multi-segment content via the
+  // TemplateContentEditor (stored as a JSON {segments:[…]} string in
+  // header_content / footer_content). When present, those segments replace
+  // the default address/contact/reg block in the header (and the default
+  // company/bank/tax lines in the footer). When absent, the legacy default
+  // rendering is used. Backwards-compatible: legacy plain-text content is
+  // wrapped into a single muted segment by parseContentConfig().
+  const placeholderData: PlaceholderData = {
+    company_name: tenant?.legal_name || tenant?.name || "",
+    company_address: tenant?.address_line || "",
+    company_city: tenant?.city || "",
+    company_country: tenant?.country || "",
+    company_reg: tenant?.registration_number || "",
+    company_vat: tenant?.vat_number || "",
+    company_tax_id: tenant?.tax_id || "",
+    company_phone: tenant?.phone || "",
+    company_email: tenant?.email || "",
+    company_website: tenant?.website || "",
+    bank_name: letterheadBank?.bankName || tenant?.bank_name || "",
+    bank_iban: letterheadBank?.iban || tenant?.bank_iban || "",
+    bank_swift: letterheadBank?.swift || tenant?.bank_swift || "",
+    doc_number: doc.number || "",
+    doc_date: formatDate((doc as any).issue_date || doc.created_at),
+    valid_until: formatDate((doc as any).valid_until),
+    due_date: formatDate((doc as any).due_date),
+    partner_name: partner?.name || "",
+    partner_address: partner?.address_line || "",
+    total: fmtMoney(doc.total, doc.currency),
+    currency: doc.currency || "",
+    // page_number / total_pages intentionally left undefined — react-pdf
+    // fills them at page render time via the <Text render={…}> callback.
+  };
+
+  const headerSegments: ContentSegment[] = (() => {
+    const cfg = parseContentConfig(tpl?.header_content);
+    if (!cfg) return [];
+    return cfg.segments.map((s) => ({ ...s, text: substitutePlaceholders(s.text, placeholderData) }));
+  })();
+  const footerSegments: ContentSegment[] = (() => {
+    const cfg = parseContentConfig(tpl?.footer_content);
+    if (!cfg) return [];
+    return cfg.segments.map((s) => ({ ...s, text: substitutePlaceholders(s.text, placeholderData) }));
+  })();
+
   // ── HEADER (memorandum — repeats on every page) ────────────────────
   // Rendered only when tpl.header_enabled !== false. Within the header,
   // individual elements are toggled by header_show_logo / _show_company_name /
   // _show_contact (all default to true when undefined).
+  //
+  // When header_content contains user-defined segments (from the
+  // TemplateContentEditor), those segments replace the default
+  // address/contact/reg block — giving the user full control over what
+  // appears under the company name. When no segments are defined, the
+  // legacy default block is rendered.
   const HeaderContent = () => {
     if (!headerEnabled) return null;
     const contactParts = [
@@ -587,6 +648,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       tenant?.tax_id && `Tax# ${tenant.tax_id}`,
     ].filter(Boolean);
     const hasAddr = !!(tenant?.address_line || tenant?.city || tenant?.country);
+    const hasCustomSegments = headerSegments.length > 0;
     return (
       <View style={styles.header} fixed>
         {headerShowLogo && logoUrl ? (
@@ -601,46 +663,82 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
               {tenant?.legal_name || tenant?.name || "Company"}
             </Text>
           )}
-          {headerShowContact && hasAddr && (
-            <Text style={styles.companyAddr}>
-              {(() => {
-                // Build the address string WITHOUT duplicating city/country when
-                // they already appear inside `address_line`. E.g. tenant has
-                //   address_line = "GoldCrest..., JLT Cluster C, Dubai, UAE"
-                //   city = "Dubai"   country = "AE"
-                // → must render "GoldCrest..., JLT Cluster C, Dubai, UAE" (not "..., Dubai, UAE, Dubai, AE")
-                const addrLine = (tenant?.address_line || "").trim();
-                const city = (tenant?.city || "").trim();
-                const postal = (tenant?.postal_code || "").trim();
-                const country = (tenant?.country || "").trim();
-                const addrLower = addrLine.toLowerCase();
+          {hasCustomSegments ? (
+            // ── User-defined segments (TemplateContentEditor) ──
+            headerSegments.map((seg) => {
+              const segStyle: any = {
+                fontSize: seg.fontSize || 8,
+                color: seg.color || "#555",
+                fontWeight: seg.bold ? 700 : 400,
+                fontStyle: seg.italic ? "italic" : "normal",
+                textAlign: seg.alignment === "center" ? "center" : seg.alignment === "right" ? "right" : "left",
+                marginBottom: 1,
+              };
+              // Segments containing {page_number}/{total_pages} need react-pdf's
+              // render callback so the per-page values are filled at render time.
+              if (/\{page_number\}|\{total_pages\}/.test(seg.text)) {
+                return (
+                  <Text
+                    key={seg.id}
+                    style={segStyle}
+                    render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+                      seg.text
+                        .replace(/\{page_number\}/g, String(pageNumber))
+                        .replace(/\{total_pages\}/g, String(totalPages))
+                    }
+                  />
+                );
+              }
+              return (
+                <Text key={seg.id} style={segStyle}>
+                  {seg.text}
+                </Text>
+              );
+            })
+          ) : (
+            <>
+              {headerShowContact && hasAddr && (
+                <Text style={styles.companyAddr}>
+                  {(() => {
+                    // Build the address string WITHOUT duplicating city/country when
+                    // they already appear inside `address_line`. E.g. tenant has
+                    //   address_line = "GoldCrest..., JLT Cluster C, Dubai, UAE"
+                    //   city = "Dubai"   country = "AE"
+                    // → must render "GoldCrest..., JLT Cluster C, Dubai, UAE" (not "..., Dubai, UAE, Dubai, AE")
+                    const addrLine = (tenant?.address_line || "").trim();
+                    const city = (tenant?.city || "").trim();
+                    const postal = (tenant?.postal_code || "").trim();
+                    const country = (tenant?.country || "").trim();
+                    const addrLower = addrLine.toLowerCase();
 
-                const parts: string[] = [];
-                if (addrLine) parts.push(addrLine);
+                    const parts: string[] = [];
+                    if (addrLine) parts.push(addrLine);
 
-                // postal + city — only append if city isn't already in address_line
-                const cityAndPostal = [postal, city].filter(Boolean).join(" ");
-                if (cityAndPostal && !(city && addrLower.includes(city.toLowerCase()))) {
-                  parts.push(cityAndPostal);
-                }
-                // country — only append if not already mentioned in address_line
-                // (covers both full names like "UAE" and ISO codes like "AE")
-                if (country && !addrLower.includes(country.toLowerCase())) {
-                  parts.push(country);
-                }
-                return parts.join(", ");
-              })()}
-            </Text>
-          )}
-          {headerShowContact && contactParts.length > 0 && (
-            <Text style={styles.companyContact}>
-              {contactParts.join("  ·  ")}
-            </Text>
-          )}
-          {headerShowContact && regParts.length > 0 && (
-            <Text style={styles.companyReg}>
-              {regParts.join("  ·  ")}
-            </Text>
+                    // postal + city — only append if city isn't already in address_line
+                    const cityAndPostal = [postal, city].filter(Boolean).join(" ");
+                    if (cityAndPostal && !(city && addrLower.includes(city.toLowerCase()))) {
+                      parts.push(cityAndPostal);
+                    }
+                    // country — only append if not already mentioned in address_line
+                    // (covers both full names like "UAE" and ISO codes like "AE")
+                    if (country && !addrLower.includes(country.toLowerCase())) {
+                      parts.push(country);
+                    }
+                    return parts.join(", ");
+                  })()}
+                </Text>
+              )}
+              {headerShowContact && contactParts.length > 0 && (
+                <Text style={styles.companyContact}>
+                  {contactParts.join("  ·  ")}
+                </Text>
+              )}
+              {headerShowContact && regParts.length > 0 && (
+                <Text style={styles.companyReg}>
+                  {regParts.join("  ·  ")}
+                </Text>
+              )}
+            </>
           )}
         </View>
       </View>
@@ -654,6 +752,11 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
   //   • footer_show_page_number toggles "Page X of Y" (default true)
   //   • footer_show_bank_details toggles a compact bank line (default false)
   //   • footer_show_tax_id toggles Reg# / VAT# / Tax# (default false)
+  //
+  // When footer_content has user-defined segments (TemplateContentEditor),
+  // those replace the default top rows (company name / bank / tax). The
+  // bottom row (page-number / QR / generated-by) is preserved for legal
+  // attribution and verification.
   const FooterContent = () => {
     if (!footerEnabled) return null;
 
@@ -678,22 +781,60 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       tenant?.tax_id && `Tax# ${tenant.tax_id}`,
     ].filter(Boolean).join("  ·  ");
 
+    const hasCustomSegments = footerSegments.length > 0;
+
     return (
       <View style={styles.footer} fixed>
-        <View style={styles.footerTopRow}>
-          <Text style={styles.footerCompanyLine}>
-            {tenant?.legal_name || tenant?.name || "Company"}
-          </Text>
-        </View>
-        {footerShowBankDetails && footerBankLine && (
-          <View style={styles.footerTopRow}>
-            <Text style={styles.footerBankLine}>{footerBankLine}</Text>
+        {hasCustomSegments ? (
+          // ── User-defined segments (TemplateContentEditor) ──
+          <View style={styles.footerCustomSegmentCol}>
+            {footerSegments.map((seg) => {
+              const segStyle: any = {
+                fontSize: seg.fontSize || 7.5,
+                color: seg.color || "#666",
+                fontWeight: seg.bold ? 700 : 400,
+                fontStyle: seg.italic ? "italic" : "normal",
+                textAlign: seg.alignment === "center" ? "center" : seg.alignment === "right" ? "right" : "left",
+                marginBottom: 2,
+              };
+              if (/\{page_number\}|\{total_pages\}/.test(seg.text)) {
+                return (
+                  <Text
+                    key={seg.id}
+                    style={segStyle}
+                    render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+                      seg.text
+                        .replace(/\{page_number\}/g, String(pageNumber))
+                        .replace(/\{total_pages\}/g, String(totalPages))
+                    }
+                  />
+                );
+              }
+              return (
+                <Text key={seg.id} style={segStyle}>
+                  {seg.text}
+                </Text>
+              );
+            })}
           </View>
-        )}
-        {footerShowTaxId && footerTaxLine && (
-          <View style={styles.footerTopRow}>
-            <Text style={styles.footerBankLine}>{footerTaxLine}</Text>
-          </View>
+        ) : (
+          <>
+            <View style={styles.footerTopRow}>
+              <Text style={styles.footerCompanyLine}>
+                {tenant?.legal_name || tenant?.name || "Company"}
+              </Text>
+            </View>
+            {footerShowBankDetails && footerBankLine && (
+              <View style={styles.footerTopRow}>
+                <Text style={styles.footerBankLine}>{footerBankLine}</Text>
+              </View>
+            )}
+            {footerShowTaxId && footerTaxLine && (
+              <View style={styles.footerTopRow}>
+                <Text style={styles.footerBankLine}>{footerTaxLine}</Text>
+              </View>
+            )}
+          </>
         )}
         <View style={styles.footerBottomRow}>
           <View style={styles.footerLeftInfo}>

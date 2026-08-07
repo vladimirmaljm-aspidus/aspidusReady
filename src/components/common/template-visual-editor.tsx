@@ -3,10 +3,18 @@
 /**
  * TemplateVisualEditor
  * --------------------
- * A drag-and-drop visual editor for designing the layout of a PDF document
- * template. Users see a scaled A4/Letter page, drag field blocks to position
- * them, snap to edges / center / other elements, and fine-tune via the
- * properties panel. A mm ruler is shown on the top and left edges.
+ * A drag-and-drop WYSIWYG editor for designing the layout of a PDF document
+ * template. Users see a scaled A4/Letter page rendered with REAL content
+ * (company name, logo, sample line items, totals, etc.) — not just labels.
+ *
+ * Features:
+ *   • Live content preview — every field shows actual letterhead / template data
+ *   • Logo size + position control — drag corner to resize, drag body to move
+ *   • Multi-page preview — render 1 / 2 / 3 / 5 stacked pages
+ *   • Inline text editing — header / footer / custom text via properties panel
+ *   • Toolbar — ruler, grid, snap, add text, add image, zoom, page count
+ *   • Snap engine — to page edges, page center, and other elements
+ *   • mm ruler on top and left edges
  */
 
 import * as React from "react";
@@ -25,6 +33,10 @@ import {
   EyeOff,
   RotateCcw,
   Maximize2,
+  Grid3x3,
+  Plus,
+  Type,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +45,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -41,7 +55,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { DocumentTemplate } from "@/lib/supabase/types";
+import type { DocumentTemplate, TenantLetterhead } from "@/lib/supabase/types";
 
 // ============================================================
 // Types
@@ -66,7 +80,8 @@ export type FieldType =
   | "signatures"
   | "seal"
   | "footer"
-  | "custom_text";
+  | "custom_text"
+  | "custom_image";
 
 export interface FieldElement {
   id: string;
@@ -78,7 +93,7 @@ export interface FieldElement {
   height: number; // mm
   visible: boolean;
   locked: boolean;
-  props?: Record<string, unknown>; // field-specific props
+  props?: Record<string, unknown>; // field-specific props (e.g. content, logoUrl, logoWidth)
 }
 
 interface SnapGuide {
@@ -92,6 +107,9 @@ interface TemplateVisualEditorProps {
   onChange: (template: Partial<DocumentTemplate>) => void;
   /** Optional override; falls back to template.page_size, then A4. */
   pageSize?: "A4" | "Letter";
+  /** Linked letterhead supplies real company name, logo URL, bank details, etc.
+   *  Pass null when no letterhead is linked — the editor falls back to sample data. */
+  letterhead: TenantLetterhead | null;
 }
 
 // ============================================================
@@ -103,15 +121,16 @@ const PAGE_DIMENSIONS = {
   Letter: { width: 216, height: 279 },
 } as const;
 
-// 2x zoom for editing: 1 mm → 2 px on screen.
-const SCALE = 2;
+// Base screen scale: 1 mm → 2 px on screen at 100% zoom.
+const BASE_SCALE = 2;
 
 // Snap threshold in mm.
 const SNAP_THRESHOLD = 3;
 
-// Default field layout (positions in mm on A4).
+// Default field layout (positions in mm on A4). Logo is its own draggable element.
 const DEFAULT_FIELDS: FieldElement[] = [
-  { id: "header", type: "header", label: "Header (Memorandum)", x: 15, y: 8, width: 180, height: 25, visible: true, locked: false },
+  { id: "logo", type: "logo", label: "Logo", x: 15, y: 8, width: 40, height: 15, visible: true, locked: false, props: { logoWidth: 40, logoHeight: 15 } },
+  { id: "header", type: "header", label: "Header (Memorandum)", x: 60, y: 8, width: 135, height: 15, visible: true, locked: false },
   { id: "doc_title", type: "doc_title", label: "Document Title", x: 15, y: 40, width: 180, height: 12, visible: true, locked: false },
   { id: "doc_meta", type: "doc_meta", label: "Doc # + Date", x: 15, y: 54, width: 180, height: 14, visible: true, locked: false },
   { id: "from_box", type: "from_box", label: "FROM (Seller)", x: 15, y: 74, width: 87, height: 40, visible: true, locked: false },
@@ -126,6 +145,380 @@ const DEFAULT_FIELDS: FieldElement[] = [
   { id: "signatures", type: "signatures", label: "Signatures", x: 15, y: 277, width: 180, height: 14, visible: true, locked: false },
   { id: "footer", type: "footer", label: "Footer", x: 15, y: 286, width: 180, height: 8, visible: true, locked: false },
 ];
+
+// ============================================================
+// Sample data (realistic trade document examples)
+// ============================================================
+
+interface SampleRow {
+  sku: string;
+  name: string;
+  qty: number;
+  unit: string;
+  price: number;
+  total: number;
+}
+
+const SAMPLE_LINE_ITEMS: SampleRow[] = [
+  { sku: "SUG-IC45", name: "White Sugar ICUMSA 45", qty: 24, unit: "MT", price: 540, total: 12960 },
+  { sku: "WHT-1250", name: "Hard Red Winter Wheat", qty: 68, unit: "MT", price: 374, total: 25400 },
+  { sku: "OIL-SUN", name: "Refined Sunflower Oil", qty: 8, unit: "MT", price: 1160, total: 9280 },
+  { sku: "CMT-PC42", name: "Portland Cement 42.5N", qty: 200, unit: "MT", price: 78, total: 15600 },
+  { sku: "ALU-A7", name: "Aluminium Ingot A7", qty: 40, unit: "MT", price: 2150, total: 86000 },
+];
+
+const DOC_TYPE_LABELS: Record<NonNullable<DocumentTemplate["type"]>, string> = {
+  offer: "OFFER",
+  invoice: "INVOICE",
+  proforma: "PROFORMA INVOICE",
+  contract: "CONTRACT",
+  generic: "DOCUMENT",
+};
+
+// ============================================================
+// Live content helpers — pull real data from template + letterhead
+// ============================================================
+
+function buildCompanyAddress(letterhead: TenantLetterhead | null): string {
+  if (!letterhead) return "Trg Republike 5, Belgrade";
+  const parts: string[] = [];
+  if (letterhead.company_address_line) parts.push(letterhead.company_address_line);
+  const cityLine = [letterhead.company_postal_code, letterhead.company_city]
+    .filter(Boolean)
+    .join(" ");
+  if (cityLine) parts.push(cityLine);
+  if (letterhead.company_country) parts.push(letterhead.company_country);
+  return parts.length ? parts.join(", ") : "Trg Republike 5, Belgrade";
+}
+
+function getCompanyName(letterhead: TenantLetterhead | null): string {
+  return (
+    letterhead?.company_name ||
+    letterhead?.company_legal_name ||
+    "Aspidus Trading"
+  );
+}
+
+function getLogoUrl(letterhead: TenantLetterhead | null): string | null {
+  return letterhead?.logo_url || null;
+}
+
+function getRegNumber(letterhead: TenantLetterhead | null): string {
+  return (
+    letterhead?.company_registration_number ||
+    "DMCC-889293"
+  );
+}
+
+function getVatNumber(letterhead: TenantLetterhead | null): string | null {
+  return letterhead?.company_vat_number || null;
+}
+
+/** Substitute {{placeholders}} with live data for inline text rendering. */
+function substitutePlaceholders(
+  text: string,
+  template: Partial<DocumentTemplate>,
+  letterhead: TenantLetterhead | null
+): string {
+  return (text || "")
+    .replace(/{{company_name}}/g, getCompanyName(letterhead))
+    .replace(/{{company_legal_name}}/g, letterhead?.company_legal_name || getCompanyName(letterhead))
+    .replace(/{{company_address}}/g, buildCompanyAddress(letterhead))
+    .replace(/{{company_email}}/g, letterhead?.company_email || "office@aspidus.com")
+    .replace(/{{company_phone}}/g, letterhead?.company_phone || "+971 4 555 0100")
+    .replace(/{{company_website}}/g, letterhead?.company_website || "www.aspidus.com")
+    .replace(/{{company_vat}}/g, getVatNumber(letterhead) || "—")
+    .replace(/{{company_reg}}/g, getRegNumber(letterhead))
+    .replace(/{{company_bank}}/g, letterhead?.bank_name || "Abu Dhabi Islamic Bank")
+    .replace(/{{company_iban}}/g, letterhead?.bank_iban || "AE11 0200 0000 1234 5678 901")
+    .replace(/{{company_swift}}/g, letterhead?.bank_swift || "ABDIAEAD")
+    .replace(/{{doc_number}}/g, "OF-2026-0014")
+    .replace(/{{doc_date}}/g, "14 Mar 2026")
+    .replace(/{{doc_valid}}/g, "14 Apr 2026")
+    .replace(/{{payment_terms}}/g, "30% advance, 70% before shipment")
+    .replace(/{{page_number}}/g, "1")
+    .replace(/{{page_total}}/g, String(5))
+    .replace(/{company_name}/g, getCompanyName(letterhead))
+    .replace(/{address}/g, buildCompanyAddress(letterhead))
+    .replace(/{reg}/g, getRegNumber(letterhead))
+    .replace(/{vat}/g, getVatNumber(letterhead) || "—")
+    .replace(/{date}/g, "14 Mar 2026");
+}
+
+/** Resolve the text content to render for header / footer / custom_text fields. */
+function resolveFieldContent(
+  field: FieldElement,
+  template: Partial<DocumentTemplate>
+): string {
+  const override = (field.props?.content as string) || "";
+  if (override) return override;
+  if (field.type === "header") return template.header_content || "";
+  if (field.type === "footer") return template.footer_content || "";
+  return "";
+}
+
+// ============================================================
+// Live field content renderer
+// ============================================================
+
+function MiniLineItemsTable({ rows }: { rows: SampleRow[] }) {
+  return (
+    <table className="w-full border-collapse text-[6px] leading-tight">
+      <thead>
+        <tr className="bg-slate-700 text-white">
+          <th className="border border-slate-400 px-0.5 py-0.5 text-left font-semibold">SKU</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-left font-semibold">Product</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">Qty</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">Price</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={r.sku} className={i % 2 === 1 ? "bg-slate-100" : ""}>
+            <td className="border border-slate-300 px-0.5 py-0.5 text-teal-700 font-semibold">{r.sku}</td>
+            <td className="border border-slate-300 px-0.5 py-0.5 truncate max-w-[60px]">{r.name}</td>
+            <td className="border border-slate-300 px-0.5 py-0.5 text-right">{r.qty} {r.unit}</td>
+            <td className="border border-slate-300 px-0.5 py-0.5 text-right">${r.price.toLocaleString()}</td>
+            <td className="border border-slate-300 px-0.5 py-0.5 text-right font-semibold">${r.total.toLocaleString()}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function renderFieldContent(
+  field: FieldElement,
+  template: Partial<DocumentTemplate>,
+  letterhead: TenantLetterhead | null
+): React.ReactNode {
+  const companyName = getCompanyName(letterhead);
+  const logoUrl = getLogoUrl(letterhead);
+  const address = buildCompanyAddress(letterhead);
+  const vat = getVatNumber(letterhead);
+  const reg = getRegNumber(letterhead);
+  const docType = template.type || "offer";
+  const docTypeLabel = DOC_TYPE_LABELS[docType] || "DOCUMENT";
+  const primaryColor = template.primary_color || letterhead?.primary_color || "#0f766e";
+  const accentColor = template.accent_color || letterhead?.accent_color || "#0d9488";
+  const bankName = letterhead?.bank_name || "Abu Dhabi Islamic Bank";
+  const iban = letterhead?.bank_iban || "AE11 0200 0000 1234 5678 901";
+
+  switch (field.type) {
+    case "logo":
+      return logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt="Company logo"
+          className="h-full w-full object-contain"
+          draggable={false}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-teal-700/10 text-[7px] font-semibold text-teal-700">
+          [ LOGO ]
+        </div>
+      );
+
+    case "header": {
+      const rawContent = resolveFieldContent(field, template);
+      if (rawContent.trim()) {
+        return (
+          <div className="whitespace-pre-line text-[6.5px] leading-tight text-slate-700">
+            {substitutePlaceholders(rawContent, template, letterhead)}
+          </div>
+        );
+      }
+      return (
+        <div className="flex h-full w-full flex-col justify-center text-[6.5px] leading-tight">
+          {template.header_show_company_name !== false && (
+            <div className="text-[8px] font-bold leading-none" style={{ color: primaryColor }}>
+              {companyName}
+            </div>
+          )}
+          {template.header_show_contact !== false && (
+            <div className="mt-0.5 text-slate-500 truncate">
+              {address}
+              {letterhead?.company_email ? ` · ${letterhead.company_email}` : ""}
+              {letterhead?.company_phone ? ` · ${letterhead.company_phone}` : ""}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    case "company_name":
+      return (
+        <div className="text-[8px] font-bold" style={{ color: primaryColor }}>
+          {companyName}
+        </div>
+      );
+
+    case "company_address":
+      return (
+        <div className="text-[6px] text-slate-500 leading-tight">{address}</div>
+      );
+
+    case "doc_title":
+      return (
+        <div className="flex h-full w-full items-center">
+          <span className="text-[11px] font-extrabold tracking-[0.15em]" style={{ color: primaryColor }}>
+            {docTypeLabel}
+          </span>
+        </div>
+      );
+
+    case "doc_meta":
+      return (
+        <div className="flex h-full w-full items-center justify-between text-[6.5px] text-slate-600">
+          <span>No: <span className="font-semibold text-slate-800">OF-2026-0014</span></span>
+          <span>Date: <span className="font-semibold text-slate-800">14 Mar 2026</span></span>
+          <span>Valid: <span className="font-semibold text-slate-800">14 Apr 2026</span></span>
+        </div>
+      );
+
+    case "from_box":
+      return (
+        <div className="h-full w-full text-[6px] leading-tight">
+          <div className="text-[6px] font-bold uppercase tracking-wide text-slate-400">From</div>
+          <div className="text-[7px] font-bold" style={{ color: primaryColor }}>{companyName}</div>
+          <div className="text-slate-500">{address}</div>
+          {vat && <div className="text-slate-500">VAT: {vat}</div>}
+          {letterhead?.company_email && <div className="text-slate-500">{letterhead.company_email}</div>}
+        </div>
+      );
+
+    case "to_box":
+      return (
+        <div className="h-full w-full text-[6px] leading-tight">
+          <div className="text-[6px] font-bold uppercase tracking-wide text-slate-400">Bill to</div>
+          <div className="text-[7px] font-bold text-slate-800">Mediterra Exports GmbH</div>
+          <div className="text-slate-500">Hafenstraße 4, 20457 Hamburg</div>
+          <div className="text-slate-500">Germany</div>
+          <div className="text-slate-500">VAT: DE876543210</div>
+        </div>
+      );
+
+    case "trade_terms":
+      return (
+        <div className="flex h-full w-full items-center justify-between text-[6.5px]">
+          <span className="font-semibold text-slate-800">Incoterm: <span style={{ color: primaryColor }}>EXW · Hamburg</span></span>
+          <span className="text-slate-500">Payment: <span className="font-semibold">Net 30</span></span>
+        </div>
+      );
+
+    case "line_items_table":
+      return <MiniLineItemsTable rows={SAMPLE_LINE_ITEMS.slice(0, 2)} />;
+
+    case "specifications":
+      return (
+        <div className="h-full w-full text-[6px] leading-tight">
+          <div className="text-[7px] font-bold text-slate-800">Specifications</div>
+          <div className="text-slate-600">Moisture: ≤14% · Foreign matter: ≤2% · Broken: ≤5%</div>
+          <div className="text-slate-600">Packing: 50kg PP bags · Origin: EU</div>
+          <div className="text-slate-600">Inspection: SGS at loading port</div>
+        </div>
+      );
+
+    case "totals": {
+      const subtotal = 12960 + 25400; // matches SAMPLE_LINE_ITEMS.slice(0,2)
+      const vat10 = Math.round(subtotal * 0.1);
+      const total = subtotal + vat10;
+      return (
+        <div className="h-full w-full text-right text-[6.5px] leading-tight">
+          <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>${subtotal.toLocaleString()}.00</span></div>
+          <div className="flex justify-between text-slate-500"><span>VAT (10%)</span><span>${vat10.toLocaleString()}.00</span></div>
+          <div className="mt-0.5 flex justify-between border-t pt-0.5 font-bold" style={{ borderColor: primaryColor, color: primaryColor }}>
+            <span>TOTAL</span><span>${total.toLocaleString()}.00</span>
+          </div>
+        </div>
+      );
+    }
+
+    case "amount_in_words":
+      return (
+        <div className="h-full w-full text-[6px] italic leading-tight text-slate-600">
+          <span className="font-semibold not-italic">Amount in words:</span> Forty-two thousand one hundred ninety-six US dollars only.
+        </div>
+      );
+
+    case "offer_text":
+      return (
+        <div className="h-full w-full text-[6px] leading-tight text-slate-600">
+          <span className="font-semibold" style={{ color: accentColor }}>Payment terms: </span>
+          30% advance, 70% before shipment. Delivery CIF Hamburg port. Inspection by SGS at loading.
+        </div>
+      );
+
+    case "bank_details":
+      return (
+        <div className="h-full w-full text-[6px] leading-tight">
+          <span className="font-semibold text-slate-800">Bank: </span>
+          <span className="text-slate-700">{bankName}</span>
+          <span className="text-slate-500"> · IBAN: {iban}</span>
+          {letterhead?.bank_swift && <span className="text-slate-500"> · SWIFT: {letterhead.bank_swift}</span>}
+        </div>
+      );
+
+    case "signatures":
+      return (
+        <div className="flex h-full w-full items-end justify-between text-[6px] text-slate-600">
+          <div className="flex flex-col items-center">
+            <div className="border-t border-slate-500" style={{ width: 50 }} />
+            <div className="mt-0.5">Seller signature</div>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="border-t border-slate-500" style={{ width: 50 }} />
+            <div className="mt-0.5">Buyer signature</div>
+          </div>
+        </div>
+      );
+
+    case "seal":
+      return (
+        <div className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-slate-300 text-[6px] text-slate-400">
+          [ SEAL ]
+        </div>
+      );
+
+    case "footer": {
+      const rawContent = resolveFieldContent(field, template);
+      const text = rawContent.trim()
+        ? substitutePlaceholders(rawContent, template, letterhead)
+        : `${companyName} · Reg#${reg}${vat ? ` · VAT: ${vat}` : ""} · Page 1 of 5`;
+      return (
+        <div className="h-full w-full truncate text-[6px] text-slate-500">
+          {text}
+        </div>
+      );
+    }
+
+    case "custom_text": {
+      const text = (field.props?.content as string) || "";
+      return (
+        <div className="h-full w-full whitespace-pre-line text-[7px] leading-tight text-slate-700">
+          {text || <span className="text-slate-400">{field.label}</span>}
+        </div>
+      );
+    }
+
+    case "custom_image": {
+      const url = (field.props?.imageUrl as string) || null;
+      return url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={field.label} className="h-full w-full object-contain" draggable={false} />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-[7px] text-slate-400">
+          [ IMAGE ]
+        </div>
+      );
+    }
+
+    default:
+      return <span className="text-slate-700">{field.label}</span>;
+  }
+}
 
 // ============================================================
 // Ruler Component
@@ -281,6 +674,69 @@ function findSnap(
 }
 
 // ============================================================
+// Continuation Page (page 2+) — static preview
+// ============================================================
+
+function ContinuationPage({
+  pageIdx,
+  pageCount,
+  template,
+  letterhead,
+  page,
+  scale,
+}: {
+  pageIdx: number;
+  pageCount: number;
+  template: Partial<DocumentTemplate>;
+  letterhead: TenantLetterhead | null;
+  page: { width: number; height: number };
+  scale: number;
+}) {
+  const companyName = getCompanyName(letterhead);
+  const logoUrl = getLogoUrl(letterhead);
+  const reg = getRegNumber(letterhead);
+  const primaryColor = template.primary_color || letterhead?.primary_color || "#0f766e";
+  // Show one extra sample row per continuation page (cycling through the list).
+  const rowIndex = (pageIdx - 1) % SAMPLE_LINE_ITEMS.length;
+  const row = SAMPLE_LINE_ITEMS[rowIndex];
+
+  return (
+    <div
+      className="relative bg-white shadow-lg"
+      style={{ width: page.width * scale, height: page.height * scale }}
+    >
+      {/* Continued header */}
+      <div
+        className="absolute left-0 right-0 flex items-center gap-1 border-b-2"
+        style={{ top: 8 * scale, height: 15 * scale, paddingLeft: 15 * scale, paddingRight: 15 * scale, borderColor: primaryColor }}
+      >
+        {logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt="" className="shrink-0 object-contain" style={{ width: 20, height: 12 }} draggable={false} />
+        )}
+        <span className="text-[8px] font-bold" style={{ color: primaryColor }}>{companyName}</span>
+        <span className="ml-auto text-[6px] text-slate-500">(continued)</span>
+      </div>
+
+      {/* Continued table */}
+      <div className="absolute" style={{ top: 30 * scale, left: 15 * scale, right: 15 * scale }}>
+        <MiniLineItemsTable rows={[row]} />
+        <div className="mt-1 text-[6px] italic text-slate-400">…continued from previous page</div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="absolute left-0 right-0 flex items-center justify-between border-t border-slate-300 text-[6px] text-slate-500"
+        style={{ bottom: 6 * scale, paddingLeft: 15 * scale, paddingRight: 15 * scale, paddingTop: 3 }}
+      >
+        <span className="truncate">{companyName} · Reg#{reg}</span>
+        <span>Page {pageIdx + 1} of {pageCount}</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // Main Component
 // ============================================================
 
@@ -299,6 +755,7 @@ export function TemplateVisualEditor({
   template,
   onChange,
   pageSize,
+  letterhead,
 }: TemplateVisualEditorProps) {
   const [fields, setFields] = React.useState<FieldElement[]>(
     DEFAULT_FIELDS.map((f) => ({ ...f }))
@@ -307,14 +764,21 @@ export function TemplateVisualEditor({
   const [dragging, setDragging] = React.useState<DragState | null>(null);
   const [activeGuides, setActiveGuides] = React.useState<SnapGuide[]>([]);
   const [showRuler, setShowRuler] = React.useState(true);
+  const [showGrid, setShowGrid] = React.useState(false);
   const [snapEnabled, setSnapEnabled] = React.useState(true);
+  const [zoom, setZoom] = React.useState(1);
+  const [pageCount, setPageCount] = React.useState(1);
+  const [customFieldCounter, setCustomFieldCounter] = React.useState(0);
+
+  // Effective scale combines the base pixel-per-mm with zoom factor.
+  const renderScale = BASE_SCALE * zoom;
 
   // Effective page size: explicit prop wins, then template.page_size, then A4.
   const effectivePageSize: "A4" | "Letter" =
     pageSize ?? (template.page_size === "Letter" ? "Letter" : "A4");
   const page = PAGE_DIMENSIONS[effectivePageSize];
-  const pageWidthPx = page.width * SCALE;
-  const pageHeightPx = page.height * SCALE;
+  const pageWidthPx = page.width * renderScale;
+  const pageHeightPx = page.height * renderScale;
 
   const selected = fields.find((f) => f.id === selectedId) ?? null;
 
@@ -347,8 +811,8 @@ export function TemplateVisualEditor({
     if (!dragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const dx = (e.clientX - dragging.startX) / SCALE;
-      const dy = (e.clientY - dragging.startY) / SCALE;
+      const dx = (e.clientX - dragging.startX) / renderScale;
+      const dy = (e.clientY - dragging.startY) / renderScale;
 
       setFields((prev) =>
         prev.map((f) => {
@@ -408,7 +872,8 @@ export function TemplateVisualEditor({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragging, snapEnabled, page.width, page.height]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging, snapEnabled, page.width, page.height, renderScale]);
 
   // ---------------------------------------------------------
   // Template / field mutations
@@ -421,6 +886,14 @@ export function TemplateVisualEditor({
   const updateField = (id: string, updates: Partial<FieldElement>) => {
     setFields((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
+    );
+  };
+
+  const updateFieldProps = (id: string, props: Record<string, unknown>) => {
+    setFields((prev) =>
+      prev.map((f) =>
+        f.id === id ? { ...f, props: { ...(f.props || {}), ...props } } : f
+      )
     );
   };
 
@@ -452,6 +925,52 @@ export function TemplateVisualEditor({
     setFields(DEFAULT_FIELDS.map((f) => ({ ...f })));
     setSelectedId(null);
     setActiveGuides([]);
+    setCustomFieldCounter(0);
+  };
+
+  const addCustomText = () => {
+    const idx = customFieldCounter + 1;
+    const newField: FieldElement = {
+      id: `custom_text_${Date.now()}`,
+      type: "custom_text",
+      label: `Custom Text ${idx}`,
+      x: 60,
+      y: 60 + idx * 4,
+      width: 90,
+      height: 12,
+      visible: true,
+      locked: false,
+      props: { content: "Enter your text here..." },
+    };
+    setFields((prev) => [...prev, newField]);
+    setCustomFieldCounter(idx);
+    setSelectedId(newField.id);
+  };
+
+  const addCustomImage = () => {
+    const idx = customFieldCounter + 1;
+    const newField: FieldElement = {
+      id: `custom_image_${Date.now()}`,
+      type: "custom_image",
+      label: `Custom Image ${idx}`,
+      x: 80,
+      y: 100 + idx * 4,
+      width: 50,
+      height: 25,
+      visible: true,
+      locked: false,
+      props: { imageUrl: null },
+    };
+    setFields((prev) => [...prev, newField]);
+    setCustomFieldCounter(idx);
+    setSelectedId(newField.id);
+  };
+
+  const deleteField = (id: string) => {
+    // Prevent deletion of built-in default fields.
+    if (DEFAULT_FIELDS.some((f) => f.id === id)) return;
+    setFields((prev) => prev.filter((f) => f.id !== id));
+    if (selectedId === id) setSelectedId(null);
   };
 
   // ---------------------------------------------------------
@@ -461,6 +980,139 @@ export function TemplateVisualEditor({
   const marginBottom = template.page_margin_bottom ?? 20;
   const marginLeft = template.page_margin_left ?? 18;
   const marginRight = template.page_margin_right ?? 18;
+
+  // ---------------------------------------------------------
+  // Render the editable page (interactive field canvas)
+  // ---------------------------------------------------------
+  const renderEditorPage = () => (
+    <div
+      className="relative bg-white shadow-lg"
+      style={{ width: pageWidthPx, height: pageHeightPx }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setSelectedId(null);
+      }}
+    >
+      {/* Page margin guides (dashed blue) */}
+      <div
+        className="absolute border-l border-dashed border-blue-300/50"
+        style={{ left: marginLeft * renderScale, top: 0, bottom: 0 }}
+      />
+      <div
+        className="absolute border-r border-dashed border-blue-300/50"
+        style={{ right: marginRight * renderScale, top: 0, bottom: 0 }}
+      />
+      <div
+        className="absolute border-t border-dashed border-blue-300/50"
+        style={{ top: marginTop * renderScale, left: 0, right: 0 }}
+      />
+      <div
+        className="absolute border-b border-dashed border-blue-300/50"
+        style={{ bottom: marginBottom * renderScale, left: 0, right: 0 }}
+      />
+
+      {/* Grid overlay (5mm squares) */}
+      {showGrid && (
+        <div className="pointer-events-none absolute inset-0">
+          {Array.from({ length: Math.floor(page.width / 5) - 1 }).map((_, i) => (
+            <div
+              key={`gv-${i}`}
+              className="absolute top-0 bottom-0 border-l border-blue-200/30"
+              style={{ left: (i + 1) * 5 * renderScale }}
+            />
+          ))}
+          {Array.from({ length: Math.floor(page.height / 5) - 1 }).map((_, i) => (
+            <div
+              key={`gh-${i}`}
+              className="absolute left-0 right-0 border-t border-blue-200/30"
+              style={{ top: (i + 1) * 5 * renderScale }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Active snap guides (red) */}
+      {activeGuides.map((g, i) =>
+        g.orientation === "vertical" ? (
+          <div
+            key={`snap-v-${i}`}
+            className="absolute bg-red-500/60"
+            style={{
+              left: g.position * renderScale,
+              top: 0,
+              width: 1,
+              height: pageHeightPx,
+            }}
+          />
+        ) : (
+          <div
+            key={`snap-h-${i}`}
+            className="absolute bg-red-500/60"
+            style={{
+              top: g.position * renderScale,
+              left: 0,
+              height: 1,
+              width: pageWidthPx,
+            }}
+          />
+        )
+      )}
+
+      {/* Fields */}
+      {fields
+        .filter((f) => f.visible)
+        .map((f) => {
+          const isSelected = selectedId === f.id;
+          return (
+            <div
+              key={f.id}
+              onMouseDown={(e) => startDrag(e, f, "move")}
+              className={cn(
+                "absolute flex select-none flex-col overflow-hidden border text-[9px] font-medium leading-tight",
+                isSelected
+                  ? "z-10 cursor-move border-primary bg-primary/10"
+                  : "cursor-move border-blue-300 bg-blue-50/50 hover:bg-blue-50",
+                f.locked && "cursor-default opacity-60"
+              )}
+              style={{
+                left: f.x * renderScale,
+                top: f.y * renderScale,
+                width: f.width * renderScale,
+                height: f.height * renderScale,
+              }}
+              title={`${f.label} — (${Math.round(f.x)}, ${Math.round(
+                f.y
+              )}) mm · ${Math.round(f.width)}×${Math.round(f.height)}mm`}
+            >
+              {/* Live content */}
+              <div className="pointer-events-none flex-1 overflow-hidden p-0.5">
+                {renderFieldContent(f, template, letterhead)}
+              </div>
+
+              {/* Tiny label badge so users still know what each block is */}
+              <span className="pointer-events-none absolute -top-4 left-0 rounded bg-slate-700 px-1 py-px text-[7px] font-medium text-white opacity-0 group-hover:opacity-100" />
+
+              {/* Coordinates badge */}
+              {isSelected && (
+                <span className="absolute -top-5 left-0 rounded bg-primary px-1.5 py-0.5 text-[8px] font-medium text-primary-foreground">
+                  {Math.round(f.x)}, {Math.round(f.y)}
+                </span>
+              )}
+
+              {/* Resize handle (bottom-right) */}
+              {isSelected && !f.locked && (
+                <div
+                  onMouseDown={(e) => startDrag(e, f, "resize")}
+                  className="absolute -bottom-1 -right-1 flex size-3 cursor-nwse-resize items-center justify-center rounded-sm border border-primary bg-white"
+                  title="Drag to resize"
+                >
+                  <Maximize2 className="size-2 text-primary" />
+                </div>
+              )}
+            </div>
+          );
+        })}
+    </div>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -475,22 +1127,71 @@ export function TemplateVisualEditor({
         </Button>
         <Button
           size="sm"
+          variant={showGrid ? "default" : "outline"}
+          onClick={() => setShowGrid(!showGrid)}
+        >
+          <Grid3x3 className="size-4" /> Grid
+        </Button>
+        <Button
+          size="sm"
           variant={snapEnabled ? "default" : "outline"}
           onClick={() => setSnapEnabled(!snapEnabled)}
         >
           <Move className="size-4" /> Snap {snapEnabled ? "On" : "Off"}
         </Button>
         <div className="h-6 w-px bg-border" />
-        <Button size="sm" variant="outline" onClick={resetLayout}>
-          <RotateCcw className="size-4" /> Reset Layout
+        <Button size="sm" variant="outline" onClick={addCustomText}>
+          <Type className="size-4" /> Text
         </Button>
+        <Button size="sm" variant="outline" onClick={addCustomImage}>
+          <ImageIcon className="size-4" /> Image
+        </Button>
+        <div className="h-6 w-px bg-border" />
+        <Button size="sm" variant="outline" onClick={resetLayout}>
+          <RotateCcw className="size-4" /> Reset
+        </Button>
+
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          {/* Zoom selector */}
+          <div className="flex items-center gap-1">
+            <Label className="text-xs">Zoom</Label>
+            <Select
+              value={String(zoom)}
+              onValueChange={(v) => setZoom(Number(v))}
+            >
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0.5">50%</SelectItem>
+                <SelectItem value="0.75">75%</SelectItem>
+                <SelectItem value="1">100%</SelectItem>
+                <SelectItem value="1.25">125%</SelectItem>
+                <SelectItem value="1.5">150%</SelectItem>
+                <SelectItem value="2">200%</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Pages selector */}
+          <div className="flex items-center gap-1">
+            <Label className="text-xs">Pages</Label>
+            <Select
+              value={String(pageCount)}
+              onValueChange={(v) => setPageCount(Number(v))}
+            >
+              <SelectTrigger className="h-8 w-[60px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1</SelectItem>
+                <SelectItem value="2">2</SelectItem>
+                <SelectItem value="3">3</SelectItem>
+                <SelectItem value="5">5</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <span>
-            Page:{" "}
-            <strong className="text-foreground">{effectivePageSize}</strong>
-          </span>
-          <span>
-            {page.width} × {page.height} mm
+            {effectivePageSize} · {page.width}×{page.height}mm
           </span>
         </div>
       </div>
@@ -539,12 +1240,26 @@ export function TemplateVisualEditor({
                 {f.locked && <Lock className="size-3 text-muted-foreground" />}
               </div>
             ))}
+            <div className="mt-3 border-t pt-3">
+              <p className="mb-2 text-[10px] text-muted-foreground">
+                Quick add:
+              </p>
+              <div className="flex flex-col gap-1">
+                <Button size="sm" variant="outline" onClick={addCustomText}>
+                  <Type className="size-3.5" /> Text block
+                </Button>
+                <Button size="sm" variant="outline" onClick={addCustomImage}>
+                  <ImageIcon className="size-3.5" /> Image block
+                </Button>
+              </div>
+            </div>
           </div>
         </ScrollArea>
 
         {/* CENTER — Canvas */}
         <div className="flex-1 overflow-auto bg-muted/20 p-4">
           <div className="inline-block">
+            {/* Ruler row */}
             {showRuler && (
               <div className="flex">
                 {/* Top-left corner square */}
@@ -553,125 +1268,52 @@ export function TemplateVisualEditor({
                 <RulerBar
                   orientation="horizontal"
                   length={page.width}
-                  scale={SCALE}
+                  scale={renderScale}
                 />
               </div>
             )}
 
-            <div className="flex">
-              {/* Left ruler */}
-              {showRuler && (
-                <RulerBar
-                  orientation="vertical"
-                  length={page.height}
-                  scale={SCALE}
-                />
-              )}
+            {/* Pages stack */}
+            <div className="flex flex-col gap-4">
+              {Array.from({ length: pageCount }).map((_, pageIdx) => (
+                <div key={pageIdx} className="flex flex-col">
+                  {/* Page label */}
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground">
+                      Page {pageIdx + 1} of {pageCount}
+                    </span>
+                    {pageIdx > 0 && (
+                      <span className="text-[9px] text-muted-foreground">
+                        (auto-continued)
+                      </span>
+                    )}
+                  </div>
 
-              {/* Page */}
-              <div
-                className="relative bg-white shadow-lg"
-                style={{ width: pageWidthPx, height: pageHeightPx }}
-                onClick={(e) => {
-                  if (e.target === e.currentTarget) setSelectedId(null);
-                }}
-              >
-                {/* Page margin guides (dashed blue) */}
-                <div
-                  className="absolute border-l border-dashed border-blue-300/50"
-                  style={{ left: marginLeft * SCALE, top: 0, bottom: 0 }}
-                />
-                <div
-                  className="absolute border-r border-dashed border-blue-300/50"
-                  style={{ right: marginRight * SCALE, top: 0, bottom: 0 }}
-                />
-                <div
-                  className="absolute border-t border-dashed border-blue-300/50"
-                  style={{ top: marginTop * SCALE, left: 0, right: 0 }}
-                />
-                <div
-                  className="absolute border-b border-dashed border-blue-300/50"
-                  style={{ bottom: marginBottom * SCALE, left: 0, right: 0 }}
-                />
+                  <div className="flex">
+                    {/* Left ruler only beside page 1 */}
+                    {showRuler && (
+                      <RulerBar
+                        orientation="vertical"
+                        length={page.height}
+                        scale={renderScale}
+                      />
+                    )}
 
-                {/* Active snap guides (red) */}
-                {activeGuides.map((g, i) =>
-                  g.orientation === "vertical" ? (
-                    <div
-                      key={`snap-v-${i}`}
-                      className="absolute bg-red-500/60"
-                      style={{
-                        left: g.position * SCALE,
-                        top: 0,
-                        width: 1,
-                        height: pageHeightPx,
-                      }}
-                    />
-                  ) : (
-                    <div
-                      key={`snap-h-${i}`}
-                      className="absolute bg-red-500/60"
-                      style={{
-                        top: g.position * SCALE,
-                        left: 0,
-                        height: 1,
-                        width: pageWidthPx,
-                      }}
-                    />
-                  )
-                )}
-
-                {/* Fields */}
-                {fields
-                  .filter((f) => f.visible)
-                  .map((f) => {
-                    const isSelected = selectedId === f.id;
-                    return (
-                      <div
-                        key={f.id}
-                        onMouseDown={(e) => startDrag(e, f, "move")}
-                        className={cn(
-                          "absolute flex select-none items-center justify-center border text-[9px] font-medium leading-tight",
-                          isSelected
-                            ? "z-10 cursor-move border-primary bg-primary/10"
-                            : "cursor-move border-blue-300 bg-blue-50/50 hover:bg-blue-50",
-                          f.locked && "cursor-default opacity-60"
-                        )}
-                        style={{
-                          left: f.x * SCALE,
-                          top: f.y * SCALE,
-                          width: f.width * SCALE,
-                          height: f.height * SCALE,
-                        }}
-                        title={`${f.label} — (${Math.round(f.x)}, ${Math.round(
-                          f.y
-                        )}) mm`}
-                      >
-                        <span className="px-1 text-center text-slate-700">
-                          {f.label}
-                        </span>
-
-                        {/* Coordinates badge */}
-                        {isSelected && (
-                          <span className="absolute -top-5 left-0 rounded bg-primary px-1.5 py-0.5 text-[8px] font-medium text-primary-foreground">
-                            {Math.round(f.x)}, {Math.round(f.y)}
-                          </span>
-                        )}
-
-                        {/* Resize handle (bottom-right) */}
-                        {isSelected && !f.locked && (
-                          <div
-                            onMouseDown={(e) => startDrag(e, f, "resize")}
-                            className="absolute -bottom-1 -right-1 flex size-3 cursor-nwse-resize items-center justify-center rounded-sm border border-primary bg-white"
-                            title="Drag to resize"
-                          >
-                            <Maximize2 className="size-2 text-primary" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
+                    {pageIdx === 0 ? (
+                      renderEditorPage()
+                    ) : (
+                      <ContinuationPage
+                        pageIdx={pageIdx}
+                        pageCount={pageCount}
+                        template={template}
+                        letterhead={letterhead}
+                        page={page}
+                        scale={renderScale}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Legend */}
@@ -689,6 +1331,10 @@ export function TemplateVisualEditor({
                 Page margin
               </span>
               <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-3 border-t border-blue-200/60" />
+                Grid (5mm)
+              </span>
+              <span className="flex items-center gap-1">
                 <span className="inline-block h-2 w-3 bg-red-500/60" />
                 Active snap guide
               </span>
@@ -697,7 +1343,7 @@ export function TemplateVisualEditor({
         </div>
 
         {/* RIGHT — Properties */}
-        <ScrollArea className="w-64 shrink-0 border-l">
+        <ScrollArea className="w-72 shrink-0 border-l">
           <div className="space-y-4 p-3">
             {selected ? (
               <>
@@ -709,7 +1355,17 @@ export function TemplateVisualEditor({
                     {selected.type}
                   </Badge>
                 </div>
-                <p className="text-xs font-medium">{selected.label}</p>
+
+                {/* Editable label */}
+                <div>
+                  <Label className="text-xs">Label</Label>
+                  <Input
+                    value={selected.label}
+                    onChange={(e) =>
+                      updateField(selected.id, { label: e.target.value })
+                    }
+                  />
+                </div>
 
                 {/* Position & size */}
                 <div className="grid grid-cols-2 gap-2">
@@ -796,6 +1452,181 @@ export function TemplateVisualEditor({
 
                 <Separator />
 
+                {/* Logo field controls */}
+                {selected.type === "logo" && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                      Logo
+                    </h4>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <Label className="text-xs">Width (mm)</Label>
+                        <span className="text-[10px] tabular text-muted-foreground">
+                          {Math.round(selected.width)}mm
+                        </span>
+                      </div>
+                      <Slider
+                        value={[selected.width]}
+                        min={10}
+                        max={100}
+                        step={1}
+                        onValueChange={(v) =>
+                          updateField(selected.id, { width: v[0] })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <Label className="text-xs">Height (mm)</Label>
+                        <span className="text-[10px] tabular text-muted-foreground">
+                          {Math.round(selected.height)}mm
+                        </span>
+                      </div>
+                      <Slider
+                        value={[selected.height]}
+                        min={5}
+                        max={50}
+                        step={1}
+                        onValueChange={(v) =>
+                          updateField(selected.id, { height: v[0] })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1 block text-xs">Alignment</Label>
+                      <div className="grid grid-cols-3 gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Align left"
+                          onClick={() => alignField(selected.id, "left")}
+                        >
+                          <AlignLeft className="size-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Center horizontally"
+                          onClick={() => alignField(selected.id, "center-h")}
+                        >
+                          <AlignCenter className="size-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Align right"
+                          onClick={() => alignField(selected.id, "right")}
+                        >
+                          <AlignRight className="size-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="rounded border bg-muted/30 p-2 text-[10px] text-muted-foreground">
+                      {letterhead?.logo_url
+                        ? "Source: linked letterhead logo"
+                        : "No logo uploaded — set one in the letterhead editor."}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom image field controls */}
+                {selected.type === "custom_image" && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                      Image
+                    </h4>
+                    <div>
+                      <Label className="text-xs">Image URL</Label>
+                      <Input
+                        placeholder="https://… or /uploads/…"
+                        value={(selected.props?.imageUrl as string) || ""}
+                        onChange={(e) =>
+                          updateFieldProps(selected.id, {
+                            imageUrl: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="mb-1 flex items-center justify-between">
+                          <Label className="text-xs">Width (mm)</Label>
+                          <span className="text-[10px] tabular text-muted-foreground">
+                            {Math.round(selected.width)}
+                          </span>
+                        </div>
+                        <Slider
+                          value={[selected.width]}
+                          min={10}
+                          max={180}
+                          step={1}
+                          onValueChange={(v) =>
+                            updateField(selected.id, { width: v[0] })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-1 flex items-center justify-between">
+                          <Label className="text-xs">Height (mm)</Label>
+                          <span className="text-[10px] tabular text-muted-foreground">
+                            {Math.round(selected.height)}
+                          </span>
+                        </div>
+                        <Slider
+                          value={[selected.height]}
+                          min={5}
+                          max={100}
+                          step={1}
+                          onValueChange={(v) =>
+                            updateField(selected.id, { height: v[0] })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Content editor for header / footer / custom_text */}
+                {["header", "footer", "custom_text", "offer_text", "bank_details"].includes(
+                  selected.type
+                ) && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                      Content
+                    </h4>
+                    <Textarea
+                      rows={4}
+                      value={
+                        ((selected.props?.content as string) ??
+                          (selected.type === "header"
+                            ? template.header_content || ""
+                            : selected.type === "footer"
+                              ? template.footer_content || ""
+                              : "")) as string
+                      }
+                      onChange={(e) =>
+                        updateFieldProps(selected.id, {
+                          content: e.target.value,
+                        })
+                      }
+                      placeholder="Enter text that appears in this section…"
+                      className="text-xs"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Placeholders: {"{company_name}"}, {"{address}"}, {"{reg}"},{" "}
+                      {"{vat}"}, {"{date}"}, {"{doc_number}"}, {"{page_number}"}
+                    </p>
+                    {selected.type !== "custom_text" && (
+                      <p className="text-[10px] italic text-muted-foreground">
+                        Leave empty to use the default {selected.type} text from
+                        the template.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <Separator />
+
                 {/* Alignment buttons */}
                 <div>
                   <Label className="mb-2 block text-xs">Align to page</Label>
@@ -853,7 +1684,7 @@ export function TemplateVisualEditor({
 
                 <Separator />
 
-                {/* Quick geometry info */}
+                {/* Quick geometry info + delete */}
                 <div className="rounded border bg-muted/30 p-2 text-[10px] text-muted-foreground">
                   <div className="flex justify-between">
                     <span>Right edge:</span>
@@ -875,6 +1706,17 @@ export function TemplateVisualEditor({
                     </span>
                   </div>
                 </div>
+
+                {!DEFAULT_FIELDS.some((f) => f.id === selected.id) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full text-destructive hover:text-destructive"
+                    onClick={() => deleteField(selected.id)}
+                  >
+                    Delete field
+                  </Button>
+                )}
               </>
             ) : (
               <div className="py-8 text-center text-sm text-muted-foreground">
@@ -933,7 +1775,8 @@ export function TemplateVisualEditor({
             </div>
 
             <p className="text-[10px] text-muted-foreground">
-              Snap threshold: {SNAP_THRESHOLD} mm · Scale: 1mm = {SCALE}px
+              Snap threshold: {SNAP_THRESHOLD} mm · Scale: 1mm = {BASE_SCALE}px ·
+              Zoom: {Math.round(zoom * 100)}%
             </p>
           </div>
         </ScrollArea>

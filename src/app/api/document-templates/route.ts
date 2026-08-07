@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
+import { STARTER_TEMPLATES } from "@/lib/data/starter-templates";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   }
   const items = await auth.store.listDocumentTemplates(tenantId);
+  // ─── Auto-create starter templates for first-time tenants ───────────────
+  // If the tenant has zero templates, seed them with three professional
+  // starting points (offer / invoice / proforma) so they can hit the ground
+  // running. Idempotent — only fires when nothing exists yet.
+  if (items.length === 0) {
+    for (const starter of STARTER_TEMPLATES) {
+      await auth.store.upsertDocumentTemplate({
+        ...starter.template,
+        tenant_id: tenantId,
+      });
+    }
+    const seeded = await auth.store.listDocumentTemplates(tenantId);
+    return NextResponse.json({ items: seeded });
+  }
   return NextResponse.json({ items });
 }
 
