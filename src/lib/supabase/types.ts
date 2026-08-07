@@ -877,6 +877,9 @@ export interface DocumentTemplate {
   seal_enabled: boolean;
   letterhead?: TenantLetterhead | null;
   seal?: TenantSeal | null;
+  /** Which bank accounts to show in PDF (indexes into tenant.bank_accounts array).
+   *  null/empty = show all accounts. [0,2] = show only 1st and 3rd accounts. */
+  selected_bank_accounts?: number[] | null;
   // Metadata
   created_by: string | null;
   created_at: string;

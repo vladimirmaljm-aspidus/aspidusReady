@@ -39,6 +39,8 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
+import { TemplateVisualEditor } from "@/components/common/template-visual-editor";
+import { BankAccountSelector } from "@/components/common/bank-account-selector";
 import { fmtDate } from "@/lib/utils/format";
 import {
   DocumentTemplate, TenantLetterhead, TenantSeal, Tenant,
@@ -284,6 +286,7 @@ function defaultTemplate(name = "Untitled template"): TemplateFormState {
     letterhead_id: null,
     seal_id: null,
     seal_enabled: true,
+    selected_bank_accounts: null,
   };
 }
 
@@ -865,6 +868,27 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
     enabled: queryEnabled,
   });
 
+  // Fetch the active tenant so we can read its bank_accounts array — needed by
+  // the BankAccountSelector in the template editor.
+  //   • Regular admin: GET /api/tenants returns only their own tenant.
+  //   • Super-admin: returns ALL tenants, and we filter by ?tenant_id= in
+  //     `tenantQuery` (set by the tenant switcher above).
+  const tenantsQ = useQuery<{ items: Tenant[] }>({
+    queryKey: ["tenants", tenantKey, "for-templates", tenantQuery],
+    queryFn: async () => {
+      const r = await fetch(api("/api/tenants"));
+      if (!r.ok) throw new Error("Failed to load tenants");
+      return r.json();
+    },
+    enabled: queryEnabled,
+  });
+  const activeTenantId = tenantQuery.startsWith("?tenant_id=")
+    ? decodeURIComponent(tenantQuery.slice("?tenant_id=".length))
+    : null;
+  const tenant = (tenantsQ.data?.items ?? []).find((t) =>
+    activeTenantId ? t.id === activeTenantId : true,
+  ) ?? null;
+
   const letterheads = letterheadsQ.data?.items ?? [];
   const seals = sealsQ.data?.items ?? [];
 
@@ -1033,6 +1057,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
         onOpenChange={setShowForm}
         template={editing}
         tenantQuery={tenantQuery}
+        tenant={tenant}
         letterheads={letterheads}
         seals={seals}
         onSaved={() => {
@@ -2029,12 +2054,13 @@ function SealPreview({ form }: { form: SealFormState }) {
 // ============================================================
 
 function TemplateEditorDialog({
-  open, onOpenChange, template, tenantQuery, letterheads, seals, onSaved,
+  open, onOpenChange, template, tenantQuery, tenant, letterheads, seals, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   template: DocumentTemplate | null;
   tenantQuery: string;
+  tenant: Tenant | null;
   letterheads: TenantLetterhead[];
   seals: TenantSeal[];
   onSaved: () => void;
@@ -2095,7 +2121,19 @@ function TemplateEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">
+        <Tabs defaultValue="form" className="flex-1 min-h-0 flex flex-col gap-0">
+          <div className="px-5 pt-3">
+            <TabsList className="w-fit">
+              <TabsTrigger value="form">
+                <FileText className="size-4" /> Form editor
+              </TabsTrigger>
+              <TabsTrigger value="visual">
+                <LayoutTemplate className="size-4" /> Visual editor
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="form" className="flex-1 min-h-0 flex flex-col mt-0">
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">
           {/* Left: form */}
           <div className="border-r border-border/60 min-h-0 flex flex-col">
             <ScrollArea className="flex-1">
@@ -2257,6 +2295,23 @@ function TemplateEditorDialog({
                     </AccordionContent>
                   </AccordionItem>
 
+                  <AccordionItem value="bank-accounts">
+                    <AccordionTrigger><SectionLabel icon={Building2} label="Bank accounts" /></AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Select which of your bank accounts should appear in PDFs generated with this template.
+                          Leave empty to show all accounts.
+                        </p>
+                        <BankAccountSelector
+                          accounts={tenant?.bank_accounts ?? null}
+                          selected={form.selected_bank_accounts ?? null}
+                          onChange={(sel) => set("selected_bank_accounts", sel)}
+                        />
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
                   <AccordionItem value="body">
                     <AccordionTrigger><SectionLabel icon={Type} label="Body styling" /></AccordionTrigger>
                     <AccordionContent>
@@ -2336,7 +2391,16 @@ function TemplateEditorDialog({
               </div>
             </ScrollArea>
           </div>
-        </div>
+          </div>
+          </TabsContent>
+          <TabsContent value="visual" className="flex-1 min-h-0 mt-0">
+            <TemplateVisualEditor
+              template={form}
+              onChange={(updates) => setForm((p) => ({ ...p, ...updates }))}
+              pageSize={form.page_size === "Letter" ? "Letter" : "A4"}
+            />
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="px-5 py-4 border-t border-border/60 bg-card">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

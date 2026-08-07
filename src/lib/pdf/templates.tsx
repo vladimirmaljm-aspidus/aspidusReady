@@ -38,6 +38,26 @@ interface PdfDocData {
 const mmToPoints = (mm: number) => mm * 2.83465;
 
 /**
+ * Lighten a hex color by blending it towards white.
+ * amount=0 returns the original color, amount=1 returns pure white.
+ * Used to derive stripe-row backgrounds from the table header color so
+ * zebra striping matches the document's branding instead of a flat grey.
+ */
+function lightenHex(hex: string, amount: number): string {
+  const h = (hex || "#ffffff").replace("#", "");
+  if (h.length !== 6) return hex;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if ([r, g, b].some((n) => Number.isNaN(n))) return hex;
+  const lr = Math.round(r + (255 - r) * amount);
+  const lg = Math.round(g + (255 - g) * amount);
+  const lb = Math.round(b + (255 - b) * amount);
+  const toHex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${toHex(lr)}${toHex(lg)}${toHex(lb)}`;
+}
+
+/**
  * Format a money value with exactly 2 decimal places.
  * Falls back to 0.00 when the value is null/undefined/NaN.
  * Uses the document's currency symbol when available.
@@ -147,34 +167,92 @@ function amountInWords(amount: number, currency = "USD"): string {
 export function buildPdfDocument({ doc, docType, partner, tenant, template, verificationCode, qrCodeDataUrl, logoUrl, sealImageUrl, pdfMeta }: PdfDocData) {
   const tpl = template;
   const primaryColor = tpl?.primary_color || "#0d9488";
+  const accentColor = tpl?.accent_color || "#666666";
 
-  // ── Corporate typography (Helvetica family — clean, professional,
-  //    standard for international business documents) ──────────────────
-  const fontFamily = "Helvetica";
-  const headingFontFamily = "Helvetica-Bold";
-  const fontSize = 9;
-  const lineHeight = 1.4;
+  // ── Corporate typography ────────────────────────────────────────────
+  // react-pdf only has Helvetica, Times-Roman, Courier built-in.
+  // Any custom font (Inter, Roboto, etc.) would need Font.register() first.
+  // Map common web font names to their PDF-safe equivalents so templates
+  // that specify "Inter" or "system-ui" don't crash the render.
+  const FONT_MAP: Record<string, string> = {
+    "inter": "Helvetica",
+    "system-ui": "Helvetica",
+    "sans-serif": "Helvetica",
+    "arial": "Helvetica",
+    "helvetica": "Helvetica",
+    "times": "Times-Roman",
+    "times-new-roman": "Times-Roman",
+    "serif": "Times-Roman",
+    "courier": "Courier",
+    "monospace": "Courier",
+  };
+  // Template stores a CSS font stack like "Inter, system-ui, sans-serif".
+  // react-pdf needs a single registered family. Take the first font in the
+  // comma-separated list, trim it, and map to a PDF-safe equivalent.
+  const rawFontStack = tpl?.body_font_family || "Helvetica";
+  const firstFont = rawFontStack.split(",")[0].trim().replace(/['"]/g, "");
+  const fontFamily = FONT_MAP[firstFont.toLowerCase()] || firstFont;
+  const headingFontFamily =
+    fontFamily.endsWith("Bold") || fontFamily.endsWith("Italic")
+      ? fontFamily
+      : `${fontFamily}-Bold`;
+  const fontSize = tpl?.body_font_size ?? 9;
+  const lineHeight = tpl?.body_line_height ?? 1.4;
 
-  // ── Layout dimensions ──────────────────────────────────────────────
-  // Header height accommodates: logo + company name + address + contact + reg line.
-  // Footer height accommodates: company legal line + page/QR/generated row.
-  const headerTop = mmToPoints(8);
-  const headerHeight = 72;
-  const footerBottom = mmToPoints(8);
-  const footerHeight = 60;
+  // ── Page size ──────────────────────────────────────────────────────
+  // react-pdf's <Page size=...> accepts "A4", "LETTER", or a [w,h] tuple.
+  const pageSize = tpl?.page_size === "Letter" ? "LETTER" : "A4";
 
-  const marginLeft = mmToPoints(tpl?.page_margin_left ?? 18);
-  const marginRight = mmToPoints(tpl?.page_margin_right ?? 18);
+  // ── Page margins (mm → points) ──────────────────────────────────────
+  const marginTop = mmToPoints(tpl?.page_margin_top ?? 20);
+  const marginBottom = mmToPoints(tpl?.page_margin_bottom ?? 20);
+  const marginLeft = mmToPoints(tpl?.page_margin_left ?? 15);
+  const marginRight = mmToPoints(tpl?.page_margin_right ?? 15);
+
+  // ── Header (memorandum — repeats on every page) ────────────────────
+  // Default to enabled=true when undefined; only disabled when explicitly false.
+  const headerEnabled = tpl?.header_enabled !== false;
+  const headerHeightPts = headerEnabled ? mmToPoints(tpl?.header_height ?? 20) : 0;
+  const headerShowLogo = tpl?.header_show_logo !== false;
+  const headerShowCompanyName = tpl?.header_show_company_name !== false;
+  const headerShowContact = tpl?.header_show_contact !== false;
+
+  // ── Footer (memorandum — repeats on every page) ────────────────────
+  const footerEnabled = tpl?.footer_enabled !== false;
+  const footerHeightPts = footerEnabled ? mmToPoints(tpl?.footer_height ?? 15) : 0;
+  const footerShowPageNumber = tpl?.footer_show_page_number !== false;
+  const footerShowBankDetails = tpl?.footer_show_bank_details === true;
+  const footerShowTaxId = tpl?.footer_show_tax_id === true;
+
+  // ── Table styling ──────────────────────────────────────────────────
   const tableHeaderBg = tpl?.table_header_bg || primaryColor;
   const tableHeaderColor = tpl?.table_header_color || "#ffffff";
   const tableBorderColor = tpl?.table_border_color || "#e5e7eb";
+  const tableStripe = tpl?.table_stripe === true;
+  // Stripe row background: a very light tint of the header color so it
+  // matches the document's branding instead of being a flat grey.
+  const stripeBg = lightenHex(tableHeaderBg, 0.92);
+
+  // ── Derived layout — content area must clear the absolutely ─────────
+  //    positioned header/footer. When the header/footer is disabled the
+  //    configured page margin applies directly; otherwise the content
+  //    padding is whichever is larger of (margin) and (header/footer height
+  //    plus a small breathing gap).
+  const headerGap = 6;  // breathing room between header bottom and body
+  const footerGap = 6;  // breathing room between body and footer top
+  const paddingTop = headerEnabled
+    ? Math.max(marginTop, headerHeightPts + headerGap)
+    : marginTop;
+  const paddingBottom = footerEnabled
+    ? Math.max(marginBottom, footerHeightPts + footerGap)
+    : marginBottom;
 
   const styles = StyleSheet.create({
     page: {
       fontSize,
       lineHeight,
-      paddingTop: headerTop + headerHeight + 14,
-      paddingBottom: footerBottom + footerHeight + 14,
+      paddingTop,
+      paddingBottom,
       paddingLeft: marginLeft,
       paddingRight: marginRight,
       fontFamily,
@@ -187,13 +265,14 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     //         Reg# · VAT# · Tax#
     header: {
       position: "absolute",
-      top: headerTop,
+      top: 0,
       left: marginLeft,
       right: marginRight,
-      height: headerHeight,
+      height: headerHeightPts,
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
+      paddingTop: 4,
       paddingBottom: 8,
       borderBottomWidth: 2,
       borderBottomColor: primaryColor,
@@ -212,13 +291,13 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     // Verification code is intentionally NOT shown — it lives in PDF metadata only.
     footer: {
       position: "absolute",
-      bottom: footerBottom,
+      bottom: 0,
       left: marginLeft,
       right: marginRight,
-      height: footerHeight,
+      height: footerHeightPts,
       paddingTop: 6,
       borderTopWidth: 1,
-      borderTopColor: tableBorderColor,
+      borderTopColor: accentColor,
       flexDirection: "column",
     },
     footerTopRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
@@ -227,6 +306,9 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     footerLeftInfo: { flexDirection: "column", flex: 1, justifyContent: "flex-end" },
     footerPage: { fontSize: 7.5, color: "#666", fontFamily: headingFontFamily },
     footerSys: { fontSize: 6.5, color: "#aaa", fontStyle: "italic", marginTop: 2 },
+    // Compact one-line text used for the optional bank-details and tax-id
+    // rows in the footer (toggled by footer_show_bank_details / footer_show_tax_id).
+    footerBankLine: { fontSize: 7, color: "#666" },
     footerQr: { flexDirection: "column", alignItems: "center", gap: 2 },
     footerQrImage: { width: 35, height: 35 },
     footerQrLabel: { fontSize: 5.5, color: "#aaa", textAlign: "center" },
@@ -260,10 +342,13 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     proformaBannerText: { fontSize: 8, fontFamily: headingFontFamily, color: "#cc0000", textTransform: "uppercase", textAlign: "center", letterSpacing: 0.5 },
 
     // ── Section header (FROM/TO/TRADE TERMS/LINE ITEMS/SPECIFICATIONS/...)
+    // Color uses accent_color (a "secondary" brand color) so the section
+    // headings form a visual hierarchy below the primary call-outs (grand
+    // total, company name) which keep using primary_color.
     sectionHeader: {
       fontSize: 9,
       fontFamily: headingFontFamily,
-      color: primaryColor,
+      color: accentColor,
       textTransform: "uppercase",
       paddingBottom: 4,
       borderBottomWidth: 1,
@@ -303,6 +388,12 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       borderBottomWidth: 0.5,
       borderBottomColor: tableBorderColor,
       alignItems: "stretch",
+    },
+    // Zebra-stripe background — applied to every other data row when
+    // tpl.table_stripe is true. Uses a very light tint of the header
+    // background so it blends with the document's branding.
+    tableRowEven: {
+      backgroundColor: stripeBg,
     },
     td: { fontSize: 8.5, paddingHorizontal: 4, color: "#333" },
 
@@ -441,7 +532,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
   // The DB column is typed as `string | null` (jsonb), but in practice it
   // holds a JSON array of { bankName, currency, swiftCode, accountNumber }.
   // Normalise to a plain array so the JSX below can `.map()` cleanly.
-  const bankAccountsList: any[] = (() => {
+  const parsedBankAccounts: any[] = (() => {
     const raw = tenant?.bank_accounts as unknown;
     if (Array.isArray(raw)) return raw as any[];
     if (typeof raw === "string" && raw.trim()) {
@@ -455,106 +546,180 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     return [];
   })();
 
+  // ── Filter bank accounts by template's `selected_bank_accounts` ────
+  // If the template specifies a non-empty list of indexes (into the
+  // tenant.bank_accounts array), only those accounts are shown in the PDF.
+  // null/empty = show all accounts (default behaviour).
+  const bankAccountsList: any[] =
+    tpl?.selected_bank_accounts && tpl.selected_bank_accounts.length > 0
+      ? parsedBankAccounts.filter((_, i) => tpl.selected_bank_accounts!.includes(i))
+      : parsedBankAccounts;
+
+  // ── Letterhead bank details (preferred source when a letterhead is ─
+  //    linked — overrides tenant.bank_accounts for the BANK DETAILS body
+  //    section and the footer's compact bank line). Only populated when
+  //    the linked letterhead actually has at least one bank field set.
+  const lh = tpl?.letterhead;
+  const letterheadBank =
+    lh && (lh.bank_name || lh.bank_iban || lh.bank_swift || lh.bank_account_holder)
+      ? {
+          bankName: lh.bank_name,
+          iban: lh.bank_iban,
+          swift: lh.bank_swift,
+          holder: lh.bank_account_holder,
+        }
+      : null;
+
   // ── HEADER (memorandum — repeats on every page) ────────────────────
-  const HeaderContent = () => (
-    <View style={styles.header} fixed>
-      {logoUrl ? (
-        <View style={styles.headerLogoWrap}>
-          {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          <Image style={styles.headerLogo} src={logoUrl} />
+  // Rendered only when tpl.header_enabled !== false. Within the header,
+  // individual elements are toggled by header_show_logo / _show_company_name /
+  // _show_contact (all default to true when undefined).
+  const HeaderContent = () => {
+    if (!headerEnabled) return null;
+    const contactParts = [
+      tenant?.phone,
+      tenant?.email,
+      tenant?.website,
+    ].filter(Boolean);
+    const regParts = [
+      tenant?.registration_number && `Reg# ${tenant.registration_number}`,
+      tenant?.vat_number && `VAT# ${tenant.vat_number}`,
+      tenant?.tax_id && `Tax# ${tenant.tax_id}`,
+    ].filter(Boolean);
+    const hasAddr = !!(tenant?.address_line || tenant?.city || tenant?.country);
+    return (
+      <View style={styles.header} fixed>
+        {headerShowLogo && logoUrl ? (
+          <View style={styles.headerLogoWrap}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image style={styles.headerLogo} src={logoUrl} />
+          </View>
+        ) : null}
+        <View style={styles.headerLeft}>
+          {headerShowCompanyName && (
+            <Text style={styles.companyName}>
+              {tenant?.legal_name || tenant?.name || "Company"}
+            </Text>
+          )}
+          {headerShowContact && hasAddr && (
+            <Text style={styles.companyAddr}>
+              {(() => {
+                // Build the address string WITHOUT duplicating city/country when
+                // they already appear inside `address_line`. E.g. tenant has
+                //   address_line = "GoldCrest..., JLT Cluster C, Dubai, UAE"
+                //   city = "Dubai"   country = "AE"
+                // → must render "GoldCrest..., JLT Cluster C, Dubai, UAE" (not "..., Dubai, UAE, Dubai, AE")
+                const addrLine = (tenant?.address_line || "").trim();
+                const city = (tenant?.city || "").trim();
+                const postal = (tenant?.postal_code || "").trim();
+                const country = (tenant?.country || "").trim();
+                const addrLower = addrLine.toLowerCase();
+
+                const parts: string[] = [];
+                if (addrLine) parts.push(addrLine);
+
+                // postal + city — only append if city isn't already in address_line
+                const cityAndPostal = [postal, city].filter(Boolean).join(" ");
+                if (cityAndPostal && !(city && addrLower.includes(city.toLowerCase()))) {
+                  parts.push(cityAndPostal);
+                }
+                // country — only append if not already mentioned in address_line
+                // (covers both full names like "UAE" and ISO codes like "AE")
+                if (country && !addrLower.includes(country.toLowerCase())) {
+                  parts.push(country);
+                }
+                return parts.join(", ");
+              })()}
+            </Text>
+          )}
+          {headerShowContact && contactParts.length > 0 && (
+            <Text style={styles.companyContact}>
+              {contactParts.join("  ·  ")}
+            </Text>
+          )}
+          {headerShowContact && regParts.length > 0 && (
+            <Text style={styles.companyReg}>
+              {regParts.join("  ·  ")}
+            </Text>
+          )}
         </View>
-      ) : null}
-      <View style={styles.headerLeft}>
-        <Text style={styles.companyName}>
-          {tenant?.legal_name || tenant?.name || "Company"}
-        </Text>
-        {(tenant?.address_line || tenant?.city || tenant?.country) && (
-          <Text style={styles.companyAddr}>
-            {(() => {
-              // Build the address string WITHOUT duplicating city/country when
-              // they already appear inside `address_line`. E.g. tenant has
-              //   address_line = "GoldCrest..., JLT Cluster C, Dubai, UAE"
-              //   city = "Dubai"   country = "AE"
-              // → must render "GoldCrest..., JLT Cluster C, Dubai, UAE" (not "..., Dubai, UAE, Dubai, AE")
-              const addrLine = (tenant?.address_line || "").trim();
-              const city = (tenant?.city || "").trim();
-              const postal = (tenant?.postal_code || "").trim();
-              const country = (tenant?.country || "").trim();
-              const addrLower = addrLine.toLowerCase();
-
-              const parts: string[] = [];
-              if (addrLine) parts.push(addrLine);
-
-              // postal + city — only append if city isn't already in address_line
-              const cityAndPostal = [postal, city].filter(Boolean).join(" ");
-              if (cityAndPostal && !(city && addrLower.includes(city.toLowerCase()))) {
-                parts.push(cityAndPostal);
-              }
-              // country — only append if not already mentioned in address_line
-              // (covers both full names like "UAE" and ISO codes like "AE")
-              if (country && !addrLower.includes(country.toLowerCase())) {
-                parts.push(country);
-              }
-              return parts.join(", ");
-            })()}
-          </Text>
-        )}
-        <Text style={styles.companyContact}>
-          {[
-            tenant?.phone,
-            tenant?.email,
-            tenant?.website,
-          ].filter(Boolean).join("  ·  ")}
-        </Text>
-        {(tenant?.registration_number || tenant?.vat_number || tenant?.tax_id) && (
-          <Text style={styles.companyReg}>
-            {[
-              tenant?.registration_number && `Reg# ${tenant.registration_number}`,
-              tenant?.vat_number && `VAT# ${tenant.vat_number}`,
-              tenant?.tax_id && `Tax# ${tenant.tax_id}`,
-            ].filter(Boolean).join("  ·  ")}
-          </Text>
-        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   // ── FOOTER (memorandum — repeats on every page) ────────────────────
   // NOTE: verification code is intentionally NOT rendered here — it is
   // embedded into the PDF Document metadata (subject/keywords) instead.
-  const FooterContent = () => (
-    <View style={styles.footer} fixed>
-      <View style={styles.footerTopRow}>
-        <Text style={styles.footerCompanyLine}>
-          {[
-            tenant?.legal_name || tenant?.name || "Company",
-            tenant?.registration_number && `Reg# ${tenant.registration_number}`,
-            tenant?.vat_number && `VAT# ${tenant.vat_number}`,
-          ].filter(Boolean).join("  ·  ")}
-        </Text>
-      </View>
-      <View style={styles.footerBottomRow}>
-        <View style={styles.footerLeftInfo}>
-          <Text
-            style={styles.footerPage}
-            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-              `Page ${pageNumber} of ${totalPages}`
-            }
-          />
-          <Text style={styles.footerSys}>
-            Generated by {pdfMeta?.creator || "Aspidus CRM"} · {new Date().toLocaleString("en-GB")}
+  // Rendered only when tpl.footer_enabled !== false. Within the footer:
+  //   • footer_show_page_number toggles "Page X of Y" (default true)
+  //   • footer_show_bank_details toggles a compact bank line (default false)
+  //   • footer_show_tax_id toggles Reg# / VAT# / Tax# (default false)
+  const FooterContent = () => {
+    if (!footerEnabled) return null;
+
+    // Compact bank details line — uses the letterhead's bank info when a
+    // letterhead is linked, otherwise falls back to the tenant's single-bank
+    // fields. Kept short so it fits on one line in the footer.
+    const footerBankLine = (() => {
+      const bankName = letterheadBank?.bankName || tenant?.bank_name;
+      const iban = letterheadBank?.iban || tenant?.bank_iban;
+      const swift = letterheadBank?.swift || tenant?.bank_swift;
+      const parts: string[] = [];
+      if (bankName) parts.push(bankName);
+      if (iban) parts.push(`IBAN: ${iban}`);
+      if (swift) parts.push(`SWIFT: ${swift}`);
+      return parts.join("  ·  ");
+    })();
+
+    // Tax / Reg line — shown only when footer_show_tax_id is true.
+    const footerTaxLine = [
+      tenant?.registration_number && `Reg# ${tenant.registration_number}`,
+      tenant?.vat_number && `VAT# ${tenant.vat_number}`,
+      tenant?.tax_id && `Tax# ${tenant.tax_id}`,
+    ].filter(Boolean).join("  ·  ");
+
+    return (
+      <View style={styles.footer} fixed>
+        <View style={styles.footerTopRow}>
+          <Text style={styles.footerCompanyLine}>
+            {tenant?.legal_name || tenant?.name || "Company"}
           </Text>
         </View>
-        {qrCodeDataUrl && (
-          <View style={styles.footerQr}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text */}
-            <Image style={styles.footerQrImage} src={qrCodeDataUrl} />
-            <Text style={styles.footerQrLabel}>Scan to verify</Text>
+        {footerShowBankDetails && footerBankLine && (
+          <View style={styles.footerTopRow}>
+            <Text style={styles.footerBankLine}>{footerBankLine}</Text>
           </View>
         )}
+        {footerShowTaxId && footerTaxLine && (
+          <View style={styles.footerTopRow}>
+            <Text style={styles.footerBankLine}>{footerTaxLine}</Text>
+          </View>
+        )}
+        <View style={styles.footerBottomRow}>
+          <View style={styles.footerLeftInfo}>
+            {footerShowPageNumber && (
+              <Text
+                style={styles.footerPage}
+                render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+                  `Page ${pageNumber} of ${totalPages}`
+                }
+              />
+            )}
+            <Text style={styles.footerSys}>
+              Generated by {pdfMeta?.creator || "Aspidus CRM"} · {new Date().toLocaleString("en-GB")}
+            </Text>
+          </View>
+          {qrCodeDataUrl && (
+            <View style={styles.footerQr}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image style={styles.footerQrImage} src={qrCodeDataUrl} />
+              <Text style={styles.footerQrLabel}>Scan to verify</Text>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   // ── Party box helper (used for FROM / TO) ──────────────────────────
   const PartyBox = ({
@@ -634,7 +799,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
       keywords={pdfMeta?.keywords || `${docType}, ${doc.number}, ${partner?.name || ""}, ${currency}${verificationCode ? `, verification: ${verificationCode}` : ""}`}
       producer="Aspidus CRM"
     >
-      <Page size="A4" style={styles.page}>
+      <Page size={pageSize} style={styles.page}>
         {/* ── HEADER (memorandum — fixed, repeats on every page) ── */}
         <HeaderContent />
 
@@ -777,7 +942,10 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
             <Text style={[styles.th, { flex: 1.1, textAlign: "right" }]}>Total</Text>
           </View>
           {items.map((item, i) => (
-            <View key={i} style={styles.tableRow}>
+            <View
+              key={i}
+              style={[styles.tableRow, ...(tableStripe && i % 2 === 1 ? [styles.tableRowEven] : [])]}
+            >
               <Text style={[styles.td, { flex: 0.3 }]}>{i + 1}</Text>
               <Text style={[styles.td, { flex: 3 }]}>
                 {item.product_name}
@@ -882,18 +1050,47 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         )}
 
         {/* BANK DETAILS — show as a clean vertical list, not a cramped grid.
-            Modern: tenant.bank_accounts JSON array → one row per account.
-            Legacy: if no bank_accounts array, fall back to single-bank fields.
+            Preferred: letterhead's bank_name/iban/swift/holder (when a
+              letterhead is linked and has bank info configured).
+            Modern: tenant.bank_accounts JSON array → one row per account
+              (optionally filtered by tpl.selected_bank_accounts).
+            Legacy: if no letterhead bank and no bank_accounts array, fall
+              back to tenant's single-bank fields.
             Per-doc bank_details override always appended at the bottom. */}
-        {(tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift ||
+        {(letterheadBank || tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift ||
           bankAccountsList.length > 0 || bankDetails) && (
           <View style={styles.termsBox}>
             <Text style={styles.sectionHeader} wrap={false}>Bank Details</Text>
 
-            {bankAccountsList.length > 0 ? (
-              /* Modern: render every account as its own row. Each row shows
-                 the bank name + currency on line 1, and the account number +
-                 SWIFT on line 2. No more overlap, no more grid cramming. */
+            {letterheadBank ? (
+              /* Preferred: letterhead's bank details. Shows bank name + holder
+                 + IBAN + SWIFT in a single, clean block (no per-account grid). */
+              <View style={styles.bankList}>
+                <View style={styles.bankAccountRow} wrap={false}>
+                  <Text style={styles.bankAccountName}>
+                    {letterheadBank.bankName || "Bank"}
+                  </Text>
+                  {letterheadBank.holder && (
+                    <Text style={styles.bankAccountDetails}>
+                      Account Holder: {letterheadBank.holder}
+                    </Text>
+                  )}
+                  {letterheadBank.iban && (
+                    <Text style={styles.bankAccountDetails}>
+                      IBAN: {letterheadBank.iban}
+                    </Text>
+                  )}
+                  {letterheadBank.swift && (
+                    <Text style={styles.bankAccountDetails}>
+                      SWIFT/BIC: {letterheadBank.swift}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ) : bankAccountsList.length > 0 ? (
+              /* Modern: render every (optionally filtered) account as its own
+                 row. Each row shows the bank name + currency on line 1, and
+                 the account number + SWIFT on line 2. */
               <View style={styles.bankList}>
                 {bankAccountsList.map((acct: any, i: number) => (
                   <View key={i} style={styles.bankAccountRow} wrap={false}>
