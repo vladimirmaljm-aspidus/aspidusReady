@@ -23,7 +23,14 @@ export async function GET(req: NextRequest) {
   }
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) {
-    return NextResponse.json({ error: "tenant_id query parameter is required for super-admin actions." }, { status: 400 });
+    // Super-admin without an explicit ?tenant_id=xxx has no tenant scope —
+    // return an empty list rather than 400 so the UI shows an empty state
+    // instead of an error. Regular users without a tenant (shouldn't happen
+    // in practice — every regular user has a tenant_id) get a 400.
+    if (auth.isSuperAdmin) {
+      return NextResponse.json({ items: [], total: 0 });
+    }
+    return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   }
   const items = await auth.store.listLetterheads(tenantId);
   return NextResponse.json({ items });

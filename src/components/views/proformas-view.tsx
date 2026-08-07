@@ -44,6 +44,7 @@ import { UnitSelect } from "@/components/common/unit-select";
 import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { downloadPdf } from "@/lib/utils/download";
 
 const STATUS_LABELS: Record<ProformaStatus, string> = {
   draft: "Draft",
@@ -469,6 +470,8 @@ function ProformaDetail({
   markingPaid: boolean;
   sending: boolean;
 }) {
+  const api = useApiUrl();
+  const [downloading, setDownloading] = useState(false);
   const totals = computeTotals(proforma.items || []);
   const expired = isExpired(proforma);
 
@@ -582,10 +585,25 @@ function ProformaDetail({
 
       {/* Download */}
       <div className="pt-3 border-t">
-        <Button asChild variant="outline" size="sm">
-          <a href={`/api/proformas/${proforma.id}/pdf`} target="_blank" download>
-            <Download className="size-4 mr-1" /> Download PDF
-          </a>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={downloading}
+          onClick={async () => {
+            try {
+              setDownloading(true);
+              const filename = `Proforma_${proforma.number || proforma.id}.pdf`;
+              await downloadPdf(api(`/api/proformas/${proforma.id}/pdf`), filename);
+              toast.success("PDF downloaded");
+            } catch (e: any) {
+              toast.error(e?.message || "Failed to download PDF");
+            } finally {
+              setDownloading(false);
+            }
+          }}
+        >
+          {downloading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Download className="size-4 mr-1" />}
+          Download PDF
         </Button>
       </div>
     </div>

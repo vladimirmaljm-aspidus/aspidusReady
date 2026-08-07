@@ -421,6 +421,11 @@ export function DocumentTemplatesView() {
 function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  // Super-admins must explicitly pick a tenant before we can list letterheads
+  // (the backend requires ?tenant_id= for super-admin — otherwise it returns
+  // 400, which previously surfaced as an empty result + console error).
+  const isSuperAdminUser = isSuperAdmin(useAppStore((s) => s.user));
+  const queryEnabled = !!tenantQuery || !isSuperAdminUser;
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TenantLetterhead | null>(null);
@@ -435,6 +440,7 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load letterheads");
       return r.json() as Promise<{ items: TenantLetterhead[] }>;
     },
+    enabled: queryEnabled,
   });
 
   const deleteMut = useMutation({
@@ -610,6 +616,10 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
 function SealsTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  // Super-admins must explicitly pick a tenant before we can list seals
+  // (same reason as LetterheadsTab — backend requires ?tenant_id=).
+  const isSuperAdminUser = isSuperAdmin(useAppStore((s) => s.user));
+  const queryEnabled = !!tenantQuery || !isSuperAdminUser;
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TenantSeal | null>(null);
@@ -624,6 +634,7 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load seals");
       return r.json() as Promise<{ items: TenantSeal[] }>;
     },
+    enabled: queryEnabled,
   });
 
   const deleteMut = useMutation({
@@ -812,6 +823,11 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
 function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  // Super-admins must explicitly pick a tenant before we can list templates
+  // (same reason as LetterheadsTab — backend requires ?tenant_id= for the
+  // templates/letterheads/seals list endpoints).
+  const isSuperAdminUser = isSuperAdmin(useAppStore((s) => s.user));
+  const queryEnabled = !!tenantQuery || !isSuperAdminUser;
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<DocumentTemplate | null>(null);
@@ -826,6 +842,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load templates");
       return r.json() as Promise<{ items: DocumentTemplate[] }>;
     },
+    enabled: queryEnabled,
   });
 
   // Load letterheads + seals so we can show their names on the cards
@@ -836,6 +853,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load letterheads");
       return r.json() as Promise<{ items: TenantLetterhead[] }>;
     },
+    enabled: queryEnabled,
   });
   const sealsQ = useQuery({
     queryKey: ["seals", tenantKey, tenantQuery],
@@ -844,6 +862,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load seals");
       return r.json() as Promise<{ items: TenantSeal[] }>;
     },
+    enabled: queryEnabled,
   });
 
   const letterheads = letterheadsQ.data?.items ?? [];

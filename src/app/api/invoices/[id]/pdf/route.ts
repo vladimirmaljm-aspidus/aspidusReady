@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
+import { requireAuth, audit } from "@/lib/api/helpers";
 import { generatePdf } from "@/lib/pdf/generator";
 
 export const runtime = "nodejs";
@@ -15,20 +15,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const { id } = await params;
-  let tenantId = resolveTenantId(auth, req);
-  if (!tenantId && auth.isSuperAdmin) {
-    const tenants = await auth.store.listTenants();
-    tenantId = tenants[0]?.id || null;
-  }
-  if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
 
   try {
+    // Fetch the invoice FIRST so we know which tenant it belongs to. This
+    // fixes super-admin downloads: the document itself carries the tenant_id,
+    // so super-admins no longer need ?tenant_id= explicitly (the previous
+    // silent fallback to tenants[0] returned a PDF for the wrong tenant).
     const invoice = await auth.store.getInvoice(id);
-    // Tenant ownership check
     if (!invoice) return NextResponse.json({ error: "Not found." }, { status: 404 });
     if (!auth.isSuperAdmin && invoice.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
+    const tenantId = invoice.tenant_id;
+
     const partner = invoice?.partner_id ? await auth.store.getPartner(invoice.partner_id) : null;
     const tenant = await auth.store.getTenant(tenantId);
 

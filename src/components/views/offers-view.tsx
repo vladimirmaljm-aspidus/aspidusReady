@@ -59,6 +59,7 @@ import { cn } from "@/lib/utils";
 import { useEffectiveTenantId } from "@/lib/store/app-store";
 import { checkOfferCompleteness } from "@/lib/utils/completeness-checker";
 import { CompletenessChecker } from "@/components/common/completeness-checker";
+import { downloadPdf } from "@/lib/utils/download";
 
 const PAGE_SIZE = 20;
 
@@ -812,6 +813,7 @@ function OfferDetail({
   const [showVersionDialog, setShowVersionDialog] = useState(false);
   const [changeNote, setChangeNote] = useState("");
   const [savingVersion, setSavingVersion] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const revisions = useQuery({
     queryKey: ["document-revisions", tenantKey, offer.id],
@@ -1238,10 +1240,25 @@ function OfferDetail({
 
       {/* Download PDF */}
       <div className="pt-3 border-t">
-        <Button asChild variant="outline" size="sm">
-          <a href={`/api/offers/${offer.id}/pdf`} target="_blank" download>
-            <Download className="size-4 mr-1" /> Download PDF
-          </a>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={downloading}
+          onClick={async () => {
+            try {
+              setDownloading(true);
+              const filename = `Offer_${offer.number || offer.id}.pdf`;
+              await downloadPdf(api(`/api/offers/${offer.id}/pdf`), filename);
+              toast.success("PDF downloaded");
+            } catch (e: any) {
+              toast.error(e?.message || "Failed to download PDF");
+            } finally {
+              setDownloading(false);
+            }
+          }}
+        >
+          {downloading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Download className="size-4 mr-1" />}
+          Download PDF
         </Button>
       </div>
 
@@ -2511,7 +2528,7 @@ function OfferFormDialog({
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="pt-3">
+              <div className="pt-3 pb-2">
                 <CompletenessChecker report={completenessReport} />
               </div>
             </CollapsibleContent>

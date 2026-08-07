@@ -29,7 +29,7 @@ import {
   Building2, ShieldCheck, Star, Landmark, Receipt, FileCheck2,
   CheckCircle2, Clock, XCircle, AlertTriangle, Send, Ban, Plus,
   Download, Eye, FileSignature, Calculator, Inbox, UserX,
-  Calendar, Tag, FileBadge, Trash2, KeyRound,
+  Calendar, Tag, FileBadge, Trash2, KeyRound, Loader2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -45,6 +45,7 @@ import {
 } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { cn } from "@/lib/utils";
+import { downloadPdf } from "@/lib/utils/download";
 
 // Local KYC status union (pre-existing duplicate KycStatus export collapses
 // the imported symbol — same workaround used in kyc-review-view.tsx).
@@ -220,6 +221,7 @@ function Partner360Content({
   const setView = useAppStore((s) => s.setView);
   const [tab, setTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // ---------- parallel queries ----------
   const partnerQ = useQuery<Partner>({
@@ -634,10 +636,33 @@ function Partner360Content({
                           <TableCell className="hidden md:table-cell tabular text-muted-foreground text-xs">{fmtDate(o.created_at)}</TableCell>
                           <TableCell className="text-right tabular">{fmtMoney(o.total, o.currency)}</TableCell>
                           <TableCell className="text-right">
-                            <Button asChild size="icon" variant="ghost" className="size-7" title="Download" aria-label="Download">
-                              <a href={`/api/offers/${o.id}/pdf`} target="_blank" rel="noreferrer" download>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-7"
+                              title="Download"
+                              aria-label="Download"
+                              disabled={downloadingId === o.id}
+                              onClick={async () => {
+                                try {
+                                  setDownloadingId(o.id);
+                                  await downloadPdf(
+                                    api(`/api/offers/${o.id}/pdf`),
+                                    `Offer_${o.number || o.id}.pdf`,
+                                  );
+                                  toast.success("PDF downloaded");
+                                } catch (e: any) {
+                                  toast.error(e?.message || "Failed to download PDF");
+                                } finally {
+                                  setDownloadingId(null);
+                                }
+                              }}
+                            >
+                              {downloadingId === o.id ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
                                 <Download className="size-3.5" />
-                              </a>
+                              )}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -691,10 +716,33 @@ function Partner360Content({
                           <TableCell className="hidden md:table-cell tabular text-muted-foreground text-xs">{fmtDate(i.due_date)}</TableCell>
                           <TableCell className="text-right tabular">{fmtMoney(i.total, i.currency)}</TableCell>
                           <TableCell className="text-right">
-                            <Button asChild size="icon" variant="ghost" className="size-7" title="Download" aria-label="Download">
-                              <a href={`/api/invoices/${i.id}/pdf`} target="_blank" rel="noreferrer" download>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-7"
+                              title="Download"
+                              aria-label="Download"
+                              disabled={downloadingId === i.id}
+                              onClick={async () => {
+                                try {
+                                  setDownloadingId(i.id);
+                                  await downloadPdf(
+                                    api(`/api/invoices/${i.id}/pdf`),
+                                    `Invoice_${i.number || i.id}.pdf`,
+                                  );
+                                  toast.success("PDF downloaded");
+                                } catch (e: any) {
+                                  toast.error(e?.message || "Failed to download PDF");
+                                } finally {
+                                  setDownloadingId(null);
+                                }
+                              }}
+                            >
+                              {downloadingId === i.id ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
                                 <Download className="size-3.5" />
-                              </a>
+                              )}
                             </Button>
                           </TableCell>
                         </TableRow>

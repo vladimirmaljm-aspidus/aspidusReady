@@ -16,13 +16,16 @@ export async function GET(req: NextRequest) {
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
-  let tenantId = resolveTenantId(auth, req);
-  // Super-admin without tenant_id param: fall back to first tenant for demo
-  if (!tenantId && auth.isSuperAdmin) {
-    const tenants = await auth.store.listTenants();
-    tenantId = tenants[0]?.id || null;
+  const tenantId = resolveTenantId(auth, req);
+  if (!tenantId) {
+    // Super-admin without an explicit ?tenant_id=xxx has no tenant scope —
+    // return an empty list rather than 400 so the UI shows an empty state.
+    // Regular users always have a tenant_id attached to their session.
+    if (auth.isSuperAdmin) {
+      return NextResponse.json({ items: [], total: 0 });
+    }
+    return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   }
-  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
   const items = await auth.store.listDocumentTemplates(tenantId);
   return NextResponse.json({ items });
 }

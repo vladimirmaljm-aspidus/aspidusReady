@@ -821,8 +821,26 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
               )}
               {tenant?.bank_accounts && (
                 <View style={styles.bankCell}>
-                  <Text style={styles.bankLabel}>Account</Text>
-                  <Text style={styles.bankValue}>{tenant.bank_accounts}</Text>
+                  <Text style={styles.bankLabel}>Account(s)</Text>
+                  {/* bank_accounts can be a JSON array of {bankName, currency, swiftCode, accountNumber}
+                      OR a plain string. Handle both safely. */}
+                  {(() => {
+                    const accts: any = tenant.bank_accounts;
+                    if (typeof accts === "string") {
+                      return <Text style={styles.bankValue}>{accts}</Text>;
+                    }
+                    if (Array.isArray(accts)) {
+                      return accts.map((a: any, i: number) => (
+                        <Text key={i} style={styles.bankValue}>
+                          {a.bankName || a.bank_name || "Bank"}{a.accountNumber || a.account_number ? `: ${a.accountNumber || a.account_number}` : ""}{a.currency ? ` (${a.currency})` : ""}{a.swiftCode || a.swift_code ? ` SWIFT: ${a.swiftCode || a.swift_code}` : ""}
+                        </Text>
+                      ));
+                    }
+                    if (typeof accts === "object" && accts !== null) {
+                      return <Text style={styles.bankValue}>{JSON.stringify(accts)}</Text>;
+                    }
+                    return null;
+                  })()}
                 </View>
               )}
               {bankDetails && (

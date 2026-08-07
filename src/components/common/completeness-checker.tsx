@@ -10,7 +10,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type {
   CompletenessReport,
   CompletenessIssue,
@@ -116,7 +115,7 @@ export function CompletenessChecker({
       </div>
 
       {issues.length > 0 && (
-        <ScrollArea className="max-h-64">
+        <div className="max-h-64 overflow-y-auto pr-1 -mr-1">
           <div className="space-y-2">
             {grouped.map(([group, groupIssues]) => (
               <div key={group} className="space-y-1">
@@ -164,7 +163,7 @@ export function CompletenessChecker({
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       )}
     </div>
   );

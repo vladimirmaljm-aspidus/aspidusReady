@@ -48,6 +48,7 @@ import { UnitSelect } from "@/components/common/unit-select";
 import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { downloadPdf } from "@/lib/utils/download";
 
 const STATUS_LABELS: Record<InvoiceStatus, string> = {
   draft: "Draft",
@@ -166,6 +167,7 @@ export function InvoicesView() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showOfferPicker, setShowOfferPicker] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["invoices", tenantKey, debouncedSearch, statusFilter, partnerFilter],
@@ -489,10 +491,30 @@ export function InvoicesView() {
                                     <CheckCircle2 className="size-4 mr-2" /> Mark as Paid
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem asChild>
-                                  <a href={`/api/invoices/${inv.id}/pdf`} target="_blank" download className="flex items-center">
-                                    <FileDown className="size-4 mr-2" /> Download PDF
-                                  </a>
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    try {
+                                      setDownloadingId(inv.id);
+                                      await downloadPdf(
+                                        api(`/api/invoices/${inv.id}/pdf`),
+                                        `Invoice_${inv.number || inv.id}.pdf`,
+                                      );
+                                      toast.success("PDF downloaded");
+                                    } catch (e: any) {
+                                      toast.error(e?.message || "Failed to download PDF");
+                                    } finally {
+                                      setDownloadingId(null);
+                                    }
+                                  }}
+                                  disabled={downloadingId === inv.id}
+                                  className="flex items-center"
+                                >
+                                  {downloadingId === inv.id ? (
+                                    <Loader2 className="size-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <FileDown className="size-4 mr-2" />
+                                  )}
+                                  Download PDF
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => setDetailId(inv.id)}>
@@ -742,6 +764,8 @@ function InvoiceDetail({
   markingSent: boolean;
   sending: boolean;
 }) {
+  const api = useApiUrl();
+  const [downloading, setDownloading] = useState(false);
   const totals = computeTotals(invoice.items || []);
   const overdue = isOverdue(invoice);
 
@@ -866,10 +890,25 @@ function InvoiceDetail({
 
       {/* Quick Actions Footer */}
       <div className="pt-3 border-t flex flex-wrap items-center gap-2">
-        <Button asChild variant="outline" size="sm">
-          <a href={`/api/invoices/${invoice.id}/pdf`} target="_blank" download>
-            <Download className="size-4 mr-1" /> Download PDF
-          </a>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={downloading}
+          onClick={async () => {
+            try {
+              setDownloading(true);
+              const filename = `Invoice_${invoice.number || invoice.id}.pdf`;
+              await downloadPdf(api(`/api/invoices/${invoice.id}/pdf`), filename);
+              toast.success("PDF downloaded");
+            } catch (e: any) {
+              toast.error(e?.message || "Failed to download PDF");
+            } finally {
+              setDownloading(false);
+            }
+          }}
+        >
+          {downloading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Download className="size-4 mr-1" />}
+          Download PDF
         </Button>
         {invoice.status === "draft" && (
           <Button size="sm" variant="default" onClick={onSend} disabled={sending} className="gap-1">
