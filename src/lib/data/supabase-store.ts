@@ -986,20 +986,137 @@ export class SupabaseStore implements Store {
   }
 
   // ---- document templates ----
+  // Join columns: include nested letterhead + seal rows so the PDF renderer
+  // has direct access to logo_url / image_url without an extra round-trip.
+  // We use the PostgREST embedded-resource hint syntax `!fk_column` because
+  // the document_templates.letterhead_id / seal_id columns don't always have
+  // explicit FOREIGN KEY constraints in older schema revisions.
+  private static readonly TEMPLATE_SELECT =
+    "*, letterhead:tenant_letterheads!letterhead_id(*), seal:tenant_seals!seal_id(*)";
+
   async listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]> {
-    const { data, error } = await this.sb().from("document_templates").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+    const { data, error } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return (data as DocumentTemplate[]) || [];
   }
   async getDocumentTemplate(id: string): Promise<DocumentTemplate | null> {
-    const { data, error } = await this.sb().from("document_templates").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("id", id)
+      .maybeSingle();
     if (error) throw error;
     return (data as DocumentTemplate) || null;
   }
   async getDefaultDocumentTemplate(tenantId: string, type: string): Promise<DocumentTemplate | null> {
-    const { data, error } = await this.sb().from("document_templates").select("*").eq("tenant_id", tenantId).eq("type", type).eq("is_default", true).maybeSingle();
+    // 1) Look for an existing default template for this doc type.
+    const { data, error } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("tenant_id", tenantId)
+      .eq("type", type)
+      .eq("is_default", true)
+      .maybeSingle();
     if (error) throw error;
-    return (data as DocumentTemplate) || null;
+    if (data) return data as DocumentTemplate;
+
+    // 2) Fall back to any default template (any type) — a tenant might have
+    //    created a single "all-documents" template instead of per-type ones.
+    const { data: anyType } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("tenant_id", tenantId)
+      .eq("is_default", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (anyType) return anyType as DocumentTemplate;
+
+    // 3) Auto-create a default template from the tenant's default (or first)
+    //    letterhead + seal so PDFs actually use the configured branding. This
+    //    is idempotent: we only get here when NO template exists yet.
+    try {
+      const letterheads = await this.listLetterheads(tenantId);
+      const seals = await this.listSeals(tenantId);
+      const activeLetterhead =
+        letterheads.find((l) => l.is_default) || letterheads[0] || null;
+      const activeSeal =
+        seals.find((s) => s.is_default) || seals[0] || null;
+
+      // No branding assets at all → nothing to wire up. Leave template null.
+      if (!activeLetterhead && !activeSeal) return null;
+
+      const newId = (typeof crypto !== "undefined" && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const now = new Date().toISOString();
+
+      const payload: SupaRow = {
+        id: newId,
+        tenant_id: tenantId,
+        name: "Default Template",
+        type,
+        is_default: true,
+        // Page layout — inherit from letterhead when available
+        page_size: activeLetterhead?.page_size || "A4",
+        page_margin_top: activeLetterhead?.margin_top_mm ?? 25,
+        page_margin_bottom: activeLetterhead?.margin_bottom_mm ?? 25,
+        page_margin_left: activeLetterhead?.margin_left_mm ?? 20,
+        page_margin_right: activeLetterhead?.margin_right_mm ?? 20,
+        // Header
+        header_enabled: true,
+        header_height: activeLetterhead?.header_height_mm ?? 20,
+        header_content: null,
+        header_show_logo: activeLetterhead?.header_show_logo ?? true,
+        header_show_company_name: activeLetterhead?.header_show_company_name ?? true,
+        header_show_contact: activeLetterhead?.header_show_contact ?? true,
+        // Footer
+        footer_enabled: true,
+        footer_height: activeLetterhead?.footer_height_mm ?? 15,
+        footer_content: null,
+        footer_show_page_number: activeLetterhead?.footer_show_page_number ?? true,
+        footer_show_bank_details: activeLetterhead?.footer_show_bank_details ?? true,
+        footer_show_tax_id: activeLetterhead?.footer_show_tax_id ?? true,
+        // Body typography
+        body_font_family: activeLetterhead?.body_font_family || "Inter",
+        body_font_size: activeLetterhead?.body_font_size_pt ?? 11,
+        body_line_height: 1.5,
+        // Branding colors
+        primary_color: activeLetterhead?.primary_color || "#0f766e",
+        accent_color: activeLetterhead?.accent_color || "#0d9488",
+        // Table styling
+        table_header_bg: activeLetterhead?.primary_color || "#0f766e",
+        table_header_color: "#ffffff",
+        table_border_color: "#e5e7eb",
+        table_stripe: true,
+        // Linked branding assets
+        letterhead_id: activeLetterhead?.id || null,
+        seal_id: activeSeal?.id || null,
+        seal_enabled: !!activeSeal,
+        // Metadata
+        created_by: null,
+        created_at: now,
+        updated_at: now,
+      };
+
+      const { data: created, error: insErr } = await this.sb()
+        .from("document_templates")
+        .insert(payload)
+        .select(SupabaseStore.TEMPLATE_SELECT)
+        .single();
+      if (insErr) {
+        console.warn("[getDefaultDocumentTemplate] Auto-create failed:", insErr.message);
+        return null;
+      }
+      return (created as DocumentTemplate) || null;
+    } catch (autoErr) {
+      console.warn("[getDefaultDocumentTemplate] Auto-create error:", autoErr);
+      return null;
+    }
   }
   async upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate> {
     return this.smartUpsert<DocumentTemplate>("document_templates", t);

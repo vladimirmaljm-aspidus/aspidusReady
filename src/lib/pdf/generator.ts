@@ -4,7 +4,7 @@ import { buildPdfDocument } from "./templates";
 import { generateQrCodeDataUrl, generateVerificationCode, computePdfHash } from "./qr";
 import { getStore } from "@/lib/data/store";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import type { Offer, Invoice, Proforma, Partner, Tenant, DocumentTemplate } from "@/lib/supabase/types";
+import type { Offer, Invoice, Proforma, Partner, Tenant, DocumentTemplate, TenantLetterhead, TenantSeal } from "@/lib/supabase/types";
 
 export interface GeneratePdfOptions {
   docType: "offer" | "invoice" | "proforma";
@@ -21,16 +21,20 @@ export interface GeneratePdfResult {
 }
 
 /**
- * Resolve the tenant logo URL into a form that @react-pdf/renderer can fetch.
+ * Resolve an image URL (tenant logo, letterhead logo, or seal image) into a
+ * form that @react-pdf/renderer can fetch reliably.
  *
  * Cases handled:
  *  1. null / undefined → null
- *  2. Full public URL (http…) → try to get a signed URL (works for private buckets);
- *     fall back to the original URL if signing fails.
- *  3. Relative storage path (e.g. "tenant-id/logo.png") → build a signed URL;
+ *  2. data: URL → return as-is. <Image> handles these natively and re-fetching
+ *     a large base64 payload is wasteful (letterhead logos & seals uploaded via
+ *     the UI are stored as data: URLs).
+ *  3. Full public URL (http…) → try to get a signed URL (works for private
+ *     buckets); fall back to the original URL if signing fails.
+ *  4. Relative storage path (e.g. "tenant-id/logo.png") → build a signed URL;
  *     fall back to constructing the public URL from SUPABASE_URL.
  *
- * After resolving the URL, we also fetch the bytes and re-encode as a data: URL.
+ * For non-data: URLs we also fetch the bytes and re-encode as a data: URL.
  * This is critical because @react-pdf/renderer has no error boundary around the
  * <Image> component — if the remote URL returns a 404, a non-image content type,
  * or the network is unreachable, the entire PDF render throws and the user sees
@@ -39,6 +43,10 @@ export interface GeneratePdfResult {
  */
 async function resolveLogoUrl(logoUrl: string | null | undefined): Promise<string | null> {
   if (!logoUrl) return null;
+
+  // data: URLs (letterhead logos & seals uploaded via the UI) work natively
+  // with @react-pdf/renderer — pass them straight through.
+  if (logoUrl.startsWith("data:")) return logoUrl;
 
   // If Supabase is not configured, return the URL as-is (dev/mock mode)
   if (!isSupabaseConfigured()) return fetchAsDataUrl(logoUrl);
@@ -144,7 +152,84 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
   // Fetch partner + tenant + template
   const partner = doc.partner_id ? await store.getPartner(doc.partner_id) : null;
   const tenant = await store.getTenant(opts.tenantId);
-  const template = await store.getDefaultDocumentTemplate(opts.tenantId, opts.docType);
+  let template = await store.getDefaultDocumentTemplate(opts.tenantId, opts.docType);
+
+  // ── Template enrichment / fallback ───────────────────────────────────
+  // The store's getDefaultDocumentTemplate normally returns a template whose
+  // nested `letterhead` + `seal` rows are joined in. But mock/prisma stores or
+  // older schema versions may not join them — and if NO template exists at all
+  // (e.g. mock mode), we still want PDFs to use the tenant's configured
+  // letterhead + seal rather than the bare default styling.
+  try {
+    if (template) {
+      // If the template references a letterhead/seal but the join didn't populate
+      // (e.g. the store implementation doesn't join), fetch them explicitly.
+      if (template.letterhead_id && !template.letterhead) {
+        const lh = await store.getLetterhead(template.letterhead_id);
+        if (lh) template = { ...template, letterhead: lh };
+      }
+      if (template.seal_id && !template.seal) {
+        const s = await store.getSeal(template.seal_id);
+        if (s) template = { ...template, seal: s };
+      }
+    } else {
+      // No template at all — build a synthetic one from the tenant's default
+      // (or first) letterhead + seal so PDFs still get branded.
+      const letterheads = await store.listLetterheads(opts.tenantId);
+      const seals = await store.listSeals(opts.tenantId);
+      const activeLetterhead: TenantLetterhead | null =
+        letterheads.find((l) => l.is_default) || letterheads[0] || null;
+      const activeSeal: TenantSeal | null =
+        seals.find((s) => s.is_default) || seals[0] || null;
+
+      if (activeLetterhead || activeSeal) {
+        const now = new Date().toISOString();
+        template = {
+          id: "auto",
+          tenant_id: opts.tenantId,
+          name: "Auto (from active letterhead + seal)",
+          type: opts.docType,
+          is_default: false,
+          page_size: activeLetterhead?.page_size || "A4",
+          page_margin_top: activeLetterhead?.margin_top_mm ?? 25,
+          page_margin_bottom: activeLetterhead?.margin_bottom_mm ?? 25,
+          page_margin_left: activeLetterhead?.margin_left_mm ?? 20,
+          page_margin_right: activeLetterhead?.margin_right_mm ?? 20,
+          header_enabled: true,
+          header_height: activeLetterhead?.header_height_mm ?? 20,
+          header_content: "",
+          header_show_logo: activeLetterhead?.header_show_logo ?? true,
+          header_show_company_name: activeLetterhead?.header_show_company_name ?? true,
+          header_show_contact: activeLetterhead?.header_show_contact ?? true,
+          footer_enabled: true,
+          footer_height: activeLetterhead?.footer_height_mm ?? 15,
+          footer_content: "",
+          footer_show_page_number: activeLetterhead?.footer_show_page_number ?? true,
+          footer_show_bank_details: activeLetterhead?.footer_show_bank_details ?? true,
+          footer_show_tax_id: activeLetterhead?.footer_show_tax_id ?? true,
+          body_font_family: activeLetterhead?.body_font_family || "Helvetica",
+          body_font_size: activeLetterhead?.body_font_size_pt ?? 10,
+          body_line_height: 1.4,
+          primary_color: activeLetterhead?.primary_color || "#0d9488",
+          accent_color: activeLetterhead?.accent_color || "#0d9488",
+          table_header_bg: activeLetterhead?.primary_color || "#0d9488",
+          table_header_color: "#ffffff",
+          table_border_color: "#e5e7eb",
+          table_stripe: true,
+          letterhead_id: activeLetterhead?.id || null,
+          seal_id: activeSeal?.id || null,
+          seal_enabled: !!activeSeal,
+          letterhead: activeLetterhead,
+          seal: activeSeal,
+          created_by: null,
+          created_at: now,
+          updated_at: now,
+        } as DocumentTemplate;
+      }
+    }
+  } catch (tplErr) {
+    console.warn("[PDF] Template enrichment failed — continuing with bare template:", tplErr);
+  }
 
   // Handle verification
   let verificationCode: string | undefined;
@@ -187,8 +272,16 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     }
   }
 
-  // Resolve the logo URL so @react-pdf/renderer can fetch it
-  const resolvedLogoUrl = await resolveLogoUrl(tenant?.logo_url);
+  // Resolve the logo URL so @react-pdf/renderer can fetch it.
+  // Prefer the letterhead's own logo when a template + letterhead are present
+  // (the tenant logo is the fallback used by the memorandum header).
+  const letterheadLogoUrl = template?.letterhead_id ? template?.letterhead?.logo_url : null;
+  const resolvedLogoUrl = await resolveLogoUrl(letterheadLogoUrl || tenant?.logo_url);
+
+  // Resolve the seal image URL (if a seal is linked + enabled).
+  const sealImageUrl = template?.seal_enabled
+    ? await resolveLogoUrl(template?.seal?.image_url)
+    : null;
 
   // Build PDF metadata (visible in the PDF document properties dialog)
   const docTitleLabel = opts.docType === "offer" ? "Offer" : opts.docType === "invoice" ? "Invoice" : "Proforma";
@@ -210,6 +303,7 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     verificationCode,
     qrCodeDataUrl,
     logoUrl: resolvedLogoUrl,
+    sealImageUrl,
     pdfMeta,
   });
   const buffer = await renderToBuffer(element as any);

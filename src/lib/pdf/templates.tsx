@@ -21,6 +21,10 @@ interface PdfDocData {
   verificationCode?: string;
   qrCodeDataUrl?: string;
   logoUrl?: string | null;
+  /** Resolved seal image URL (data: URL or fetched+re-encoded). Null when no
+   *  seal is configured or the seal image couldn't be loaded — the renderer
+   *  must skip the seal element entirely in that case. */
+  sealImageUrl?: string | null;
   /** Optional metadata for PDF properties (Author, Title, Subject, etc.) */
   pdfMeta?: {
     author?: string;
@@ -140,7 +144,7 @@ function amountInWords(amount: number, currency = "USD"): string {
   return result;
 }
 
-export function buildPdfDocument({ doc, docType, partner, tenant, template, verificationCode, qrCodeDataUrl, logoUrl, pdfMeta }: PdfDocData) {
+export function buildPdfDocument({ doc, docType, partner, tenant, template, verificationCode, qrCodeDataUrl, logoUrl, sealImageUrl, pdfMeta }: PdfDocData) {
   const tpl = template;
   const primaryColor = tpl?.primary_color || "#0d9488";
 
@@ -343,18 +347,59 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     termsBox: { marginTop: 14, marginBottom: 8 },
     termsText: { fontSize: 8.5, color: "#444", lineHeight: 1.5, marginBottom: 4 },
 
-    bankGrid: { flexDirection: "row", flexWrap: "wrap", borderWidth: 1, borderColor: tableBorderColor, borderRadius: 3, overflow: "hidden" },
-    bankCell: { width: "50%", flexDirection: "row", paddingVertical: 5, paddingHorizontal: 8, borderRightWidth: 0.5, borderRightColor: tableBorderColor, borderBottomWidth: 0.5, borderBottomColor: tableBorderColor },
-    bankCellFull: { width: "100%", flexDirection: "row", paddingVertical: 5, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: tableBorderColor },
-    bankLabel: { fontSize: 7, color: "#999", textTransform: "uppercase", marginRight: 4, fontFamily: headingFontFamily },
-    bankValue: { fontSize: 8.5, color: "#333", fontFamily: headingFontFamily, flex: 1 },
+    // ── Bank Details — rendered as a clean vertical list (not a cramped grid) ──
+    // One row per account: bank name + currency on line 1, account + SWIFT on line 2.
+    bankList: {
+      flexDirection: "column",
+      gap: 6,
+      marginTop: 4,
+    },
+    bankAccountRow: {
+      flexDirection: "column",
+      paddingBottom: 4,
+      borderBottomWidth: 0.5,
+      borderBottomColor: tableBorderColor,
+      marginBottom: 2,
+    },
+    bankAccountName: {
+      fontSize: 8.5,
+      fontFamily: headingFontFamily,
+      color: "#333",
+      marginBottom: 1,
+    },
+    bankAccountDetails: {
+      fontSize: 8,
+      color: "#555",
+      lineHeight: 1.4,
+    },
 
     // ── Authorized Signatures ─────────────────────────────────────────
+    signatureWrap: { position: "relative" },
     signatureBlock: { marginTop: 20, flexDirection: "row", justifyContent: "space-between", gap: 24 },
     signatureCol: { flex: 1, flexDirection: "column" },
     signatureParty: { fontSize: 8, color: "#555", marginBottom: 2, fontFamily: headingFontFamily },
     signatureLine: { marginTop: 26, borderBottomWidth: 1, borderBottomColor: "#333" },
     signatureLabel: { fontSize: 8, color: "#666", marginTop: 3, textAlign: "center", fontFamily: headingFontFamily },
+
+    // ── Company Seal (Zigled) ─────────────────────────────────────────
+    // Absolutely positioned over the signature area. Placement comes from the
+    // TenantSeal.position field; offsets are in millimetres converted to points.
+    // @react-pdf/renderer supports `transform` for rotation but does NOT support
+    // per-axis translate — we use left/right/top/bottom + margins instead.
+    sealOverlay: {
+      position: "absolute",
+      // Sensible defaults; overridden inline per-placement below.
+      bottom: 0,
+      right: 0,
+      width: 90,
+      height: 90,
+      opacity: 0.85,
+    },
+    sealImage: {
+      width: "100%",
+      height: "100%",
+      objectFit: "contain",
+    },
 
     // ── Document Notice (legally required disclaimer per doc type) ────
     noticeBox: {
@@ -392,6 +437,24 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
   const originCountry: string = (items[0] as any)?.origin_country || "—";
   const bankDetails: string = tradeFields.bank_details || "";
 
+  // ── Bank accounts (modern JSON array on tenant) ─────────────────────
+  // The DB column is typed as `string | null` (jsonb), but in practice it
+  // holds a JSON array of { bankName, currency, swiftCode, accountNumber }.
+  // Normalise to a plain array so the JSX below can `.map()` cleanly.
+  const bankAccountsList: any[] = (() => {
+    const raw = tenant?.bank_accounts as unknown;
+    if (Array.isArray(raw)) return raw as any[];
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })();
+
   // ── HEADER (memorandum — repeats on every page) ────────────────────
   const HeaderContent = () => (
     <View style={styles.header} fixed>
@@ -407,11 +470,33 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         </Text>
         {(tenant?.address_line || tenant?.city || tenant?.country) && (
           <Text style={styles.companyAddr}>
-            {[
-              tenant?.address_line,
-              [tenant?.postal_code, tenant?.city].filter(Boolean).join(" "),
-              tenant?.country,
-            ].filter(Boolean).join(", ")}
+            {(() => {
+              // Build the address string WITHOUT duplicating city/country when
+              // they already appear inside `address_line`. E.g. tenant has
+              //   address_line = "GoldCrest..., JLT Cluster C, Dubai, UAE"
+              //   city = "Dubai"   country = "AE"
+              // → must render "GoldCrest..., JLT Cluster C, Dubai, UAE" (not "..., Dubai, UAE, Dubai, AE")
+              const addrLine = (tenant?.address_line || "").trim();
+              const city = (tenant?.city || "").trim();
+              const postal = (tenant?.postal_code || "").trim();
+              const country = (tenant?.country || "").trim();
+              const addrLower = addrLine.toLowerCase();
+
+              const parts: string[] = [];
+              if (addrLine) parts.push(addrLine);
+
+              // postal + city — only append if city isn't already in address_line
+              const cityAndPostal = [postal, city].filter(Boolean).join(" ");
+              if (cityAndPostal && !(city && addrLower.includes(city.toLowerCase()))) {
+                parts.push(cityAndPostal);
+              }
+              // country — only append if not already mentioned in address_line
+              // (covers both full names like "UAE" and ISO codes like "AE")
+              if (country && !addrLower.includes(country.toLowerCase())) {
+                parts.push(country);
+              }
+              return parts.join(", ");
+            })()}
           </Text>
         )}
         <Text style={styles.companyContact}>
@@ -796,75 +881,129 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
           </View>
         )}
 
-        {/* BANK DETAILS — seller bank info + optional per-doc bank_details string */}
-        {(tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift || tenant?.bank_accounts || bankDetails) && (
+        {/* BANK DETAILS — show as a clean vertical list, not a cramped grid.
+            Modern: tenant.bank_accounts JSON array → one row per account.
+            Legacy: if no bank_accounts array, fall back to single-bank fields.
+            Per-doc bank_details override always appended at the bottom. */}
+        {(tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift ||
+          bankAccountsList.length > 0 || bankDetails) && (
           <View style={styles.termsBox}>
             <Text style={styles.sectionHeader} wrap={false}>Bank Details</Text>
-            <View style={styles.bankGrid}>
-              {tenant?.bank_name && (
-                <View style={styles.bankCell}>
-                  <Text style={styles.bankLabel}>Bank</Text>
-                  <Text style={styles.bankValue}>{tenant.bank_name}</Text>
-                </View>
-              )}
-              {tenant?.bank_iban && (
-                <View style={styles.bankCell}>
-                  <Text style={styles.bankLabel}>IBAN</Text>
-                  <Text style={styles.bankValue}>{tenant.bank_iban}</Text>
-                </View>
-              )}
-              {tenant?.bank_swift && (
-                <View style={styles.bankCell}>
-                  <Text style={styles.bankLabel}>SWIFT/BIC</Text>
-                  <Text style={styles.bankValue}>{tenant.bank_swift}</Text>
-                </View>
-              )}
-              {tenant?.bank_accounts && (
-                <View style={styles.bankCell}>
-                  <Text style={styles.bankLabel}>Account(s)</Text>
-                  {/* bank_accounts can be a JSON array of {bankName, currency, swiftCode, accountNumber}
-                      OR a plain string. Handle both safely. */}
-                  {(() => {
-                    const accts: any = tenant.bank_accounts;
-                    if (typeof accts === "string") {
-                      return <Text style={styles.bankValue}>{accts}</Text>;
-                    }
-                    if (Array.isArray(accts)) {
-                      return accts.map((a: any, i: number) => (
-                        <Text key={i} style={styles.bankValue}>
-                          {a.bankName || a.bank_name || "Bank"}{a.accountNumber || a.account_number ? `: ${a.accountNumber || a.account_number}` : ""}{a.currency ? ` (${a.currency})` : ""}{a.swiftCode || a.swift_code ? ` SWIFT: ${a.swiftCode || a.swift_code}` : ""}
-                        </Text>
-                      ));
-                    }
-                    if (typeof accts === "object" && accts !== null) {
-                      return <Text style={styles.bankValue}>{JSON.stringify(accts)}</Text>;
-                    }
-                    return null;
-                  })()}
-                </View>
-              )}
-              {bankDetails && (
-                <View style={styles.bankCellFull}>
-                  <Text style={styles.bankLabel}>Additional</Text>
-                  <Text style={styles.bankValue}>{bankDetails}</Text>
-                </View>
-              )}
-            </View>
+
+            {bankAccountsList.length > 0 ? (
+              /* Modern: render every account as its own row. Each row shows
+                 the bank name + currency on line 1, and the account number +
+                 SWIFT on line 2. No more overlap, no more grid cramming. */
+              <View style={styles.bankList}>
+                {bankAccountsList.map((acct: any, i: number) => (
+                  <View key={i} style={styles.bankAccountRow} wrap={false}>
+                    <Text style={styles.bankAccountName}>
+                      {acct.bankName || acct.bank_name || "Bank"}
+                      {acct.currency ? ` (${acct.currency})` : ""}
+                    </Text>
+                    <Text style={styles.bankAccountDetails}>
+                      Account: {acct.accountNumber || acct.account_number || "—"}
+                      {"   "}
+                      SWIFT: {acct.swiftCode || acct.swift_code || "—"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              /* Legacy: tenant has only single-bank fields (bank_name / bank_iban /
+                 bank_swift). Render them as a vertical list of rows. */
+              <View style={styles.bankList}>
+                {tenant?.bank_name && (
+                  <View style={styles.bankAccountRow} wrap={false}>
+                    <Text style={styles.bankAccountName}>{tenant.bank_name}</Text>
+                  </View>
+                )}
+                {tenant?.bank_iban && (
+                  <View style={styles.bankAccountRow} wrap={false}>
+                    <Text style={styles.bankAccountDetails}>IBAN: {tenant.bank_iban}</Text>
+                  </View>
+                )}
+                {tenant?.bank_swift && (
+                  <View style={styles.bankAccountRow} wrap={false}>
+                    <Text style={styles.bankAccountDetails}>SWIFT/BIC: {tenant.bank_swift}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Per-document bank_details override (if set on this offer/invoice/proforma) */}
+            {bankDetails && (
+              <View style={styles.bankAccountRow} wrap={false}>
+                <Text style={styles.bankAccountDetails}>{bankDetails}</Text>
+              </View>
+            )}
           </View>
         )}
 
         {/* AUTHORIZED SIGNATURES — seller + buyer/acceptholder */}
-        <View style={styles.signatureBlock} wrap={false}>
-          <View style={styles.signatureCol}>
-            <Text style={styles.signatureParty}>For {tenant?.legal_name || tenant?.name || "Company"}:</Text>
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>Authorized Signature</Text>
+        {/* Wrapped in a relative-positioned container so the company seal
+            (when configured) can be absolutely positioned over the signature
+            area, as is customary for stamped business documents. */}
+        <View style={styles.signatureWrap} wrap={false}>
+          <View style={styles.signatureBlock}>
+            <View style={styles.signatureCol}>
+              <Text style={styles.signatureParty}>For {tenant?.legal_name || tenant?.name || "Company"}:</Text>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureLabel}>Authorized Signature</Text>
+            </View>
+            <View style={styles.signatureCol}>
+              <Text style={styles.signatureParty}>For {partner?.name || "Buyer"}:</Text>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureLabel}>Accepted &amp; Signed</Text>
+            </View>
           </View>
-          <View style={styles.signatureCol}>
-            <Text style={styles.signatureParty}>For {partner?.name || "Buyer"}:</Text>
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>Accepted &amp; Signed</Text>
-          </View>
+
+          {/* Company seal (zigled) — only rendered when a seal image is
+              available. Placement / opacity / rotation come from the
+              TenantSeal relation, with sensible defaults. */}
+          {sealImageUrl && tpl?.seal_enabled && (() => {
+            const seal = tpl?.seal;
+            const position = seal?.position || "bottom-right";
+            const opacity = typeof seal?.opacity === "number" ? seal.opacity : 1;
+            const rotation = typeof seal?.rotation_deg === "number" ? seal.rotation_deg : 0;
+            // Seal dimensions in mm → points; fall back to a 30mm square.
+            const wPts = mmToPoints(seal?.image_width_mm || 30);
+            const hPts = mmToPoints(seal?.image_height_mm || 30);
+            const offXPts = mmToPoints(seal?.offset_x_mm || 0);
+            const offYPts = mmToPoints(seal?.offset_y_mm || 0);
+
+            // Translate position + offset into left/top/right/bottom anchors.
+            const placement: Record<string, any> = {
+              "bottom-right": { right: 10 + offXPts, bottom: 0 + offYPts },
+              "bottom-left":  { left:  10 + offXPts, bottom: 0 + offYPts },
+              "bottom-center": { left: "50%", marginLeft: -wPts / 2 + offXPts, bottom: 0 + offYPts },
+              "top-right":    { right: 10 + offXPts, top:    0 + offYPts },
+              "top-left":     { left:  10 + offXPts, top:    0 + offYPts },
+              "top-center":   { left: "50%", marginLeft: -wPts / 2 + offXPts, top: 0 + offYPts },
+            };
+            const posStyle = placement[position] || placement["bottom-right"];
+
+            // @react-pdf/renderer accepts a `transform` string array; older
+            // builds only honour a single string. We use a single string for
+            // broad compatibility — a 0deg rotation produces an identity
+            // transform, so omitting it is also fine.
+            const transform = rotation ? `rotate(${rotation}deg)` : undefined;
+
+            return (
+              <View
+                style={[
+                  styles.sealOverlay,
+                  posStyle,
+                  { width: wPts, height: hPts, opacity },
+                  transform ? ({ transform } as any) : {},
+                ]}
+                wrap={false}
+              >
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                <Image style={styles.sealImage} src={sealImageUrl} />
+              </View>
+            );
+          })()}
         </View>
 
         {/* DOCUMENT NOTICE — legally required disclaimer per doc type */}
