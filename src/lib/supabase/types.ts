@@ -880,6 +880,18 @@ export interface DocumentTemplate {
   /** Which bank accounts to show in PDF (indexes into tenant.bank_accounts array).
    *  null/empty = show all accounts. [0,2] = show only 1st and 3rd accounts. */
   selected_bank_accounts?: number[] | null;
+  // ── QR code placement ─────────────────────────────────────────────
+  // NOTE: these fields are NOT real DB columns. They live inside
+  // `footer_content` as a `_qrConfig` JSON sub-key (see
+  // src/components/views/document-templates-view.tsx → handleSave). They're
+  // declared on the type so the PDF renderer + visual editor can read/write
+  // them with type safety.
+  /** QR code placement. Default: "footer-right". */
+  qr_position?: string | null; // "footer-right" | "footer-left" | "footer-center" | "none"
+  /** QR code size in mm. Default: 15. */
+  qr_size_mm?: number | null;
+  /** QR code opacity 0..1. Default: 1.0. */
+  qr_opacity?: number | null;
   // Metadata
   created_by: string | null;
   created_at: string;

@@ -1,6 +1,6 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image, Font, Link } from "@react-pdf/renderer";
-import type { Offer, Invoice, Proforma, OfferLineItem, Partner, Tenant, DocumentTemplate } from "@/lib/supabase/types";
+import type { Offer, Invoice, Proforma, OfferLineItem, Partner, Tenant, DocumentTemplate, TenantLetterhead } from "@/lib/supabase/types";
 import {
   parseContentConfig,
   substitutePlaceholders,
@@ -310,7 +310,16 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     },
     footerTopRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
     footerCompanyLine: { fontSize: 7, color: "#666", fontFamily: headingFontFamily },
-    footerBottomRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+    footerBottomRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      marginTop: 4,
+      // No flex on the row itself — children manage their own flex sizing.
+      // This prevents the QR View from being squashed/overlapped by the
+      // flex:1 page-info View (the "QR glued to half the edge" bug).
+      gap: 8,
+    },
     footerLeftInfo: { flexDirection: "column", flex: 1, justifyContent: "flex-end" },
     footerPage: { fontSize: 7.5, color: "#666", fontFamily: headingFontFamily },
     footerSys: { fontSize: 6.5, color: "#aaa", fontStyle: "italic", marginTop: 2 },
@@ -319,7 +328,13 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     footerBankLine: { fontSize: 7, color: "#666" },
     // Column wrapper that holds user-defined segments (TemplateContentEditor).
     footerCustomSegmentCol: { flexDirection: "column", marginBottom: 4 },
-    footerQr: { flexDirection: "column", alignItems: "center", gap: 2 },
+    // QR wrapper — uses a fixed-size Image (size set inline via qrSizePts)
+    // so it can't push the page-info View off the edge. Align items so the
+    // "Scan to verify" label sits neatly under the QR.
+    footerQr: { flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 },
+    // footerQrImage is kept for backwards-compat with any external code
+    // that references it — the actual QR image now uses inline styles
+    // (width/height/opacity) derived from qr_size_mm + qr_opacity.
     footerQrImage: { width: 35, height: 35 },
     footerQrLabel: { fontSize: 5.5, color: "#aaa", textAlign: "center" },
 
@@ -625,6 +640,48 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
     return cfg.segments.map((s) => ({ ...s, text: substitutePlaceholders(s.text, placeholderData) }));
   })();
 
+  // ── QR code placement ──────────────────────────────────────────────
+  // Stored inside footer_content as a reserved `_qrConfig` JSON sub-key
+  // (see src/components/views/document-templates-view.tsx → writeQrConfig).
+  // Falls back to "footer-right" / 15 mm / opacity 1 when missing.
+  const qrConfig = (() => {
+    const fallback = { position: "footer-right", size: 15, opacity: 1 };
+    if (!tpl?.footer_content) return fallback;
+    try {
+      const parsed = JSON.parse(tpl.footer_content);
+      const q = parsed?._qrConfig;
+      if (q && typeof q === "object") {
+        return {
+          position: typeof q.position === "string" ? q.position : fallback.position,
+          size: typeof q.size === "number" ? q.size : fallback.size,
+          opacity: typeof q.opacity === "number" ? q.opacity : fallback.opacity,
+        };
+      }
+    } catch {
+      // footer_content might be legacy plain text — keep defaults.
+    }
+    return fallback;
+  })();
+  // Whether to render the QR at all (false when position === "none" or no
+  // qrCodeDataUrl was supplied by the generator).
+  const showQr = !!qrCodeDataUrl && qrConfig.position !== "none";
+  // Convert mm → points for the QR image dimensions.
+  const qrSizePts = mmToPoints(qrConfig.size);
+  // Clamp opacity 0..1.
+  const qrOpacity = Math.max(0, Math.min(1, qrConfig.opacity));
+
+  // ── Letterhead takes priority for the header (memorandum) ─────────
+  // When a letterhead is linked to the template AND the joined letterhead
+  // row is present, the letterhead's company identity / address / contact
+  // IS the memorandum — rendering header_content segments on top of it
+  // would duplicate the company name, address, etc. In that case we drop
+  // the user-defined header segments entirely and render the letterhead's
+  // own header block (logo + name + address + reg/vat).
+  const useLetterheadHeader = !!(tpl?.letterhead_id && tpl?.letterhead);
+  const effectiveHeaderSegments: ContentSegment[] = useLetterheadHeader
+    ? []
+    : headerSegments;
+
   // ── HEADER (memorandum — repeats on every page) ────────────────────
   // Rendered only when tpl.header_enabled !== false. Within the header,
   // individual elements are toggled by header_show_logo / _show_company_name /
@@ -637,18 +694,43 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
   // legacy default block is rendered.
   const HeaderContent = () => {
     if (!headerEnabled) return null;
+    // When a letterhead is linked, the letterhead IS the memorandum — pull
+    // every field from the letterhead row and DROP any header_content
+    // segments (they'd duplicate the company name / address / reg info).
+    // When no letterhead is linked, fall back to tenant fields + the user's
+    // custom header_content segments (existing behaviour).
+    const lhForHeader = useLetterheadHeader ? (tpl?.letterhead as TenantLetterhead | null) : null;
+    const companyName =
+      lhForHeader?.company_name ||
+      lhForHeader?.company_legal_name ||
+      tenant?.legal_name ||
+      tenant?.name ||
+      "Company";
     const contactParts = [
-      tenant?.phone,
-      tenant?.email,
-      tenant?.website,
+      lhForHeader?.company_phone || tenant?.phone,
+      lhForHeader?.company_email || tenant?.email,
+      lhForHeader?.company_website || tenant?.website,
     ].filter(Boolean);
     const regParts = [
-      tenant?.registration_number && `Reg# ${tenant.registration_number}`,
-      tenant?.vat_number && `VAT# ${tenant.vat_number}`,
-      tenant?.tax_id && `Tax# ${tenant.tax_id}`,
+      (lhForHeader?.company_registration_number || tenant?.registration_number) &&
+        `Reg# ${lhForHeader?.company_registration_number || tenant?.registration_number}`,
+      (lhForHeader?.company_vat_number || tenant?.vat_number) &&
+        `VAT# ${lhForHeader?.company_vat_number || tenant?.vat_number}`,
+      (lhForHeader?.company_tax_id || tenant?.tax_id) &&
+        `Tax# ${lhForHeader?.company_tax_id || tenant?.tax_id}`,
     ].filter(Boolean);
-    const hasAddr = !!(tenant?.address_line || tenant?.city || tenant?.country);
-    const hasCustomSegments = headerSegments.length > 0;
+    const hasAddr = !!(
+      lhForHeader?.company_address_line ||
+      lhForHeader?.company_city ||
+      lhForHeader?.company_country ||
+      tenant?.address_line ||
+      tenant?.city ||
+      tenant?.country
+    );
+    // effectiveHeaderSegments is already [] when useLetterheadHeader is true
+    // (see its definition above), so the "user-defined segments" branch is
+    // automatically skipped when a letterhead is linked.
+    const hasCustomSegments = effectiveHeaderSegments.length > 0;
     return (
       <View style={styles.header} fixed>
         {headerShowLogo && logoUrl ? (
@@ -660,12 +742,12 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
         <View style={styles.headerLeft}>
           {headerShowCompanyName && (
             <Text style={styles.companyName}>
-              {tenant?.legal_name || tenant?.name || "Company"}
+              {companyName}
             </Text>
           )}
           {hasCustomSegments ? (
             // ── User-defined segments (TemplateContentEditor) ──
-            headerSegments.map((seg) => {
+            effectiveHeaderSegments.map((seg) => {
               const segStyle: any = {
                 fontSize: seg.fontSize || 8,
                 color: seg.color || "#555",
@@ -705,10 +787,26 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
                     //   address_line = "GoldCrest..., JLT Cluster C, Dubai, UAE"
                     //   city = "Dubai"   country = "AE"
                     // → must render "GoldCrest..., JLT Cluster C, Dubai, UAE" (not "..., Dubai, UAE, Dubai, AE")
-                    const addrLine = (tenant?.address_line || "").trim();
-                    const city = (tenant?.city || "").trim();
-                    const postal = (tenant?.postal_code || "").trim();
-                    const country = (tenant?.country || "").trim();
+                    const addrLine = (
+                      lhForHeader?.company_address_line ||
+                      tenant?.address_line ||
+                      ""
+                    ).trim();
+                    const city = (
+                      lhForHeader?.company_city ||
+                      tenant?.city ||
+                      ""
+                    ).trim();
+                    const postal = (
+                      lhForHeader?.company_postal_code ||
+                      tenant?.postal_code ||
+                      ""
+                    ).trim();
+                    const country = (
+                      lhForHeader?.company_country ||
+                      tenant?.country ||
+                      ""
+                    ).trim();
                     const addrLower = addrLine.toLowerCase();
 
                     const parts: string[] = [];
@@ -783,6 +881,77 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
 
     const hasCustomSegments = footerSegments.length > 0;
 
+    // ── QR rendering (positioned via footer_content._qrConfig) ──────
+    // The QR's image dimensions are derived from `qr_size_mm` (mm → pts)
+    // and the opacity is applied directly to the <Image>. Position is one
+    // of: "footer-right" (default) | "footer-left" | "footer-center" |
+    // "none". We compose the bottom row so the QR sits in its chosen
+    // column and the page-number/sys-info fills the remaining space —
+    // this avoids the "QR glued to half the edge" overlap the user saw.
+    const qrView = showQr && qrCodeDataUrl ? (
+      <View style={styles.footerQr}>
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        <Image
+          style={{
+            width: qrSizePts,
+            height: qrSizePts,
+            opacity: qrOpacity,
+            objectFit: "contain",
+          }}
+          src={qrCodeDataUrl}
+        />
+        <Text style={styles.footerQrLabel}>Scan to verify</Text>
+      </View>
+    ) : null;
+
+    // Page-number + generated-by info (always present unless both flags
+    // are off — but footerSys is always shown for legal attribution).
+    const footerPageInfo = (
+      <View style={styles.footerLeftInfo}>
+        {footerShowPageNumber && (
+          <Text
+            style={styles.footerPage}
+            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
+              `Page ${pageNumber} of ${totalPages}`
+            }
+          />
+        )}
+        <Text style={styles.footerSys}>
+          Generated by {pdfMeta?.creator || "Aspidus CRM"} · {new Date().toLocaleString("en-GB")}
+        </Text>
+      </View>
+    );
+
+    // Compose the bottom row depending on QR position.
+    let bottomRow: React.ReactNode;
+    if (!showQr) {
+      bottomRow = footerPageInfo;
+    } else if (qrConfig.position === "footer-left") {
+      bottomRow = (
+        <>
+          {qrView}
+          {footerPageInfo}
+        </>
+      );
+    } else if (qrConfig.position === "footer-center") {
+      bottomRow = (
+        <>
+          {footerPageInfo}
+          {qrView}
+          {/* Symmetric filler so the QR truly sits in the centre. */}
+          <View style={{ flex: 1 }} />
+        </>
+      );
+    } else {
+      // "footer-right" (default)
+      bottomRow = (
+        <>
+          {footerPageInfo}
+          {qrView}
+        </>
+      );
+    }
+
     return (
       <View style={styles.footer} fixed>
         {hasCustomSegments ? (
@@ -836,28 +1005,7 @@ export function buildPdfDocument({ doc, docType, partner, tenant, template, veri
             )}
           </>
         )}
-        <View style={styles.footerBottomRow}>
-          <View style={styles.footerLeftInfo}>
-            {footerShowPageNumber && (
-              <Text
-                style={styles.footerPage}
-                render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-                  `Page ${pageNumber} of ${totalPages}`
-                }
-              />
-            )}
-            <Text style={styles.footerSys}>
-              Generated by {pdfMeta?.creator || "Aspidus CRM"} · {new Date().toLocaleString("en-GB")}
-            </Text>
-          </View>
-          {qrCodeDataUrl && (
-            <View style={styles.footerQr}>
-              {/* eslint-disable-next-line jsx-a11y/alt-text */}
-              <Image style={styles.footerQrImage} src={qrCodeDataUrl} />
-              <Text style={styles.footerQrLabel}>Scan to verify</Text>
-            </View>
-          )}
-        </View>
+        <View style={styles.footerBottomRow}>{bottomRow}</View>
       </View>
     );
   };

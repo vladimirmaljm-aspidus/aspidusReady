@@ -42,15 +42,40 @@ export class SupabaseStore implements Store {
   }
 
   /**
-   * Convert empty strings to null across the payload. Postgres refuses "" for
-   * date/timestamp/numeric/uuid/jsonb columns with error 22007
-   * ('invalid input syntax for type date: ""'), and every form in the app
-   * sends "" for an unfilled optional field. This one-liner unblocks all of
-   * them without every route having to re-implement the same sanitization.
+   * Sanitize a payload before sending it to Supabase:
+   *   • Empty strings ("") become NULL — Postgres refuses "" for
+   *     date/timestamp/numeric/uuid/jsonb columns (error 22007).
+   *   • Nested plain objects are STRIPPED — these come back from SELECT
+   *     queries that use PostgREST join syntax (e.g. `*, letterhead:...(*),
+   *     seal:...(*)`) and end up as nested objects on the row. They are NOT
+   *     real columns in the target table, so sending them back on an
+   *     UPDATE/INSERT triggers a 500 from PostgREST
+   *     ('column "letterhead" of relation "document_templates" does not
+   *     exist'). The classic case is `document_templates.letterhead` and
+   *     `document_templates.seal` — both join results.
+   *   • Arrays are KEPT — they map to jsonb columns
+   *     (e.g. document_templates.selected_bank_accounts, users.permissions).
    */
   private sanitizePayload(row: SupaRow): SupaRow {
+    // Known JOIN result keys that come back from SELECT joins but are NOT
+    // real DB columns. Strip them entirely (both null and object values)
+    // to prevent PostgREST 500 "column does not exist" errors.
+    const JOIN_KEYS = new Set([
+      "letterhead", "seal", "partner", "deal", "offer", "invoice",
+      "proforma", "demand", "product", "supplier", "buyer", "owner",
+      "user", "tenant", "fiscal_period", "journal_entry", "bank_account",
+      "cost_center", "account", "created_by_user", "posted_by_user",
+      "commission_agent", "portal_access", "kyc_submission",
+    ]);
     const out: SupaRow = {};
     for (const [k, v] of Object.entries(row)) {
+      // Skip known JOIN result keys (even if null — null still triggers
+      // "column does not exist" in PostgREST)
+      if (JOIN_KEYS.has(k)) continue;
+      // Skip nested plain objects — they're JOIN results too
+      if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+        continue;
+      }
       if (v === "") out[k] = null;
       else out[k] = v;
     }
@@ -60,6 +85,14 @@ export class SupabaseStore implements Store {
   /**
    * Smart upsert: uses INSERT when no id is provided, UPDATE when id exists.
    * This avoids issues with Supabase's upsert() and auto-generated UUIDs.
+   *
+   * On UPDATE we additionally strip:
+   *   • created_at — DB owns this column; sending it would silently overwrite
+   *     the original creation timestamp.
+   *   • created_by — same; the original author shouldn't change on every edit.
+   *   • updated_at — Postgres has a default/trigger that sets this; sending
+   *     a client-supplied value can clobber it or trigger a NOT NULL /
+   *     immutability error on some schemas.
    */
   private async smartUpsert<T>(
     table: string,
@@ -67,8 +100,12 @@ export class SupabaseStore implements Store {
   ): Promise<T> {
     const payload: SupaRow = this.sanitizePayload({ ...data });
     if (data.id) {
-      // UPDATE existing record
+      // UPDATE existing record — never overwrite audit columns.
       const { id, ...fields } = payload;
+      delete fields.created_at;
+      delete fields.created_by;
+      // Let the DB default/trigger update updated_at.
+      delete fields.updated_at;
       const { data: updated, error } = await this.sb()
         .from(table)
         .update(fields)

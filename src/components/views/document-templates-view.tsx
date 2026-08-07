@@ -363,7 +363,74 @@ function defaultTemplate(name = "Untitled template"): TemplateFormState {
     seal_id: null,
     seal_enabled: true,
     selected_bank_accounts: null,
+    // QR placement defaults. These are stored INSIDE footer_content._qrConfig
+    // at save time (see handleSave) — they are NOT real DB columns.
+    qr_position: "footer-right",
+    qr_size_mm: 15,
+    qr_opacity: 1,
   };
+}
+
+// ── QR config helpers ─────────────────────────────────────────────
+// QR placement (position / size / opacity) lives inside the footer_content
+// JSON under a reserved `_qrConfig` key. It is NOT a real DB column on
+// document_templates — storing it inside footer_content means we don't need
+// a schema migration. parseContentConfig() ignores `_qrConfig` (it only
+// reads `segments`), so the visual editor / PDF rendering are unaffected.
+const QR_DEFAULTS = { position: "footer-right", size: 15, opacity: 1 };
+
+function parseQrConfig(footerContent: string | null | undefined): {
+  position: string;
+  size: number;
+  opacity: number;
+} {
+  if (!footerContent) return { ...QR_DEFAULTS };
+  try {
+    const parsed = JSON.parse(footerContent);
+    const q = parsed?._qrConfig;
+    if (q && typeof q === "object") {
+      return {
+        position: typeof q.position === "string" ? q.position : QR_DEFAULTS.position,
+        size: typeof q.size === "number" ? q.size : QR_DEFAULTS.size,
+        opacity: typeof q.opacity === "number" ? q.opacity : QR_DEFAULTS.opacity,
+      };
+    }
+  } catch {
+    // footer_content might be legacy plain text — fall through to defaults.
+  }
+  return { ...QR_DEFAULTS };
+}
+
+/** Merge the QR placement fields into footer_content's `_qrConfig` key,
+ *  preserving any existing `segments` array. Returns the serialized JSON. */
+function writeQrConfig(
+  footerContent: string | null | undefined,
+  qr: { position: string; size: number; opacity: number },
+): string {
+  let parsed: any = { segments: [] };
+  if (footerContent) {
+    try {
+      const maybe = JSON.parse(footerContent);
+      if (maybe && typeof maybe === "object") parsed = maybe;
+    } catch {
+      // Legacy plain text — wrap into a single segment so we don't lose it.
+      parsed = {
+        segments: [
+          {
+            id: "legacy-footer",
+            text: footerContent,
+            fontSize: 7.5,
+            bold: false,
+            italic: false,
+            color: "#666666",
+            alignment: "left",
+          },
+        ],
+      };
+    }
+  }
+  parsed._qrConfig = { position: qr.position, size: qr.size, opacity: qr.opacity };
+  return JSON.stringify(parsed);
 }
 
 // ============================================================
@@ -2228,7 +2295,16 @@ function TemplateEditorDialog({
   useEffect(() => {
     if (open) {
       // Edit-existing takes priority, then starter draft, then blank default.
-      setForm(template ? { ...template } : draft ? { ...draft } : defaultTemplate());
+      const base = template ? { ...template } : draft ? { ...draft } : defaultTemplate();
+      // Hydrate QR placement fields from footer_content._qrConfig (they're
+      // not real DB columns — see writeQrConfig / parseQrConfig above).
+      const qr = parseQrConfig(base.footer_content);
+      setForm({
+        ...base,
+        qr_position: base.qr_position ?? qr.position,
+        qr_size_mm: base.qr_size_mm ?? qr.size,
+        qr_opacity: base.qr_opacity ?? qr.opacity,
+      });
     }
   }, [open, template, draft]);
 
@@ -2252,10 +2328,36 @@ function TemplateEditorDialog({
         ? `/api/document-templates/${template.id}${template.tenant_id ? `?tenant_id=${encodeURIComponent(template.tenant_id)}` : tenantQuery}`
         : `/api/document-templates${tenantQuery}`;
       const url = api(saveUrl);
+
+      // Build the payload that goes to the DB. Strip:
+      //   • id, tenant_id, created_by, created_at, updated_at, letterhead, seal
+      //     — these come back from the GET (join) response but aren't writable
+      //     via the form (DB-managed or join results).
+      //   • qr_position / qr_size_mm / qr_opacity — NOT real DB columns.
+      //     They get serialized into footer_content._qrConfig instead so the
+      //     PDF renderer can read them back out without a schema migration.
+      const {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        qr_position: _qp,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        qr_size_mm: _qs,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        qr_opacity: _qo,
+        ...writable
+      } = form;
+      const payload: TemplateFormState = {
+        ...writable,
+        footer_content: writeQrConfig(form.footer_content, {
+          position: form.qr_position ?? "footer-right",
+          size: form.qr_size_mm ?? 15,
+          opacity: form.qr_opacity ?? 1,
+        }),
+      };
+
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -2470,6 +2572,66 @@ function TemplateEditorDialog({
                               <ToggleField label="Page #" checked={form.footer_show_page_number} onChange={(v) => set("footer_show_page_number", v)} />
                               <ToggleField label="Bank" checked={form.footer_show_bank_details} onChange={(v) => set("footer_show_bank_details", v)} />
                               <ToggleField label="Tax ID" checked={form.footer_show_tax_id} onChange={(v) => set("footer_show_tax_id", v)} />
+                            </div>
+
+                            {/* ── QR code placement ──
+                                Stored inside footer_content._qrConfig (NOT a real
+                                DB column) — see writeQrConfig / parseQrConfig. */}
+                            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-3">
+                              <div>
+                                <Label className="text-xs font-medium">QR code placement</Label>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  Where the verification QR code appears on each page.
+                                </p>
+                              </div>
+                              <Field label="Position">
+                                <Select
+                                  value={form.qr_position ?? "footer-right"}
+                                  onValueChange={(v) => set("qr_position", v)}
+                                >
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="footer-right">Footer right (default)</SelectItem>
+                                    <SelectItem value="footer-left">Footer left</SelectItem>
+                                    <SelectItem value="footer-center">Footer center</SelectItem>
+                                    <SelectItem value="none">Don&apos;t show QR</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+                              {form.qr_position !== "none" && (
+                                <>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <Label className="text-xs">QR size (mm)</Label>
+                                      <span className="text-[10px] tabular text-muted-foreground">
+                                        {form.qr_size_mm ?? 15} mm
+                                      </span>
+                                    </div>
+                                    <Slider
+                                      value={[form.qr_size_mm ?? 15]}
+                                      min={8}
+                                      max={40}
+                                      step={1}
+                                      onValueChange={(v) => set("qr_size_mm", v[0])}
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <Label className="text-xs">QR opacity</Label>
+                                      <span className="text-[10px] tabular text-muted-foreground">
+                                        {Math.round((form.qr_opacity ?? 1) * 100)}%
+                                      </span>
+                                    </div>
+                                    <Slider
+                                      value={[Math.round((form.qr_opacity ?? 1) * 100)]}
+                                      min={20}
+                                      max={100}
+                                      step={5}
+                                      onValueChange={(v) => set("qr_opacity", v[0] / 100)}
+                                    />
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </>
                         )}
