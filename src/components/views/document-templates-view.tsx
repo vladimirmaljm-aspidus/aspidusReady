@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -2244,17 +2244,28 @@ function TemplateEditorDialog({
     setSaving(true);
     try {
       const method = template ? "PUT" : "POST";
-      const url = template ? api(`/api/document-templates/${template.id}`) : api(`/api/document-templates${tenantQuery}`);
+      // Always include ?tenant_id= for super-admin so the backend can resolve
+      // the tenant scope (POST uses resolveTenantId, PUT just ignores it but
+      // it's safer to keep the URL consistent). For PUT we read it from the
+      // existing template row; for POST we use tenantQuery (already built).
+      const saveUrl = template
+        ? `/api/document-templates/${template.id}${template.tenant_id ? `?tenant_id=${encodeURIComponent(template.tenant_id)}` : tenantQuery}`
+        : `/api/document-templates${tenantQuery}`;
+      const url = api(saveUrl);
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (!r.ok) throw new Error("Save failed");
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
       toast.success(template ? "Template updated." : "Template created.");
       onSaved();
-    } catch {
-      toast.error("Failed to save template.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to save template.";
+      toast.error(message || "Failed to save template.");
     } finally {
       setSaving(false);
     }
@@ -2557,8 +2568,15 @@ function TemplateEditorDialog({
               </div>
             </div>
             <ScrollArea className="flex-1">
-              <div className="p-6 flex justify-center">
-                <TemplatePreview form={form} letterhead={linkedLetterhead} seal={linkedSeal ? { ...linkedSeal } : null} />
+              <div className="p-6 flex items-center justify-center min-h-full">
+                <div className="text-center text-muted-foreground max-w-sm">
+                  <Eye className="size-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm font-medium">Switch to "Visual Editor" tab to see the live layout</p>
+                  <p className="text-xs mt-1.5">
+                    This tab is for form-based settings (page size, colors, fonts, toggles).
+                    The visual editor renders the actual field positions.
+                  </p>
+                </div>
               </div>
             </ScrollArea>
           </div>
@@ -2582,251 +2600,6 @@ function TemplateEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// ============================================================
-// Template live preview — full document with header/table/footer + seal
-// ============================================================
-
-function TemplatePreview({
-  form, letterhead, seal,
-}: {
-  form: TemplateFormState;
-  letterhead: TenantLetterhead | null;
-  seal: TenantSeal | null;
-}) {
-  const pageWidthPx = 480;
-  const pageHeightPx = Math.round(pageWidthPx * 1.414);
-  const mmToPx = (mm: number) => (mm / 210) * pageWidthPx;
-
-  const headerSegments = useMemo(() => resolvePreviewSegments(form.header_content), [form.header_content]);
-  const footerSegments = useMemo(() => resolvePreviewSegments(form.footer_content), [form.footer_content]);
-
-  // Resolve brand colors: template overrides letterhead
-  const primaryColor = form.primary_color || letterhead?.primary_color || "#0f766e";
-  const accentColor = form.accent_color || letterhead?.accent_color || "#0d9488";
-  const logoUrl = letterhead?.logo_url || null;
-  const companyName = letterhead?.company_name || "Aspidus Trading";
-
-  // Sample offer rows
-  const rows = [
-    { sku: "SUG-IC45", name: "Refined White Sugar ICUMSA 45", qty: 24, unit: "MT", price: 540, total: 12960 },
-    { sku: "WHT-1250", name: "Hard Red Winter Wheat", qty: 5000, unit: "MT", price: 285, total: 1425000 },
-    { sku: "OIL-SUN", name: "Refined Sunflower Oil", qty: 80, unit: "MT", price: 1180, total: 94400 },
-  ];
-
-  // Seal placement (only if seal is linked + enabled)
-  const showSeal = seal && form.seal_enabled && seal.image_url;
-  const sealWidth = seal ? mmToPx(seal.image_width_mm) : 0;
-  const sealHeight = seal ? mmToPx(seal.image_height_mm) : 0;
-  const sealMargin = 16;
-  const sealStyle: React.CSSProperties = showSeal
-    ? {
-        position: "absolute",
-        width: sealWidth,
-        height: sealHeight,
-        opacity: seal.opacity,
-        transform: `rotate(${seal.rotation_deg}deg)`,
-        ...(seal.position === "bottom-right"
-          ? { bottom: sealMargin + mmToPx(seal.offset_y_mm), right: sealMargin - mmToPx(seal.offset_x_mm) }
-          : seal.position === "bottom-left"
-            ? { bottom: sealMargin + mmToPx(seal.offset_y_mm), left: sealMargin + mmToPx(seal.offset_x_mm) }
-            : seal.position === "bottom-center"
-              ? { bottom: sealMargin + mmToPx(seal.offset_y_mm), left: "50%", marginLeft: -sealWidth / 2 + mmToPx(seal.offset_x_mm) }
-              : seal.position === "top-right"
-                ? { top: sealMargin - mmToPx(seal.offset_y_mm), right: sealMargin - mmToPx(seal.offset_x_mm) }
-                : seal.position === "top-left"
-                  ? { top: sealMargin - mmToPx(seal.offset_y_mm), left: sealMargin + mmToPx(seal.offset_x_mm) }
-                  : { top: sealMargin - mmToPx(seal.offset_y_mm), left: "50%", marginLeft: -sealWidth / 2 + mmToPx(seal.offset_x_mm) }),
-      }
-    : {};
-
-  return (
-    <div
-      className="bg-white shadow-soft-lg rounded-sm mx-auto relative overflow-hidden"
-      style={{
-        width: pageWidthPx,
-        height: pageHeightPx,
-        fontFamily: form.body_font_family,
-        fontSize: form.body_font_size,
-        lineHeight: form.body_line_height,
-        color: "#0f172a",
-        paddingTop: mmToPx(form.page_margin_top),
-        paddingBottom: mmToPx(form.page_margin_bottom),
-        paddingLeft: mmToPx(form.page_margin_left),
-        paddingRight: mmToPx(form.page_margin_right),
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Header */}
-      {form.header_enabled && (
-        <div
-          style={{
-            minHeight: mmToPx(form.header_height),
-            borderBottom: `2px solid ${primaryColor}`,
-            paddingBottom: 6,
-            marginBottom: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-          }}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {form.header_show_logo && (
-              logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="shrink-0" style={{ width: 32, height: 18, objectFit: "contain" }} />
-              ) : (
-                <div
-                  className="rounded-md flex items-center justify-center shrink-0"
-                  style={{ width: 28, height: 28, backgroundColor: primaryColor, color: form.table_header_color, fontWeight: 700, fontSize: 14 }}
-                >
-                  {companyName[0]}
-                </div>
-              )
-            )}
-            {form.header_show_company_name && (
-              <div className="min-w-0">
-                <div style={{ color: primaryColor, fontWeight: 700, fontSize: 14 }}>{companyName}</div>
-                {form.header_show_contact && headerSegments.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {headerSegments.map((seg) => (
-                      <div
-                        key={seg.id}
-                        style={{
-                          fontSize: seg.fontSize,
-                          fontWeight: seg.bold ? 700 : 400,
-                          fontStyle: seg.italic ? "italic" : "normal",
-                          color: seg.color,
-                          textAlign: seg.alignment,
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        {seg.text}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <div style={{ textAlign: "right", fontSize: 8, color: "#64748b" }}>
-            <div style={{ fontWeight: 700, color: primaryColor, fontSize: 11 }}>{TYPE_LABELS[form.type].toUpperCase()}</div>
-            <div>OF-2026-0014</div>
-            <div>Date: 14 Mar 2026</div>
-            <div>Valid: 14 Apr 2026</div>
-          </div>
-        </div>
-      )}
-
-      {/* Body */}
-      <div className="flex-1 min-h-0">
-        <div style={{ marginBottom: 10, fontSize: 9 }}>
-          <div style={{ color: "#94a3b8", fontSize: 7, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Bill to</div>
-          <div style={{ fontWeight: 700 }}>Mediterra Exports GmbH</div>
-          <div style={{ color: "#64748b" }}>Hafenstraße 4, 20457 Hamburg, Germany</div>
-          <div style={{ color: "#64748b" }}>VAT: DE876543210</div>
-        </div>
-
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8.5 }}>
-          <thead>
-            <tr style={{ backgroundColor: form.table_header_bg, color: form.table_header_color }}>
-              <th style={{ padding: "4px 6px", textAlign: "left", border: `1px solid ${form.table_border_color}` }}>SKU</th>
-              <th style={{ padding: "4px 6px", textAlign: "left", border: `1px solid ${form.table_border_color}` }}>Product</th>
-              <th style={{ padding: "4px 6px", textAlign: "right", border: `1px solid ${form.table_border_color}` }}>Qty</th>
-              <th style={{ padding: "4px 6px", textAlign: "right", border: `1px solid ${form.table_border_color}` }}>Unit price</th>
-              <th style={{ padding: "4px 6px", textAlign: "right", border: `1px solid ${form.table_border_color}` }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.sku} style={{ backgroundColor: form.table_stripe && i % 2 === 1 ? form.table_border_color + "55" : "transparent" }}>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, color: accentColor, fontWeight: 600 }}>{r.sku}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}` }}>{r.name}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, textAlign: "right" }}>{r.qty} {r.unit}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, textAlign: "right" }}>${r.price.toLocaleString()}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, textAlign: "right", fontWeight: 600 }}>${r.total.toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
-          <div style={{ fontSize: 9, minWidth: 160 }}>
-            <Row label="Subtotal" value="$1,532,360" />
-            <Row label="Discount (5%)" value="-$76,618" />
-            <Row label="VAT (10%)" value="$145,574" />
-            <div style={{ marginTop: 4, paddingTop: 4, borderTop: `2px solid ${primaryColor}`, display: "flex", justifyContent: "space-between", fontWeight: 700, color: primaryColor }}>
-              <span>Total</span>
-              <span>$1,601,316</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 10, fontSize: 8, color: "#64748b" }}>
-          <div style={{ color: primaryColor, fontWeight: 600, marginBottom: 2 }}>Payment terms</div>
-          30% advance, 70% before shipment. Delivery CIF Hamburg port. Inspection by SGS at loading.
-        </div>
-      </div>
-
-      {/* Footer */}
-      {form.footer_enabled && (
-        <div
-          style={{
-            minHeight: mmToPx(form.footer_height),
-            borderTop: `1px solid ${form.table_border_color}`,
-            paddingTop: 6,
-            marginTop: 6,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: 7.5,
-            color: "#64748b",
-            gap: 8,
-          }}
-        >
-          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            {footerSegments.map((seg) => (
-              <div
-                key={seg.id}
-                style={{
-                  fontSize: seg.fontSize,
-                  fontWeight: seg.bold ? 700 : 400,
-                  fontStyle: seg.italic ? "italic" : "normal",
-                  color: seg.color,
-                  textAlign: seg.alignment,
-                  lineHeight: 1.3,
-                }}
-              >
-                {seg.text}
-              </div>
-            ))}
-          </div>
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            {form.footer_show_tax_id && <div>VAT: RS123456789</div>}
-            {form.footer_show_page_number && <div style={{ color: accentColor, fontWeight: 600 }}>Page 1 of 1</div>}
-          </div>
-        </div>
-      )}
-
-      {/* Seal */}
-      {showSeal && (
-        <div style={sealStyle}>
-          <img src={seal!.image_url} alt="Seal" className="w-full h-full object-contain" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#475569" }}>
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
   );
 }
 

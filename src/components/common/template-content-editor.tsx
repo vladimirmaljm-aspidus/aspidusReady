@@ -91,6 +91,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
 
   const [config, setConfig] = React.useState<ContentConfig>(() => coerceConfig(value, fallback));
   const [selectedSegId, setSelectedSegId] = React.useState<string | null>(config.segments[0]?.id || null);
+  const [dragOverSegId, setDragOverSegId] = React.useState<string | null>(null);
 
   // Keep in sync if the parent swaps the value (e.g., user selects a different
   // template in the dialog). We compare on a stringified snapshot to avoid
@@ -149,6 +150,8 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
     });
   };
 
+  // Click-to-add fallback (kept for keyboard / mouse users who prefer click).
+  // Drag-and-drop is the primary interaction (see chips below + drop targets on each line).
   const addPlaceholder = (placeholder: string) => {
     if (!selectedSeg) return;
     const current = selectedSeg.text;
@@ -165,15 +168,37 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
         </Button>
       </div>
 
-      {/* Segments list */}
+      {/* Segments list — each segment is a DROP TARGET for placeholder chips */}
       <div className="space-y-2">
         {config.segments.map((seg, idx) => (
           <div
             key={seg.id}
             className={cn(
-              "border rounded p-2",
+              "relative border rounded p-2 transition-shadow",
               selectedSeg?.id === seg.id ? "border-primary bg-primary/5" : "border-border",
+              dragOverSegId === seg.id && "ring-2 ring-primary ring-offset-1 border-primary",
             )}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              setDragOverSegId(seg.id);
+            }}
+            onDragLeave={(e) => {
+              // Only clear if we've truly left the segment (not entering a child).
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setDragOverSegId((prev) => (prev === seg.id ? null : prev));
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const placeholder = e.dataTransfer.getData("text/plain");
+              if (placeholder) {
+                const next = seg.text.trim() ? `${seg.text} ${placeholder}` : placeholder;
+                updateSegment(seg.id, { text: next });
+                setSelectedSegId(seg.id);
+              }
+              setDragOverSegId(null);
+            }}
           >
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs text-muted-foreground">Line {idx + 1}</span>
@@ -191,7 +216,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
               value={seg.text}
               onChange={(e) => updateSegment(seg.id, { text: e.target.value })}
               onFocus={() => setSelectedSegId(seg.id)}
-              placeholder="Enter text or use placeholders..."
+              placeholder="Enter text or drag a placeholder here…"
               className="text-sm"
               style={{
                 fontWeight: seg.bold ? 700 : 400,
@@ -200,6 +225,11 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
                 textAlign: seg.alignment,
               }}
             />
+            {dragOverSegId === seg.id && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded bg-primary/5 text-[10px] font-medium text-primary">
+                Drop here to insert into Line {idx + 1}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -273,21 +303,25 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
         </>
       )}
 
-      {/* Placeholders */}
+      {/* Placeholders — DRAG onto a line above (click also works as a fallback) */}
       <Separator />
       <div className="space-y-1">
-        <Label className="text-xs">Insert Placeholder (click to add to selected line):</Label>
+        <Label className="text-xs">Placeholders — drag onto a line (or click to add to selected line):</Label>
         <div className="flex flex-wrap gap-1 mt-1 max-h-32 overflow-y-auto">
           {CONTENT_PLACEHOLDERS.map((ph) => (
-            <button
+            <div
               key={ph.key}
-              type="button"
-              className="text-xs px-2 py-1 border rounded hover:bg-primary/5"
-              title={ph.description || ph.label}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", ph.key);
+                e.dataTransfer.effectAllowed = "copy";
+              }}
               onClick={() => addPlaceholder(ph.key)}
+              className="text-xs px-2 py-1 border rounded cursor-grab hover:bg-primary/5 hover:border-primary/40 active:cursor-grabbing select-none"
+              title={ph.description ? `Drag to a line: ${ph.description}` : `Drag to a line: ${ph.label}`}
             >
               {ph.label}
-            </button>
+            </div>
           ))}
         </div>
       </div>

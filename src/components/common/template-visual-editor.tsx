@@ -37,6 +37,9 @@ import {
   Plus,
   Type,
   Image as ImageIcon,
+  ZoomIn,
+  ZoomOut,
+  GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -174,6 +177,31 @@ const DOC_TYPE_LABELS: Record<NonNullable<DocumentTemplate["type"]>, string> = {
   contract: "CONTRACT",
   generic: "DOCUMENT",
 };
+
+// ============================================================
+// Draggable placeholder chips for inline text fields
+// (header / footer / custom_text / offer_text / bank_details).
+// Keys match the {{...}} tokens consumed by substitutePlaceholders().
+// ============================================================
+const PLACEHOLDERS: { key: string; label: string }[] = [
+  { key: "{{company_name}}", label: "Company Name" },
+  { key: "{{company_legal_name}}", label: "Legal Name" },
+  { key: "{{company_address}}", label: "Address" },
+  { key: "{{company_email}}", label: "Email" },
+  { key: "{{company_phone}}", label: "Phone" },
+  { key: "{{company_website}}", label: "Website" },
+  { key: "{{company_vat}}", label: "VAT #" },
+  { key: "{{company_reg}}", label: "Reg #" },
+  { key: "{{company_bank}}", label: "Bank" },
+  { key: "{{company_iban}}", label: "IBAN" },
+  { key: "{{company_swift}}", label: "SWIFT" },
+  { key: "{{doc_number}}", label: "Doc #" },
+  { key: "{{doc_date}}", label: "Doc Date" },
+  { key: "{{doc_valid}}", label: "Valid Until" },
+  { key: "{{payment_terms}}", label: "Payment Terms" },
+  { key: "{{page_number}}", label: "Page #" },
+  { key: "{{page_total}}", label: "Total Pages" },
+];
 
 // ============================================================
 // Live content helpers — pull real data from template + letterhead
@@ -769,6 +797,13 @@ export function TemplateVisualEditor({
   const [zoom, setZoom] = React.useState(1);
   const [pageCount, setPageCount] = React.useState(1);
   const [customFieldCounter, setCustomFieldCounter] = React.useState(0);
+  // "vertical" = stacked pages (default), "grid" = 2-column side-by-side.
+  const [pageLayout, setPageLayout] = React.useState<"vertical" | "grid">("vertical");
+  // True while a placeholder chip is being dragged over the content Textarea.
+  const [dragOverContent, setDragOverContent] = React.useState(false);
+  // Ref to the scrollable canvas container — used by the "Fit" button to
+  // calculate the zoom level that fits the page width in the visible area.
+  const canvasContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   // Effective scale combines the base pixel-per-mm with zoom factor.
   const renderScale = BASE_SCALE * zoom;
@@ -926,6 +961,17 @@ export function TemplateVisualEditor({
     setSelectedId(null);
     setActiveGuides([]);
     setCustomFieldCounter(0);
+  };
+
+  // Fit-to-width: zoom so the full page width (ruler excluded) fits inside the
+  // visible canvas area. Falls back to 1 if the container isn't measured yet.
+  const fitToWidth = () => {
+    const containerWidth = canvasContainerRef.current?.clientWidth || 800;
+    const pageWidthPx = page.width * BASE_SCALE;
+    // Account for ~32px of padding on each side + the left ruler (~24px).
+    const padding = showRuler ? 56 : 32;
+    const newZoom = (containerWidth - padding) / pageWidthPx;
+    setZoom(Math.max(0.25, Math.min(3, newZoom)));
   };
 
   const addCustomText = () => {
@@ -1152,25 +1198,57 @@ export function TemplateVisualEditor({
         </Button>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-          {/* Zoom selector */}
+          {/* Zoom: slider + buttons */}
           <div className="flex items-center gap-1">
             <Label className="text-xs">Zoom</Label>
-            <Select
-              value={String(zoom)}
-              onValueChange={(v) => setZoom(Number(v))}
+            <Button
+              size="sm"
+              variant="outline"
+              className="size-8 p-0"
+              onClick={() => setZoom(Math.max(0.25, Math.round((zoom - 0.25) * 100) / 100))}
+              title="Zoom out"
             >
-              <SelectTrigger className="h-8 w-[70px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0.5">50%</SelectItem>
-                <SelectItem value="0.75">75%</SelectItem>
-                <SelectItem value="1">100%</SelectItem>
-                <SelectItem value="1.25">125%</SelectItem>
-                <SelectItem value="1.5">150%</SelectItem>
-                <SelectItem value="2">200%</SelectItem>
-              </SelectContent>
-            </Select>
+              <ZoomOut className="size-3" />
+            </Button>
+            <Slider
+              value={[zoom]}
+              onValueChange={(v) => setZoom(v[0])}
+              min={0.25}
+              max={3}
+              step={0.05}
+              className="w-28"
+              aria-label="Zoom level"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="size-8 p-0"
+              onClick={() => setZoom(Math.min(3, Math.round((zoom + 0.25) * 100) / 100))}
+              title="Zoom in"
+            >
+              <ZoomIn className="size-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2"
+              onClick={() => setZoom(1)}
+              title="Reset to 100%"
+            >
+              100%
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2"
+              onClick={fitToWidth}
+              title="Fit page width to visible area"
+            >
+              <Maximize2 className="size-3" /> Fit
+            </Button>
+            <span className="w-10 text-right tabular-nums">
+              {Math.round(zoom * 100)}%
+            </span>
           </div>
           {/* Pages selector */}
           <div className="flex items-center gap-1">
@@ -1187,6 +1265,22 @@ export function TemplateVisualEditor({
                 <SelectItem value="2">2</SelectItem>
                 <SelectItem value="3">3</SelectItem>
                 <SelectItem value="5">5</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Page layout: stacked vs grid */}
+          <div className="flex items-center gap-1">
+            <Label className="text-xs">Layout</Label>
+            <Select
+              value={pageLayout}
+              onValueChange={(v) => setPageLayout(v as "vertical" | "grid")}
+            >
+              <SelectTrigger className="h-8 w-[88px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vertical">Stacked</SelectItem>
+                <SelectItem value="grid">Grid 2-col</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1256,8 +1350,11 @@ export function TemplateVisualEditor({
           </div>
         </ScrollArea>
 
-        {/* CENTER — Canvas */}
-        <div className="flex-1 overflow-auto bg-muted/20 p-4">
+        {/* CENTER — Canvas (scrollable: pan by scrolling when zoomed in) */}
+        <div
+          ref={canvasContainerRef}
+          className="flex-1 overflow-auto bg-muted/20 p-4"
+        >
           <div className="inline-block">
             {/* Ruler row */}
             {showRuler && (
@@ -1273,8 +1370,14 @@ export function TemplateVisualEditor({
               </div>
             )}
 
-            {/* Pages stack */}
-            <div className="flex flex-col gap-4">
+            {/* Pages — stacked (vertical) or side-by-side grid (2-col) */}
+            <div
+              className={
+                pageLayout === "grid"
+                  ? "grid grid-cols-2 gap-4"
+                  : "flex flex-col gap-4"
+              }
+            >
               {Array.from({ length: pageCount }).map((_, pageIdx) => (
                 <div key={pageIdx} className="flex flex-col">
                   {/* Page label */}
@@ -1594,6 +1697,29 @@ export function TemplateVisualEditor({
                     <h4 className="text-xs font-semibold uppercase text-muted-foreground">
                       Content
                     </h4>
+                    {/* Draggable placeholder palette — drag a chip into the text area below */}
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">
+                        Drag placeholders into the text:
+                      </Label>
+                      <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded border bg-muted/30 p-1.5">
+                        {PLACEHOLDERS.map((ph) => (
+                          <div
+                            key={ph.key}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", ph.key);
+                              e.dataTransfer.effectAllowed = "copy";
+                            }}
+                            className="flex items-center gap-1 rounded border bg-background px-1.5 py-0.5 text-[10px] cursor-grab hover:border-primary/40 hover:bg-primary/5 active:cursor-grabbing select-none"
+                            title={`Drag into the text area: ${ph.key}`}
+                          >
+                            <GripVertical className="size-2.5 text-muted-foreground/70" />
+                            {ph.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                     <Textarea
                       rows={4}
                       value={
@@ -1609,8 +1735,41 @@ export function TemplateVisualEditor({
                           content: e.target.value,
                         })
                       }
-                      placeholder="Enter text that appears in this section…"
-                      className="text-xs"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
+                        setDragOverContent(true);
+                      }}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                          setDragOverContent(false);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const ph = e.dataTransfer.getData("text/plain");
+                        if (ph) {
+                          // Use the resolved display value as the base — this lets
+                          // users drop onto a header/footer that currently falls
+                          // back to the template's default text.
+                          const current =
+                            (selected.props?.content as string) ??
+                            (selected.type === "header"
+                              ? template.header_content || ""
+                              : selected.type === "footer"
+                                ? template.footer_content || ""
+                                : "") ??
+                            "";
+                          const next = current.trim() ? `${current} ${ph}` : ph;
+                          updateFieldProps(selected.id, { content: next });
+                        }
+                        setDragOverContent(false);
+                      }}
+                      placeholder="Enter text or drag a placeholder here…"
+                      className={cn(
+                        "text-xs",
+                        dragOverContent && "ring-2 ring-primary ring-offset-1"
+                      )}
                     />
                     <p className="text-[10px] text-muted-foreground">
                       Placeholders: {"{company_name}"}, {"{address}"}, {"{reg}"},{" "}
