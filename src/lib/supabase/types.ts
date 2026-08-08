@@ -430,7 +430,11 @@ export interface Invoice {
 }
 
 // ---------- Proformas ----------
-export type ProformaStatus = "draft" | "sent" | "paid" | "expired";
+// Status flow: draft → sent → accepted → paid (or expired at any point).
+// "accepted" is the client's confirmation of the proforma; it unlocks
+// invoice creation. Existing proformas with status "sent" remain valid —
+// the create-invoice automation accepts either "accepted" or "sent".
+export type ProformaStatus = "draft" | "sent" | "accepted" | "paid" | "expired";
 
 export interface Proforma {
   id: string;

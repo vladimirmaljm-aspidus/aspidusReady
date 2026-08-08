@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
 
@@ -28,9 +29,8 @@ export async function GET(req: NextRequest) {
   const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
   const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
   const result = await auth.store.listOffers(tid!, { search, limit, offset, filters: { partner_id, status } });
-  // Tenant isolation: PrismaStore.listOffers ignores _tenantId, so we
-  // post-filter for non-super_admin (and for API keys, which are scoped to
-  // their tenant).
+  // Defense-in-depth: even though SupabaseStore filters by tenant_id,
+  // this post-filter provides an extra safety layer. Do NOT remove.
   const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
   if (shouldFilter && auth.tenantId) {
     const before = result.items.length;
@@ -89,17 +89,24 @@ export async function POST(req: NextRequest) {
   }
 
   // Auto-generate document number if not provided (e.g. manual "Create" click).
-  // Matches the format used by /api/automation/create-offer-from-deal:
-  //   OF-<year>-<NNN>  (3-digit sequence, total+1)
+  // Atomic: tries the `get_next_doc_number` Postgres SEQUENCE RPC first;
+  // falls back to the legacy `listOffers().total + 1` if the RPC is
+  // unavailable (e.g. before the 004 migration has been applied).
+  //   Format: OF-<year>-<NNNN>  (4-digit sequence)
   if (!body.id && !body.number) {
     const year = new Date().getFullYear();
-    try {
-      const existing = await auth.store.listOffers(tid!, { limit: 1 });
-      const nextSeq = (existing.total || 0) + 1;
-      body.number = `OF-${year}-${String(nextSeq).padStart(3, "0")}`;
-    } catch (e) {
-      console.error("[offers.post] number auto-gen failed:", e);
-      return NextResponse.json({ error: "Failed to auto-generate offer number." }, { status: 500 });
+    const seqNum = await nextDocNumber("offer");
+    if (seqNum) {
+      body.number = seqNum;
+    } else {
+      try {
+        const existing = await auth.store.listOffers(tid!, { limit: 1 });
+        const nextSeq = (existing.total || 0) + 1;
+        body.number = formatDocNumber("offer", year, nextSeq);
+      } catch (e) {
+        console.error("[offers.post] number auto-gen failed:", e);
+        return NextResponse.json({ error: "Failed to auto-generate offer number." }, { status: 500 });
+      }
     }
   }
 
@@ -112,7 +119,7 @@ export async function POST(req: NextRequest) {
       try {
         const m = body.number.match(/^(OF-\d{4}-)(\d+)$/);
         if (m) {
-          body.number = `${m[1]}${String(Number(m[2]) + 1).padStart(3, "0")}`;
+          body.number = `${m[1]}${String(Number(m[2]) + 1).padStart(4, "0")}`;
           created = await auth.store.upsertOffer(body);
         } else {
           throw e;

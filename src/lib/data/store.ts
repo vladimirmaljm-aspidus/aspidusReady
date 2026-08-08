@@ -354,22 +354,22 @@ let _impl: Store | null = null;
 export async function getStore(): Promise<Store> {
   if (_impl) return _impl;
 
-  const forced = process.env.DB_BACKEND;
+  // Production always uses SupabaseStore. PrismaStore and MockStore are legacy
+  // and kept only for backward compatibility — they can be re-enabled by
+  // setting DB_BACKEND=prisma or DB_BACKEND=mock (not recommended for production).
+  const backend = process.env.DB_BACKEND;
 
-  if (forced === "supabase") {
-    const { SupabaseStore } = await import("./supabase-store");
-    _impl = new SupabaseStore();
-  } else if (forced === "mock") {
-    console.warn("[store] DB_BACKEND=mock — MockStore has no seed data. Use only for testing.");
-    const { MockStore } = await import("./mock-store");
-    _impl = new MockStore() as unknown as Store;
-  } else if (forced === "prisma") {
+  if (backend === "prisma") {
+    console.warn("[store] DB_BACKEND=prisma is DEPRECATED. PrismaStore has known tenant isolation bugs. Use DB_BACKEND=supabase.");
     const { PrismaStore } = await import("./prisma-store");
     _impl = new PrismaStore() as unknown as Store;
+  } else if (backend === "mock") {
+    console.warn("[store] DB_BACKEND=mock has no seed data. Use only for testing.");
+    const { MockStore } = await import("./mock-store");
+    _impl = new MockStore() as unknown as Store;
   } else {
-    // Default: use SupabaseStore (production)
     const { SupabaseStore } = await import("./supabase-store");
-    _impl = new SupabaseStore();
+    _impl = new SupabaseStore() as unknown as Store;
   }
   return _impl;
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
 
@@ -145,12 +146,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ].filter(Boolean).join("\n");
   }
 
-  // Generate offer number
+  // Generate offer number (atomic via Postgres SEQUENCE; falls back to
+  // legacy `listOffers().total + 1` if the RPC is unavailable).
+  // Format: OF-<year>-<NNNN>  (4-digit sequence)
   const year = new Date().getFullYear();
-  const existingOffers = await auth.store.listOffers(tenantId, { limit: 1000 });
-  const yearOffers = existingOffers.items.filter((o: any) => o.number?.includes(`/${year}`));
-  const nextNum = yearOffers.length + 1;
-  const offerNumber = `${nextNum}/${year}`;
+  const seqNum = await nextDocNumber("offer");
+  let offerNumber: string;
+  if (seqNum) {
+    offerNumber = seqNum;
+  } else {
+    const existingOffers = await auth.store.listOffers(tenantId, { limit: 1000 });
+    const yearOffers = existingOffers.items.filter((o: any) => o.number?.includes(`/${year}`));
+    const nextSeq = yearOffers.length + 1;
+    offerNumber = formatDocNumber("offer", year, nextSeq);
+  }
 
   // Subject uses the actual product name (NOT calc.name)
   const subject = `Offer: ${productName} — ${qty} ${unit}`;

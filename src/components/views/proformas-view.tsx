@@ -49,15 +49,24 @@ import { downloadPdf } from "@/lib/utils/download";
 const STATUS_LABELS: Record<ProformaStatus, string> = {
   draft: "Draft",
   sent: "Sent",
+  accepted: "Accepted",
   paid: "Paid",
   expired: "Expired",
 };
 
+// Status-specific Tailwind class (used by both StatusBadge and filter dropdown).
+// Mirrors the offer-view styling for consistency.
+const STATUS_STYLES: Record<ProformaStatus, string> = {
+  draft: "bg-secondary text-secondary-foreground",
+  sent: "border-transparent bg-[var(--chart-1)] text-white",
+  accepted: "border-transparent bg-emerald-600 text-white",
+  paid: "border-transparent bg-emerald-700 text-white",
+  expired: "border-transparent bg-muted text-muted-foreground",
+};
+
 function StatusBadge({ status }: { status: ProformaStatus }) {
   if (status === "draft") return <Badge variant="secondary">{STATUS_LABELS[status]}</Badge>;
-  if (status === "paid") return <Badge className="border-transparent bg-emerald-600 text-white">{STATUS_LABELS[status]}</Badge>;
-  if (status === "sent") return <Badge className="border-transparent bg-[var(--chart-1)] text-white">{STATUS_LABELS[status]}</Badge>;
-  return <Badge className="border-transparent bg-muted text-muted-foreground">{STATUS_LABELS[status]}</Badge>;
+  return <Badge className={STATUS_STYLES[status]}>{STATUS_LABELS[status]}</Badge>;
 }
 
 function lineTotal(it: OfferLineItem): number {
@@ -119,6 +128,7 @@ export function ProformasView() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showFromOffer, setShowFromOffer] = useState(false);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["proformas", tenantKey, debouncedSearch, statusFilter, partnerFilter],
@@ -179,6 +189,31 @@ export function ProformasView() {
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: () => toast.error("Could not update proforma."),
+  });
+
+  // ─── Mark proforma as accepted (client confirmed) ───
+  // Promotes draft/sent → accepted. Once accepted, an invoice can be created.
+  const markAcceptedMut = useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const r = await fetch(api(`/api/proformas/${id}`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "accepted" }),
+      });
+      if (!r.ok) throw new Error("Failed to mark as accepted");
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Proforma marked as accepted.");
+      setAcceptingId(null);
+      qc.invalidateQueries({ queryKey: ["proformas", tenantKey] });
+      if (detailId) qc.invalidateQueries({ queryKey: ["proforma", tenantKey, detailId] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+    },
+    onError: () => {
+      setAcceptingId(null);
+      toast.error("Could not update proforma.");
+    },
   });
 
   const deleteMut = useMutation({
@@ -253,10 +288,10 @@ export function ProformasView() {
     let expiredCount = 0;
     let paidThisMonth = 0;
     for (const p of all) {
-      if (p.status === "draft" || p.status === "sent") {
+      if (p.status === "draft" || p.status === "sent" || p.status === "accepted") {
         outstanding += Number(p.total) || 0;
       }
-      if (p.status === "expired" || (p.status === "sent" && isExpired(p))) expiredCount += 1;
+      if (p.status === "expired" || ((p.status === "sent" || p.status === "accepted") && isExpired(p))) expiredCount += 1;
       if (p.status === "paid" && p.paid_at && new Date(p.paid_at) >= monthStart) {
         paidThisMonth += Number(p.total) || 0;
       }
@@ -286,7 +321,7 @@ export function ProformasView() {
         <KpiCard
           label="Outstanding"
           value={fmtMoney(kpis.outstanding, "USD")}
-          sub="Draft + sent"
+          sub="Draft + sent + accepted"
           icon={Wallet}
         />
         <KpiCard
@@ -322,6 +357,7 @@ export function ProformasView() {
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="accepted">Accepted</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
             </SelectContent>
@@ -449,15 +485,38 @@ export function ProformasView() {
               proforma={detail.data}
               partnerName={partnerName(detail.data.partner_id)}
               onMarkPaid={() => detailId && markPaidMut.mutate({ id: detailId })}
+              onMarkAccepted={() => detailId && setAcceptingId(detailId)}
               onSend={() => detailId && sendMut.mutate(detailId)}
               onCreateInvoice={() => detailId && createInvoiceMut.mutate(detailId)}
               markingPaid={markPaidMut.isPending}
+              markingAccepted={markAcceptedMut.isPending}
               sending={sendMut.isPending}
               creatingInvoice={createInvoiceMut.isPending}
             />
           ) : null}
         </SheetContent>
       </Sheet>
+
+      {/* Accept confirm */}
+      <AlertDialog open={!!acceptingId} onOpenChange={(o) => !o && setAcceptingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark proforma as accepted?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This records that the client has confirmed the proforma. Once accepted, you can create an invoice from it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => acceptingId && markAcceptedMut.mutate({ id: acceptingId })}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              <CheckCircle2 className="size-4 mr-1" /> Mark Accepted
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete confirm */}
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
@@ -485,14 +544,16 @@ export function ProformasView() {
 
 // ---- Detail panel ----
 function ProformaDetail({
-  proforma, partnerName, onMarkPaid, onSend, onCreateInvoice, markingPaid, sending, creatingInvoice,
+  proforma, partnerName, onMarkPaid, onMarkAccepted, onSend, onCreateInvoice, markingPaid, markingAccepted, sending, creatingInvoice,
 }: {
   proforma: Proforma;
   partnerName: string;
   onMarkPaid: () => void;
+  onMarkAccepted: () => void;
   onSend: () => void;
   onCreateInvoice: () => void;
   markingPaid: boolean;
+  markingAccepted: boolean;
   sending: boolean;
   creatingInvoice: boolean;
 }) {
@@ -502,10 +563,17 @@ function ProformaDetail({
   const totals = computeTotals(proforma.items || []);
   const expired = isExpired(proforma);
 
-  // Proformas have no "accepted" status — the closest analog is "sent"
-  // (i.e. the customer has received it). Also allow invoicing from a
-  // "paid" proforma for retroactive record-keeping.
-  const canCreateInvoice = proforma.status === "sent" || proforma.status === "paid";
+  // Invoice creation is unlocked at "accepted" (primary) or "sent" (secondary —
+  // for cases where the client agreed verbally but didn't go through the
+  // explicit accept step). We also allow invoicing from a "paid" proforma
+  // for retroactive record-keeping.
+  const canCreateInvoice =
+    proforma.status === "accepted" ||
+    proforma.status === "sent" ||
+    proforma.status === "paid";
+  // When the proforma is only "sent" (not yet explicitly accepted), warn
+  // the user before creating the invoice.
+  const needsAcceptWarning = proforma.status === "sent";
 
   // ─── Auto-saved revisions (from recordRevision in the API layer) ───
   const revisions = useQuery({
@@ -539,6 +607,18 @@ function ProformaDetail({
               {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
             </Button>
           )}
+          {proforma.status === "sent" && (
+            <Button
+              size="sm"
+              onClick={onMarkAccepted}
+              disabled={markingAccepted}
+              variant="default"
+              className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700"
+              title="Mark this proforma as accepted by the client"
+            >
+              {markingAccepted ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />} Mark Accepted
+            </Button>
+          )}
           <Button
             size="sm"
             variant="default"
@@ -546,8 +626,10 @@ function ProformaDetail({
             disabled={creatingInvoice || !canCreateInvoice}
             title={
               canCreateInvoice
-                ? "Create a new invoice from this proforma"
-                : "Proforma must be sent before an invoice can be created"
+                ? needsAcceptWarning
+                  ? "Proforma is sent but not yet accepted. Click to create an invoice anyway."
+                  : "Create a new invoice from this proforma"
+                : "Proforma must be sent or accepted before an invoice can be created"
             }
           >
             {creatingInvoice ? (

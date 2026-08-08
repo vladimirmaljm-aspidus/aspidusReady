@@ -34,9 +34,8 @@ export async function GET(req: NextRequest) {
       search, limit, offset,
       filters: { status, type },
     });
-    // Tenant isolation: PrismaStore.listPartners ignores _tenantId, so we
-    // post-filter for non-super_admin (and for API keys, which are scoped to
-    // their tenant).
+    // Defense-in-depth: even though SupabaseStore filters by tenant_id,
+    // this post-filter provides an extra safety layer. Do NOT remove.
     const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
     if (shouldFilter && auth.tenantId) {
       const before = result.items.length;

@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
   const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
   const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
   const result = await auth.store.listDocuments(tid, { search, limit, offset, filters: { partner_id } });
-  // Tenant isolation: PrismaStore.listDocuments ignores _tenantId, so we
-  // post-filter for non-super_admin.
+  // Defense-in-depth: even though SupabaseStore filters by tenant_id,
+  // this post-filter provides an extra safety layer. Do NOT remove.
   if (!auth.isSuperAdmin && auth.tenantId) {
     const before = result.items.length;
     result.items = result.items.filter((d) => d.tenant_id === auth.tenantId);

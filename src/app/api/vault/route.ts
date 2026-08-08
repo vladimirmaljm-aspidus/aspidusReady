@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
   const search = url.searchParams.get("search") || undefined;
   const category = url.searchParams.get("category") || undefined;
   const result = await auth.store.listVault(tid, { search, filters: { category } });
-  // Tenant isolation: PrismaStore.listVault ignores _tenantId, so we
-  // post-filter for non-super_admin.
+  // Defense-in-depth: even though SupabaseStore filters by tenant_id,
+  // this post-filter provides an extra safety layer. Do NOT remove.
   if (!auth.isSuperAdmin && auth.tenantId) {
     result.items = result.items.filter((s) => s.tenant_id === auth.tenantId);
     result.total = result.items.length;

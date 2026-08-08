@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 import type { OfferLineItem } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -55,11 +56,19 @@ export async function POST(req: NextRequest) {
     // 2. Fetch partner data for auto-fill
     const partner = deal.partner_id ? await store.getPartner(deal.partner_id) : null;
 
-    // 3. Auto-generate offer number
-    const existingOffers = await store.listOffers(tid, { limit: 1 });
+    // 3. Auto-generate offer number (atomic via Postgres SEQUENCE; falls
+    //    back to legacy `listOffers().total + 1` if the RPC is unavailable).
+    //    Format: OF-<year>-<NNNN>  (4-digit sequence)
     const year = new Date().getFullYear();
-    const nextSeq = existingOffers.total + 1;
-    const offerNumber = `OF-${year}-${String(nextSeq).padStart(3, "0")}`;
+    const seqNum = await nextDocNumber("offer");
+    let offerNumber: string;
+    if (seqNum) {
+      offerNumber = seqNum;
+    } else {
+      const existingOffers = await store.listOffers(tid, { limit: 1 });
+      const nextSeq = (existingOffers.total || 0) + 1;
+      offerNumber = formatDocNumber("offer", year, nextSeq);
+    }
 
     // 4. Build offer items from deal data
     const items: OfferLineItem[] = [

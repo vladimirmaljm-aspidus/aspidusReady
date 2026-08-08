@@ -101,7 +101,8 @@ const INVOICE_STATUS_STYLES: Record<InvoiceStatus, string> = {
 const PROFORMA_STATUS_STYLES: Record<ProformaStatus, string> = {
   draft: "bg-secondary text-secondary-foreground",
   sent: "border-transparent bg-chart-1 text-white",
-  paid: "border-transparent bg-emerald-600 text-white",
+  accepted: "border-transparent bg-emerald-600 text-white",
+  paid: "border-transparent bg-emerald-700 text-white",
   expired: "border-transparent bg-destructive text-destructive-foreground",
 };
 

@@ -1,3 +1,5 @@
+// DEPRECATED: This route has no active UI consumers. Kept for potential future use.
+// If you're building a new feature, consider whether this integration is still needed.
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 

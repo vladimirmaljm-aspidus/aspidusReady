@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
+import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
 
@@ -68,16 +69,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Proforma not found." }, { status: 404 });
     }
 
-    // 2. Verify proforma is in a valid state. Proformas don't have an
-    //    "accepted" status — "sent" is the closest analog (the customer
-    //    has received the proforma). We also allow invoicing from a "paid"
-    //    proforma for retroactive record-keeping. Cast to string so TS
-    //    doesn't complain about the missing "accepted" case.
-    const pStatus = String(proforma.status) as string;
-    if (pStatus !== "accepted" && pStatus !== "sent" && pStatus !== "paid") {
+    // 2. Verify proforma is in a valid state. Proformas can be invoiced once
+    //    they have been accepted by the client. We also allow invoicing from a
+    //    "sent" proforma (without an explicit accept step) as a fallback for
+    //    workflows where the verbal agreement is enough. Finally, "paid"
+    //    proformas can be invoiced for retroactive record-keeping.
+    if (
+      proforma.status !== "accepted" &&
+      proforma.status !== "sent" &&
+      proforma.status !== "paid"
+    ) {
       return NextResponse.json(
         {
-          error: `Cannot create invoice from proforma with status "${proforma.status}". Proforma must be sent (or paid) first.`,
+          error: `Cannot create invoice from proforma with status "${proforma.status}". Proforma must be sent or accepted first.`,
         },
         { status: 400 },
       );
@@ -111,10 +115,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Auto-generate invoice number (INV-YYYY-NNNN)
+    // 4. Auto-generate invoice number (atomic via Postgres SEQUENCE; falls
+    //    back to legacy `listInvoices().total + 1` if the RPC is unavailable).
+    //    Format: INV-<year>-<NNNN>  (4-digit sequence). We reuse the
+    //    `existingInvoices` query from step 3 only on the fallback path so we
+    //    don't issue an extra query when the RPC is available.
     const year = new Date().getFullYear();
-    const nextSeq = existingInvoices.total + 1;
-    const invoiceNumber = `INV-${year}-${String(nextSeq).padStart(4, "0")}`;
+    const seqNum = await nextDocNumber("invoice");
+    let invoiceNumber: string;
+    if (seqNum) {
+      invoiceNumber = seqNum;
+    } else {
+      const nextSeq = (existingInvoices.total || 0) + 1;
+      invoiceNumber = formatDocNumber("invoice", year, nextSeq);
+    }
 
     // 5. Calculate due date based on payment terms (default: net 30)
     const issueDate = new Date();

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
 
@@ -54,11 +55,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Auto-generate proforma number
-    const existingProformas = await store.listProformas(tid, { limit: 1 });
+    // 3. Auto-generate proforma number (atomic via Postgres SEQUENCE; falls
+    //    back to legacy `listProformas().total + 1` if the RPC is unavailable).
+    //    Format: PRO-<year>-<NNNN>  (4-digit sequence)
     const year = new Date().getFullYear();
-    const nextSeq = existingProformas.total + 1;
-    const proformaNumber = `PRO-${year}-${String(nextSeq).padStart(3, "0")}`;
+    const seqNum = await nextDocNumber("proforma");
+    let proformaNumber: string;
+    if (seqNum) {
+      proformaNumber = seqNum;
+    } else {
+      const existingProformas = await store.listProformas(tid, { limit: 1 });
+      const nextSeq = (existingProformas.total || 0) + 1;
+      proformaNumber = formatDocNumber("proforma", year, nextSeq);
+    }
 
     // 4. Calculate valid until (typically 30 days from now)
     const issueDate = new Date();

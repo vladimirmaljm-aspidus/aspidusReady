@@ -28,9 +28,8 @@ export async function GET(req: NextRequest) {
     const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
     const result = await auth.store.listProducts(tid!, { search, limit, offset, filters: { category } });
-    // Tenant isolation: PrismaStore.listProducts ignores _tenantId, so we
-    // post-filter for non-super_admin (and for API keys, which are scoped to
-    // their tenant).
+    // Defense-in-depth: even though SupabaseStore filters by tenant_id,
+    // this post-filter provides an extra safety layer. Do NOT remove.
     const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
     if (shouldFilter && auth.tenantId) {
       const before = result.items.length;

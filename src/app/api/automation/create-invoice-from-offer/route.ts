@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
 
@@ -63,11 +64,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Auto-generate invoice number
-    const existingInvoices = await store.listInvoices(tid, { limit: 1 });
+    // 4. Auto-generate invoice number (atomic via Postgres SEQUENCE; falls
+    //    back to legacy `listInvoices().total + 1` if the RPC is unavailable).
+    //    Format: INV-<year>-<NNNN>  (4-digit sequence)
     const year = new Date().getFullYear();
-    const nextSeq = existingInvoices.total + 1;
-    const invoiceNumber = `INV-${year}-${String(nextSeq).padStart(3, "0")}`;
+    const seqNum = await nextDocNumber("invoice");
+    let invoiceNumber: string;
+    if (seqNum) {
+      invoiceNumber = seqNum;
+    } else {
+      const existingInvoices = await store.listInvoices(tid, { limit: 1 });
+      const nextSeq = (existingInvoices.total || 0) + 1;
+      invoiceNumber = formatDocNumber("invoice", year, nextSeq);
+    }
 
     // 5. Calculate due date based on payment terms
     const issueDate = new Date();

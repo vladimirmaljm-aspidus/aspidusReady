@@ -392,6 +392,21 @@ export const OFFER_STATUSES = [
 ];
 
 // ============================================================
+// Proforma statuses
+// Status flow: draft → sent → accepted → paid (or expired).
+// "accepted" is the client's confirmation of the proforma; it unlocks
+// invoice creation. Backward compatible with existing "sent" proformas —
+// the create-invoice automation accepts either "accepted" or "sent".
+// ============================================================
+export const PROFORMA_STATUSES = [
+  { value: "draft", label: "Draft" },
+  { value: "sent", label: "Sent" },
+  { value: "accepted", label: "Accepted" },
+  { value: "paid", label: "Paid" },
+  { value: "expired", label: "Expired" },
+];
+
+// ============================================================
 // Product categories (localized)
 // ============================================================
 export const PRODUCT_CATEGORIES_LOCAL = [
