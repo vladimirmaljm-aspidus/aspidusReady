@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {

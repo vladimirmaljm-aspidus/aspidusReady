@@ -252,7 +252,7 @@ export function DemandsView() {
                           <div className="font-medium truncate max-w-[220px]">{d.subject || "—"}</div>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">{partnerName(d.partner_id)}</TableCell>
-                        <TableCell><PriorityBadge priority={d.priority || "medium"} /></TableCell>
+                        <TableCell><PriorityBadge priority={(d as any).priority || "medium"} /></TableCell>
                         <TableCell><StatusBadge status={d.status} /></TableCell>
                         <TableCell className="text-right font-mono tabular">{(d.items || []).length}</TableCell>
                         <TableCell className="hidden xl:table-cell">{fmtDate(d.created_at)}</TableCell>
@@ -1100,7 +1100,7 @@ function DemandFormDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label>Priority</Label>
-                    <Select value={form.priority || "medium"} onValueChange={(v) => set("priority", v)}>
+                    <Select value={(form as any).priority || "medium"} onValueChange={(v) => set("priority" as any, v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="low">Low</SelectItem>
