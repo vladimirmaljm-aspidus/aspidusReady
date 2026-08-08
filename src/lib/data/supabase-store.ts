@@ -4,6 +4,7 @@
 
 import { Store, ListParams, ListResult } from "./store";
 import { getSupabase } from "@/lib/supabase/client";
+import { ensureStarterTemplates } from "./starter-templates";
 import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
@@ -41,15 +42,40 @@ export class SupabaseStore implements Store {
   }
 
   /**
-   * Convert empty strings to null across the payload. Postgres refuses "" for
-   * date/timestamp/numeric/uuid/jsonb columns with error 22007
-   * ('invalid input syntax for type date: ""'), and every form in the app
-   * sends "" for an unfilled optional field. This one-liner unblocks all of
-   * them without every route having to re-implement the same sanitization.
+   * Sanitize a payload before sending it to Supabase:
+   *   • Empty strings ("") become NULL — Postgres refuses "" for
+   *     date/timestamp/numeric/uuid/jsonb columns (error 22007).
+   *   • Nested plain objects are STRIPPED — these come back from SELECT
+   *     queries that use PostgREST join syntax (e.g. `*, letterhead:...(*),
+   *     seal:...(*)`) and end up as nested objects on the row. They are NOT
+   *     real columns in the target table, so sending them back on an
+   *     UPDATE/INSERT triggers a 500 from PostgREST
+   *     ('column "letterhead" of relation "document_templates" does not
+   *     exist'). The classic case is `document_templates.letterhead` and
+   *     `document_templates.seal` — both join results.
+   *   • Arrays are KEPT — they map to jsonb columns
+   *     (e.g. document_templates.selected_bank_accounts, users.permissions).
    */
   private sanitizePayload(row: SupaRow): SupaRow {
+    // Known JOIN result keys that come back from SELECT joins but are NOT
+    // real DB columns. Strip them entirely (both null and object values)
+    // to prevent PostgREST 500 "column does not exist" errors.
+    const JOIN_KEYS = new Set([
+      "letterhead", "seal", "partner", "deal", "offer", "invoice",
+      "proforma", "demand", "product", "supplier", "buyer", "owner",
+      "user", "tenant", "fiscal_period", "journal_entry", "bank_account",
+      "cost_center", "account", "created_by_user", "posted_by_user",
+      "commission_agent", "portal_access", "kyc_submission",
+    ]);
     const out: SupaRow = {};
     for (const [k, v] of Object.entries(row)) {
+      // Skip known JOIN result keys (even if null — null still triggers
+      // "column does not exist" in PostgREST)
+      if (JOIN_KEYS.has(k)) continue;
+      // Skip nested plain objects — they're JOIN results too
+      if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+        continue;
+      }
       if (v === "") out[k] = null;
       else out[k] = v;
     }
@@ -59,6 +85,14 @@ export class SupabaseStore implements Store {
   /**
    * Smart upsert: uses INSERT when no id is provided, UPDATE when id exists.
    * This avoids issues with Supabase's upsert() and auto-generated UUIDs.
+   *
+   * On UPDATE we additionally strip:
+   *   • created_at — DB owns this column; sending it would silently overwrite
+   *     the original creation timestamp.
+   *   • created_by — same; the original author shouldn't change on every edit.
+   *   • updated_at — Postgres has a default/trigger that sets this; sending
+   *     a client-supplied value can clobber it or trigger a NOT NULL /
+   *     immutability error on some schemas.
    */
   private async smartUpsert<T>(
     table: string,
@@ -66,8 +100,12 @@ export class SupabaseStore implements Store {
   ): Promise<T> {
     const payload: SupaRow = this.sanitizePayload({ ...data });
     if (data.id) {
-      // UPDATE existing record
+      // UPDATE existing record — never overwrite audit columns.
       const { id, ...fields } = payload;
+      delete fields.created_at;
+      delete fields.created_by;
+      // Let the DB default/trigger update updated_at.
+      delete fields.updated_at;
       const { data: updated, error } = await this.sb()
         .from(table)
         .update(fields)
@@ -986,20 +1024,156 @@ export class SupabaseStore implements Store {
   }
 
   // ---- document templates ----
+  // Join columns: include nested letterhead + seal rows so the PDF renderer
+  // has direct access to logo_url / image_url without an extra round-trip.
+  // We use the PostgREST embedded-resource hint syntax `!fk_column` because
+  // the document_templates.letterhead_id / seal_id columns don't always have
+  // explicit FOREIGN KEY constraints in older schema revisions.
+  private static readonly TEMPLATE_SELECT =
+    "*, letterhead:tenant_letterheads!letterhead_id(*), seal:tenant_seals!seal_id(*)";
+
   async listDocumentTemplates(tenantId: string): Promise<DocumentTemplate[]> {
-    const { data, error } = await this.sb().from("document_templates").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+    const { data, error } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return (data as DocumentTemplate[]) || [];
   }
   async getDocumentTemplate(id: string): Promise<DocumentTemplate | null> {
-    const { data, error } = await this.sb().from("document_templates").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("id", id)
+      .maybeSingle();
     if (error) throw error;
     return (data as DocumentTemplate) || null;
   }
   async getDefaultDocumentTemplate(tenantId: string, type: string): Promise<DocumentTemplate | null> {
-    const { data, error } = await this.sb().from("document_templates").select("*").eq("tenant_id", tenantId).eq("type", type).eq("is_default", true).maybeSingle();
+    // 1) Look for an existing default template for this doc type.
+    const { data, error } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("tenant_id", tenantId)
+      .eq("type", type)
+      .eq("is_default", true)
+      .maybeSingle();
     if (error) throw error;
-    return (data as DocumentTemplate) || null;
+    if (data) return data as DocumentTemplate;
+
+    // 2) Fall back to any default template (any type) — a tenant might have
+    //    created a single "all-documents" template instead of per-type ones.
+    const { data: anyType } = await this.sb()
+      .from("document_templates")
+      .select(SupabaseStore.TEMPLATE_SELECT)
+      .eq("tenant_id", tenantId)
+      .eq("is_default", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (anyType) return anyType as DocumentTemplate;
+
+    // 3) Auto-create a default template from the tenant's default (or first)
+    //    letterhead + seal so PDFs actually use the configured branding. This
+    //    is idempotent: we only get here when NO default template exists yet.
+    try {
+      // 3a) If the tenant has zero templates at all, seed the professional
+      //     starter pack (offer / invoice / proforma). This gives brand-new
+      //     tenants a sensible default for every document type without
+      //     requiring them to visit the Templates view first. The starter
+      //     templates are is_default=true for their respective types, so
+      //     after seeding we can short-circuit and return the matching one.
+      const allTemplates = await this.listDocumentTemplates(tenantId);
+      if (allTemplates.length === 0) {
+        await ensureStarterTemplates(tenantId, this);
+        const { data: starterMatch } = await this.sb()
+          .from("document_templates")
+          .select(SupabaseStore.TEMPLATE_SELECT)
+          .eq("tenant_id", tenantId)
+          .eq("type", type)
+          .eq("is_default", true)
+          .maybeSingle();
+        if (starterMatch) return starterMatch as DocumentTemplate;
+      }
+
+      const letterheads = await this.listLetterheads(tenantId);
+      const seals = await this.listSeals(tenantId);
+      const activeLetterhead =
+        letterheads.find((l) => l.is_default) || letterheads[0] || null;
+      const activeSeal =
+        seals.find((s) => s.is_default) || seals[0] || null;
+
+      // No branding assets at all → nothing to wire up. Leave template null.
+      if (!activeLetterhead && !activeSeal) return null;
+
+      const newId = (typeof crypto !== "undefined" && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const now = new Date().toISOString();
+
+      const payload: SupaRow = {
+        id: newId,
+        tenant_id: tenantId,
+        name: "Default Template",
+        type,
+        is_default: true,
+        // Page layout — inherit from letterhead when available
+        page_size: activeLetterhead?.page_size || "A4",
+        page_margin_top: activeLetterhead?.margin_top_mm ?? 25,
+        page_margin_bottom: activeLetterhead?.margin_bottom_mm ?? 25,
+        page_margin_left: activeLetterhead?.margin_left_mm ?? 20,
+        page_margin_right: activeLetterhead?.margin_right_mm ?? 20,
+        // Header
+        header_enabled: true,
+        header_height: activeLetterhead?.header_height_mm ?? 20,
+        header_content: null,
+        header_show_logo: activeLetterhead?.header_show_logo ?? true,
+        header_show_company_name: activeLetterhead?.header_show_company_name ?? true,
+        header_show_contact: activeLetterhead?.header_show_contact ?? true,
+        // Footer
+        footer_enabled: true,
+        footer_height: activeLetterhead?.footer_height_mm ?? 15,
+        footer_content: null,
+        footer_show_page_number: activeLetterhead?.footer_show_page_number ?? true,
+        footer_show_bank_details: activeLetterhead?.footer_show_bank_details ?? true,
+        footer_show_tax_id: activeLetterhead?.footer_show_tax_id ?? true,
+        // Body typography
+        body_font_family: activeLetterhead?.body_font_family || "Inter",
+        body_font_size: activeLetterhead?.body_font_size_pt ?? 11,
+        body_line_height: 1.5,
+        // Branding colors
+        primary_color: activeLetterhead?.primary_color || "#0f766e",
+        accent_color: activeLetterhead?.accent_color || "#0d9488",
+        // Table styling
+        table_header_bg: activeLetterhead?.primary_color || "#0f766e",
+        table_header_color: "#ffffff",
+        table_border_color: "#e5e7eb",
+        table_stripe: true,
+        // Linked branding assets
+        letterhead_id: activeLetterhead?.id || null,
+        seal_id: activeSeal?.id || null,
+        seal_enabled: !!activeSeal,
+        // Metadata
+        created_by: null,
+        created_at: now,
+        updated_at: now,
+      };
+
+      const { data: created, error: insErr } = await this.sb()
+        .from("document_templates")
+        .insert(payload)
+        .select(SupabaseStore.TEMPLATE_SELECT)
+        .single();
+      if (insErr) {
+        console.warn("[getDefaultDocumentTemplate] Auto-create failed:", insErr.message);
+        return null;
+      }
+      return (created as DocumentTemplate) || null;
+    } catch (autoErr) {
+      console.warn("[getDefaultDocumentTemplate] Auto-create error:", autoErr);
+      return null;
+    }
   }
   async upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate> {
     return this.smartUpsert<DocumentTemplate>("document_templates", t);

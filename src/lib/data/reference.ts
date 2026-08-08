@@ -321,15 +321,52 @@ export const PARTNER_CATEGORIES = [
 ];
 
 // ============================================================
-// Payment terms (localized)
+// Payment terms (international trade standard)
 // ============================================================
+// Covers advance payments, net terms, letters of credit (L/C),
+// documents against payment/acceptance (D/P, D/A), split payments,
+// open account, and consignment. The legacy "immediate" value is
+// kept at the top so existing offers don't lose their label.
 export const PAYMENT_TERMS_LOCAL = [
-  { value: "immediate", label: "Immediate" },
-  { value: "net15", label: "Net 15" },
-  { value: "net30", label: "Net 30" },
-  { value: "net45", label: "Net 45" },
-  { value: "net60", label: "Net 60" },
-  { value: "net90", label: "Net 90" },
+  // Legacy (preserved for backward compatibility with existing offers)
+  { value: "immediate", label: "Immediate (legacy)" },
+
+  // Advance payments
+  { value: "advance_100", label: "100% Advance Payment" },
+  { value: "cia", label: "Cash in Advance (CIA)" },
+  { value: "tt_advance", label: "T/T in Advance" },
+
+  // Net terms (payment after delivery)
+  { value: "net7", label: "Net 7 Days" },
+  { value: "net15", label: "Net 15 Days" },
+  { value: "net30", label: "Net 30 Days" },
+  { value: "net45", label: "Net 45 Days" },
+  { value: "net60", label: "Net 60 Days" },
+  { value: "net90", label: "Net 90 Days" },
+
+  // Letter of Credit
+  { value: "lc_sight", label: "L/C at Sight" },
+  { value: "lc_30", label: "L/C 30 Days" },
+  { value: "lc_60", label: "L/C 60 Days" },
+  { value: "lc_90", label: "L/C 90 Days" },
+  { value: "lc_confirmed", label: "Confirmed L/C" },
+  { value: "lc_transferable", label: "Transferable L/C" },
+
+  // Documents against
+  { value: "dp", label: "Documents against Payment (D/P)" },
+  { value: "da", label: "Documents against Acceptance (D/A)" },
+  { value: "cad", label: "Cash Against Documents (CAD)" },
+
+  // Split payments
+  { value: "30_70_bl", label: "30% Advance / 70% on B/L" },
+  { value: "20_80_bl", label: "20% Advance / 80% on B/L" },
+  { value: "50_50", label: "50% Advance / 50% on Delivery" },
+  { value: "40_60_proforma", label: "40% with Proforma / 60% before Shipment" },
+
+  // Other
+  { value: "open_account", label: "Open Account" },
+  { value: "consignment", label: "Consignment Sale" },
+  { value: "custom", label: "Custom (specify in notes)" },
 ];
 
 // ============================================================
@@ -410,4 +447,42 @@ export function getCurrency(code: string): Currency | undefined {
   const c = CURRENCIES.find((c) => c.value === code);
   if (!c) return undefined;
   return { code: c.value, name: c.label, symbol: c.value };
+}
+
+// ============================================================
+// Helper: due-date calculator for international payment terms
+// ============================================================
+// Returns an ISO date string (yyyy-mm-dd) for the calculated due date,
+// or `null` when there is no future due date (immediate / advance / L/C
+// at sight / D/P — settlement happens on issue).
+//
+// Recognized codes (from PAYMENT_TERMS_LOCAL above):
+//   • net7, net15, net30, net45, net60, net90 → +N days
+//   • lc_30, lc_60, lc_90                     → +N days
+//   • da                                       → +60 days (D/A default)
+//   • advance_100, cia, tt_advance, lc_sight,
+//     dp, cad, split payments, open_account,
+//     consignment, custom, immediate           → null (no due date)
+export function calculateDueDate(
+  paymentTerms: string,
+  issueDate: string | Date = new Date(),
+): string | null {
+  const date = new Date(issueDate);
+  const terms = paymentTerms || "";
+  const days = terms.match(/net\s*(\d+)/i);
+  const lcDays = terms.match(/lc[_\s]*(\d+)/i);
+
+  if (days) {
+    date.setDate(date.getDate() + parseInt(days[1], 10));
+    return date.toISOString().slice(0, 10);
+  }
+  if (lcDays) {
+    date.setDate(date.getDate() + parseInt(lcDays[1], 10));
+    return date.toISOString().slice(0, 10);
+  }
+  if (/da$/i.test(terms)) {
+    date.setDate(date.getDate() + 60); // D/A default 60 days
+    return date.toISOString().slice(0, 10);
+  }
+  return null; // Advance, L/C at sight, D/P — no due date (immediate)
 }

@@ -47,6 +47,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
+  // Strip JOIN results that come back from GET (letterhead, seal) — they're
+  // not real DB columns and would cause a 500 from PostgREST.
+  delete body.letterhead;
+  delete body.seal;
+  // Also strip virtual QR fields — they're stored inside footer_content._qrConfig
+  delete body.qr_position;
+  delete body.qr_size_mm;
+  delete body.qr_opacity;
   const updated = await auth.store.upsertDocumentTemplate({ ...body, id, tenant_id: existing.tenant_id });
   await audit(auth.store, auth.user, req, "doc_template.update", "document_template", id, { name: updated.name });
   return NextResponse.json(updated);

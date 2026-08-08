@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
-import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAlert, MapPin, ClipboardList, FileText, ArrowRightCircle, History, CheckCircle2, MessageSquare, XCircle, Play, Send } from "lucide-react";
+import { Ship, Truck, Plane, Train, Package, RefreshCw, Search, Trash2, ShieldAlert, MapPin, ClipboardList, FileText, ArrowRightCircle, History, CheckCircle2, MessageSquare, XCircle, Play, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
@@ -21,6 +21,7 @@ import { useCan } from "@/lib/store/app-store";
 import type { Partner } from "@/lib/supabase/types";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
+import { downloadPdf } from "@/lib/utils/download";
 
 interface LogisticsEvent {
   id: string;
@@ -321,6 +322,7 @@ function RequestDetailSheet({
   const [trackingUrl, setTrackingUrl] = React.useState<string>("");
   const [carrier, setCarrier] = React.useState<string>("");
   const [carrierReference, setCarrierReference] = React.useState<string>("");
+  const [downloading, setDownloading] = React.useState(false);
 
   React.useEffect(() => {
     if (req) {
@@ -593,13 +595,34 @@ function RequestDetailSheet({
               </div>
 
               <div className="pt-2 border-t">
-                <a
-                  href={api(`/api/logistics-requests/${req.id}/packing-list.pdf`)}
-                  target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  disabled={downloading}
+                  onClick={async () => {
+                    if (!req) return;
+                    try {
+                      setDownloading(true);
+                      await downloadPdf(
+                        api(`/api/logistics-requests/${req.id}/packing-list.pdf`),
+                        `PackingList_${req.number || req.id}.pdf`,
+                      );
+                      toast.success("PDF downloaded");
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed to download PDF");
+                    } finally {
+                      setDownloading(false);
+                    }
+                  }}
                 >
-                  <FileText className="size-3.5" /> Download packing list PDF
-                </a>
+                  {downloading ? (
+                    <Loader2 className="size-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <FileText className="size-3.5 mr-1" />
+                  )}
+                  Download packing list PDF
+                </Button>
               </div>
               <div className="flex items-center justify-between gap-2 pt-2 border-t flex-wrap">
                 {canDelete ? (

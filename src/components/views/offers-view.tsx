@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -40,20 +40,26 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save, Truck,
+  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, ArrowLeftRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
-import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision, SupplierOffer } from "@/lib/supabase/types";
+import { Offer, OfferLineItem, OfferStatus, Partner, Product, Deal, DocumentRevision, SupplierOffer, Tenant } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL, INCOTERM_CODES } from "@/lib/data/reference";
 import { UnitSelect } from "@/components/common/unit-select";
+import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { CountrySelect } from "@/components/common/country-select";
+import { OfferTextBuilder } from "@/components/common/offer-text-builder";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { ProductPicker } from "@/components/common/product-picker";
 import { cn } from "@/lib/utils";
+import { useEffectiveTenantId } from "@/lib/store/app-store";
+import { checkOfferCompleteness } from "@/lib/utils/completeness-checker";
+import { CompletenessChecker } from "@/components/common/completeness-checker";
+import { downloadPdf } from "@/lib/utils/download";
 
 const PAGE_SIZE = 20;
 
@@ -94,6 +100,130 @@ function computeTotals(items: OfferLineItem[]) {
     total += net + tax;
   }
   return { subtotal, discount_total, tax_total, total };
+}
+
+// ─── Bank account shape (tenant.bank_accounts JSON array) ───
+// The DB column is typed as `string | null` (jsonb), but in practice it holds
+// a JSON array of { bankName, currency, swiftCode, accountNumber, holder }.
+// Accept both camelCase and snake_case keys so we're resilient to legacy data.
+interface TenantBankAccount {
+  bankName?: string;
+  bank_name?: string;
+  accountNumber?: string;
+  account_number?: string;
+  swiftCode?: string;
+  swift_code?: string;
+  iban?: string;
+  currency?: string;
+  holder?: string;
+  account_holder?: string;
+}
+
+function parseTenantBankAccounts(raw: string | null | undefined): TenantBankAccount[] {
+  if (!raw) return [];
+  if (Array.isArray(raw as any)) return raw as unknown as TenantBankAccount[];
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Format a single bank account as the multi-line string saved into the
+ *  offer's `bank_details` column. The PDF renders this verbatim. */
+function formatBankDetailsForOffer(acct: TenantBankAccount): string {
+  const bankName = acct.bankName || acct.bank_name || "";
+  const accountNumber = acct.accountNumber || acct.account_number || acct.iban || "";
+  const swift = acct.swiftCode || acct.swift_code || "";
+  const holder = acct.holder || acct.account_holder || "";
+  const currency = acct.currency || "";
+  const lines: string[] = [];
+  if (bankName) lines.push(bankName);
+  if (holder) lines.push(`Account holder: ${holder}`);
+  if (accountNumber) lines.push(`Account: ${accountNumber}`);
+  if (swift) lines.push(`SWIFT: ${swift}`);
+  if (currency) lines.push(`Currency: ${currency}`);
+  return lines.join("\n");
+}
+
+// ─── Convert a numeric amount to English words (e.g. 171000 → "One Hundred
+//     Seventy-One Thousand US Dollars"). Mirrors the PDF generator's
+//     amountInWords helper so the offer form's "Amount in Words" line matches
+//     exactly what will print on the PDF. Handles up to billions + cents.
+function amountInWords(amount: number, currency = "USD"): string {
+  const currName =
+    currency === "USD" ? "US Dollars"
+    : currency === "EUR" ? "Euros"
+    : currency === "GBP" ? "Pounds Sterling"
+    : currency === "CHF" ? "Swiss Francs"
+    : currency === "AED" ? "UAE Dirhams"
+    : currency === "CNY" ? "Chinese Yuan"
+    : currency === "INR" ? "Indian Rupees"
+    : currency === "RUB" ? "Russian Rubles"
+    : currency === "JPY" ? "Japanese Yen"
+    : currency === "SAR" ? "Saudi Riyals"
+    : currency === "BRL" ? "Brazilian Real"
+    : currency === "ZAR" ? "South African Rand"
+    : currency === "TRY" ? "Turkish Lira"
+    : currency === "SGD" ? "Singapore Dollars"
+    : currency === "HKD" ? "Hong Kong Dollars"
+    : currency;
+
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  function threeDigitsToWords(n: number): string {
+    if (n === 0) return "";
+    let str = "";
+    const hundred = Math.floor(n / 100);
+    const remainder = n % 100;
+    if (hundred > 0) str += ones[hundred] + " Hundred";
+    if (remainder > 0) {
+      if (str) str += " ";
+      if (remainder < 10) str += ones[remainder];
+      else if (remainder < 20) str += teens[remainder - 10];
+      else {
+        const t = Math.floor(remainder / 10);
+        const o = remainder % 10;
+        str += tens[t];
+        if (o > 0) str += "-" + ones[o];
+      }
+    }
+    return str;
+  }
+
+  if (!isFinite(amount)) return `Zero ${currName} Only`;
+  const negative = amount < 0;
+  const absAmount = Math.abs(amount);
+  const whole = Math.floor(absAmount);
+  const cents = Math.round((absAmount - whole) * 100);
+
+  let words: string;
+  if (whole === 0) {
+    words = "Zero";
+  } else {
+    const billions = Math.floor(whole / 1000000000);
+    const millions = Math.floor((whole % 1000000000) / 1000000);
+    const thousands = Math.floor((whole % 1000000) / 1000);
+    const remainder = whole % 1000;
+    const parts: string[] = [];
+    if (billions > 0) parts.push(threeDigitsToWords(billions) + " Billion");
+    if (millions > 0) parts.push(threeDigitsToWords(millions) + " Million");
+    if (thousands > 0) parts.push(threeDigitsToWords(thousands) + " Thousand");
+    if (remainder > 0) parts.push(threeDigitsToWords(remainder));
+    words = parts.join(" ");
+  }
+
+  let result = words + " " + currName;
+  if (cents > 0) {
+    const c = cents < 10 ? "0" + cents : String(cents);
+    result += ` and ${c}/100`;
+  }
+  result += " Only";
+  return negative ? `Minus ${result}` : result;
 }
 
 // ─── Partner context type ───
@@ -807,6 +937,7 @@ function OfferDetail({
   const [showVersionDialog, setShowVersionDialog] = useState(false);
   const [changeNote, setChangeNote] = useState("");
   const [savingVersion, setSavingVersion] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const revisions = useQuery({
     queryKey: ["document-revisions", tenantKey, offer.id],
@@ -828,6 +959,25 @@ function OfferDetail({
   });
 
   const revisionList = revisions.data || [];
+
+  // ─── Auto-saved revisions (written by recordRevision on every PUT) ───
+  const autoRevisions = useQuery({
+    queryKey: ["document-revisions-auto", tenantKey, offer.id],
+    queryFn: async () => {
+      try {
+        const r = await fetch(api(`/api/document-revisions/${offer.id}`));
+        if (!r.ok) return [];
+        const data = await r.json();
+        return ((data.items || []) as any[]).sort(
+          (a, b) => (b.version || 0) - (a.version || 0),
+        );
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!offer.id,
+  });
+  const autoRevisionList = autoRevisions.data || [];
 
   async function handleSaveVersion() {
     if (!changeNote.trim()) {
@@ -905,6 +1055,7 @@ function OfferDetail({
       setChangeNote("");
       setShowVersionDialog(false);
       qc.invalidateQueries({ queryKey: ["document-revisions", tenantKey, offer.id] });
+      qc.invalidateQueries({ queryKey: ["document-revisions-auto", tenantKey, offer.id] });
     } catch (e: any) {
       toast.error(e.message || "Failed to save version.");
     } finally {
@@ -1233,10 +1384,25 @@ function OfferDetail({
 
       {/* Download PDF */}
       <div className="pt-3 border-t">
-        <Button asChild variant="outline" size="sm">
-          <a href={`/api/offers/${offer.id}/pdf`} target="_blank" download>
-            <Download className="size-4 mr-1" /> Download PDF
-          </a>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={downloading}
+          onClick={async () => {
+            try {
+              setDownloading(true);
+              const filename = `Offer_${offer.number || offer.id}.pdf`;
+              await downloadPdf(api(`/api/offers/${offer.id}/pdf`), filename);
+              toast.success("PDF downloaded");
+            } catch (e: any) {
+              toast.error(e?.message || "Failed to download PDF");
+            } finally {
+              setDownloading(false);
+            }
+          }}
+        >
+          {downloading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Download className="size-4 mr-1" />}
+          Download PDF
         </Button>
       </div>
 
@@ -1284,6 +1450,92 @@ function OfferDetail({
                     <TableCell className="text-xs text-muted-foreground tabular-nums">{fmtDateTime(rev.created_at)}</TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      {/* Auto-Saved Revisions (from recordRevision on every PUT) */}
+      <div className="pt-4 mt-4 border-t">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold flex items-center gap-1.5">
+            <History className="size-4" /> Auto-Saved Revisions
+            <Badge variant="outline" className="ml-1 font-mono text-xs">
+              v{(offer as any).version || 1}
+            </Badge>
+          </h4>
+        </div>
+
+        {autoRevisions.isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : autoRevisionList.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
+            <History className="size-6 text-muted-foreground/40 mx-auto mb-1" />
+            <p className="text-sm text-muted-foreground">No auto-saved revisions yet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Every edit to this offer is automatically saved as a version with a per-field diff.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border/60 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-20">Version</TableHead>
+                  <TableHead>Changes</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
+                  <TableHead className="w-36">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {autoRevisionList.map((rev: any, i: number) => {
+                  const fields: any[] = Array.isArray(rev.changed_fields) ? rev.changed_fields : [];
+                  return (
+                    <TableRow key={rev.id || i}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs">V{rev.version}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm align-top">
+                        {rev.change_note ? (
+                          <p className="mb-1">{rev.change_note}</p>
+                        ) : null}
+                        {fields.length > 0 ? (
+                          <div className="space-y-1">
+                            {fields.slice(0, 4).map((c: any, idx: number) => (
+                              <div key={idx} className="text-xs">
+                                <span className="font-medium">{c.field}:</span>{" "}
+                                <span className="text-red-600 dark:text-red-400 line-through">
+                                  {String(c.before ?? "").slice(0, 40) || "∅"}
+                                </span>{" "}
+                                →{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">
+                                  {String(c.after ?? "").slice(0, 40) || "∅"}
+                                </span>
+                              </div>
+                            ))}
+                            {fields.length > 4 ? (
+                              <div className="text-xs text-muted-foreground">
+                                +{fields.length - 4} more field{fields.length - 4 === 1 ? "" : "s"}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground align-top">
+                        {rev.changed_by_username || rev.created_by || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground tabular-nums align-top">
+                        {fmtDateTime(rev.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -1370,6 +1622,11 @@ function OfferFormDialog({
   const isEditing = !!offer;
 
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
+  // Completeness checker is collapsed by default — the score + critical count
+  // is always visible in the trigger, and the user expands to drill into the
+  // per-field list. Keeps the offer form compact instead of always showing a
+  // tall scrollable list right below the line items.
+  const [completenessOpen, setCompletenessOpen] = useState(false);
   // Form state. Extended with three non-DB-column fields used only by the UI:
   //   - `origin_country` is a real DB column on `offers` (added via migration)
   //     but is not in the Prisma schema, so we keep it loosely typed.
@@ -1388,6 +1645,19 @@ function OfferFormDialog({
   const [loadingPartner, setLoadingPartner] = useState(false);
   const [productContextMap, setProductContextMap] = useState<Record<string, ProductContext>>({});
   const [loadingProductIdx, setLoadingProductIdx] = useState<number | null>(null);
+  // Index (into the tenant's parsed `bank_accounts` JSON array) of the bank
+  // account the user picked for this offer's payment. null = no selection —
+  // the user can still type custom bank details into the textarea below.
+  const [selectedBankAccountIdx, setSelectedBankAccountIdx] = useState<number | null>(null);
+  // True while we wait for the user to confirm the choice in the bank account
+  // dropdown (purely cosmetic — the textarea updates instantly).
+  const [manualBankOverride, setManualBankOverride] = useState(false);
+
+  // Ref mirror of `form` so callbacks that need to read the latest items
+  // (e.g. handleUnitChange, selectProduct unit-conversion logic) don't have to
+  // re-create on every keystroke and don't capture stale state.
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; }, [form]);
 
   const deals = useQuery({
     queryKey: ["deals", tenantKey, "list", "100"],
@@ -1443,6 +1713,12 @@ function OfferFormDialog({
       }
       setPartnerContext(null);
       setProductContextMap({});
+      // Reset the bank-account picker. When editing an existing offer we
+      // don't try to reverse-match the saved `bank_details` text back to a
+      // tenant account (it may have been edited manually) — we just leave
+      // the picker empty so the user can re-select if needed.
+      setSelectedBankAccountIdx(null);
+      setManualBankOverride(false);
     }
   }, [open, offer]);
 
@@ -1463,6 +1739,44 @@ function OfferFormDialog({
       items[idx] = { ...items[idx], ...patch };
       return { ...f, items };
     });
+  }
+
+  /**
+   * Handle a unit-of-measure change on a line item.
+   *
+   * If the new unit is in the same physical category as the old one (e.g.
+   * weight ↔ weight: kg → MT), the unit_price is auto-converted so the line
+   * total stays the same. If the categories differ (e.g. kg → piece) the unit
+   * is still changed but the price is left untouched and the user is warned
+   * — we can't meaningfully convert a per-kg price into a per-piece price.
+   */
+  function handleUnitChange(idx: number, newUnit: string) {
+    const items = formRef.current.items || [];
+    const item = items[idx];
+    if (!item) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+    const oldUnit = item.unit || "";
+
+    if (!oldUnit || oldUnit === newUnit) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+
+    const currentPrice = Number(item.unit_price) || 0;
+    const convertedPrice = convertUnitPrice(currentPrice, oldUnit, newUnit);
+
+    if (convertedPrice != null && currentPrice > 0) {
+      setItem(idx, { unit: newUnit, unit_price: convertedPrice });
+      toast.info(`Price auto-converted: ${currentPrice} ${oldUnit} → ${convertedPrice.toFixed(2)} ${newUnit}`);
+    } else {
+      // Can't convert (different categories) — just change unit, keep price
+      setItem(idx, { unit: newUnit });
+      if (currentPrice > 0) {
+        toast.warning(`Cannot auto-convert price from ${oldUnit} to ${newUnit} (different unit categories). Please enter price manually.`);
+      }
+    }
   }
 
   // ─── Partner auto-fill ───
@@ -1508,12 +1822,36 @@ function OfferFormDialog({
   //      when the user hasn't filled them in yet.
   const selectProduct = useCallback(async (idx: number, p: Product) => {
     // 1. Immediate line-item fill from the product itself.
+    //
+    // Unit-conversion aware: if the user already picked a non-default unit on
+    // this line (e.g. they set "MT" while the product is priced per "kg"),
+    // preserve their choice and convert the product's price into that unit so
+    // the form stays internally consistent. If the line still has the default
+    // "pcs" unit (i.e. nothing has been chosen yet) we adopt the product's
+    // native unit instead.
+    const supplierUnit = p.unit || null;
+    const currentLineUnit = formRef.current.items?.[idx]?.unit || null;
+    const preserveLineUnit =
+      currentLineUnit && currentLineUnit !== "pcs" ? currentLineUnit : null;
+    const lineUnit = preserveLineUnit || supplierUnit || "pcs";
+
+    const basePrice = Number(p.price) || 0;
+    let priceToUse = basePrice;
+    if (
+      supplierUnit &&
+      lineUnit !== supplierUnit &&
+      basePrice > 0
+    ) {
+      const converted = convertUnitPrice(basePrice, supplierUnit, lineUnit);
+      if (converted != null) priceToUse = converted;
+    }
+
     setItem(idx, {
       product_id: p.id,
       product_name: p.name,
       sku: p.sku,
-      unit_price: p.price,
-      unit: p.unit || "pcs",
+      unit_price: priceToUse,
+      unit: lineUnit,
       hs_code: (p as any).hs_code ?? null,
       description: (p as any).description ?? null,
       detailed_spec: (p as any).detailed_spec ?? null,
@@ -1566,9 +1904,18 @@ function OfferFormDialog({
       if (latestOffer) {
         // Use the supplier offer's unit_price as the line's default buy price
         // (only if it's a positive number — guards against bad data).
+        // The supplier offer price is in the product's native unit (supplierUnit);
+        // if the line item's unit differs (e.g. user picked MT while supplier
+        // prices per kg), convert the price so it stays consistent with the unit.
         const soPrice = Number(latestOffer.unit_price);
         if (Number.isFinite(soPrice) && soPrice > 0) {
-          setItem(idx, { unit_price: soPrice });
+          const liveLineUnit = formRef.current.items?.[idx]?.unit || lineUnit;
+          let priceToSet = soPrice;
+          if (supplierUnit && liveLineUnit !== supplierUnit) {
+            const converted = convertUnitPrice(soPrice, supplierUnit, liveLineUnit);
+            if (converted != null) priceToSet = converted;
+          }
+          setItem(idx, { unit_price: priceToSet });
         }
         // Origin country on the line item (prefer the catalog spec-sheet,
         // then the supplier offer). We only override if the catalog didn't
@@ -1673,8 +2020,26 @@ function OfferFormDialog({
       // Strip the extra fields so they aren't sent to the API.
       const { inspection: _insp, certificate: _cert, ...formRest } = form as any;
 
+      // ─── Bank details: re-derive from the selected account when the user
+      //     hasn't manually overridden the textarea. This keeps the saved
+      //     `bank_details` string in sync even if the live form-state somehow
+      //     drifted (e.g. the user picked an account then edited another field
+      //     without touching the textarea). When `manualBankOverride` is true
+      //     we keep the user's edited text verbatim. */
+      let bankDetailsToSave = (form.bank_details as string | null | undefined) ?? null;
+      if (
+        selectedBankAccountIdx !== null &&
+        !manualBankOverride &&
+        tenantBankAccounts[selectedBankAccountIdx]
+      ) {
+        bankDetailsToSave = formatBankDetailsForOffer(
+          tenantBankAccounts[selectedBankAccountIdx],
+        );
+      }
+
       const body = {
         ...formRest,
+        bank_details: bankDetailsToSave,
         notes: combinedNotes,
         status: form.status || "draft",
         items: (form.items || []).map((it) => ({ ...it, total: lineTotal(it) })),
@@ -1707,6 +2072,68 @@ function OfferFormDialog({
   const dealList = deals.data?.items || [];
   const selectedPartner = partnerContext?.partner || partners.find((p) => p.id === form.partner_id);
 
+  // ─── Tenant (company) record ───
+  // Used by the completeness checker to verify that the seller's legal name,
+  // address, registration number and bank details are present — these end up
+  // on the offer PDF footer and on invoices/proformas spawned from the offer.
+  // For regular users `/api/tenants` returns just their own tenant; for
+  // super-admins it returns every tenant, so we filter by the effective
+  // tenant id (activeTenantId for super-admins, user.tenant_id otherwise).
+  const effectiveTenantId = useEffectiveTenantId();
+  const tenantQuery = useQuery({
+    queryKey: ["tenant", tenantKey, effectiveTenantId, "completeness"],
+    queryFn: async () => {
+      const r = await fetch(api("/api/tenants"));
+      if (!r.ok) throw new Error("Failed to load tenant");
+      const data = (await r.json()) as { items: Tenant[] };
+      const list = data.items || [];
+      const match = effectiveTenantId
+        ? list.find((t) => t.id === effectiveTenantId)
+        : null;
+      return (match || list[0] || null) as Tenant | null;
+    },
+    enabled: open,
+  });
+  const tenant = tenantQuery.data ?? null;
+
+  // ─── Tenant bank accounts (parsed from the JSON column) ───
+  // The tenant's `bank_accounts` field holds a JSON array of
+  // { bankName, accountNumber, swiftCode, currency, holder } records. We
+  // expose them as a clean array so the bank-account picker in the form
+  // can render a dropdown without re-parsing on every render.
+  const tenantBankAccounts = useMemo(
+    () => parseTenantBankAccounts(tenant?.bank_accounts ?? null),
+    [tenant?.bank_accounts],
+  );
+
+  // ─── Real-time completeness report ───
+  // Recomputed on every keystroke so the panel below the line-items table
+  // always reflects the current form state. The supplier-offers context map
+  // carries the latest active supplier offer for each line item so the
+  // checker can tell the user "this field IS available from supplier X" vs.
+  // "this field is missing — look it up in the product catalog".
+  const supplierOffersContext = useMemo(() => {
+    const map: Record<number, any> = {};
+    for (const [k, v] of Object.entries(productContextMap)) {
+      const ctx = v as ProductContext;
+      map[Number(k)] =
+        ctx.latestSupplierOffer || ctx.supplierOffers?.[0] || null;
+    }
+    return map;
+  }, [productContextMap]);
+
+  const completenessReport = useMemo(
+    () =>
+      checkOfferCompleteness(
+        form,
+        form.items || [],
+        selectedPartner ?? null,
+        tenant,
+        supplierOffersContext,
+      ),
+    [form, selectedPartner, tenant, supplierOffersContext],
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="full">
@@ -1724,19 +2151,22 @@ function OfferFormDialog({
 
         <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4 py-2">
 
-          {/* ─── Essential Section (always visible) ─── */}
-          <div className="space-y-3">
+          {/* ─── Partner Selection (top — auto-fill partner details) ─── */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Building2 className="h-4 w-4" /> Partner
+              {partnerContext && !loadingPartner && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5 ml-1">
+                  <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                </Badge>
+              )}
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Partner select */}
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   Partner *
                   {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-                  {partnerContext && !loadingPartner && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                      <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
-                    </Badge>
-                  )}
                 </Label>
                 <Select
                   value={form.partner_id || ""}
@@ -1771,7 +2201,7 @@ function OfferFormDialog({
               </div>
             </div>
 
-            {/* Partner context panel */}
+            {/* Partner context panel — auto-pulled details */}
             {selectedPartner && partnerContext && (
               <div className="rounded-lg border border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 p-3">
                 <div className="flex items-center gap-2 mb-2">
@@ -1784,6 +2214,12 @@ function OfferFormDialog({
                     <div className="flex items-start gap-1.5">
                       <MapPin className="size-3 text-muted-foreground mt-0.5 shrink-0" />
                       <span className="text-muted-foreground">{[selectedPartner.address_line, selectedPartner.city, selectedPartner.country].filter(Boolean).join(", ")}</span>
+                    </div>
+                  )}
+                  {selectedPartner.tax_id && (
+                    <div className="flex items-center gap-1.5">
+                      <Hash className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">Tax ID: {selectedPartner.tax_id}</span>
                     </div>
                   )}
                   {selectedPartner.vat_number && (
@@ -1881,6 +2317,7 @@ function OfferFormDialog({
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Truck className="h-4 w-4" /> Trade Terms
+              <span className="text-xs text-muted-foreground font-normal">Incoterm · POL · POD · Payment · Validity · Lead time</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Incoterm */}
@@ -1999,83 +2436,47 @@ function OfferFormDialog({
                   placeholder="e.g., Phytosanitary, ISO 22000, Halal"
                 />
               </div>
-
-              {/* Bank Details */}
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Bank Details</Label>
-                <Textarea
-                  rows={2}
-                  value={form.bank_details || ""}
-                  onChange={(e) => set("bank_details", e.target.value)}
-                  placeholder="Bank name, IBAN, SWIFT/BIC…"
-                />
-              </div>
-            </div>
-
-            {/* Notes & Terms */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Notes</Label>
-                <Textarea
-                  rows={2}
-                  value={form.notes || ""}
-                  onChange={(e) => set("notes", e.target.value)}
-                  placeholder="Additional notes visible to the partner…"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Terms &amp; Conditions</Label>
-                <Textarea
-                  rows={2}
-                  value={typeof form.terms === "string" ? form.terms : ""}
-                  onChange={(e) => set("terms", e.target.value)}
-                  placeholder="Delivery time, warranty, dispute resolution…"
-                />
-              </div>
             </div>
           </div>
 
           {/* ─── Line Items Section (inline table) ─── */}
-          <div className="space-y-3">
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-medium">Line Items</span>
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Package className="h-4 w-4" /> Line Items
                 <Sparkles className="size-3.5 text-amber-500" />
-                <span className="text-xs text-muted-foreground">Auto-fill enabled</span>
-              </div>
+                <span className="text-xs text-muted-foreground font-normal">Auto-fill from catalog & supplier offers</span>
+              </h3>
               <Button type="button" size="sm" variant="outline" onClick={addItem}>
                 <Plus className="size-4 mr-1" /> Add item
               </Button>
             </div>
 
             {(form.items || []).length === 0 ? (
-              <div className="border rounded-md border-dashed border-border/60 p-6 text-center">
+              <div className="border rounded-md border-dashed border-border/60 p-6 text-center bg-card">
                 <Package className="size-8 text-muted-foreground/40 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No line items yet</p>
                 <p className="text-xs text-muted-foreground mt-1">Click &ldquo;Add item&rdquo; to add products or services</p>
               </div>
             ) : (
-              <div className="rounded-md border border-border/60 overflow-x-auto">
+              <div className="rounded-md border border-border/60 overflow-x-auto bg-card">
                 <Table>
                   <TableHeader className="bg-muted/30">
                     <TableRow>
-                      <TableHead className="min-w-[180px]">Product</TableHead>
+                      <TableHead className="min-w-[200px]">Product</TableHead>
+                      <TableHead className="w-24 hidden md:table-cell">HS Code</TableHead>
                       <TableHead className="w-20 text-right">Qty</TableHead>
-                      <TableHead className="w-20">Unit</TableHead>
-                      <TableHead className="w-28 text-right">Unit Price</TableHead>
+                      <TableHead className="w-24">Unit</TableHead>
+                      <TableHead className="w-32 text-right">Unit Price</TableHead>
                       <TableHead className="w-16 text-right hidden sm:table-cell">Disc%</TableHead>
                       <TableHead className="w-16 text-right hidden sm:table-cell">Tax%</TableHead>
-                      <TableHead className="w-24 text-right hidden md:table-cell">Cost/unit</TableHead>
                       <TableHead className="w-28 text-right">Line Total</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(form.items || []).map((it, idx) => {
-                      const lineCost = (Number(it.cost) || 0) * (Number(it.quantity) || 0);
                       const lineRevenue = lineTotal(it);
-                      const lineMargin = lineRevenue - lineCost;
-                      const lineMarginPct = lineRevenue > 0 ? (lineMargin / lineRevenue) * 100 : 0;
                       return (
                       <TableRow key={idx}>
                         <TableCell>
@@ -2128,19 +2529,24 @@ function OfferFormDialog({
                             ) : (
                               // Lightweight inline metadata shown before the
                               // full context has loaded (or when the API call
-                              // failed). Keeps the old HS / brand / stock chips.
-                              ((it as any).hs_code || (it as any).brand) ? (
+                              // failed). Keeps the old brand chip available
+                              // even when HS code is shown in its own column.
+                              (it as any).brand ? (
                                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-                                  {(it as any).hs_code && (
-                                    <span className="font-mono px-1.5 py-0.5 rounded bg-muted">HS {(it as any).hs_code}</span>
-                                  )}
-                                  {(it as any).brand && (
-                                    <span>{(it as any).brand}</span>
-                                  )}
+                                  <span>{(it as any).brand}</span>
                                 </div>
                               ) : null
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {it.hs_code ? (
+                            <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted text-foreground tabular">
+                              {it.hs_code}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <Input
@@ -2151,42 +2557,84 @@ function OfferFormDialog({
                           />
                         </TableCell>
                         <TableCell>
-                          <UnitSelect
-                            value={it.unit || ""}
-                            onChange={(v) => setItem(idx, { unit: v })}
-                            placeholder="pcs"
-                            className="h-8 text-xs w-24"
-                          />
+                          <div
+                            className="w-24"
+                            title={
+                              it.unit &&
+                              productContextMap[idx]?.product?.unit &&
+                              it.unit !== productContextMap[idx].product.unit &&
+                              describeConversion(
+                                productContextMap[idx].product!.unit,
+                                it.unit,
+                              )
+                                ? `Unit conversion: ${describeConversion(
+                                    productContextMap[idx].product!.unit,
+                                    it.unit,
+                                  )}`
+                                : undefined
+                            }
+                          >
+                            <UnitSelect
+                              value={it.unit || ""}
+                              onChange={(v) => handleUnitChange(idx, v)}
+                              placeholder="pcs"
+                              className="h-8 text-xs w-24"
+                            />
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <Input
                             type="number"
-                            className="h-8 text-xs w-24 text-right"
+                            className="h-8 text-xs w-28 text-right"
                             value={it.unit_price}
                             onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
+                            title={
+                              productContextMap[idx]?.latestSupplierOffer
+                                ? (() => {
+                                    const so = productContextMap[idx].latestSupplierOffer!;
+                                    const soPrice = fmtMoney(
+                                      so.unit_price,
+                                      so.currency || form.currency || "USD",
+                                    );
+                                    const soUnit = productContextMap[idx].product?.unit || "unit";
+                                    const soRef =
+                                      (
+                                        so.offer_number ||
+                                        so.id ||
+                                        ""
+                                      ).slice(-6) || "?";
+                                    const conv =
+                                      it.unit &&
+                                      productContextMap[idx].product?.unit &&
+                                      it.unit !== productContextMap[idx].product.unit &&
+                                      describeConversion(
+                                        productContextMap[idx].product.unit,
+                                        it.unit,
+                                      )
+                                        ? ` · ${describeConversion(
+                                            productContextMap[idx].product!.unit,
+                                            it.unit!,
+                                          )}`
+                                        : "";
+                                    return `Supplier offer: ${soPrice}/${soUnit} (SO-${soRef})${conv}`;
+                                  })()
+                                : undefined
+                            }
                           />
+                          {/* Compact supplier-price badge (replaces the old
+                              verbose paragraph). Only shown when a latest
+                              supplier offer exists for this line. */}
                           {productContextMap[idx]?.latestSupplierOffer && (
-                            <div className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-0.5 mt-0.5 justify-end">
-                              <Info className="size-2.5 shrink-0" />
-                              <span className="font-mono">
-                                {fmtMoney(
-                                  productContextMap[idx].latestSupplierOffer!.unit_price,
-                                  productContextMap[idx].latestSupplierOffer!.currency || form.currency || "USD",
-                                )}
-                              </span>
-                              <span className="text-muted-foreground">
-                                /{it.unit || "unit"}
-                              </span>
-                              <span className="text-muted-foreground ml-0.5">
-                                (SO-
-                                {(
-                                  productContextMap[idx].latestSupplierOffer!.offer_number ||
-                                  productContextMap[idx].latestSupplierOffer!.id ||
-                                  ""
-                                ).slice(-6) || "?"}
-                                )
-                              </span>
-                            </div>
+                            <Badge
+                              variant="outline"
+                              className="mt-0.5 text-[10px] h-4 px-1 font-mono border-blue-500/30 bg-blue-50/60 text-blue-700 dark:bg-blue-950/20 dark:text-blue-300"
+                              title={`Auto-filled from supplier offer${productContextMap[idx].latestSupplierOffer!.offer_number ? ` ${productContextMap[idx].latestSupplierOffer!.offer_number}` : ""}`}
+                            >
+                              Supplier: {fmtMoney(
+                                productContextMap[idx].latestSupplierOffer!.unit_price,
+                                productContextMap[idx].latestSupplierOffer!.currency || form.currency || "USD",
+                              )}/{productContextMap[idx].product?.unit || "unit"}
+                            </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right hidden sm:table-cell">
@@ -2205,22 +2653,11 @@ function OfferFormDialog({
                             onChange={(e) => setItem(idx, { tax_rate: Number(e.target.value) })}
                           />
                         </TableCell>
-                        <TableCell className="text-right hidden md:table-cell">
-                          <Input
-                            type="number"
-                            className="h-8 text-xs w-20 text-right"
-                            value={Number(it.cost) || 0}
-                            onChange={(e) => setItem(idx, { cost: Number(e.target.value) })}
-                            placeholder="0.00"
-                          />
-                          {Number(it.cost) > 0 && (
-                            <p className={`text-[10px] mt-0.5 ${lineMargin >= 0 ? "text-chart-1" : "text-destructive"}`}>
-                              {lineMarginPct.toFixed(0)}% margin
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-mono tabular text-sm">
-                          {fmtMoney(lineTotal(it), form.currency || "USD")}
+                        <TableCell
+                          className="text-right font-mono tabular text-sm font-medium"
+                          title={`Line total: ${fmtMoney(lineRevenue, form.currency || "USD")}`}
+                        >
+                          {fmtMoney(lineRevenue, form.currency || "USD")}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -2241,10 +2678,161 @@ function OfferFormDialog({
                 </Table>
               </div>
             )}
+          </div>
 
-            {/* Auto-calculated totals */}
-            {(form.items || []).length > 0 && (
-              <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
+          {/* ─── Bank Account for Payment (NEW) ─── */}
+          {/* The tenant's `bank_accounts` JSON array is presented as a
+              dropdown. Picking one auto-fills the offer's `bank_details`
+              string (which the PDF renders verbatim). The user can still
+              override the auto-filled text manually — typing into the
+              textarea below flips the picker to "custom" (no highlight). */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Landmark className="h-4 w-4" /> Bank Account for Payment
+            </h3>
+            {tenantBankAccounts.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground bg-card">
+                No bank accounts are configured on this tenant. Add them in the tenant settings to enable quick bank-account selection.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  Bank Account
+                  {selectedBankAccountIdx !== null && !manualBankOverride && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                      <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                    </Badge>
+                  )}
+                </Label>
+                <Select
+                  value={selectedBankAccountIdx === null ? "__none__" : String(selectedBankAccountIdx)}
+                  onValueChange={(v) => {
+                    if (v === "__none__") {
+                      setSelectedBankAccountIdx(null);
+                      // Don't clear the textarea — let the user keep the
+                      // previously-auto-filled text if they want.
+                      setManualBankOverride(false);
+                    } else {
+                      const idx = Number(v);
+                      setSelectedBankAccountIdx(idx);
+                      setManualBankOverride(false);
+                      const acct = tenantBankAccounts[idx];
+                      if (acct) {
+                        const formatted = formatBankDetailsForOffer(acct);
+                        setForm((f) => ({ ...f, bank_details: formatted }));
+                        toast.success("Bank details auto-filled", {
+                          description: acct.bankName || acct.bank_name || "Selected account",
+                        });
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a bank account (or use custom text below)…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— No selection (use text below) —</SelectItem>
+                    {tenantBankAccounts.map((acct, idx) => {
+                      const bankName = acct.bankName || acct.bank_name || "Bank";
+                      const accountNumber = acct.accountNumber || acct.account_number || acct.iban || "—";
+                      const currency = acct.currency || "";
+                      const swift = acct.swiftCode || acct.swift_code || "";
+                      return (
+                        <SelectItem key={idx} value={String(idx)}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{bankName}</span>
+                            {currency && (
+                              <Badge variant="secondary" className="text-[10px] h-4 px-1">{currency}</Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground font-mono">{accountNumber}</span>
+                            {swift && (
+                              <span className="text-xs text-muted-foreground font-mono">· {swift}</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Bank Details (editable — shown verbatim on the offer PDF)
+              </Label>
+              <Textarea
+                rows={3}
+                className="font-mono text-xs"
+                value={form.bank_details || ""}
+                onChange={(e) => {
+                  set("bank_details", e.target.value);
+                  // User typed something manually → mark the picker as overridden
+                  // so the "Auto-filled" badge disappears. They can still re-pick
+                  // from the dropdown to re-fill from a tenant account.
+                  setManualBankOverride(true);
+                }}
+                placeholder="Bank name, account number, IBAN, SWIFT/BIC…"
+              />
+              {manualBankOverride && selectedBankAccountIdx !== null && (
+                <p className="text-[11px] text-muted-foreground italic">
+                  Customized — changes here won&rsquo;t affect the saved tenant bank account.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ─── Offer Text / Notes / Terms (template builder) ─── */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Offer Text
+              <span className="text-xs text-muted-foreground font-normal">Template builder + free-form notes</span>
+            </h3>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea
+                rows={2}
+                value={form.notes || ""}
+                onChange={(e) => set("notes", e.target.value)}
+                placeholder="Additional notes visible to the partner…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Offer Text / Terms &amp; Conditions</Label>
+              <OfferTextBuilder
+                value={typeof form.terms === "string" ? form.terms : ""}
+                onChange={(text) => set("terms", text)}
+                currency={form.currency || undefined}
+                total={computeTotals(form.items || []).total}
+                validUntil={form.valid_until || undefined}
+                incoterm={form.incoterm || undefined}
+                paymentTerms={form.payment_terms || undefined}
+                leadTime={form.lead_time || undefined}
+                pol={form.pol || undefined}
+                pod={form.pod || undefined}
+                origin={(form as { origin_country?: string | null }).origin_country || undefined}
+                packaging={form.packaging || undefined}
+              />
+            </div>
+          </div>
+
+          {/* ─── Totals (auto-calculated, read-only) ─── */}
+          <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Receipt className="h-4 w-4" /> Totals
+              <span className="text-xs text-muted-foreground font-normal">Auto-calculated from line items</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Amount in words */}
+              <div className="rounded-md border border-border/60 bg-card p-3">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                  Amount in Words
+                </p>
+                <p className="text-xs font-medium leading-snug">
+                  {amountInWords(totals.total, form.currency || "USD")}
+                </p>
+              </div>
+              {/* Numeric totals */}
+              <div className="space-y-1 text-sm ml-auto w-full sm:w-72">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Sparkles className="size-3 text-amber-500" />
                   <span className="text-xs text-muted-foreground">Auto-calculated</span>
@@ -2261,13 +2849,69 @@ function OfferFormDialog({
                   <span className="text-muted-foreground">Tax</span>
                   <span className="font-mono tabular">{fmtMoney(totals.tax_total, form.currency || "USD")}</span>
                 </div>
-                <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
-                  <span>Total</span>
+                <div className="flex justify-between border-t pt-1.5 mt-1 text-base font-bold">
+                  <span>Grand Total</span>
                   <span className="font-mono tabular">{fmtMoney(totals.total, form.currency || "USD")}</span>
                 </div>
               </div>
-            )}
+            </div>
           </div>
+
+          {/* ─── Data Completeness Checker (real-time, collapsible) ─── */}
+          {/* Surfaces every field that's still missing from the offer — grouped
+              by offer / line item / buyer / company — so the user knows exactly
+              what to fix or supplement before sending. Recomputed on every
+              keystroke via the `completenessReport` memo above.
+              Collapsed by default — the score + critical count always shows in
+              the trigger, expand to drill into the per-field list. */}
+          <Collapsible open={completenessOpen} onOpenChange={setCompletenessOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors"
+              >
+                {completenessOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                )}
+                <CheckCircle2 className="size-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium">Data Completeness</span>
+                <Badge
+                  variant={
+                    completenessReport.criticalCount > 0
+                      ? "destructive"
+                      : completenessReport.warningCount > 0
+                        ? "secondary"
+                        : "default"
+                  }
+                  className="ml-auto"
+                >
+                  {completenessReport.completenessScore}%
+                </Badge>
+                {completenessReport.criticalCount > 0 && (
+                  <span className="text-xs text-destructive">
+                    {completenessReport.criticalCount} critical
+                  </span>
+                )}
+                {completenessReport.criticalCount === 0 &&
+                  completenessReport.warningCount > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {completenessReport.warningCount} to review
+                    </span>
+                  )}
+                {completenessReport.criticalCount === 0 &&
+                  completenessReport.warningCount === 0 && (
+                    <span className="text-xs text-emerald-600">All complete</span>
+                  )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pt-3 pb-2">
+                <CompletenessChecker report={completenessReport} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* ─── More Details Section (collapsible) ─── */}
           <Collapsible open={moreDetailsOpen} onOpenChange={setMoreDetailsOpen}>

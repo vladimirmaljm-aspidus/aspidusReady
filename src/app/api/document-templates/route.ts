@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
+import { STARTER_TEMPLATES } from "@/lib/data/starter-templates";
 
 export const runtime = "nodejs";
 
@@ -16,14 +17,31 @@ export async function GET(req: NextRequest) {
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
-  let tenantId = resolveTenantId(auth, req);
-  // Super-admin without tenant_id param: fall back to first tenant for demo
-  if (!tenantId && auth.isSuperAdmin) {
-    const tenants = await auth.store.listTenants();
-    tenantId = tenants[0]?.id || null;
+  const tenantId = resolveTenantId(auth, req);
+  if (!tenantId) {
+    // Super-admin without an explicit ?tenant_id=xxx has no tenant scope —
+    // return an empty list rather than 400 so the UI shows an empty state.
+    // Regular users always have a tenant_id attached to their session.
+    if (auth.isSuperAdmin) {
+      return NextResponse.json({ items: [], total: 0 });
+    }
+    return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   }
-  if (!tenantId) return NextResponse.json({ items: [], total: 0 });
   const items = await auth.store.listDocumentTemplates(tenantId);
+  // ─── Auto-create starter templates for first-time tenants ───────────────
+  // If the tenant has zero templates, seed them with three professional
+  // starting points (offer / invoice / proforma) so they can hit the ground
+  // running. Idempotent — only fires when nothing exists yet.
+  if (items.length === 0) {
+    for (const starter of STARTER_TEMPLATES) {
+      await auth.store.upsertDocumentTemplate({
+        ...starter.template,
+        tenant_id: tenantId,
+      });
+    }
+    const seeded = await auth.store.listDocumentTemplates(tenantId);
+    return NextResponse.json({ items: seeded });
+  }
   return NextResponse.json({ items });
 }
 

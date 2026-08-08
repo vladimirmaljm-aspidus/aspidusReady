@@ -7,6 +7,7 @@
 
 import { Store, ListParams, ListResult } from "./store";
 import * as mock from "./mock";
+import { ensureStarterTemplates } from "./starter-templates";
 import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
@@ -925,7 +926,28 @@ export class MockStore implements Store {
     return mock.documentTemplates.find((t) => t.id === id) || null;
   }
   async getDefaultDocumentTemplate(tenantId: string, type: string): Promise<DocumentTemplate | null> {
-    return mock.documentTemplates.find((t) => t.tenant_id === tenantId && t.type === type && t.is_default) || null;
+    const existing =
+      mock.documentTemplates.find((t) => t.tenant_id === tenantId && t.type === type && t.is_default) || null;
+    if (existing) return existing;
+    // Fall back to any default template of any type.
+    const anyDefault =
+      mock.documentTemplates.find((t) => t.tenant_id === tenantId && t.is_default) || null;
+    if (anyDefault) return anyDefault;
+    // Auto-create starter templates when the tenant has none at all.
+    try {
+      const allTemplates = mock.documentTemplates.filter((t) => t.tenant_id === tenantId);
+      if (allTemplates.length === 0) {
+        await ensureStarterTemplates(tenantId, this);
+        return (
+          mock.documentTemplates.find((t) => t.tenant_id === tenantId && t.type === type && t.is_default) ||
+          mock.documentTemplates.find((t) => t.tenant_id === tenantId && t.is_default) ||
+          null
+        );
+      }
+    } catch (autoErr) {
+      console.warn("[getDefaultDocumentTemplate] Starter auto-create error:", autoErr);
+    }
+    return null;
   }
   async upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate> {
     const existing = t.id ? mock.documentTemplates.find((x) => x.id === t.id) : null;

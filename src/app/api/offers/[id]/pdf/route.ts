@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
+import { requireAuth, audit } from "@/lib/api/helpers";
 import { generatePdf } from "@/lib/pdf/generator";
 
 export const runtime = "nodejs";
@@ -12,21 +12,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       const _d = requirePermission(auth, "offers.read"); if (_d) return _d; } /* requirePermission wired */
 
   const { id } = await params;
-  let tenantId = resolveTenantId(auth, req);
-  if (!tenantId && auth.isSuperAdmin) {
-    const tenants = await auth.store.listTenants();
-    tenantId = tenants[0]?.id || null;
-  }
-  if (!tenantId) return NextResponse.json({ error: "No tenant." }, { status: 400 });
 
   try {
-    // Fetch the offer to build a professional filename
+    // Fetch the offer FIRST so we know which tenant it belongs to. This also
+    // fixes super-admin downloads: the document itself carries the tenant_id,
+    // so super-admins no longer need to pass ?tenant_id= explicitly (the
+    // previous silent fallback to tenants[0] was wrong — it returned a PDF
+    // for the wrong tenant's first document).
     const offer = await auth.store.getOffer(id);
-    // Tenant ownership check
     if (!offer) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    // Tenant ownership check (super-admin can access any tenant's docs)
     if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
+    const tenantId = offer.tenant_id;
+
     const partner = offer?.partner_id ? await auth.store.getPartner(offer.partner_id) : null;
     const tenant = await auth.store.getTenant(tenantId);
 

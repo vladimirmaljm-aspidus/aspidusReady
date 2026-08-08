@@ -7,6 +7,7 @@
 
 import { Store, ListParams, ListResult } from "./store";
 import { db } from "@/lib/db";
+import { ensureStarterTemplates } from "./starter-templates";
 import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
@@ -1703,14 +1704,56 @@ export class PrismaStore implements Store {
       where: { tenant_id: tenantId, type, is_default: true },
       include: { letterhead: true, seal: true },
     });
-    if (!r) return null;
-    return {
-      ...r,
-      created_at: dateToISOOrNow(r.created_at),
-      updated_at: dateToISOOrNow(r.updated_at),
-      letterhead: r.letterhead ? this._mapLetterhead(r.letterhead) : null,
-      seal: r.seal ? this._mapSeal(r.seal) : null,
-    };
+    if (r) {
+      return {
+        ...r,
+        created_at: dateToISOOrNow(r.created_at),
+        updated_at: dateToISOOrNow(r.updated_at),
+        letterhead: r.letterhead ? this._mapLetterhead(r.letterhead) : null,
+        seal: r.seal ? this._mapSeal(r.seal) : null,
+      };
+    }
+    // Fall back to any default template of any type — a tenant might have
+    // created a single "all-documents" template instead of per-type ones.
+    const anyDefault = await db.documentTemplate.findFirst({
+      where: { tenant_id: tenantId, is_default: true },
+      orderBy: { created_at: "desc" },
+      include: { letterhead: true, seal: true },
+    });
+    if (anyDefault) {
+      return {
+        ...anyDefault,
+        created_at: dateToISOOrNow(anyDefault.created_at),
+        updated_at: dateToISOOrNow(anyDefault.updated_at),
+        letterhead: anyDefault.letterhead ? this._mapLetterhead(anyDefault.letterhead) : null,
+        seal: anyDefault.seal ? this._mapSeal(anyDefault.seal) : null,
+      };
+    }
+    // Auto-create starter templates when the tenant has none at all — gives
+    // new tenants a professional default for every document type without
+    // requiring them to visit the Templates view first. Idempotent.
+    try {
+      const allTemplates = await this.listDocumentTemplates(tenantId);
+      if (allTemplates.length === 0) {
+        await ensureStarterTemplates(tenantId, this);
+        const seeded = await db.documentTemplate.findFirst({
+          where: { tenant_id: tenantId, type, is_default: true },
+          include: { letterhead: true, seal: true },
+        });
+        if (seeded) {
+          return {
+            ...seeded,
+            created_at: dateToISOOrNow(seeded.created_at),
+            updated_at: dateToISOOrNow(seeded.updated_at),
+            letterhead: seeded.letterhead ? this._mapLetterhead(seeded.letterhead) : null,
+            seal: seeded.seal ? this._mapSeal(seeded.seal) : null,
+          };
+        }
+      }
+    } catch (autoErr) {
+      console.warn("[getDefaultDocumentTemplate] Starter auto-create error:", autoErr);
+    }
+    return null;
   }
 
   async upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate> {

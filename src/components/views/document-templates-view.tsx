@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -34,17 +34,39 @@ import {
   Plus, Pencil, Trash2, FileText, Star, Copy, Save, Eye, LayoutTemplate,
   Type, Palette, Table as TableIcon, AlignCenter, AlignJustify,
   Building2, Stamp, ShieldCheck, Upload, ImageIcon, X, Lock,
-  Waves, Droplet, RotateCw, MapPin, Pen, Layers,
+  Waves, Droplet, RotateCw, MapPin, Pen, Layers, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
+import { TemplateVisualEditor } from "@/components/common/template-visual-editor";
+import { BankAccountSelector } from "@/components/common/bank-account-selector";
+import {
+  TemplateContentEditor,
+  parseContentConfig,
+  substitutePlaceholders,
+  DEFAULT_HEADER_CONTENT_JSON,
+  DEFAULT_FOOTER_CONTENT_JSON,
+  type ContentSegment,
+} from "@/components/common/template-content-editor";
 import { fmtDate } from "@/lib/utils/format";
 import {
   DocumentTemplate, TenantLetterhead, TenantSeal, Tenant,
 } from "@/lib/supabase/types";
 import { useAppStore, isAdmin, isSuperAdmin } from "@/lib/store/app-store";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import {
+  STARTER_TEMPLATES,
+  type StarterTemplate,
+} from "@/lib/data/starter-templates";
 
 // ============================================================
 // Constants
@@ -129,6 +151,62 @@ function substituteForPreview(text: string): string {
     .replace(/{{payment_terms}}/g, "30% advance, 70% before shipment")
     .replace(/{{page_number}}/g, "1")
     .replace(/{{doc_number}}/g, "OF-2026-0014");
+}
+
+// Sample data used by the live preview to substitute the new {placeholder}
+// tokens introduced by the TemplateContentEditor. The legacy {{token}}
+// syntax is handled by substituteForPreview() above.
+const PREVIEW_PLACEHOLDER_DATA = {
+  company_name: "Aspidus Trading",
+  company_address: "Trg Republike 5, Belgrade",
+  company_city: "Belgrade",
+  company_country: "Serbia",
+  company_reg: "RS-12345678",
+  company_vat: "RS123456789",
+  company_tax_id: "Tax-001",
+  company_phone: "+381 11 555 0100",
+  company_email: "office@aspidus.com",
+  company_website: "aspidus.com",
+  bank_name: "Raiffeisen Bank",
+  bank_iban: "RS35 2600 0560 0012 3456 78",
+  bank_swift: "RAFRCSBG",
+  doc_number: "OF-2026-0014",
+  doc_date: "14 Mar 2026",
+  valid_until: "14 Apr 2026",
+  due_date: "14 Apr 2026",
+  partner_name: "Mediterra Exports GmbH",
+  partner_address: "Hafenstraße 4, 20457 Hamburg, Germany",
+  total: "$1,601,316",
+  currency: "USD",
+  page_number: 1,
+  total_pages: 1,
+};
+
+/**
+ * Resolve raw `header_content` / `footer_content` (which may be either the
+ * new JSON {segments:[…]} format or the legacy plain-text format) into a
+ * list of styled segments with placeholders substituted for the live preview.
+ */
+function resolvePreviewSegments(content: string): ContentSegment[] {
+  const cfg = parseContentConfig(content);
+  if (cfg) {
+    return cfg.segments.map((s) => ({
+      ...s,
+      text: substitutePlaceholders(s.text, PREVIEW_PLACEHOLDER_DATA),
+    }));
+  }
+  // Fallback: legacy plain text — render as one muted line.
+  return [
+    {
+      id: "legacy",
+      text: substituteForPreview(content || ""),
+      fontSize: 8,
+      bold: false,
+      italic: false,
+      color: "#64748b",
+      alignment: "left",
+    },
+  ];
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -262,13 +340,13 @@ function defaultTemplate(name = "Untitled template"): TemplateFormState {
     page_margin_right: 18,
     header_enabled: true,
     header_height: 24,
-    header_content: "{{company_name}}\n{{company_address}} · {{company_email}} · {{company_phone}}",
+    header_content: DEFAULT_HEADER_CONTENT_JSON,
     header_show_logo: true,
     header_show_company_name: true,
     header_show_contact: true,
     footer_enabled: true,
     footer_height: 18,
-    footer_content: "{{company_bank}} — IBAN: {{company_iban}} — SWIFT: {{company_swift}}",
+    footer_content: DEFAULT_FOOTER_CONTENT_JSON,
     footer_show_page_number: true,
     footer_show_bank_details: true,
     footer_show_tax_id: true,
@@ -284,7 +362,75 @@ function defaultTemplate(name = "Untitled template"): TemplateFormState {
     letterhead_id: null,
     seal_id: null,
     seal_enabled: true,
+    selected_bank_accounts: null,
+    // QR placement defaults. These are stored INSIDE footer_content._qrConfig
+    // at save time (see handleSave) — they are NOT real DB columns.
+    qr_position: "footer-right",
+    qr_size_mm: 15,
+    qr_opacity: 1,
   };
+}
+
+// ── QR config helpers ─────────────────────────────────────────────
+// QR placement (position / size / opacity) lives inside the footer_content
+// JSON under a reserved `_qrConfig` key. It is NOT a real DB column on
+// document_templates — storing it inside footer_content means we don't need
+// a schema migration. parseContentConfig() ignores `_qrConfig` (it only
+// reads `segments`), so the visual editor / PDF rendering are unaffected.
+const QR_DEFAULTS = { position: "footer-right", size: 15, opacity: 1 };
+
+function parseQrConfig(footerContent: string | null | undefined): {
+  position: string;
+  size: number;
+  opacity: number;
+} {
+  if (!footerContent) return { ...QR_DEFAULTS };
+  try {
+    const parsed = JSON.parse(footerContent);
+    const q = parsed?._qrConfig;
+    if (q && typeof q === "object") {
+      return {
+        position: typeof q.position === "string" ? q.position : QR_DEFAULTS.position,
+        size: typeof q.size === "number" ? q.size : QR_DEFAULTS.size,
+        opacity: typeof q.opacity === "number" ? q.opacity : QR_DEFAULTS.opacity,
+      };
+    }
+  } catch {
+    // footer_content might be legacy plain text — fall through to defaults.
+  }
+  return { ...QR_DEFAULTS };
+}
+
+/** Merge the QR placement fields into footer_content's `_qrConfig` key,
+ *  preserving any existing `segments` array. Returns the serialized JSON. */
+function writeQrConfig(
+  footerContent: string | null | undefined,
+  qr: { position: string; size: number; opacity: number },
+): string {
+  let parsed: any = { segments: [] };
+  if (footerContent) {
+    try {
+      const maybe = JSON.parse(footerContent);
+      if (maybe && typeof maybe === "object") parsed = maybe;
+    } catch {
+      // Legacy plain text — wrap into a single segment so we don't lose it.
+      parsed = {
+        segments: [
+          {
+            id: "legacy-footer",
+            text: footerContent,
+            fontSize: 7.5,
+            bold: false,
+            italic: false,
+            color: "#666666",
+            alignment: "left",
+          },
+        ],
+      };
+    }
+  }
+  parsed._qrConfig = { position: qr.position, size: qr.size, opacity: qr.opacity };
+  return JSON.stringify(parsed);
 }
 
 // ============================================================
@@ -421,6 +567,11 @@ export function DocumentTemplatesView() {
 function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  // Super-admins must explicitly pick a tenant before we can list letterheads
+  // (the backend requires ?tenant_id= for super-admin — otherwise it returns
+  // 400, which previously surfaced as an empty result + console error).
+  const isSuperAdminUser = isSuperAdmin(useAppStore((s) => s.user));
+  const queryEnabled = !!tenantQuery || !isSuperAdminUser;
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TenantLetterhead | null>(null);
@@ -435,6 +586,7 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load letterheads");
       return r.json() as Promise<{ items: TenantLetterhead[] }>;
     },
+    enabled: queryEnabled,
   });
 
   const deleteMut = useMutation({
@@ -610,6 +762,10 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
 function SealsTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  // Super-admins must explicitly pick a tenant before we can list seals
+  // (same reason as LetterheadsTab — backend requires ?tenant_id=).
+  const isSuperAdminUser = isSuperAdmin(useAppStore((s) => s.user));
+  const queryEnabled = !!tenantQuery || !isSuperAdminUser;
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TenantSeal | null>(null);
@@ -624,6 +780,7 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load seals");
       return r.json() as Promise<{ items: TenantSeal[] }>;
     },
+    enabled: queryEnabled,
   });
 
   const deleteMut = useMutation({
@@ -809,15 +966,91 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
 // Tab 3: Templates (Offers / Invoices / Proformas / etc.)
 // ============================================================
 
+/**
+ * "New Template" dropdown button — exposes a blank template option plus
+ * the three professional starter templates (offer / invoice / proforma).
+ * Used in both the page header and the empty-state CTA so users always
+ * have the same starter-picker available.
+ */
+function NewTemplateDropdown({
+  onBlank,
+  onStarter,
+}: {
+  onBlank: () => void;
+  onStarter: (starter: StarterTemplate) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button>
+          <Plus className="size-4 mr-1" /> New Template
+          <ChevronDown className="size-4 ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuItem onClick={onBlank}>
+          <FileText className="size-4 mr-2" />
+          <span>Blank template</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Start from a starter
+        </DropdownMenuLabel>
+        {STARTER_TEMPLATES.map((starter) => (
+          <DropdownMenuItem
+            key={starter.type}
+            onClick={() => onStarter(starter)}
+            className="items-start py-2"
+          >
+            <LayoutTemplate className="size-4 mr-2 mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-medium leading-tight">{starter.name}</span>
+              <span className="text-xs text-muted-foreground leading-snug">
+                {starter.description}
+              </span>
+            </div>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  // Super-admins must explicitly pick a tenant before we can list templates
+  // (same reason as LetterheadsTab — backend requires ?tenant_id= for the
+  // templates/letterheads/seals list endpoints).
+  const isSuperAdminUser = isSuperAdmin(useAppStore((s) => s.user));
+  const queryEnabled = !!tenantQuery || !isSuperAdminUser;
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<DocumentTemplate | null>(null);
+  // `draft` holds the initial form values for a brand-new template that
+  // was created from a starter (e.g. "Professional Offer Template"). When
+  // set, the editor dialog seeds the form from `draft` instead of the
+  // built-in `defaultTemplate()`. Cleared on dialog close.
+  const [draft, setDraft] = useState<TemplateFormState | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<DocumentTemplate | null>(null);
+
+  // Open the editor with a blank form (uses defaultTemplate()).
+  function handleNewBlank() {
+    setEditing(null);
+    setDraft(null);
+    setShowForm(true);
+  }
+
+  // Open the editor pre-filled with a starter template's settings.
+  // `starter.template` is a `Partial<DocumentTemplate>` containing every
+  // TemplateFormState field, so a cast is safe here.
+  function handleNewFromStarter(starter: StarterTemplate) {
+    setEditing(null);
+    setDraft(starter.template as TemplateFormState);
+    setShowForm(true);
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["document-templates", tenantKey, tenantQuery],
@@ -826,6 +1059,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load templates");
       return r.json() as Promise<{ items: DocumentTemplate[] }>;
     },
+    enabled: queryEnabled,
   });
 
   // Load letterheads + seals so we can show their names on the cards
@@ -836,6 +1070,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load letterheads");
       return r.json() as Promise<{ items: TenantLetterhead[] }>;
     },
+    enabled: queryEnabled,
   });
   const sealsQ = useQuery({
     queryKey: ["seals", tenantKey, tenantQuery],
@@ -844,7 +1079,29 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Failed to load seals");
       return r.json() as Promise<{ items: TenantSeal[] }>;
     },
+    enabled: queryEnabled,
   });
+
+  // Fetch the active tenant so we can read its bank_accounts array — needed by
+  // the BankAccountSelector in the template editor.
+  //   • Regular admin: GET /api/tenants returns only their own tenant.
+  //   • Super-admin: returns ALL tenants, and we filter by ?tenant_id= in
+  //     `tenantQuery` (set by the tenant switcher above).
+  const tenantsQ = useQuery<{ items: Tenant[] }>({
+    queryKey: ["tenants", tenantKey, "for-templates", tenantQuery],
+    queryFn: async () => {
+      const r = await fetch(api("/api/tenants"));
+      if (!r.ok) throw new Error("Failed to load tenants");
+      return r.json();
+    },
+    enabled: queryEnabled,
+  });
+  const activeTenantId = tenantQuery.startsWith("?tenant_id=")
+    ? decodeURIComponent(tenantQuery.slice("?tenant_id=".length))
+    : null;
+  const tenant = (tenantsQ.data?.items ?? []).find((t) =>
+    activeTenantId ? t.id === activeTenantId : true,
+  ) ?? null;
 
   const letterheads = letterheadsQ.data?.items ?? [];
   const seals = sealsQ.data?.items ?? [];
@@ -910,9 +1167,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
             {items.length} template{items.length === 1 ? "" : "s"} configured
           </p>
         </div>
-        <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-          <Plus className="size-4 mr-1" /> New Template
-        </Button>
+        <NewTemplateDropdown onBlank={handleNewBlank} onStarter={handleNewFromStarter} />
       </div>
 
       {isLoading ? (
@@ -927,9 +1182,7 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
           title="No document templates"
           description="Create your first template to start generating branded PDFs for offers, invoices, and proformas."
           action={
-            <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New Template
-            </Button>
+            <NewTemplateDropdown onBlank={handleNewBlank} onStarter={handleNewFromStarter} />
           }
         />
       ) : (
@@ -1011,13 +1264,19 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
 
       <TemplateEditorDialog
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={(o) => {
+          setShowForm(o);
+          if (!o) setDraft(null);
+        }}
         template={editing}
+        draft={draft}
         tenantQuery={tenantQuery}
+        tenant={tenant}
         letterheads={letterheads}
         seals={seals}
         onSaved={() => {
           setShowForm(false);
+          setDraft(null);
           qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
         }}
       />
@@ -2010,12 +2269,19 @@ function SealPreview({ form }: { form: SealFormState }) {
 // ============================================================
 
 function TemplateEditorDialog({
-  open, onOpenChange, template, tenantQuery, letterheads, seals, onSaved,
+  open, onOpenChange, template, draft, tenantQuery, tenant, letterheads, seals, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   template: DocumentTemplate | null;
+  /**
+   * Optional initial form values for a brand-new template created from a
+   * starter (e.g. "Professional Offer Template"). Only consulted when
+   * `template` is null. Ignored when editing an existing template.
+   */
+  draft?: TemplateFormState | null;
   tenantQuery: string;
+  tenant: Tenant | null;
   letterheads: TenantLetterhead[];
   seals: TenantSeal[];
   onSaved: () => void;
@@ -2028,9 +2294,19 @@ function TemplateEditorDialog({
 
   useEffect(() => {
     if (open) {
-      setForm(template ? { ...template } : defaultTemplate());
+      // Edit-existing takes priority, then starter draft, then blank default.
+      const base = template ? { ...template } : draft ? { ...draft } : defaultTemplate();
+      // Hydrate QR placement fields from footer_content._qrConfig (they're
+      // not real DB columns — see writeQrConfig / parseQrConfig above).
+      const qr = parseQrConfig(base.footer_content);
+      setForm({
+        ...base,
+        qr_position: base.qr_position ?? qr.position,
+        qr_size_mm: base.qr_size_mm ?? qr.size,
+        qr_opacity: base.qr_opacity ?? qr.opacity,
+      });
     }
-  }, [open, template]);
+  }, [open, template, draft]);
 
   function set<K extends keyof TemplateFormState>(k: K, v: TemplateFormState[K]) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -2044,17 +2320,54 @@ function TemplateEditorDialog({
     setSaving(true);
     try {
       const method = template ? "PUT" : "POST";
-      const url = template ? api(`/api/document-templates/${template.id}`) : api(`/api/document-templates${tenantQuery}`);
+      // Always include ?tenant_id= for super-admin so the backend can resolve
+      // the tenant scope (POST uses resolveTenantId, PUT just ignores it but
+      // it's safer to keep the URL consistent). For PUT we read it from the
+      // existing template row; for POST we use tenantQuery (already built).
+      const saveUrl = template
+        ? `/api/document-templates/${template.id}${template.tenant_id ? `?tenant_id=${encodeURIComponent(template.tenant_id)}` : tenantQuery}`
+        : `/api/document-templates${tenantQuery}`;
+      const url = api(saveUrl);
+
+      // Build the payload that goes to the DB. Strip:
+      //   • id, tenant_id, created_by, created_at, updated_at, letterhead, seal
+      //     — these come back from the GET (join) response but aren't writable
+      //     via the form (DB-managed or join results).
+      //   • qr_position / qr_size_mm / qr_opacity — NOT real DB columns.
+      //     They get serialized into footer_content._qrConfig instead so the
+      //     PDF renderer can read them back out without a schema migration.
+      const {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        qr_position: _qp,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        qr_size_mm: _qs,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        qr_opacity: _qo,
+        ...writable
+      } = form;
+      const payload: TemplateFormState = {
+        ...writable,
+        footer_content: writeQrConfig(form.footer_content, {
+          position: form.qr_position ?? "footer-right",
+          size: form.qr_size_mm ?? 15,
+          opacity: form.qr_opacity ?? 1,
+        }),
+      };
+
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
-      if (!r.ok) throw new Error("Save failed");
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
       toast.success(template ? "Template updated." : "Template created.");
       onSaved();
-    } catch {
-      toast.error("Failed to save template.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to save template.";
+      toast.error(message || "Failed to save template.");
     } finally {
       setSaving(false);
     }
@@ -2076,7 +2389,19 @@ function TemplateEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">
+        <Tabs defaultValue="form" className="flex-1 min-h-0 flex flex-col gap-0">
+          <div className="px-5 pt-3">
+            <TabsList className="w-fit">
+              <TabsTrigger value="form">
+                <FileText className="size-4" /> Form editor
+              </TabsTrigger>
+              <TabsTrigger value="visual">
+                <LayoutTemplate className="size-4" /> Visual editor
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="form" className="flex-1 min-h-0 flex flex-col mt-0">
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">
           {/* Left: form */}
           <div className="border-r border-border/60 min-h-0 flex flex-col">
             <ScrollArea className="flex-1">
@@ -2197,9 +2522,17 @@ function TemplateEditorDialog({
                         {form.header_enabled && (
                           <>
                             <Field label="Height (mm)"><NumberInput value={form.header_height} onChange={(v) => set("header_height", v)} min={5} max={80} /></Field>
-                            <Field label="Header content">
-                              <Textarea value={form.header_content} onChange={(e) => set("header_content", e.target.value)} rows={3} placeholder="{{company_name}} — {{company_address}}" className="font-mono text-xs" />
-                            </Field>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Header content</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Define what text appears in the document header. Use placeholders to auto-fill company data.
+                              </p>
+                              <TemplateContentEditor
+                                value={form.header_content || DEFAULT_HEADER_CONTENT_JSON}
+                                onChange={(val) => set("header_content", val)}
+                                label="Header Content"
+                              />
+                            </div>
                             <div className="grid grid-cols-3 gap-2">
                               <ToggleField label="Logo" checked={form.header_show_logo} onChange={(v) => set("header_show_logo", v)} />
                               <ToggleField label="Name" checked={form.header_show_company_name} onChange={(v) => set("header_show_company_name", v)} />
@@ -2224,16 +2557,101 @@ function TemplateEditorDialog({
                         {form.footer_enabled && (
                           <>
                             <Field label="Height (mm)"><NumberInput value={form.footer_height} onChange={(v) => set("footer_height", v)} min={5} max={60} /></Field>
-                            <Field label="Footer content">
-                              <Textarea value={form.footer_content} onChange={(e) => set("footer_content", e.target.value)} rows={3} placeholder="{{company_bank}} — IBAN {{company_iban}}" className="font-mono text-xs" />
-                            </Field>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Footer content</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Define what text appears in the document footer. Use placeholders to auto-fill company data.
+                              </p>
+                              <TemplateContentEditor
+                                value={form.footer_content || DEFAULT_FOOTER_CONTENT_JSON}
+                                onChange={(val) => set("footer_content", val)}
+                                label="Footer Content"
+                              />
+                            </div>
                             <div className="grid grid-cols-3 gap-2">
                               <ToggleField label="Page #" checked={form.footer_show_page_number} onChange={(v) => set("footer_show_page_number", v)} />
                               <ToggleField label="Bank" checked={form.footer_show_bank_details} onChange={(v) => set("footer_show_bank_details", v)} />
                               <ToggleField label="Tax ID" checked={form.footer_show_tax_id} onChange={(v) => set("footer_show_tax_id", v)} />
                             </div>
+
+                            {/* ── QR code placement ──
+                                Stored inside footer_content._qrConfig (NOT a real
+                                DB column) — see writeQrConfig / parseQrConfig. */}
+                            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-3">
+                              <div>
+                                <Label className="text-xs font-medium">QR code placement</Label>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  Where the verification QR code appears on each page.
+                                </p>
+                              </div>
+                              <Field label="Position">
+                                <Select
+                                  value={form.qr_position ?? "footer-right"}
+                                  onValueChange={(v) => set("qr_position", v)}
+                                >
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="footer-right">Footer right (default)</SelectItem>
+                                    <SelectItem value="footer-left">Footer left</SelectItem>
+                                    <SelectItem value="footer-center">Footer center</SelectItem>
+                                    <SelectItem value="none">Don&apos;t show QR</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+                              {form.qr_position !== "none" && (
+                                <>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <Label className="text-xs">QR size (mm)</Label>
+                                      <span className="text-[10px] tabular text-muted-foreground">
+                                        {form.qr_size_mm ?? 15} mm
+                                      </span>
+                                    </div>
+                                    <Slider
+                                      value={[form.qr_size_mm ?? 15]}
+                                      min={8}
+                                      max={40}
+                                      step={1}
+                                      onValueChange={(v) => set("qr_size_mm", v[0])}
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <Label className="text-xs">QR opacity</Label>
+                                      <span className="text-[10px] tabular text-muted-foreground">
+                                        {Math.round((form.qr_opacity ?? 1) * 100)}%
+                                      </span>
+                                    </div>
+                                    <Slider
+                                      value={[Math.round((form.qr_opacity ?? 1) * 100)]}
+                                      min={20}
+                                      max={100}
+                                      step={5}
+                                      onValueChange={(v) => set("qr_opacity", v[0] / 100)}
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </>
                         )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="bank-accounts">
+                    <AccordionTrigger><SectionLabel icon={Building2} label="Bank accounts" /></AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Select which of your bank accounts should appear in PDFs generated with this template.
+                          Leave empty to show all accounts.
+                        </p>
+                        <BankAccountSelector
+                          accounts={tenant?.bank_accounts ?? null}
+                          selected={form.selected_bank_accounts ?? null}
+                          onChange={(sel) => set("selected_bank_accounts", sel)}
+                        />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
@@ -2312,12 +2730,29 @@ function TemplateEditorDialog({
               </div>
             </div>
             <ScrollArea className="flex-1">
-              <div className="p-6 flex justify-center">
-                <TemplatePreview form={form} letterhead={linkedLetterhead} seal={linkedSeal ? { ...linkedSeal } : null} />
+              <div className="p-6 flex items-center justify-center min-h-full">
+                <div className="text-center text-muted-foreground max-w-sm">
+                  <Eye className="size-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm font-medium">Switch to "Visual Editor" tab to see the live layout</p>
+                  <p className="text-xs mt-1.5">
+                    This tab is for form-based settings (page size, colors, fonts, toggles).
+                    The visual editor renders the actual field positions.
+                  </p>
+                </div>
               </div>
             </ScrollArea>
           </div>
-        </div>
+          </div>
+          </TabsContent>
+          <TabsContent value="visual" className="flex-1 min-h-0 mt-0">
+            <TemplateVisualEditor
+              template={form}
+              onChange={(updates) => setForm((p) => ({ ...p, ...updates }))}
+              pageSize={form.page_size === "Letter" ? "Letter" : "A4"}
+              letterhead={linkedLetterhead}
+            />
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="px-5 py-4 border-t border-border/60 bg-card">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -2327,219 +2762,6 @@ function TemplateEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// ============================================================
-// Template live preview — full document with header/table/footer + seal
-// ============================================================
-
-function TemplatePreview({
-  form, letterhead, seal,
-}: {
-  form: TemplateFormState;
-  letterhead: TenantLetterhead | null;
-  seal: TenantSeal | null;
-}) {
-  const pageWidthPx = 480;
-  const pageHeightPx = Math.round(pageWidthPx * 1.414);
-  const mmToPx = (mm: number) => (mm / 210) * pageWidthPx;
-
-  const headerText = useMemo(() => substituteForPreview(form.header_content), [form.header_content]);
-  const footerText = useMemo(() => substituteForPreview(form.footer_content), [form.footer_content]);
-
-  // Resolve brand colors: template overrides letterhead
-  const primaryColor = form.primary_color || letterhead?.primary_color || "#0f766e";
-  const accentColor = form.accent_color || letterhead?.accent_color || "#0d9488";
-  const logoUrl = letterhead?.logo_url || null;
-  const companyName = letterhead?.company_name || "Aspidus Trading";
-
-  // Sample offer rows
-  const rows = [
-    { sku: "SUG-IC45", name: "Refined White Sugar ICUMSA 45", qty: 24, unit: "MT", price: 540, total: 12960 },
-    { sku: "WHT-1250", name: "Hard Red Winter Wheat", qty: 5000, unit: "MT", price: 285, total: 1425000 },
-    { sku: "OIL-SUN", name: "Refined Sunflower Oil", qty: 80, unit: "MT", price: 1180, total: 94400 },
-  ];
-
-  // Seal placement (only if seal is linked + enabled)
-  const showSeal = seal && form.seal_enabled && seal.image_url;
-  const sealWidth = seal ? mmToPx(seal.image_width_mm) : 0;
-  const sealHeight = seal ? mmToPx(seal.image_height_mm) : 0;
-  const sealMargin = 16;
-  const sealStyle: React.CSSProperties = showSeal
-    ? {
-        position: "absolute",
-        width: sealWidth,
-        height: sealHeight,
-        opacity: seal.opacity,
-        transform: `rotate(${seal.rotation_deg}deg)`,
-        ...(seal.position === "bottom-right"
-          ? { bottom: sealMargin + mmToPx(seal.offset_y_mm), right: sealMargin - mmToPx(seal.offset_x_mm) }
-          : seal.position === "bottom-left"
-            ? { bottom: sealMargin + mmToPx(seal.offset_y_mm), left: sealMargin + mmToPx(seal.offset_x_mm) }
-            : seal.position === "bottom-center"
-              ? { bottom: sealMargin + mmToPx(seal.offset_y_mm), left: "50%", marginLeft: -sealWidth / 2 + mmToPx(seal.offset_x_mm) }
-              : seal.position === "top-right"
-                ? { top: sealMargin - mmToPx(seal.offset_y_mm), right: sealMargin - mmToPx(seal.offset_x_mm) }
-                : seal.position === "top-left"
-                  ? { top: sealMargin - mmToPx(seal.offset_y_mm), left: sealMargin + mmToPx(seal.offset_x_mm) }
-                  : { top: sealMargin - mmToPx(seal.offset_y_mm), left: "50%", marginLeft: -sealWidth / 2 + mmToPx(seal.offset_x_mm) }),
-      }
-    : {};
-
-  return (
-    <div
-      className="bg-white shadow-soft-lg rounded-sm mx-auto relative overflow-hidden"
-      style={{
-        width: pageWidthPx,
-        height: pageHeightPx,
-        fontFamily: form.body_font_family,
-        fontSize: form.body_font_size,
-        lineHeight: form.body_line_height,
-        color: "#0f172a",
-        paddingTop: mmToPx(form.page_margin_top),
-        paddingBottom: mmToPx(form.page_margin_bottom),
-        paddingLeft: mmToPx(form.page_margin_left),
-        paddingRight: mmToPx(form.page_margin_right),
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Header */}
-      {form.header_enabled && (
-        <div
-          style={{
-            minHeight: mmToPx(form.header_height),
-            borderBottom: `2px solid ${primaryColor}`,
-            paddingBottom: 6,
-            marginBottom: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-          }}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {form.header_show_logo && (
-              logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="shrink-0" style={{ width: 32, height: 18, objectFit: "contain" }} />
-              ) : (
-                <div
-                  className="rounded-md flex items-center justify-center shrink-0"
-                  style={{ width: 28, height: 28, backgroundColor: primaryColor, color: form.table_header_color, fontWeight: 700, fontSize: 14 }}
-                >
-                  {companyName[0]}
-                </div>
-              )
-            )}
-            {form.header_show_company_name && (
-              <div className="min-w-0">
-                <div style={{ color: primaryColor, fontWeight: 700, fontSize: 14 }}>{companyName}</div>
-                {form.header_show_contact && (
-                  <div style={{ fontSize: 8, color: "#64748b", whiteSpace: "pre-line" }}>{headerText}</div>
-                )}
-              </div>
-            )}
-          </div>
-          <div style={{ textAlign: "right", fontSize: 8, color: "#64748b" }}>
-            <div style={{ fontWeight: 700, color: primaryColor, fontSize: 11 }}>{TYPE_LABELS[form.type].toUpperCase()}</div>
-            <div>OF-2026-0014</div>
-            <div>Date: 14 Mar 2026</div>
-            <div>Valid: 14 Apr 2026</div>
-          </div>
-        </div>
-      )}
-
-      {/* Body */}
-      <div className="flex-1 min-h-0">
-        <div style={{ marginBottom: 10, fontSize: 9 }}>
-          <div style={{ color: "#94a3b8", fontSize: 7, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Bill to</div>
-          <div style={{ fontWeight: 700 }}>Mediterra Exports GmbH</div>
-          <div style={{ color: "#64748b" }}>Hafenstraße 4, 20457 Hamburg, Germany</div>
-          <div style={{ color: "#64748b" }}>VAT: DE876543210</div>
-        </div>
-
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8.5 }}>
-          <thead>
-            <tr style={{ backgroundColor: form.table_header_bg, color: form.table_header_color }}>
-              <th style={{ padding: "4px 6px", textAlign: "left", border: `1px solid ${form.table_border_color}` }}>SKU</th>
-              <th style={{ padding: "4px 6px", textAlign: "left", border: `1px solid ${form.table_border_color}` }}>Product</th>
-              <th style={{ padding: "4px 6px", textAlign: "right", border: `1px solid ${form.table_border_color}` }}>Qty</th>
-              <th style={{ padding: "4px 6px", textAlign: "right", border: `1px solid ${form.table_border_color}` }}>Unit price</th>
-              <th style={{ padding: "4px 6px", textAlign: "right", border: `1px solid ${form.table_border_color}` }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.sku} style={{ backgroundColor: form.table_stripe && i % 2 === 1 ? form.table_border_color + "55" : "transparent" }}>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, color: accentColor, fontWeight: 600 }}>{r.sku}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}` }}>{r.name}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, textAlign: "right" }}>{r.qty} {r.unit}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, textAlign: "right" }}>${r.price.toLocaleString()}</td>
-                <td style={{ padding: "3px 6px", border: `1px solid ${form.table_border_color}`, textAlign: "right", fontWeight: 600 }}>${r.total.toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
-          <div style={{ fontSize: 9, minWidth: 160 }}>
-            <Row label="Subtotal" value="$1,532,360" />
-            <Row label="Discount (5%)" value="-$76,618" />
-            <Row label="VAT (10%)" value="$145,574" />
-            <div style={{ marginTop: 4, paddingTop: 4, borderTop: `2px solid ${primaryColor}`, display: "flex", justifyContent: "space-between", fontWeight: 700, color: primaryColor }}>
-              <span>Total</span>
-              <span>$1,601,316</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 10, fontSize: 8, color: "#64748b" }}>
-          <div style={{ color: primaryColor, fontWeight: 600, marginBottom: 2 }}>Payment terms</div>
-          30% advance, 70% before shipment. Delivery CIF Hamburg port. Inspection by SGS at loading.
-        </div>
-      </div>
-
-      {/* Footer */}
-      {form.footer_enabled && (
-        <div
-          style={{
-            minHeight: mmToPx(form.footer_height),
-            borderTop: `1px solid ${form.table_border_color}`,
-            paddingTop: 6,
-            marginTop: 6,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: 7.5,
-            color: "#64748b",
-            gap: 8,
-          }}
-        >
-          <div style={{ whiteSpace: "pre-line", flex: 1 }}>{footerText}</div>
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            {form.footer_show_tax_id && <div>VAT: RS123456789</div>}
-            {form.footer_show_page_number && <div style={{ color: accentColor, fontWeight: 600 }}>Page 1 of 1</div>}
-          </div>
-        </div>
-      )}
-
-      {/* Seal */}
-      {showSeal && (
-        <div style={sealStyle}>
-          <img src={seal!.image_url} alt="Seal" className="w-full h-full object-contain" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#475569" }}>
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
   );
 }
 

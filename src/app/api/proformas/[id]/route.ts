@@ -51,6 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: "proforma", documentId: id, tenantId: existing.tenant_id,
         before: existing as any, after: updated as any,
         userId: auth.user.id, username: auth.user.username,
+        changeNote: (body as any)?._changeNote || null,
       });
     } catch (e) { console.warn("[proforma.update] revision failed:", e); }
     await audit(auth.store, auth.user, req, "proforma.update", "proforma", id, { status: updated.status });

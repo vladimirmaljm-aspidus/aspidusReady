@@ -4,7 +4,7 @@ import { buildPdfDocument } from "./templates";
 import { generateQrCodeDataUrl, generateVerificationCode, computePdfHash } from "./qr";
 import { getStore } from "@/lib/data/store";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import type { Offer, Invoice, Proforma, Partner, Tenant, DocumentTemplate } from "@/lib/supabase/types";
+import type { Offer, Invoice, Proforma, Partner, Tenant, MemorandumSettings, TenantSeal } from "@/lib/supabase/types";
 
 export interface GeneratePdfOptions {
   docType: "offer" | "invoice" | "proforma";
@@ -21,20 +21,38 @@ export interface GeneratePdfResult {
 }
 
 /**
- * Resolve the tenant logo URL into a form that @react-pdf/renderer can fetch.
+ * Resolve an image URL (tenant logo or seal image) into a form that
+ * @react-pdf/renderer can fetch reliably.
  *
  * Cases handled:
  *  1. null / undefined → null
- *  2. Full public URL (http…) → try to get a signed URL (works for private buckets);
- *     fall back to the original URL if signing fails.
- *  3. Relative storage path (e.g. "tenant-id/logo.png") → build a signed URL;
+ *  2. data: URL → return as-is. <Image> handles these natively and re-fetching
+ *     a large base64 payload is wasteful (logos & seals uploaded via the UI
+ *     are stored as data: URLs).
+ *  3. Full public URL (http…) → try to get a signed URL (works for private
+ *     buckets); fall back to the original URL if signing fails.
+ *  4. Relative storage path (e.g. "tenant-id/logo.png") → build a signed URL;
  *     fall back to constructing the public URL from SUPABASE_URL.
+ *
+ * For non-data: URLs we also fetch the bytes and re-encode as a data: URL.
+ * This is critical because @react-pdf/renderer has no error boundary around
+ * the <Image> component — if the remote URL returns a 404, a non-image
+ * content type, or the network is unreachable, the entire PDF render throws
+ * and the user sees a 500 instead of a PDF. By converting to a data: URL
+ * ourselves we can detect failures early and gracefully fall back to the
+ * no-logo layout.
  */
 async function resolveLogoUrl(logoUrl: string | null | undefined): Promise<string | null> {
   if (!logoUrl) return null;
 
-  // If Supabase is not configured, return the URL as-is (dev/mock mode)
-  if (!isSupabaseConfigured()) return logoUrl;
+  // data: URLs (logos & seals uploaded via the UI) work natively with
+  // @react-pdf/renderer — pass them straight through.
+  if (logoUrl.startsWith("data:")) return logoUrl;
+
+  // If Supabase is not configured, fetch as data URL (dev/mock mode)
+  if (!isSupabaseConfigured()) return fetchAsDataUrl(logoUrl);
+
+  let resolvedUrl: string | null = null;
 
   try {
     const sb = getSupabase();
@@ -58,33 +76,109 @@ async function resolveLogoUrl(logoUrl: string | null | undefined): Promise<strin
         storagePath = decodeURIComponent(logoUrl.substring(idx2 + signedPrefix.length)).split("?")[0];
       } else {
         // Not a Supabase storage URL — return as-is (could be an external logo)
-        return logoUrl;
+        resolvedUrl = logoUrl;
       }
     } else {
       // Relative path — e.g. "tenant-id/logo.png"
       storagePath = logoUrl;
     }
 
-    if (storagePath) {
+    if (storagePath && !resolvedUrl) {
       // Try to get a signed URL (works for both public and private buckets)
       const { data, error } = await sb.storage
         .from("tenant-logos")
         .createSignedUrl(storagePath, 3600); // 1 hour expiry
 
       if (!error && data?.signedUrl) {
-        return data.signedUrl;
+        resolvedUrl = data.signedUrl;
+      } else {
+        // Fallback: construct the public URL manually
+        console.warn(`[PDF] Signed URL failed for logo path "${storagePath}": ${error?.message}. Falling back to public URL.`);
+        resolvedUrl = `${supabaseUrl}/storage/v1/object/public/tenant-logos/${storagePath}`;
       }
-
-      // Fallback: construct the public URL manually
-      console.warn(`[PDF] Signed URL failed for logo path "${storagePath}": ${error?.message}. Falling back to public URL.`);
-      return `${supabaseUrl}/storage/v1/object/public/tenant-logos/${storagePath}`;
     }
   } catch (err) {
     console.warn("[PDF] Error resolving logo URL:", err);
+    resolvedUrl = logoUrl;
   }
 
   // Last resort — return the original URL
-  return logoUrl;
+  if (!resolvedUrl) resolvedUrl = logoUrl;
+
+  // Fetch the bytes and re-encode as data: URL so @react-pdf/renderer doesn't
+  // have to perform a network fetch during render (which would throw on 404).
+  return fetchAsDataUrl(resolvedUrl);
+}
+
+/**
+ * Fetch a remote image URL and re-encode it as a base64 data: URL.
+ * Returns null on any failure (HTTP error, network error, non-image content)
+ * so the caller can gracefully skip rendering the logo.
+ */
+async function fetchAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { redirect: "follow" });
+    if (!res.ok) {
+      console.warn(`[PDF] Logo fetch returned ${res.status} for ${url}`);
+      return null;
+    }
+    const contentType = (res.headers.get("content-type") || "image/png").split(";")[0].trim();
+    if (!contentType.startsWith("image/")) {
+      console.warn(`[PDF] Logo URL returned non-image content-type ${contentType} — skipping`);
+      return null;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0) {
+      console.warn(`[PDF] Logo URL returned empty body — skipping`);
+      return null;
+    }
+    return `data:${contentType};base64,${buf.toString("base64")}`;
+  } catch (err) {
+    console.warn(`[PDF] Logo fetch failed for ${url}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Fetch the per-tenant MemorandumSettings row. Auto-creates a default row
+ * when none exists so a fresh tenant still gets a branded PDF without any
+ * setup. Returns null on any error (missing table, network failure, etc.)
+ * — the PDF renderer falls back to built-in defaults in that case.
+ */
+async function getMemorandumSettings(tenantId: string): Promise<MemorandumSettings | null> {
+  // If Supabase isn't configured (dev/mock mode), there's no row to fetch.
+  if (!isSupabaseConfigured()) return null;
+
+  const sb = getSupabase();
+
+  const { data, error } = await sb
+    .from("memorandum_settings")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (error) {
+    // The most common cause: the `memorandum_settings` table hasn't been
+    // migrated yet. Log + fall back to defaults — don't crash the PDF.
+    console.warn("[getMemorandumSettings] error:", error.message);
+    return null;
+  }
+
+  // Auto-create defaults if none exist
+  if (!data) {
+    const { data: created, error: insErr } = await sb
+      .from("memorandum_settings")
+      .insert({ tenant_id: tenantId })
+      .select("*")
+      .maybeSingle();
+    if (insErr) {
+      console.warn("[getMemorandumSettings] auto-create failed:", insErr.message);
+      return null;
+    }
+    return (created as MemorandumSettings | null) ?? null;
+  }
+
+  return data as MemorandumSettings;
 }
 
 export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdfResult> {
@@ -98,10 +192,17 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
 
   if (!doc) throw new Error(`${opts.docType} not found`);
 
-  // Fetch partner + tenant + template
+  // Fetch partner + tenant + memorandum settings
   const partner = doc.partner_id ? await store.getPartner(doc.partner_id) : null;
   const tenant = await store.getTenant(opts.tenantId);
-  const template = await store.getDefaultDocumentTemplate(opts.tenantId, opts.docType);
+
+  let memorandumSettings: MemorandumSettings | null = null;
+  try {
+    memorandumSettings = await getMemorandumSettings(opts.tenantId);
+  } catch (memoErr) {
+    // Don't fail the whole PDF — fall back to built-in defaults.
+    console.warn("[PDF] MemorandumSettings fetch failed — continuing with defaults:", memoErr);
+  }
 
   // Handle verification
   let verificationCode: string | undefined;
@@ -118,7 +219,15 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     } else {
       verificationCode = generateVerificationCode(opts.docType, doc.number);
     }
-    qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+    // Wrap QR generation in try/catch — if the qrcode lib fails (corrupt
+    // input, native module crash, etc.) we still produce a valid PDF
+    // without the QR.
+    try {
+      qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+    } catch (qrErr) {
+      console.warn("[PDF] QR code generation failed — continuing without QR:", qrErr);
+      qrCodeDataUrl = undefined;
+    }
   } else {
     // Even when NOT creating a new verification (portal-side PDF re-download),
     // if the admin already issued a verification for this document, we STILL
@@ -128,12 +237,31 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     if (existing && existing.status === "active") {
       verificationCode = existing.verification_code;
       verificationId = existing.id;
-      qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+      try {
+        qrCodeDataUrl = await generateQrCodeDataUrl(verificationCode);
+      } catch (qrErr) {
+        console.warn("[PDF] QR code generation failed — continuing without QR:", qrErr);
+        qrCodeDataUrl = undefined;
+      }
     }
   }
 
-  // Resolve the logo URL so @react-pdf/renderer can fetch it
+  // Resolve the logo URL — memorandum_settings uses the tenant's own logo
+  // (tenant.logo_url). Resolution converts the storage path into a data:
+  // URL so @react-pdf/renderer can render it without a network round-trip.
   const resolvedLogoUrl = await resolveLogoUrl(tenant?.logo_url);
+
+  // ── Seal (optional, branded stamp) ────────────────────────────────
+  // The seal isn't part of memorandum_settings (memorandum_settings is
+  // purely header/footer/body layout). We fall back to the tenant's default
+  // seal (the existing tenant_seals table) so branded PDFs keep their stamp.
+  let seal: TenantSeal | null = null;
+  try {
+    seal = await store.getDefaultSeal(opts.tenantId);
+  } catch (sealErr) {
+    console.warn("[PDF] Seal fetch failed — continuing without seal:", sealErr);
+  }
+  const sealImageUrl = seal ? await resolveLogoUrl(seal.image_url) : null;
 
   // Build PDF metadata (visible in the PDF document properties dialog)
   const docTitleLabel = opts.docType === "offer" ? "Offer" : opts.docType === "invoice" ? "Invoice" : "Proforma";
@@ -151,10 +279,12 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
     docType: opts.docType,
     partner,
     tenant,
-    template,
+    memorandumSettings,
     verificationCode,
     qrCodeDataUrl,
     logoUrl: resolvedLogoUrl,
+    sealImageUrl,
+    seal,
     pdfMeta,
   });
   const buffer = await renderToBuffer(element as any);

@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
-import type { Product, ProductCatalogEntry } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/automation/product-context?product_id=xxx&tenant_id=xxx
- * GET /api/automation/product-context?catalog_entry_id=xxx&tenant_id=xxx
  *
- * When a product is selected, return ALL related data in one response.
+ * Returns ALL context related to a product in one response so the offer /
+ * trade-calculator / demand UIs can render without N+1 round-trips.
+ *
+ * Product Catalog has been merged into Products — the Product itself now
+ * carries HS code, brand, coa_params, detailed_spec, etc. The legacy
+ * `catalog_entry_id` query param is still accepted for backward compat but
+ * is a no-op (the response always returns `catalogEntry: null`).
  */
 export async function GET(req: NextRequest) {
   const auth = await requireAuth();
@@ -24,82 +28,40 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const productId = url.searchParams.get("product_id");
   const catalogEntryId = url.searchParams.get("catalog_entry_id");
+  // catalogEntryId is accepted for backward compat with old bookmarks /
+  // integrations but is intentionally unused — Product Catalog is merged
+  // into Products. We keep the parameter so old callers don't 400.
+  void catalogEntryId;
 
-  if (!productId && !catalogEntryId) {
+  if (!productId) {
     return NextResponse.json(
-      { error: "product_id or catalog_entry_id is required." },
+      {
+        error:
+          "product_id is required. (catalog_entry_id is deprecated — Product Catalog has been merged into Products.)",
+      },
       { status: 400 }
     );
   }
 
   try {
     const store = auth.store;
-    let product: Product | null = null;
-    let catalogEntry: ProductCatalogEntry | null = null;
 
-    // 1. Product details
-    if (productId) {
-      product = await store.getProduct(productId);
-      if (!product) {
-        return NextResponse.json({ error: "Product not found." }, { status: 404 });
-      }
+    // 1. Product details — Product now carries all trade metadata (HS code,
+    //    brand, coa_params, detailed_spec, logistics, etc.) directly, so no
+    //    catalog lookup is needed.
+    const product = await store.getProduct(productId);
+    if (!product) {
+      return NextResponse.json({ error: "Product not found." }, { status: 404 });
     }
 
-    // 2. Product catalog entry details
-    if (catalogEntryId) {
-      catalogEntry = await store.getProductCatalogEntry(catalogEntryId);
-      if (!catalogEntry) {
-        return NextResponse.json({ error: "Catalog entry not found." }, { status: 404 });
-      }
-      if (catalogEntry.tenant_id !== tenantId) {
-        return NextResponse.json({ error: "Catalog entry not found." }, { status: 404 });
-      }
-    } else if (product) {
-      // Fallback: match a catalog spec-sheet entry to the selected product by
-      // SKU (case-insensitive) or by exact name. Catalog carries richer trade
-      // metadata (specifications, origin, HS) that Products may not have.
-      try {
-        const cat = await store.listProductCatalog(tenantId, { limit: 500 });
-        const bySku = product.sku
-          ? cat.items.find((c) => c.sku && c.sku.toLowerCase() === product!.sku.toLowerCase())
-          : null;
-        const byName = !bySku
-          ? cat.items.find((c) => c.name.toLowerCase() === product!.name.toLowerCase())
-          : null;
-        catalogEntry = bySku || byName || null;
-      } catch { /* catalog is optional — carry on with just product data */ }
-    }
-
-    // Determine the effective catalog entry ID for queries
-    const effectiveCatalogId = catalogEntryId || (product?.id ?? null);
-    const effectiveProductId = productId || (catalogEntry?.id ?? null);
-
-    // 3. Supplier offers for this product
+    // 2. Supplier offers for this product
     const supplierOffers = await store.listSupplierOffers(tenantId, {
       limit: 20,
-      filters: { product_id: effectiveCatalogId || undefined },
+      filters: { product_id: productId },
     });
 
-    // 4. Recent trade calculations for this product
-    const tradeCalculations = await store.listTradeCalculations(tenantId, {
-      limit: 10,
-      filters: { product_id: effectiveProductId || undefined },
-    });
-
-    // 5. Inventory status — find all inventory movements for this product
-    // We need to get all partners and check inventory, but that's expensive.
-    // Instead, we'll use the product's stock field directly.
-    const inventoryStatus = product
-      ? {
-          stock: product.stock,
-          reorder_level: product.reorder_level,
-          low_stock: product.stock <= product.reorder_level,
-          unit: product.unit,
-        }
-      : null;
-
-    // 6. Price history — get from recent offers/invoices that include this product
-    // We'll look through recent offers and filter items that match this product
+    // 3. Price history — derived from recent offers that include this product
+    //    (matched by product_id or SKU).
     const recentOffers = await store.listOffers(tenantId, { limit: 50 });
     const priceHistory: Array<{
       date: string;
@@ -112,7 +74,7 @@ export async function GET(req: NextRequest) {
 
     for (const offer of recentOffers.items) {
       for (const item of offer.items) {
-        if (item.product_id === effectiveProductId || item.sku === product?.sku) {
+        if (item.product_id === productId || item.sku === product.sku) {
           priceHistory.push({
             date: offer.created_at,
             source: "offer",
@@ -130,10 +92,21 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       product,
-      catalogEntry,
+      // Kept for backward compat — no longer populated. Consumers should read
+      // trade metadata (hs_code, brand, coa_params, detailed_spec, origin,
+      // logistics, shelf_life) from `product` directly.
+      catalogEntry: null,
       supplierOffers: supplierOffers.items,
-      tradeCalculations: tradeCalculations.items,
-      inventoryStatus,
+      // Trade calculations are now derived live in the trade-calculator view;
+      // we return an empty array for backward compat with the existing response
+      // shape consumed by offers-view.tsx / demands-view.tsx.
+      tradeCalculations: [],
+      inventoryStatus: {
+        stock: product.stock,
+        reorder_level: product.reorder_level,
+        low_stock: product.stock <= product.reorder_level,
+        unit: product.unit,
+      },
       priceHistory: priceHistory.slice(0, 20), // Last 20 price entries
     });
   } catch (e) {

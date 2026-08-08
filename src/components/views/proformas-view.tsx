@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Plus, Search, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, FileCheck, Wallet, AlertCircle,
-  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight, ChevronDown,
+  Sparkles, Loader2, Building2, MapPin, Hash, Mail, Phone, ArrowRight, ArrowLeftRight, ChevronDown, FileText, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -41,8 +41,10 @@ import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Proforma, ProformaStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { UnitSelect } from "@/components/common/unit-select";
+import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { downloadPdf } from "@/lib/utils/download";
 
 const STATUS_LABELS: Record<ProformaStatus, string> = {
   draft: "Draft",
@@ -214,6 +216,28 @@ export function ProformasView() {
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
     onError: (e: any) => toast.error(e.message || "Failed to send proforma."),
+  });
+
+  // ─── Create invoice from proforma (linear flow: Offer → Proforma → Invoice) ───
+  const createInvoiceMut = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(api(`/api/automation/create-invoice-from-proforma`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proforma_id: id }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to create invoice");
+      }
+      return r.json();
+    },
+    onSuccess: (data: any) => {
+      toast.success(`Invoice ${data?.number || ""} created from proforma`);
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to create invoice."),
   });
 
   const items = data?.items || [];
@@ -426,8 +450,10 @@ export function ProformasView() {
               partnerName={partnerName(detail.data.partner_id)}
               onMarkPaid={() => detailId && markPaidMut.mutate({ id: detailId })}
               onSend={() => detailId && sendMut.mutate(detailId)}
+              onCreateInvoice={() => detailId && createInvoiceMut.mutate(detailId)}
               markingPaid={markPaidMut.isPending}
               sending={sendMut.isPending}
+              creatingInvoice={createInvoiceMut.isPending}
             />
           ) : null}
         </SheetContent>
@@ -459,17 +485,46 @@ export function ProformasView() {
 
 // ---- Detail panel ----
 function ProformaDetail({
-  proforma, partnerName, onMarkPaid, onSend, markingPaid, sending,
+  proforma, partnerName, onMarkPaid, onSend, onCreateInvoice, markingPaid, sending, creatingInvoice,
 }: {
   proforma: Proforma;
   partnerName: string;
   onMarkPaid: () => void;
   onSend: () => void;
+  onCreateInvoice: () => void;
   markingPaid: boolean;
   sending: boolean;
+  creatingInvoice: boolean;
 }) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+  const [downloading, setDownloading] = useState(false);
   const totals = computeTotals(proforma.items || []);
   const expired = isExpired(proforma);
+
+  // Proformas have no "accepted" status — the closest analog is "sent"
+  // (i.e. the customer has received it). Also allow invoicing from a
+  // "paid" proforma for retroactive record-keeping.
+  const canCreateInvoice = proforma.status === "sent" || proforma.status === "paid";
+
+  // ─── Auto-saved revisions (from recordRevision in the API layer) ───
+  const revisions = useQuery({
+    queryKey: ["document-revisions", tenantKey, proforma.id],
+    queryFn: async () => {
+      try {
+        const r = await fetch(api(`/api/document-revisions/${proforma.id}`));
+        if (!r.ok) return [];
+        const data = await r.json();
+        return ((data.items || []) as any[]).sort(
+          (a, b) => (b.version || 0) - (a.version || 0),
+        );
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!proforma.id,
+  });
+  const revisionList = revisions.data || [];
 
   return (
     <div className="px-4 pb-6">
@@ -484,6 +539,24 @@ function ProformaDetail({
               {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="default"
+            onClick={onCreateInvoice}
+            disabled={creatingInvoice || !canCreateInvoice}
+            title={
+              canCreateInvoice
+                ? "Create a new invoice from this proforma"
+                : "Proforma must be sent before an invoice can be created"
+            }
+          >
+            {creatingInvoice ? (
+              <Loader2 className="size-4 mr-1 animate-spin" />
+            ) : (
+              <FileText className="size-4 mr-1" />
+            )}
+            Create Invoice
+          </Button>
           {proforma.status !== "paid" && proforma.status !== "expired" && (
             <Button size="sm" onClick={onMarkPaid} disabled={markingPaid} className="bg-emerald-600 text-white hover:bg-emerald-700">
               <CheckCircle2 className="size-4 mr-1" /> Mark as paid
@@ -581,11 +654,111 @@ function ProformaDetail({
 
       {/* Download */}
       <div className="pt-3 border-t">
-        <Button asChild variant="outline" size="sm">
-          <a href={`/api/proformas/${proforma.id}/pdf`} target="_blank" download>
-            <Download className="size-4 mr-1" /> Download PDF
-          </a>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={downloading}
+          onClick={async () => {
+            try {
+              setDownloading(true);
+              const filename = `Proforma_${proforma.number || proforma.id}.pdf`;
+              await downloadPdf(api(`/api/proformas/${proforma.id}/pdf`), filename);
+              toast.success("PDF downloaded");
+            } catch (e: any) {
+              toast.error(e?.message || "Failed to download PDF");
+            } finally {
+              setDownloading(false);
+            }
+          }}
+        >
+          {downloading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Download className="size-4 mr-1" />}
+          Download PDF
         </Button>
+      </div>
+
+      {/* Version History (auto-saved revisions) */}
+      <div className="pt-4 mt-4 border-t">
+        <h4 className="text-sm font-semibold flex items-center gap-1.5 mb-3">
+          <History className="size-4" /> Version History
+          <Badge variant="outline" className="ml-1 font-mono text-xs">
+            v{(proforma as any).version || 1}
+          </Badge>
+        </h4>
+        {revisions.isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : revisionList.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
+            <History className="size-6 text-muted-foreground/40 mx-auto mb-1" />
+            <p className="text-sm text-muted-foreground">No revisions yet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Every edit to this proforma is automatically saved as a version.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border/60 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="w-20">Version</TableHead>
+                  <TableHead>Changes</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
+                  <TableHead className="w-36">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {revisionList.map((rev: any, i: number) => {
+                  const fields: any[] = Array.isArray(rev.changed_fields) ? rev.changed_fields : [];
+                  return (
+                    <TableRow key={rev.id || i}>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          V{rev.version}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm align-top">
+                        {rev.change_note ? (
+                          <p className="mb-1">{rev.change_note}</p>
+                        ) : null}
+                        {fields.length > 0 ? (
+                          <div className="space-y-1">
+                            {fields.slice(0, 4).map((c: any, idx: number) => (
+                              <div key={idx} className="text-xs">
+                                <span className="font-medium">{c.field}:</span>{" "}
+                                <span className="text-red-600 dark:text-red-400 line-through">
+                                  {String(c.before ?? "").slice(0, 40) || "∅"}
+                                </span>{" "}
+                                →{" "}
+                                <span className="text-emerald-600 dark:text-emerald-400">
+                                  {String(c.after ?? "").slice(0, 40) || "∅"}
+                                </span>
+                              </div>
+                            ))}
+                            {fields.length > 4 ? (
+                              <div className="text-xs text-muted-foreground">
+                                +{fields.length - 4} more field{fields.length - 4 === 1 ? "" : "s"}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground align-top">
+                        {rev.changed_by_username || rev.created_by || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground tabular-nums align-top">
+                        {fmtDateTime(rev.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -731,6 +904,12 @@ function ProformaFormDialog({
   const isEditing = !!proforma;
 
   const [form, setForm] = useState<Partial<Proforma> & { items: OfferLineItem[] }>({ items: [] });
+
+  // Ref mirror of `form` so event handlers (handleUnitChange, selectProduct)
+  // can read the latest line items without capturing stale state.
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; }, [form]);
+
   const [saving, setSaving] = useState(false);
   const [partnerContext, setPartnerContext] = useState<PartnerContext | null>(null);
   const [loadingPartner, setLoadingPartner] = useState(false);
@@ -804,15 +983,69 @@ function ProformaFormDialog({
     });
   }
 
+  /**
+   * Handle a unit-of-measure change on a line item.
+   *
+   * Same-category changes (e.g. kg → MT) auto-convert the unit_price so the
+   * line total stays the same. Cross-category changes (e.g. kg → piece) leave
+   * the price untouched and warn the user.
+   */
+  function handleUnitChange(idx: number, newUnit: string) {
+    const items = formRef.current.items || [];
+    const item = items[idx];
+    if (!item) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+    const oldUnit = item.unit || "";
+
+    if (!oldUnit || oldUnit === newUnit) {
+      setItem(idx, { unit: newUnit });
+      return;
+    }
+
+    const currentPrice = Number(item.unit_price) || 0;
+    const convertedPrice = convertUnitPrice(currentPrice, oldUnit, newUnit);
+
+    if (convertedPrice != null && currentPrice > 0) {
+      setItem(idx, { unit: newUnit, unit_price: convertedPrice });
+      toast.info(`Price auto-converted: ${currentPrice} ${oldUnit} → ${convertedPrice.toFixed(2)} ${newUnit}`);
+    } else {
+      setItem(idx, { unit: newUnit });
+      if (currentPrice > 0) {
+        toast.warning(`Cannot auto-convert price from ${oldUnit} to ${newUnit} (different unit categories). Please enter price manually.`);
+      }
+    }
+  }
+
   function selectProduct(idx: number, productId: string) {
     const p = (products.data?.items || []).find((x) => x.id === productId);
     if (!p) return;
+
+    // Unit-conversion aware: if the user already picked a non-default unit on
+    // this line (e.g. they set "MT" while the product is priced per "kg"),
+    // preserve their choice and convert the product price into that unit so
+    // the form stays internally consistent. If the line still has the default
+    // "pcs" unit we adopt the product's native unit instead.
+    const supplierUnit = p.unit || null;
+    const currentLineUnit = formRef.current.items?.[idx]?.unit || null;
+    const preserveLineUnit =
+      currentLineUnit && currentLineUnit !== "pcs" ? currentLineUnit : null;
+    const lineUnit = preserveLineUnit || supplierUnit || "pcs";
+
+    const basePrice = Number(p.price) || 0;
+    let priceToUse = basePrice;
+    if (supplierUnit && lineUnit !== supplierUnit && basePrice > 0) {
+      const converted = convertUnitPrice(basePrice, supplierUnit, lineUnit);
+      if (converted != null) priceToUse = converted;
+    }
+
     setItem(idx, {
       product_id: p.id,
       product_name: p.name,
       sku: p.sku,
-      unit: p.unit || "pcs",
-      unit_price: p.price,
+      unit: lineUnit,
+      unit_price: priceToUse,
       hs_code: (p as any).hs_code ?? null,
       description: (p as any).description ?? null,
       detailed_spec: (p as any).detailed_spec ?? null,
@@ -1144,7 +1377,7 @@ function ProformaFormDialog({
                             <Label className="text-xs">Unit</Label>
                             <UnitSelect
                               value={it.unit || ""}
-                              onChange={(v) => setItem(idx, { unit: v })}
+                              onChange={(v) => handleUnitChange(idx, v)}
                               placeholder="pcs"
                             />
                           </div>
@@ -1156,6 +1389,21 @@ function ProformaFormDialog({
                               value={it.unit_price}
                               onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
                             />
+                            {it.product_id &&
+                              it.unit &&
+                              (() => {
+                                const p = (products.data?.items || []).find((x) => x.id === it.product_id);
+                                const supplierUnit = p?.unit || null;
+                                if (!supplierUnit || supplierUnit === it.unit) return null;
+                                const desc = describeConversion(supplierUnit, it.unit);
+                                if (!desc) return null;
+                                return (
+                                  <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5 mt-0.5">
+                                    <ArrowLeftRight className="size-2.5 shrink-0" />
+                                    <span>{desc}</span>
+                                  </div>
+                                );
+                              })()}
                           </div>
                           <div className="col-span-2 sm:col-span-1 space-y-1">
                             <Label className="text-xs">VAT %</Label>

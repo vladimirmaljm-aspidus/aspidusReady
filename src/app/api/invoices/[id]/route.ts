@@ -51,6 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: "invoice", documentId: id, tenantId: existing.tenant_id,
         before: existing as any, after: updated as any,
         userId: auth.user.id, username: auth.user.username,
+        changeNote: (body as any)?._changeNote || null,
       });
     } catch (e) { console.warn("[invoice.update] revision failed:", e); }
     await audit(auth.store, auth.user, req, "invoice.update", "invoice", id, { status: updated.status });
