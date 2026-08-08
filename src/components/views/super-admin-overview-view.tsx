@@ -738,7 +738,7 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card
           className="border-border/60 shadow-soft rounded-xl cursor-pointer hover:border-primary/40 smooth"
-          onClick={() => setView("platform-dashboard")}
+          onClick={() => setView("platform-audit")}
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -751,7 +751,7 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
 
         <Card
           className="border-border/60 shadow-soft rounded-xl cursor-pointer hover:border-primary/40 smooth"
-          onClick={() => setView("platform-dashboard")}
+          onClick={() => setView("platform-health")}
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">

@@ -13,7 +13,8 @@ export async function GET() {
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_webhooks", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
-  const tid = auth.tenantId!;
+  if (!auth.tenantId) return NextResponse.json({ error: "Tenant context required." }, { status: 400 });
+  const tid = auth.tenantId;
   const items = await auth.store.listWebhooks(tid);
   return NextResponse.json({ items });
 }
@@ -34,7 +35,8 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  body.tenant_id = auth.tenantId!;
+  if (!auth.tenantId) return NextResponse.json({ error: "Tenant context required." }, { status: 400 });
+  body.tenant_id = auth.tenantId;
   const created = await auth.store.upsertWebhook(body);
   await audit(auth.store, auth.user, req, body.id ? "webhook.update" : "webhook.create", "webhook", created.id, { name: created.name });
   return NextResponse.json(created);

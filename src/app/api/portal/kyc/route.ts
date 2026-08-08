@@ -37,6 +37,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const access = await getPortalSessionAccess();
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  if (!access.partner_id) {
+    return NextResponse.json({ error: "Account not linked to a partner." }, { status: 400 });
+  }
   const store = await getStore();
 
   let body;

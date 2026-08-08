@@ -8,13 +8,9 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (platform.tenants.create)
+    // Super-admin can upload any tenant's logo; tenant admin can upload their own.
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "platform.tenants.create"); if (_d) return _d; } /* requirePermission wired */
-
-  if (!auth.isSuperAdmin && auth.user.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
-  }
+      const _d = requirePermission(auth, "settings.update"); if (_d) return _d; } /* requirePermission wired */
   const { id } = await params;
   // Tenant ownership check: a tenant admin can only upload a logo for their own tenant.
   // Super_admin can upload for any tenant.

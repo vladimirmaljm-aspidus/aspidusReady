@@ -101,7 +101,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         event_type: "note",
         actor_id: auth.user.id,
         actor_role: "admin",
-        message: (patch.quoted_notes as string) || (patch.admin_notes as string) || null,
+        message: (patch.quoted_notes as string) || null,
       });
     }
   } catch { /* non-critical */ }

@@ -222,7 +222,7 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
         throw new Error("Failed to load feature flags");
       }
       const data = await r.json();
-      return data as TenantFeatureFlags | null;
+      return (data.flags ?? data.raw ?? data) as TenantFeatureFlags | null;
     },
     enabled: !!selectedTenantId,
   });

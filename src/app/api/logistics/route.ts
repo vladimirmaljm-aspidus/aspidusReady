@@ -157,6 +157,9 @@ export async function GET(req: NextRequest) {
     const _d = requirePermission(auth, "logistics.read");
     if (_d) return _d;
   }
+  // Feature gate (module_logistics)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_logistics", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   try {
     const tenantId = resolveTenantId(auth, req);

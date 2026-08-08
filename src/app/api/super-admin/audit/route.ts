@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
   // listAudit accepts "" (empty string) as "no tenant filter" per its
   // pattern used by super-admin/users/route.ts.
-  const result = await auth.store.listAudit(tenantId, { search, limit: 5000, offset: 0 });
+  const result = await auth.store.listAudit(tenantId, { search, limit: 100_000, offset: 0 });
 
   // Filter in memory for the extra dimensions the store doesn't expose.
   let items = result.items;

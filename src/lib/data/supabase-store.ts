@@ -2130,7 +2130,7 @@ export class SupabaseStore implements Store {
       // Adjust totals
       je.debit_total += deal.buy_cost;
       je.credit_total += deal.buy_cost;
-      await this.sb().from("erp_journal_entries").update({ debit_total: je.debit_total, credit_total: je.credit_total }).eq("id", je.id);
+      await this.sb().from("erp_journal_entries").update({ debit_total: je.debit_total, credit_total: je.credit_total }).eq("id", je.id).eq("tenant_id", tenantId);
     }
     const { data: insertedLines, error: linesError } = await this.sb().from("erp_journal_lines").insert(linePayloads).select();
     if (linesError) throw linesError;

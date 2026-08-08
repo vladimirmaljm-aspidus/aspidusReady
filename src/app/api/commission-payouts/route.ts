@@ -35,9 +35,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-  // Permission gate (commissions.create)
+  // Permission gate (commissions.payout)
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "commissions.create"); if (_d) return _d; } /* requirePermission wired */
+    const _d = requirePermission(auth, "commissions.payout"); if (_d) return _d; } /* requirePermission wired */
   // Feature gate (module_finance)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
@@ -49,13 +49,9 @@ export async function POST(req: NextRequest) {
     body.tenant_id = tenantId;
     body.created_by = auth.user.id;
 
-    const created = await auth.store.upsertCommissionPayout(body);
-    await audit(auth.store, auth.user, req, "commission_payout.create", "commission_payout", created.id, { agent_id: created.agent_id, total_amount: created.total_amount });
-
-    // Mark all included deal commissions as paid
-    if (created.commission_ids && created.status === "completed") {
-      // Verify all commission IDs belong to this tenant before marking paid
-      for (const commissionId of created.commission_ids) {
+    // Validate commission ownership BEFORE creating the payout row (prevent TOCTOU)
+    if (body.commission_ids && body.status === "completed") {
+      for (const commissionId of body.commission_ids) {
         const commission = await auth.store.getDealCommission(commissionId);
         if (!commission) {
           return NextResponse.json({ error: `Commission ${commissionId} not found.` }, { status: 404 });
@@ -64,6 +60,12 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Commission does not belong to tenant." }, { status: 403 });
         }
       }
+    }
+
+    const created = await auth.store.upsertCommissionPayout(body);
+    await audit(auth.store, auth.user, req, "commission_payout.create", "commission_payout", created.id, { agent_id: created.agent_id, total_amount: created.total_amount });
+
+    if (created.commission_ids && created.status === "completed") {
       for (const commissionId of created.commission_ids) {
         await auth.store.markDealCommissionPaid(commissionId, created.payment_reference || undefined);
       }

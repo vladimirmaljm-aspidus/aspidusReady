@@ -312,7 +312,7 @@ function TaskFormDialog({
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useMemo(() => {
+  React.useEffect(() => {
     if (open) {
       setTitle(task?.title || "");
       setPriority((task?.priority as Priority) || "medium");

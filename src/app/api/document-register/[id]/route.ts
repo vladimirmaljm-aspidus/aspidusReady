@@ -9,10 +9,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // Permission gate (document-register.delete)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "document-register.delete"); if (_d) return _d; } /* requirePermission wired */
-  // Feature gate (module_finance)
-  { const { requireFeature } = await import("@/lib/api/feature-guard");
-    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
-
   const { id } = await params;
   // Tenant ownership check: listDocumentRegister ignores tenantId in the store,
   // so we fetch all and filter for non-super_admin.
@@ -33,9 +29,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Permission gate (document-register.read)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "document-register.read"); if (_d) return _d; } /* requirePermission wired */
-  // Feature gate (module_finance)
-  { const { requireFeature } = await import("@/lib/api/feature-guard");
-    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
   const { id } = await params;
   // Tenant ownership check on the parent document before listing its revisions.

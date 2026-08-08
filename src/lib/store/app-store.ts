@@ -37,6 +37,9 @@ export type ViewKey =
   // Platform (super-admin only)
   | "tenants"
   | "platform-dashboard"
+  | "platform-audit"
+  | "platform-users"
+  | "platform-health"
   | "super-admin-overview"
   | "feature-flags"
   | "document-templates"

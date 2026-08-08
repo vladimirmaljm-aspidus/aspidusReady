@@ -25,10 +25,6 @@ export async function GET(req: NextRequest) {
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "users.read"); if (_d) return _d; } /* requirePermission wired */
 
-    // only admins can list
-    if (!auth.isSuperAdmin && auth.user.role !== "admin") {
-      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-    }
     // Super-admin with no tenant_id: list users from a specific tenant if requested
     let tid = auth.tenantId;
     if (auth.isSuperAdmin && !tid) {
@@ -67,9 +63,6 @@ export async function POST(req: NextRequest) {
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "users.create"); if (_d) return _d; } /* requirePermission wired */
 
-    if (!auth.isSuperAdmin && auth.user.role !== "admin") {
-      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-    }
     const body = await req.json();
 
     // Only a super-admin can grant super-admin (platform-level) access —

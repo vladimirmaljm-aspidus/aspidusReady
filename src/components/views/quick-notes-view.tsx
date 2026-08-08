@@ -32,7 +32,7 @@ export function QuickNotesView() {
     onError: () => toast.error("Failed to save."),
   });
   const deleteMut = useMutation({
-    mutationFn: async (id: string) => { await fetch(api(`/api/quick-notes/${id}`), { method: "DELETE" }); },
+    mutationFn: async (id: string) => { const r = await fetch(api(`/api/quick-notes/${id}`), { method: "DELETE" }); if (!r.ok) throw new Error("Delete failed"); },
     onSuccess: () => { toast.success("Deleted."); qc.invalidateQueries({ queryKey: ["quick-notes", tenantKey] }); },
   });
   const togglePin = (note: QuickNote) => saveMut.mutate({ ...note, pinned: !note.pinned });

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   const body = sanitizeMessageBody(raw?.body ?? raw?.message);
-  if (!body) return NextResponse.json({ error: "Message body is required." }, { status: 400 });
+  if (!body && !raw?.attachment_url) return NextResponse.json({ error: "Message body is required." }, { status: 400 });
 
   try {
     const msg = await insertMessage({

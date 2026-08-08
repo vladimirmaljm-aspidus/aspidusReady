@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "audit.read"); if (_d) return _d; } /* requirePermission wired */
 
-  const tid = auth.tenantId!;
+  if (!auth.tenantId) {
+    return NextResponse.json({ error: "Use /api/super-admin/audit for cross-tenant audit." }, { status: 403 });
+  }
+  const tid = auth.tenantId;
   const url = new URL(req.url);
   const search = url.searchParams.get("search") || undefined;
   const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 100;
