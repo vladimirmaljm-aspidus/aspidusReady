@@ -34,7 +34,7 @@ import {
   Plus, Pencil, Trash2, Eye, Calculator, X, TrendingUp, TrendingDown,
   DollarSign, Ship, Container, ArrowLeftRight, Sparkles, Loader2, Building2,
   MapPin, Lightbulb, FileText, ChevronDown, Landmark, Percent, RefreshCw,
-  Truck, Plane, Train, Anchor,
+  Truck, Plane, Train, Anchor, FileCheck, Send, Gauge,
 } from "lucide-react";
 import { PortAutocomplete } from "@/components/ui/port-autocomplete";
 import { UnitSelect } from "@/components/common/unit-select";
@@ -55,7 +55,13 @@ import {
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import {
   calculateBankCosts, BANK_COSTS, BankCostResult,
+  calculateTransferFees, getNumTransfersForPaymentMethod,
+  TRANSFER_FEES, TransferFeeResult,
 } from "@/lib/data/bank-costs";
+import {
+  DOCUMENTATION_COSTS, getDefaultDocumentationIds,
+  calculateDocumentationCosts, DocumentationCostResult,
+} from "@/lib/data/documentation-costs";
 import { getExchangeRate } from "@/lib/utils/exchange-rates";
 import {
   convertUnit, describeConversion, canConvert,
@@ -767,6 +773,13 @@ function CalcFormDialog({
   const [bankCostOverrides, setBankCostOverrides] = useState<Record<string, number>>({});
   const [showBankOverrides, setShowBankOverrides] = useState(false);
   const [bankCostsOpen, setBankCostsOpen] = useState(true);
+  // ─── Transfer fees (SWIFT/correspondent/FX spread) — always apply ───
+  const [transferFeeOverrides, setTransferFeeOverrides] = useState<Record<string, number>>({});
+  const [transferFeesOpen, setTransferFeesOpen] = useState(true);
+  // ─── Documentation costs (B/L, Phyto, CoO, THC, …) ───
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>(getDefaultDocumentationIds());
+  const [docValueOverrides, setDocValueOverrides] = useState<Record<string, number>>({});
+  const [docsOpen, setDocsOpen] = useState(true);
   const [commissionAgentId, setCommissionAgentId] = useState<string | null>(null);
   const [commissionType, setCommissionType] =
     useState<CommissionTypeLocal>("percent_profit");
@@ -828,6 +841,10 @@ function CalcFormDialog({
       setPaymentTerms("");
       setBankCostOverrides({});
       setShowBankOverrides(false);
+      // Reset transfer fees + documentation to defaults
+      setTransferFeeOverrides({});
+      setSelectedDocIds(getDefaultDocumentationIds());
+      setDocValueOverrides({});
       setCommissionAgentId(null);
       setCommissionType("percent_profit");
       setCommissionRate(0);
@@ -1179,6 +1196,10 @@ function CalcFormDialog({
   // the deal's sell-side total. The list of applicable cost items is sourced
   // from src/lib/data/bank-costs.ts (ICC Banking Commission averages).
   // Users can override individual rates via the "Edit Rates" dialog.
+  //
+  // NOTE: calculateBankCosts now returns ONLY trade-finance costs (LC
+  // issuance, advising, etc.) — transfer fees are computed separately via
+  // calculateTransferFees because they apply to ALL international payments.
   const applicableBankCostItems = useMemo(
     () => (paymentTerms ? BANK_COSTS.filter((c) => c.applicablePaymentMethods.includes(paymentTerms)) : []),
     [paymentTerms],
@@ -1197,43 +1218,137 @@ function CalcFormDialog({
     [bankCosts],
   );
 
-  // Live preview computation (gross — no commission/bank costs folded in,
-  // so we can derive commission from gross profit before computing net).
+  // Live preview computation (gross — no commission/bank/transfer/doc costs
+  // folded in, so we can derive commission from net-of-costs profit below).
   const preview = useMemo(
     () => computeTotals({ ...form, cost_lines: lines }),
     [form, lines],
   );
 
-  // Commission — calculated live based on the selected type & current preview.
-  const commissionAmount = useMemo(() => {
-    const rate = Number(commissionRate) || 0;
-    const qty = form.quantity || 0;
-    switch (commissionType) {
-      case "percent_profit":
-        return preview.margin > 0 ? (preview.margin * rate) / 100 : 0;
-      case "percent_revenue":
-        return (preview.sellTotal * rate) / 100;
-      case "fixed_per_unit":
-        return rate * qty;
-      case "fixed_total":
-        return rate;
-      default:
-        return 0;
-    }
-  }, [commissionType, commissionRate, preview, form.quantity]);
+  // ─── International transfer fees (SWIFT / correspondent / FX spread) ───
+  // These apply to EVERY international payment regardless of payment method.
+  // Number of transfers depends on the payment method (e.g. 30% advance +
+  // 70% on B/L = 2 SWIFT messages). Falls back to "advance_100" (1 transfer).
+  const numTransfers = useMemo(
+    () => getNumTransfersForPaymentMethod(paymentTerms || "advance_100"),
+    [paymentTerms],
+  );
 
-  // Net profit = gross profit − bank costs − commission (sell currency).
-  const netProfit = preview.margin - totalBankCosts - commissionAmount;
+  const transferFees: TransferFeeResult[] = useMemo(() => {
+    const txValue = preview.sellTotal;
+    if (txValue <= 0) return [];
+    return calculateTransferFees(
+      txValue,
+      form.sell_currency || "USD",
+      numTransfers,
+      transferFeeOverrides,
+    );
+  }, [preview.sellTotal, form.sell_currency, numTransfers, transferFeeOverrides]);
+
+  const totalTransferFees = useMemo(
+    () => transferFees.reduce((s, t) => s + (t.amount || 0), 0),
+    [transferFees],
+  );
+
+  // ─── Documentation costs (B/L, Phyto, CoO, THC, …) ───
+  // Pre-selected with typically-required documents; user can add/remove.
+  // THC scales with num_containers when > 1.
+  const documentationCosts: DocumentationCostResult[] = useMemo(() => {
+    return calculateDocumentationCosts(
+      selectedDocIds,
+      docValueOverrides,
+      form.num_containers || 1,
+    );
+  }, [selectedDocIds, docValueOverrides, form.num_containers]);
+
+  const totalDocCosts = useMemo(
+    () => documentationCosts.reduce((s, d) => s + (d.amount || 0), 0),
+    [documentationCosts],
+  );
+
+  // ─── Profit BEFORE commission (after ALL costs: bank + transfer + docs) ───
+  // Commission is now calculated from this net-of-costs profit, NOT from the
+  // gross margin. This is the FIX to "commission AFTER all costs".
+  const allCostsAfterLanded = totalBankCosts + totalTransferFees + totalDocCosts;
+  const profitBeforeCommission = preview.margin - allCostsAfterLanded;
+
+  // ─── Commission calculation ───
+  // Helper: compute commission for a given profit base. Revenue- and
+  // fixed-based commission types are unaffected by the profit base, but
+  // percent_profit scales with profit (and clamps to 0 when profit ≤ 0).
+  const calcCommissionForProfit = useCallback(
+    (profitBase: number): number => {
+      const rate = Number(commissionRate) || 0;
+      const qty = form.quantity || 0;
+      switch (commissionType) {
+        case "percent_profit":
+          return profitBase > 0 ? (profitBase * rate) / 100 : 0;
+        case "percent_revenue":
+          return (preview.sellTotal * rate) / 100;
+        case "fixed_per_unit":
+          return rate * qty;
+        case "fixed_total":
+          return rate;
+        default:
+          return 0;
+      }
+    },
+    [commissionType, commissionRate, preview.sellTotal, form.quantity],
+  );
+
+  // Commission is calculated from profit AFTER all costs (bank + transfer + docs).
+  const commissionAmount = useMemo(
+    () => calcCommissionForProfit(profitBeforeCommission),
+    [calcCommissionForProfit, profitBeforeCommission],
+  );
+
+  // Net profit = profit after all costs − commission (sell currency).
+  const netProfit = profitBeforeCommission - commissionAmount;
   const netMarginPct =
     preview.sellTotal > 0 ? (netProfit / preview.sellTotal) * 100 : 0;
   const qtyForUnit = form.quantity || 0;
   const profitPerUnit = qtyForUnit > 0 ? netProfit / qtyForUnit : 0;
+
+  // ─── ±10% Variance Analysis ───
+  // Banks may charge more or less than expected — show best/worst case
+  // scenarios on bank + transfer + documentation costs.
+  const VARIANCE_PCT = 0.10;
+  const bestCaseCosts = allCostsAfterLanded * (1 - VARIANCE_PCT);
+  const worstCaseCosts = allCostsAfterLanded * (1 + VARIANCE_PCT);
+  const bestCaseProfitBeforeCommission = preview.margin - bestCaseCosts;
+  const worstCaseProfitBeforeCommission = preview.margin - worstCaseCosts;
+  const bestCaseCommission = calcCommissionForProfit(bestCaseProfitBeforeCommission);
+  const worstCaseCommission = calcCommissionForProfit(worstCaseProfitBeforeCommission);
+  const bestCaseProfit = bestCaseProfitBeforeCommission - bestCaseCommission;
+  const worstCaseProfit = worstCaseProfitBeforeCommission - worstCaseCommission;
+  const varianceSpread = Math.abs(worstCaseProfit - bestCaseProfit);
 
   function applyBankCostOverrides(id: string, value: number) {
     setBankCostOverrides((prev) => ({ ...prev, [id]: value }));
   }
   function resetBankCostOverrides() {
     setBankCostOverrides({});
+  }
+
+  // ─── Transfer fee overrides ───
+  function applyTransferFeeOverride(id: string, value: number) {
+    setTransferFeeOverrides((prev) => ({ ...prev, [id]: value }));
+  }
+  function resetTransferFeeOverrides() {
+    setTransferFeeOverrides({});
+  }
+
+  // ─── Documentation cost helpers ───
+  function toggleDoc(id: string) {
+    setSelectedDocIds((arr) =>
+      arr.includes(id) ? arr.filter((d) => d !== id) : [...arr, id],
+    );
+  }
+  function applyDocOverride(id: string, value: number) {
+    setDocValueOverrides((prev) => ({ ...prev, [id]: value }));
+  }
+  function resetDocOverrides() {
+    setDocValueOverrides({});
   }
 
   async function save() {
@@ -1932,6 +2047,260 @@ function CalcFormDialog({
             </Collapsible>
           </div>
 
+          {/* ─── Transfer Fees (SWIFT / correspondent / FX spread) ─── */}
+          {/* Always present for international payments — independent of payment method. */}
+          <div className="md:col-span-2">
+            <Collapsible open={transferFeesOpen} onOpenChange={setTransferFeesOpen}>
+              <div className="flex items-center justify-between mb-1.5">
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 hover:bg-muted/50">
+                    <Send className="size-3.5" />
+                    <span className="text-xs font-medium">International Transfer Fees</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{numTransfers}× transfer{numTransfers > 1 ? "s" : ""}</Badge>
+                    <ChevronDown className={`size-3.5 transition-transform ${transferFeesOpen ? "rotate-180" : ""}`} />
+                  </Button>
+                </CollapsibleTrigger>
+                {transferFees.length > 0 && (
+                  <span className="text-xs text-muted-foreground tabular">
+                    Total: {fmtMoney(totalTransferFees, form.sell_currency || "USD")}
+                  </span>
+                )}
+              </div>
+              <CollapsibleContent>
+                {preview.sellTotal <= 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
+                    Enter a sell price &amp; quantity to calculate SWIFT/correspondent/FX-spread fees.
+                  </p>
+                ) : transferFees.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
+                    No transfer fees calculated.
+                  </p>
+                ) : (
+                  <div className="border border-border/60 rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/40">
+                        <TableRow>
+                          <TableHead className="h-8 text-xs">Fee item</TableHead>
+                          <TableHead className="h-8 text-xs">Basis</TableHead>
+                          <TableHead className="h-8 text-xs text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {transferFees.map((fee) => {
+                          const def = TRANSFER_FEES.find((f) => f.id === fee.id);
+                          const overridden = transferFeeOverrides[fee.id] !== undefined;
+                          return (
+                            <TableRow key={fee.id} className="text-xs">
+                              <TableCell>
+                                <div className="font-medium">{fee.label}</div>
+                                {def?.description && (
+                                  <div className="text-[10px] text-muted-foreground">{def.description}</div>
+                                )}
+                                {overridden && (
+                                  <Badge variant="outline" className="text-[9px] mt-0.5 h-3.5 px-1 gap-0.5 text-amber-600 border-amber-500/30">
+                                    <Sparkles className="size-2" /> Custom
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{def?.basis || "—"}</TableCell>
+                              <TableCell className="text-right tabular font-medium">
+                                {fmtMoney(fee.amount, form.sell_currency || "USD")}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow className="font-semibold bg-muted/20">
+                          <TableCell>Total Transfer Fees</TableCell>
+                          <TableCell />
+                          <TableCell className="text-right tabular">
+                            {fmtMoney(totalTransferFees, form.sell_currency || "USD")}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                    <div className="p-2 space-y-1.5 bg-muted/20 border-t border-border/40">
+                      {TRANSFER_FEES.map((fee) => {
+                        const overridden = transferFeeOverrides[fee.id] !== undefined;
+                        const current = transferFeeOverrides[fee.id] ?? fee.defaultValue;
+                        return (
+                          <div key={fee.id} className="grid grid-cols-12 gap-2 items-center">
+                            <div className="col-span-6 text-[11px] text-muted-foreground truncate">{fee.label}</div>
+                            <div className="col-span-4">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={current}
+                                onChange={(e) => applyTransferFeeOverride(fee.id, Number(e.target.value))}
+                                className="h-7 text-[11px] tabular"
+                              />
+                            </div>
+                            <div className="col-span-2 flex items-center gap-1">
+                              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                {fee.basis === "percent" ? "%" : (form.sell_currency || "USD")}
+                              </span>
+                              {overridden && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-1.5 text-[10px]"
+                                  onClick={() => {
+                                    const next = { ...transferFeeOverrides };
+                                    delete next[fee.id];
+                                    setTransferFeeOverrides(next);
+                                  }}
+                                >
+                                  Reset
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {Object.keys(transferFeeOverrides).length > 0 && (
+                        <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={resetTransferFeeOverrides}>
+                          Reset All
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  SWIFT, correspondent bank, beneficiary bank &amp; hidden FX-spread costs.
+                  Applies to every international payment — set <strong>×</strong> transfers per payment method.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+
+          {/* ─── Documentation Costs (B/L, Phyto, CoO, THC, …) ─── */}
+          <div className="md:col-span-2">
+            <Collapsible open={docsOpen} onOpenChange={setDocsOpen}>
+              <div className="flex items-center justify-between mb-1.5">
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 hover:bg-muted/50">
+                    <FileCheck className="size-3.5" />
+                    <span className="text-xs font-medium">Documentation Costs</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{selectedDocIds.length} docs</Badge>
+                    <ChevronDown className={`size-3.5 transition-transform ${docsOpen ? "rotate-180" : ""}`} />
+                  </Button>
+                </CollapsibleTrigger>
+                {documentationCosts.length > 0 && (
+                  <span className="text-xs text-muted-foreground tabular">
+                    Total: {fmtMoney(totalDocCosts, form.sell_currency || "USD")}
+                  </span>
+                )}
+              </div>
+              <CollapsibleContent>
+                <div className="border border-border/60 rounded-md overflow-hidden">
+                  {documentationCosts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-3 text-center">
+                      No documents selected. Toggle documents below to add.
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader className="bg-muted/40">
+                        <TableRow>
+                          <TableHead className="h-8 text-xs">Document</TableHead>
+                          <TableHead className="h-8 text-xs">Category</TableHead>
+                          <TableHead className="h-8 text-xs text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {documentationCosts.map((doc) => {
+                          const def = DOCUMENTATION_COSTS.find((d) => d.id === doc.id);
+                          const overridden = docValueOverrides[doc.id] !== undefined;
+                          return (
+                            <TableRow key={doc.id} className="text-xs">
+                              <TableCell>
+                                <div className="font-medium">{doc.label}</div>
+                                {def?.description && (
+                                  <div className="text-[10px] text-muted-foreground">{def.description}</div>
+                                )}
+                                {overridden && (
+                                  <Badge variant="outline" className="text-[9px] mt-0.5 h-3.5 px-1 gap-0.5 text-amber-600 border-amber-500/30">
+                                    <Sparkles className="size-2" /> Custom
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground capitalize">{def?.category || "—"}</TableCell>
+                              <TableCell className="text-right tabular font-medium">
+                                {fmtMoney(doc.amount, form.sell_currency || "USD")}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow className="font-semibold bg-muted/20">
+                          <TableCell>Total Documentation</TableCell>
+                          <TableCell />
+                          <TableCell className="text-right tabular">
+                            {fmtMoney(totalDocCosts, form.sell_currency || "USD")}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  )}
+                  {/* Document picker grid */}
+                  <div className="p-2 space-y-1 bg-muted/20 border-t border-border/40 max-h-72 overflow-y-auto custom-scroll">
+                    {DOCUMENTATION_COSTS.map((doc) => {
+                      const selected = selectedDocIds.includes(doc.id);
+                      const current = docValueOverrides[doc.id] ?? doc.defaultValue;
+                      return (
+                        <div
+                          key={doc.id}
+                          className={`grid grid-cols-12 gap-2 items-center p-1.5 rounded border ${selected ? "border-border/60 bg-background" : "border-dashed border-border/40 opacity-70"}`}
+                        >
+                          <div className="col-span-7 flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleDoc(doc.id)}
+                              className="mt-0.5 size-3.5"
+                            />
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-medium truncate">{doc.label}</div>
+                              <div className="text-[10px] text-muted-foreground truncate">{doc.description}</div>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <Badge variant="outline" className="text-[9px] h-3 px-1 capitalize">{doc.category}</Badge>
+                                <Badge variant="outline" className="text-[9px] h-3 px-1 font-mono">{doc.basis}</Badge>
+                                {doc.typicallyRequired && (
+                                  <Badge variant="outline" className="text-[9px] h-3 px-1 text-emerald-600 border-emerald-500/30">Typically required</Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-span-5 flex items-center gap-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={current}
+                              disabled={!selected}
+                              onChange={(e) => applyDocOverride(doc.id, Number(e.target.value))}
+                              className="h-7 text-[11px] tabular"
+                            />
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {form.sell_currency || "USD"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {Object.keys(docValueOverrides).length > 0 && (
+                      <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px] mt-1" onClick={resetDocOverrides}>
+                        Reset All to Defaults
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Based on DP World / ICC / World Bank trade facilitation data. THC scales with num containers.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+
           {/* Commission (live — based on current profit) */}
           <div className="md:col-span-2">
             <Separator className="my-1 mb-2" />
@@ -2002,6 +2371,33 @@ function CalcFormDialog({
                   <span className="text-muted-foreground">Gross Profit:</span>
                   <span className="font-mono">{fmtMoney(preview.margin, form.sell_currency || "USD")}</span>
                 </div>
+                {totalBankCosts > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Bank Costs:</span>
+                    <span className="font-mono">-{fmtMoney(totalBankCosts, form.sell_currency || "USD")}</span>
+                  </div>
+                )}
+                {totalTransferFees > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Transfer Fees:</span>
+                    <span className="font-mono">-{fmtMoney(totalTransferFees, form.sell_currency || "USD")}</span>
+                  </div>
+                )}
+                {totalDocCosts > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Documentation:</span>
+                    <span className="font-mono">-{fmtMoney(totalDocCosts, form.sell_currency || "USD")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-border/40 pt-1">
+                  <span className="text-muted-foreground">
+                    Profit before commission
+                    {commissionType === "percent_profit" && " (commission base)"}:
+                  </span>
+                  <span className={`font-mono ${profitBeforeCommission >= 0 ? "text-chart-1" : "text-destructive"}`}>
+                    {fmtMoney(profitBeforeCommission, form.sell_currency || "USD")}
+                  </span>
+                </div>
                 <div className="flex justify-between text-amber-600">
                   <span>
                     Commission
@@ -2013,10 +2409,6 @@ function CalcFormDialog({
                   </span>
                   <span className="font-mono">-{fmtMoney(commissionAmount, form.sell_currency || "USD")}</span>
                 </div>
-                <div className="flex justify-between text-amber-600">
-                  <span>Bank Costs:</span>
-                  <span className="font-mono">-{fmtMoney(totalBankCosts, form.sell_currency || "USD")}</span>
-                </div>
                 <div className="flex justify-between font-semibold border-t border-border/40 pt-1">
                   <span>Net Profit:</span>
                   <span className={`font-mono ${netProfit >= 0 ? "text-chart-1" : "text-destructive"}`}>
@@ -2026,6 +2418,32 @@ function CalcFormDialog({
                 <div className="flex justify-between text-muted-foreground text-[11px]">
                   <span>Net Margin:</span>
                   <span>{netMarginPct.toFixed(1)}%</span>
+                </div>
+
+                {/* ±10% variance row */}
+                <div className="grid grid-cols-3 gap-1.5 pt-1.5 mt-1 border-t border-border/40">
+                  <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-1.5 text-center">
+                    <div className="text-[10px] text-muted-foreground">Best Case (−10%)</div>
+                    <div className={`font-mono font-semibold text-[11px] ${bestCaseProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {fmtMoney(bestCaseProfit, form.sell_currency || "USD")}
+                    </div>
+                  </div>
+                  <div className="rounded border border-blue-500/30 bg-blue-500/5 p-1.5 text-center">
+                    <div className="text-[10px] text-muted-foreground">Expected</div>
+                    <div className={`font-mono font-semibold text-[11px] ${netProfit >= 0 ? "text-chart-1" : "text-destructive"}`}>
+                      {fmtMoney(netProfit, form.sell_currency || "USD")}
+                    </div>
+                  </div>
+                  <div className="rounded border border-orange-500/30 bg-orange-500/5 p-1.5 text-center">
+                    <div className="text-[10px] text-muted-foreground">Worst Case (+10%)</div>
+                    <div className={`font-mono font-semibold text-[11px] ${worstCaseProfit >= 0 ? "text-orange-600" : "text-red-600"}`}>
+                      {fmtMoney(worstCaseProfit, form.sell_currency || "USD")}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><Gauge className="size-2.5" /> Variance spread (±10% on bank + transfer + docs):</span>
+                  <span className="font-mono">±{fmtMoney(varianceSpread / 2, form.sell_currency || "USD")}</span>
                 </div>
               </div>
             </div>
@@ -2059,15 +2477,22 @@ function CalcFormDialog({
               landedCostInSellCurrency={preview.landedCostInSellCurrency}
               bankCosts={bankCosts}
               totalBankCosts={totalBankCosts}
+              transferFees={transferFees}
+              totalTransferFees={totalTransferFees}
+              documentationCosts={documentationCosts}
+              totalDocumentationCosts={totalDocCosts}
               commissionType={commissionType}
               commissionRate={commissionRate}
               commissionAmount={commissionAmount}
+              profitBeforeCommission={profitBeforeCommission}
               grossProfit={preview.margin}
               grossMarginPct={preview.marginPct}
               netProfit={netProfit}
               netMarginPct={netMarginPct}
               landedCostPerUnit={preview.landedCostPerUnit}
               profitPerUnit={profitPerUnit}
+              bestCaseProfit={bestCaseProfit}
+              worstCaseProfit={worstCaseProfit}
             />
           </div>
         </div>

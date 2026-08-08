@@ -8,6 +8,9 @@ import {
   Banknote,
   Percent,
   Calculator,
+  Send,
+  FileCheck,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -32,6 +35,20 @@ export interface BankCost {
   label: string;
   amount: number;
   basis: string;
+}
+
+export interface TransferFee {
+  id: string;
+  label: string;
+  amount: number;
+  description?: string;
+}
+
+export interface DocumentationCost {
+  id: string;
+  label: string;
+  amount: number;
+  description?: string;
 }
 
 export interface CostBreakdownPanelProps {
@@ -63,6 +80,14 @@ export interface CostBreakdownPanelProps {
   bankCosts: BankCost[];
   totalBankCosts: number;
 
+  // Transfer fees (in sell currency)
+  transferFees: TransferFee[];
+  totalTransferFees: number;
+
+  // Documentation costs (in sell currency)
+  documentationCosts: DocumentationCost[];
+  totalDocumentationCosts: number;
+
   // Commission (in sell currency)
   commissionType: string;
   commissionRate: number;
@@ -71,12 +96,17 @@ export interface CostBreakdownPanelProps {
   // Results
   grossProfit: number; // sellTotal - landedCostInSellCurrency
   grossMarginPct: number;
-  netProfit: number; // grossProfit - commissionAmount - totalBankCosts
+  profitBeforeCommission: number; // grossProfit - bank - transfer - docs
+  netProfit: number; // profitBeforeCommission - commissionAmount
   netMarginPct: number;
 
   // Per-unit
   landedCostPerUnit: number;
   profitPerUnit: number;
+
+  // Variance analysis (±10%)
+  bestCaseProfit: number;
+  worstCaseProfit: number;
 }
 
 function fmtMoney(n: number, currency = "USD"): string {
@@ -133,19 +163,29 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
     landedCostInSellCurrency,
     bankCosts,
     totalBankCosts,
+    transferFees,
+    totalTransferFees,
+    documentationCosts,
+    totalDocumentationCosts,
     commissionType,
     commissionRate,
     commissionAmount,
     grossProfit,
     grossMarginPct,
+    profitBeforeCommission,
     netProfit,
     netMarginPct,
     landedCostPerUnit,
     profitPerUnit,
+    bestCaseProfit,
+    worstCaseProfit,
   } = props;
 
   const hasCosts = costLines.length > 0;
   const hasBankCosts = bankCosts.length > 0 && totalBankCosts > 0;
+  const hasTransferFees = transferFees.length > 0 && totalTransferFees > 0;
+  const hasDocCosts =
+    documentationCosts.length > 0 && totalDocumentationCosts > 0;
   const hasCommission = commissionAmount > 0;
 
   // Color code the margin
@@ -168,6 +208,10 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
     if (!isFinite(n) || n <= 0) return 0;
     return Math.min(100, (n / total) * 100);
   };
+
+  // Variance spread for display
+  const varianceSpread = Math.abs(worstCaseProfit - bestCaseProfit);
+  const halfSpread = varianceSpread / 2;
 
   return (
     <Card className="sticky top-4">
@@ -309,6 +353,66 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
           </>
         )}
 
+        {/* TRANSFER FEES */}
+        {hasTransferFees && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+                <Send className="size-3" /> International Transfers
+              </div>
+              <div className="space-y-1">
+                {transferFees.map((tf) => (
+                  <div key={tf.id} className="flex justify-between text-xs">
+                    <span className="text-muted-foreground truncate pr-2" title={tf.description || tf.label}>
+                      {tf.label}:
+                    </span>
+                    <span className="font-mono">
+                      {fmtMoney(tf.amount, sellCurrency)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between font-medium pt-1 border-t">
+                  <span>Total Transfer Fees:</span>
+                  <span className="font-mono">
+                    {fmtMoney(totalTransferFees, sellCurrency)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* DOCUMENTATION COSTS */}
+        {hasDocCosts && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+                <FileCheck className="size-3" /> Documentation
+              </div>
+              <div className="space-y-1">
+                {documentationCosts.map((dc) => (
+                  <div key={dc.id} className="flex justify-between text-xs">
+                    <span className="text-muted-foreground truncate pr-2" title={dc.description || dc.label}>
+                      {dc.label}:
+                    </span>
+                    <span className="font-mono">
+                      {fmtMoney(dc.amount, sellCurrency)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between font-medium pt-1 border-t">
+                  <span>Total Documentation:</span>
+                  <span className="font-mono">
+                    {fmtMoney(totalDocumentationCosts, sellCurrency)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* COMMISSION */}
         {hasCommission && (
           <>
@@ -353,19 +457,57 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <span className={marginColor}>{fmtPct(grossMarginPct)}</span>
           </div>
 
+          {(hasBankCosts || hasTransferFees || hasDocCosts) && (
+            <div className="space-y-0.5">
+              {hasBankCosts && (
+                <div className="flex justify-between text-xs text-amber-600">
+                  <span>Bank Costs:</span>
+                  <span className="font-mono">
+                    -{fmtMoney(totalBankCosts, sellCurrency)}
+                  </span>
+                </div>
+              )}
+              {hasTransferFees && (
+                <div className="flex justify-between text-xs text-amber-600">
+                  <span>Transfer Fees:</span>
+                  <span className="font-mono">
+                    -{fmtMoney(totalTransferFees, sellCurrency)}
+                  </span>
+                </div>
+              )}
+              {hasDocCosts && (
+                <div className="flex justify-between text-xs text-amber-600">
+                  <span>Documentation:</span>
+                  <span className="font-mono">
+                    -{fmtMoney(totalDocumentationCosts, sellCurrency)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Profit before commission (the commission base) */}
+          {(hasBankCosts || hasTransferFees || hasDocCosts) && (
+            <div className="flex justify-between text-xs border-t pt-1">
+              <span className="text-muted-foreground">
+                Profit before commission{commissionType === "percent_profit" ? " (base)" : ""}:
+              </span>
+              <span
+                className={cn(
+                  "font-mono",
+                  profitBeforeCommission >= 0 ? "text-green-600" : "text-red-600",
+                )}
+              >
+                {fmtMoney(profitBeforeCommission, sellCurrency)}
+              </span>
+            </div>
+          )}
+
           {hasCommission && (
             <div className="flex justify-between text-xs text-amber-600">
               <span>Commission:</span>
               <span className="font-mono">
                 -{fmtMoney(commissionAmount, sellCurrency)}
-              </span>
-            </div>
-          )}
-          {hasBankCosts && (
-            <div className="flex justify-between text-xs text-amber-600">
-              <span>Bank Costs:</span>
-              <span className="font-mono">
-                -{fmtMoney(totalBankCosts, sellCurrency)}
               </span>
             </div>
           )}
@@ -404,6 +546,61 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
           </div>
         </div>
 
+        {/* VARIANCE ANALYSIS (±10%) */}
+        <Separator />
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+            <Gauge className="size-3" /> Scenario Analysis (±10%)
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Best/worst case based on ±10% variance in bank + transfer + documentation costs.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {/* Best case */}
+            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded p-2 text-center">
+              <div className="text-[10px] text-muted-foreground">Best Case</div>
+              <div
+                className={cn(
+                  "font-mono font-semibold text-xs",
+                  bestCaseProfit >= 0 ? "text-green-600" : "text-red-600",
+                )}
+              >
+                {fmtMoney(bestCaseProfit, sellCurrency)}
+              </div>
+            </div>
+            {/* Expected */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded p-2 text-center">
+              <div className="text-[10px] text-muted-foreground">Expected</div>
+              <div
+                className={cn(
+                  "font-mono font-semibold text-xs",
+                  netProfit >= 0 ? "text-chart-1" : "text-destructive",
+                )}
+              >
+                {fmtMoney(netProfit, sellCurrency)}
+              </div>
+            </div>
+            {/* Worst case */}
+            <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded p-2 text-center">
+              <div className="text-[10px] text-muted-foreground">Worst Case</div>
+              <div
+                className={cn(
+                  "font-mono font-semibold text-xs",
+                  worstCaseProfit < 0 ? "text-red-600" : "text-orange-600",
+                )}
+              >
+                {fmtMoney(worstCaseProfit, sellCurrency)}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground pt-1">
+            <span>Variance spread:</span>
+            <span className="font-mono">
+              ±{fmtMoney(halfSpread, sellCurrency)}
+            </span>
+          </div>
+        </div>
+
         {/* Cost structure visualization */}
         {sellTotal > 0 && (
           <>
@@ -433,6 +630,22 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                     title={`Bank: ${fmtMoney(totalBankCosts, sellCurrency)}`}
                   />
                 )}
+                {/* Transfer fees */}
+                {hasTransferFees && (
+                  <div
+                    className="bg-cyan-500"
+                    style={{ width: `${pctOf(totalTransferFees)}%` }}
+                    title={`Transfers: ${fmtMoney(totalTransferFees, sellCurrency)}`}
+                  />
+                )}
+                {/* Documentation */}
+                {hasDocCosts && (
+                  <div
+                    className="bg-indigo-500"
+                    style={{ width: `${pctOf(totalDocumentationCosts)}%` }}
+                    title={`Docs: ${fmtMoney(totalDocumentationCosts, sellCurrency)}`}
+                  />
+                )}
                 {/* Commission */}
                 {hasCommission && (
                   <div
@@ -458,6 +671,16 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                 {hasBankCosts && (
                   <span className="flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-purple-500" /> Bank
+                  </span>
+                )}
+                {hasTransferFees && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-cyan-500" /> Transfers
+                  </span>
+                )}
+                {hasDocCosts && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" /> Docs
                   </span>
                 )}
                 {hasCommission && (
