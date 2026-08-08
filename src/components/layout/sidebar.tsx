@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Users, Package, Handshake, FileText, Inbox,
   FolderOpen, ListChecks, ScrollText, Settings, ShieldCheck, Key,
   Webhook, Lock, Mail, Receipt, FileSignature, Boxes,
-  ChevronLeft, ChevronRight, Building2, BookOpen, Calculator,
+  ChevronLeft, ChevronRight, Building2, Calculator,
   ToggleRight, LayoutGrid, Plug, DollarSign, BookMarked, Calendar,
   StickyNote, Briefcase, Settings2, TrendingUp, Truck,
 } from "lucide-react";
@@ -65,7 +65,9 @@ const SECTIONS: NavSection[] = [
   {
     i18nKey: "trade",
     items: [
-      { key: "product-catalog", i18nKey: "product-catalog", i18nSection: "trade", icon: BookOpen, permission: "product-catalog.read", featureFlag: "module_trade" },
+      // Product Catalog has been merged into Products — the legacy
+      // "product-catalog" view (product-catalog-view.tsx) still exists for
+      // old bookmarks but is no longer surfaced in the sidebar.
       { key: "supplier-offers", i18nKey: "supplier-offers", i18nSection: "trade", icon: Inbox, permission: "supplier-offers.read", featureFlag: "module_trade" },
       { key: "trade-calculator", i18nKey: "trade-calculator", i18nSection: "trade", icon: Calculator, permission: "trade-calculator.read", featureFlag: "module_trade" },
     ],

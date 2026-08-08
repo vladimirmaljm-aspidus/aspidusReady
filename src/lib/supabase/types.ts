@@ -122,6 +122,13 @@ export interface Product {
   tags?: string[] | null;
   /** When true, this product is exposed to portal clients under Catalog. */
   show_in_catalog?: boolean;
+  /**
+   * ISO alpha-2 country of origin. NOTE: the `products` table does NOT have an
+   * `origin_country` column yet — this field is populated from
+   * `attributes.origin_country` by `productToCatalogShape` until the column is
+   * added via migration. Treat as read-only / best-effort.
+   */
+  origin_country?: string | null;
   created_at: string;
   updated_at: string;
 }

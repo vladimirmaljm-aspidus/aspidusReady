@@ -58,7 +58,14 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    body.tenant_id = tid!;
+    // Super-admins without ?tenant_id= resolve to null — fall back to the
+    // product's existing tenant_id (e.g. when toggling show_in_catalog from
+    // the Products table). If neither is present, refuse rather than
+    // letting Postgres hit the NOT NULL constraint.
+    body.tenant_id = tid || body.tenant_id;
+    if (!body.tenant_id) {
+      return NextResponse.json({ error: "tenant_id is required." }, { status: 400 });
+    }
     if (!body.id) {
       const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
       const { enforceQuota } = await import("@/lib/api/plan-limits");
@@ -87,6 +94,8 @@ export async function POST(req: NextRequest) {
         }
       } catch (e) { console.warn("[products.upsert] dupe-check failed (allowing):", e); }
     }
+    // Strip non-DB fields that are used only for route logic
+    delete body.force;
     const created = await auth.store.upsertProduct(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "product.update" : "product.create", "product", created.id, { sku: created.sku, name: created.name });
     return NextResponse.json(created);

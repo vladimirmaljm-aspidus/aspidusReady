@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/pagination";
 import {
   Plus, Search, Package, Pencil, Trash2, Eye, AlertTriangle, CheckCircle2,
-  ChevronDown, ChevronRight, Wand2, Download,
+  ChevronDown, ChevronRight, Wand2, Download, Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -133,11 +133,23 @@ export function ProductsView() {
       const r = await fetch(api(`/api/products`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...p, show_in_catalog: next, force: true }),
+        body: JSON.stringify({
+          ...p,
+          show_in_catalog: next,
+          force: true,
+          // Ensure tenant_id is always present — super-admins browsing without
+          // an active tenant context would otherwise send tenant_id=null and
+          // the POST would 400 on the NOT NULL column.
+          tenant_id: p.tenant_id,
+        }),
       });
-      if (!r.ok) throw new Error("Update failed");
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "Update failed");
+      }
       toast.success(next ? "Now visible in portal catalog." : "Hidden from portal catalog.");
       qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["portal-catalog"] });
     } catch (e: any) {
       toast.error(e.message || "Update failed.");
     }
@@ -159,6 +171,26 @@ export function ProductsView() {
           </div>
         }
       />
+
+      {/* Explanatory banner — Products is now the single source of truth.
+          Product Catalog (the old spec-sheet table) has been merged in. */}
+      <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
+        <div className="flex items-start gap-3">
+          <Info className="size-5 text-primary shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold">Products — Your Complete Inventory</h3>
+            <p className="text-sm text-muted-foreground">
+              This is your single source for all products. Each product contains full trade data:
+              HS codes, specifications, pricing, packaging, and logistics.
+            </p>
+            <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
+              <span>📋 <strong>Active products</strong> are available for creating offers, invoices, and proformas</span>
+              <span>👁️ <strong>Show in Portal</strong> toggle controls which products your clients can see on the portal catalog</span>
+              <span>📦 <strong>Stock</strong> tracks your current inventory</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <Card className="mb-4 border-border/60 shadow-soft rounded-xl">
         <CardContent className="p-3 flex flex-col md:flex-row gap-2">
@@ -206,7 +238,9 @@ export function ProductsView() {
                       <TableHead className="text-right">Price</TableHead>
                       <TableHead className="text-right">Stock</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-center">In Catalog</TableHead>
+                      <TableHead className="text-center" title="When enabled, this product appears in the portal catalog that your clients can browse">
+                        Portal
+                      </TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>

@@ -9,12 +9,12 @@ export const runtime = "nodejs";
 
 /**
  * Portal catalog = admin-curated view of what the tenant offers to clients.
- * Union of two sources:
- *   1) product_catalog (spec-sheet entries: HS code, specifications, images…)
- *   2) products where show_in_catalog=true AND active=true — admin opts a
- *      given inventory SKU in one product at a time.
- * Dedup key: SKU (case-insensitive) if present, else lower-case name.
- * A catalog entry wins on collision because it carries richer metadata.
+ *
+ * Single source of truth: the `products` table where `show_in_catalog=true`
+ * AND `active=true`. Each product carries its full trade metadata (HS code,
+ * brand, coa_params, detailed_spec, logistics, shelf_life, …) so a separate
+ * product_catalog table is no longer needed.
+ *
  * No cost / price / margin is exposed — redactListForPortal strips it.
  */
 function productToCatalogShape(p: Product): ProductCatalogEntry {
@@ -26,8 +26,18 @@ function productToCatalogShape(p: Product): ProductCatalogEntry {
     hs_code: p.hs_code ?? null,
     description: p.description,
     base_unit: p.unit || "pc",
+    // coa_params on the Product replaces the old `specifications` field on
+    // ProductCatalogEntry — they represent the same key/value spec data.
     specifications: null,
-    origin_country: null,
+    // The `products` table doesn't have an `origin_country` column yet —
+    // fall back to the workaround where origin is stored inside the JSONB
+    // `attributes` field. Treated as best-effort.
+    origin_country:
+      (p.origin_country as string | null | undefined) ??
+      (p.attributes && "origin_country" in p.attributes
+        ? (p.attributes.origin_country as string | null)
+        : null) ??
+      null,
     images: p.image_url ? [p.image_url] : null,
     active: p.active,
     brand: p.brand ?? null,
@@ -53,26 +63,13 @@ export async function GET() {
   if (kycBlock) return kycBlock;
 
   const store = await getStore();
-  const [catalogRes, productsRes] = await Promise.all([
-    store.listProductCatalog(access.tenant_id, {}),
-    store.listProducts(access.tenant_id, { limit: 1000 }),
-  ]);
+  // Pull a generous slice of products for this tenant, then filter to the
+  // admin-curated subset. (Portal clients only see products the tenant has
+  // explicitly opted in via `show_in_catalog=true` AND `active=true`.)
+  const productsRes = await store.listProducts(access.tenant_id, { limit: 1000 });
+  const catalogItems: ProductCatalogEntry[] = productsRes.items
+    .filter((p) => p.show_in_catalog && p.active)
+    .map((p) => productToCatalogShape(p));
 
-  const merged: ProductCatalogEntry[] = [...catalogRes.items];
-  const seen = new Set<string>();
-  for (const c of catalogRes.items) {
-    const key = (c.sku && c.sku.trim()) ? `sku:${c.sku.toLowerCase()}` : `name:${c.name.toLowerCase()}`;
-    seen.add(key);
-  }
-  for (const p of productsRes.items) {
-    if (!p.active) continue;
-    if (!p.show_in_catalog) continue; // admin opt-in per product
-    if (p.tenant_id && p.tenant_id !== access.tenant_id) continue;
-    const key = (p.sku && p.sku.trim()) ? `sku:${p.sku.toLowerCase()}` : `name:${p.name.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(productToCatalogShape(p));
-  }
-
-  return NextResponse.json(redactListForPortal({ items: merged, total: merged.length }));
+  return NextResponse.json(redactListForPortal({ items: catalogItems, total: catalogItems.length }));
 }
