@@ -28,25 +28,107 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import {
+  Collapsible, CollapsibleTrigger, CollapsibleContent,
+} from "@/components/ui/collapsible";
+import {
   Plus, Pencil, Trash2, Eye, Calculator, X, TrendingUp, TrendingDown,
   DollarSign, Ship, Container, ArrowLeftRight, Sparkles, Loader2, Building2,
-  MapPin, Lightbulb, FileText,
+  MapPin, Lightbulb, FileText, ChevronDown, Landmark, Percent, RefreshCw,
+  Truck, Plane, Train, Anchor,
 } from "lucide-react";
 import { PortAutocomplete } from "@/components/ui/port-autocomplete";
 import { UnitSelect } from "@/components/common/unit-select";
+import { ProductPicker } from "@/components/common/product-picker";
+import { PartnerPicker } from "@/components/common/partner-picker";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtDate, fmtNumber } from "@/lib/utils/format";
 import {
   TradeCalculation, TradeCostLine, SupplierOffer, Partner,
-  Product,
+  Product, CommissionAgent,
 } from "@/lib/supabase/types";
 import {
   TRADE_COST_TYPES, INCOTERMS, CURRENCIES, UNITS_OF_MEASURE,
-  CONTAINER_TYPES, TRANSPORT_MODES,
+  CONTAINER_TYPES, TRANSPORT_MODES, PAYMENT_TERMS_LOCAL,
 } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import {
+  calculateBankCosts, BANK_COSTS, BankCostResult,
+} from "@/lib/data/bank-costs";
+import { getExchangeRate } from "@/lib/utils/exchange-rates";
+import {
+  convertUnit, describeConversion, canConvert,
+} from "@/lib/utils/unit-conversion";
+import {
+  CostBreakdownPanel,
+} from "./trade-cost-breakdown";
+
+// ─── Enhanced transport modes ───
+// Extends the base TRANSPORT_MODES (in reference.ts) with a Bulk Vessel variant
+// for sea freight and richer hints. Codes stay backward-compatible with the
+// existing 5 codes (SEA/AIR/ROAD/RAIL/MULTIMODAL); only SEA_BULK is new, so
+// saved calculations continue to render correctly.
+const ENHANCED_TRANSPORT_MODES: { code: string; name: string; hint: string; icon: typeof Ship }[] = [
+  { code: "SEA", name: "Sea Freight — Container", hint: "Containerized (20ft / 40ft / 40HC)", icon: Ship },
+  { code: "SEA_BULK", name: "Sea Freight — Bulk Vessel", hint: "Whole-ship charter, per-MT freight rate", icon: Anchor },
+  { code: "ROAD", name: "Road Transport", hint: "Truck(s) — standard, reefer, tanker, flatbed", icon: Truck },
+  { code: "RAIL", name: "Rail Freight", hint: "Wagons / containers on flatcars", icon: Train },
+  { code: "AIR", name: "Air Freight", hint: "Air Waybill (AWB) — chargeable weight", icon: Plane },
+  { code: "MULTIMODAL", name: "Multimodal", hint: "Combined sea + road + rail", icon: ArrowLeftRight },
+];
+
+// Truck types for ROAD transport mode.
+const TRUCK_TYPES: { code: string; name: string }[] = [
+  { code: "standard", name: "Standard Dry Van" },
+  { code: "refrigerated", name: "Refrigerated (Reefer)" },
+  { code: "tanker", name: "Tanker" },
+  { code: "flatbed", name: "Flatbed" },
+  { code: "lowboy", name: "Lowboy / Heavy Haul" },
+];
+
+/**
+ * Map the UNITS_OF_MEASURE codes (uppercase: MT, KG, G, LT, M3, …) to the
+ * keys used by src/lib/utils/unit-conversion.ts (which mixes cases — MT, kg,
+ * L, m3, …). Returns the input as-is when no mapping is known, so unknown
+ * units still flow through `canConvert` / `convertUnit` unchanged.
+ */
+function normalizeUnitForConversion(u: string): string {
+  const map: Record<string, string> = {
+    KG: "kg",
+    G: "g",
+    LT: "L",
+    M3: "m3",
+    BBL: "bbl",
+    GAL: "gal",
+    M: "m",
+    M2: "m2",
+    // MT, PCS, CTN, PAL, BAG, DRM, BOX, SET — already match or are non-convertible
+  };
+  return map[u] || u;
+}
+
+/** Resolve a friendly icon for a transport_mode code. */
+function transportModeIcon(code: string | null | undefined) {
+  return ENHANCED_TRANSPORT_MODES.find((t) => t.code === code)?.icon || Ship;
+}
+
+// ─── Commission calculator types ───
+// Local UI state — kept separate from TradeCalculation (which has no
+// payment_terms / commission fields). The bank costs + commission are
+// shown live in the preview and can optionally be added as cost lines.
+type CommissionTypeLocal =
+  | "percent_profit"
+  | "percent_revenue"
+  | "fixed_per_unit"
+  | "fixed_total";
+
+const COMMISSION_TYPE_OPTIONS: { value: CommissionTypeLocal; label: string }[] = [
+  { value: "percent_profit", label: "% of Profit" },
+  { value: "percent_revenue", label: "% of Revenue" },
+  { value: "fixed_per_unit", label: "Fixed per Unit" },
+  { value: "fixed_total", label: "Fixed Total" },
+];
 
 // Cost types available for the user to add (BUY_PRICE and SELL_PRICE are implicit
 // — derived from buy_price_per_unit / sell_price_per_unit).
@@ -135,7 +217,16 @@ const INCOTERM_COST_SUGGESTIONS: Record<string, Array<{ type: string; label: str
 };
 
 // Client-side mirror of the backend computation in /api/trade-calculator/route.ts.
-function computeTotals(form: Partial<TradeCalculation>) {
+// Extended with optional bank costs (sell currency) + commission so the live
+// preview can show net profit (gross − bank − commission). The backend still
+// computes gross totals only — bank costs/commission are preview-only here.
+function computeTotals(
+  form: Partial<TradeCalculation>,
+  options?: {
+    bankCostsTotal?: number; // already in sell currency
+    commissionAmount?: number; // already in sell currency
+  },
+) {
   const qty = form.quantity || 0;
   const numContainers = form.num_containers || 1;
   const buyTotal = (form.buy_price_per_unit || 0) * qty;
@@ -163,17 +254,35 @@ function computeTotals(form: Partial<TradeCalculation>) {
 
   const sellTotal = (form.sell_price_per_unit || 0) * qty;
   // Convert landed cost (buy currency) → sell currency for the margin math.
+  const buyTotalInSellCurrency = buyTotal * effectiveFx;
   const landedCostInSellCurrency = landedCost * effectiveFx;
+  const totalCosts = computedLines.reduce((s, l) => s + (l.amount || 0), 0);
+  const totalCostsInSellCurrency = totalCosts * effectiveFx;
+  // Gross margin = sell revenue − landed cost (in sell currency).
   const margin = sellTotal - landedCostInSellCurrency;
   const marginPct = sellTotal > 0 ? (margin / sellTotal) * 100 : 0;
+  const landedCostPerUnit = qty > 0 ? landedCostInSellCurrency / qty : 0;
+  // Net profit = gross margin − bank costs − commission (all in sell currency).
+  const bankCostsTotal = options?.bankCostsTotal || 0;
+  const commissionAmount = options?.commissionAmount || 0;
+  const netProfit = margin - bankCostsTotal - commissionAmount;
+  const netMarginPct = sellTotal > 0 ? (netProfit / sellTotal) * 100 : 0;
   return {
     buyTotal: Math.round(buyTotal * 100) / 100,
+    buyTotalInSellCurrency: Math.round(buyTotalInSellCurrency * 100) / 100,
     landedCost: Math.round(landedCost * 100) / 100,
     landedCostInSellCurrency: Math.round(landedCostInSellCurrency * 100) / 100,
+    landedCostPerUnit: Math.round(landedCostPerUnit * 100) / 100,
     sellTotal: Math.round(sellTotal * 100) / 100,
     margin: Math.round(margin * 100) / 100,
     marginPct: Math.round(marginPct * 100) / 100,
+    totalCosts: Math.round(totalCosts * 100) / 100,
+    totalCostsInSellCurrency: Math.round(totalCostsInSellCurrency * 100) / 100,
     computedLines,
+    bankCostsTotal: Math.round(bankCostsTotal * 100) / 100,
+    commissionAmount: Math.round(commissionAmount * 100) / 100,
+    netProfit: Math.round(netProfit * 100) / 100,
+    netMarginPct: Math.round(netMarginPct * 100) / 100,
   };
 }
 
@@ -654,11 +763,48 @@ function CalcFormDialog({
 
   const [form, setForm] = useState<Partial<TradeCalculation>>({});
   const [lines, setLines] = useState<TradeCostLine[]>([]);
+  const [paymentTerms, setPaymentTerms] = useState<string>("");
+  const [bankCostOverrides, setBankCostOverrides] = useState<Record<string, number>>({});
+  const [showBankOverrides, setShowBankOverrides] = useState(false);
+  const [bankCostsOpen, setBankCostsOpen] = useState(true);
+  const [commissionAgentId, setCommissionAgentId] = useState<string | null>(null);
+  const [commissionType, setCommissionType] =
+    useState<CommissionTypeLocal>("percent_profit");
+  const [commissionRate, setCommissionRate] = useState<number>(0);
+  const [fetchingRate, setFetchingRate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [supplierContext, setSupplierContext] = useState<PartnerContext | null>(null);
   const [loadingSupplier, setLoadingSupplier] = useState(false);
   const [productContext, setProductContext] = useState<ProductContext | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(false);
+  // Transport-mode-specific extras (vessel capacity, truck type, …) — kept
+  // in local UI state because the TradeCalculation schema has no columns for
+  // them. They're advisory: the user can turn them into a FREIGHT cost line
+  // via the "Add cost line" button. The persisted fields (loading_port,
+  // delivery_port, container_type, num_containers) ARE saved.
+  const [transportExtras, setTransportExtras] = useState<{
+    vessel_capacity_mt?: number;
+    freight_rate_per_mt?: number;
+    truck_type?: string;
+    num_trucks?: number;
+    air_chargeable_weight_kg?: number;
+    num_wagons?: number;
+  }>({});
+  // Last unit-conversion description — shown as a hint below the unit field
+  // so the user sees the auto-applied ratio (e.g. "1 MT = 1,000 kg").
+  const [conversionHint, setConversionHint] = useState<string | null>(null);
+
+  // ─── Commission agents (loaded for the commission dropdown) ───
+  const commissionAgentsQuery = useQuery({
+    queryKey: ["commission-agents", tenantKey, "trade-calc"],
+    queryFn: async () => {
+      const r = await fetch(api("/api/commission-agents?limit=200"));
+      if (!r.ok) throw new Error("Failed to load commission agents");
+      return r.json() as Promise<{ items: CommissionAgent[]; total: number }>;
+    },
+    enabled: open,
+  });
+  const commissionAgents = commissionAgentsQuery.data?.items || [];
 
   useEffect(() => {
     if (open) {
@@ -679,10 +825,75 @@ function CalcFormDialog({
       );
       setForm(baseForm);
       setLines(editableLines);
+      setPaymentTerms("");
+      setBankCostOverrides({});
+      setShowBankOverrides(false);
+      setCommissionAgentId(null);
+      setCommissionType("percent_profit");
+      setCommissionRate(0);
       setSupplierContext(null);
       setProductContext(null);
+      setTransportExtras({});
+      setConversionHint(null);
     }
   }, [open, calc]);
+
+  // ─── Auto-fetch live exchange rate when currencies differ ───
+  // Fires when buy/sell currency changes (or when dialog opens with
+  // differing currencies). User can still override the rate manually.
+  useEffect(() => {
+    if (!open) return;
+    const from = form.buy_currency;
+    const to = form.sell_currency;
+    if (!from || !to || from === to) return;
+    let cancelled = false;
+    setFetchingRate(true);
+    getExchangeRate(from, to)
+      .then((rate) => {
+        if (cancelled || rate === null) return;
+        // Only auto-fill if user hasn't typed a custom rate already —
+        // we still update to keep rate fresh on currency change.
+        set("exchange_rate", Math.round(rate * 10000) / 10000);
+        toast.info(
+          `Auto-fetched exchange rate: 1 ${from} = ${rate.toFixed(4)} ${to}`,
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setFetchingRate(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, form.buy_currency, form.sell_currency]);
+
+  // When commission agent is selected, auto-fill commission type + rate
+  // from the agent's defaults.
+  useEffect(() => {
+    if (!commissionAgentId) return;
+    const agent = commissionAgents.find((a) => a.id === commissionAgentId);
+    if (!agent) return;
+    // Map the agent's commission_type (CommissionType) to our local UI type.
+    switch (agent.commission_type) {
+      case "profit_percent":
+        setCommissionType("percent_profit");
+        setCommissionRate(agent.commission_rate || 0);
+        break;
+      case "revenue_percent":
+        setCommissionType("percent_revenue");
+        setCommissionRate(agent.commission_rate || 0);
+        break;
+      case "per_unit":
+        setCommissionType("fixed_per_unit");
+        setCommissionRate(agent.commission_per_unit || 0);
+        break;
+      case "fixed":
+        setCommissionType("fixed_total");
+        setCommissionRate(agent.commission_rate || 0);
+        break;
+      case "custom":
+        // Leave current type as-is — user can pick.
+        break;
+    }
+  }, [commissionAgentId, commissionAgents]);
 
   function set<K extends keyof TradeCalculation>(k: K, v: TradeCalculation[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -693,6 +904,7 @@ function CalcFormDialog({
     ? offers.filter((o) => o.product_id === form.product_id)
     : offers;
   const selectedSupplier = form.supplier_id ? partners.find((p) => p.id === form.supplier_id) : undefined;
+  const selectedBuyer = form.buyer_id ? partners.find((p) => p.id === form.buyer_id) : undefined;
   // Show all partners in both dropdowns — the partner.type field is advisory
   // (and can be localized, e.g. "Kupac" = buyer in Serbian), so filtering by
   // type would exclude valid partners. Let the user pick any partner as
@@ -801,6 +1013,98 @@ function CalcFormDialog({
     });
   }
 
+  // ─── Auto weight conversion (kg ↔ MT ↔ lb ↔ …) ───
+  // When the user changes the quantity unit, we auto-convert BOTH the
+  // quantity AND the buy price per unit so the total buy cost (qty × price)
+  // stays invariant. We use `convertUnit` (works correctly for quantity) and
+  // compute price_per_newUnit = price_per_oldUnit / convertUnit(1, old, new).
+  // The ratio is shown as a hint below the unit dropdown.
+  function handleUnitChange(newUnit: string) {
+    const oldUnit = form.unit || "MT";
+    if (oldUnit === newUnit) return;
+
+    const normOld = normalizeUnitForConversion(oldUnit);
+    const normNew = normalizeUnitForConversion(newUnit);
+
+    if (!canConvert(normOld, normNew)) {
+      // Different categories (e.g. weight → volume) — just change unit,
+      // leave qty & price alone so the user can enter them manually.
+      set("unit", newUnit);
+      setConversionHint(null);
+      return;
+    }
+
+    const oldQty = form.quantity || 0;
+    const oldPrice = form.buy_price_per_unit || 0;
+    const newQty = convertUnit(oldQty, normOld, normNew);
+    const factor = convertUnit(1, normOld, normNew);
+    // Price-per-newUnit = price-per-oldUnit / (1 oldUnit in newUnits).
+    const newPrice = factor != null && factor !== 0
+      ? oldPrice / factor
+      : null;
+
+    setForm((f) => ({
+      ...f,
+      unit: newUnit,
+      quantity: newQty != null ? Math.round(newQty * 1000) / 1000 : f.quantity,
+      buy_price_per_unit: newPrice != null
+        ? Math.round(newPrice * 10000) / 10000
+        : f.buy_price_per_unit,
+    }));
+
+    const desc = describeConversion(normOld, normNew);
+    setConversionHint(desc);
+    if (desc && newQty != null) {
+      toast.info(`Unit converted: ${desc}`, {
+        description: `Quantity & buy price auto-converted (${oldUnit} → ${newUnit}).`,
+      });
+    }
+  }
+
+  // ─── Incoterm-based loading / delivery location auto-suggest ───
+  // EXW  → loading at supplier's factory address (use Road Transport).
+  // FOB/FAS/FCA → loading at port (clear address, switch to sea container).
+  // CIF/CFR/CPT/CIP → both loading & delivery ports; sea container default.
+  // DAP/DDP/DPU → delivery at buyer's address (use Multimodal).
+  function handleIncotermChange(incoterm: string) {
+    set("buy_incoterm", incoterm);
+
+    if (incoterm === "EXW") {
+      // Loading at supplier's address (factory / warehouse).
+      if (selectedSupplier) {
+        const addr = [
+          selectedSupplier.address_line,
+          selectedSupplier.city,
+          selectedSupplier.country,
+        ].filter(Boolean).join(", ");
+        if (addr) set("loading_port", addr);
+      }
+      set("transport_mode", "ROAD");
+    } else if (["FOB", "FAS", "FCA"].includes(incoterm)) {
+      // Loading at port — clear any pre-filled address; user picks a port.
+      set("loading_port", "");
+      set("transport_mode", "SEA");
+    } else if (["CIF", "CFR", "CPT", "CIP"].includes(incoterm)) {
+      // Both loading port + delivery port — sea container default.
+      set("transport_mode", "SEA");
+    } else if (["DAP", "DDP", "DPU"].includes(incoterm)) {
+      // Delivery at buyer's address.
+      if (selectedBuyer) {
+        const addr = [
+          selectedBuyer.address_line,
+          selectedBuyer.city,
+          selectedBuyer.country,
+        ].filter(Boolean).join(", ");
+        if (addr) set("delivery_port", addr);
+      }
+      set("transport_mode", "MULTIMODAL");
+    }
+
+    toast.info(`Incoterm set to ${incoterm}`, {
+      description: "Loading & delivery locations auto-suggested based on incoterm.",
+    });
+  }
+
   function updateLine(idx: number, patch: Partial<TradeCostLine>) {
     setLines((arr) => arr.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   }
@@ -870,8 +1174,67 @@ function CalcFormDialog({
     }
   }
 
-  // Live preview computation
-  const preview = useMemo(() => computeTotals({ ...form, cost_lines: lines }), [form, lines]);
+  // ─── Bank costs / trade finance helpers ───
+  // Live bank-cost calculation — driven by the selected payment method and
+  // the deal's sell-side total. The list of applicable cost items is sourced
+  // from src/lib/data/bank-costs.ts (ICC Banking Commission averages).
+  // Users can override individual rates via the "Edit Rates" dialog.
+  const applicableBankCostItems = useMemo(
+    () => (paymentTerms ? BANK_COSTS.filter((c) => c.applicablePaymentMethods.includes(paymentTerms)) : []),
+    [paymentTerms],
+  );
+
+  const bankCosts: BankCostResult[] = useMemo(() => {
+    if (!paymentTerms) return [];
+    const txValue = (form.sell_price_per_unit || 0) * (form.quantity || 0);
+    if (txValue === 0) return [];
+    return calculateBankCosts(paymentTerms, txValue, bankCostOverrides);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentTerms, form.sell_price_per_unit, form.quantity, bankCostOverrides]);
+
+  const totalBankCosts = useMemo(
+    () => bankCosts.reduce((s, b) => s + (b.amount || 0), 0),
+    [bankCosts],
+  );
+
+  // Live preview computation (gross — no commission/bank costs folded in,
+  // so we can derive commission from gross profit before computing net).
+  const preview = useMemo(
+    () => computeTotals({ ...form, cost_lines: lines }),
+    [form, lines],
+  );
+
+  // Commission — calculated live based on the selected type & current preview.
+  const commissionAmount = useMemo(() => {
+    const rate = Number(commissionRate) || 0;
+    const qty = form.quantity || 0;
+    switch (commissionType) {
+      case "percent_profit":
+        return preview.margin > 0 ? (preview.margin * rate) / 100 : 0;
+      case "percent_revenue":
+        return (preview.sellTotal * rate) / 100;
+      case "fixed_per_unit":
+        return rate * qty;
+      case "fixed_total":
+        return rate;
+      default:
+        return 0;
+    }
+  }, [commissionType, commissionRate, preview, form.quantity]);
+
+  // Net profit = gross profit − bank costs − commission (sell currency).
+  const netProfit = preview.margin - totalBankCosts - commissionAmount;
+  const netMarginPct =
+    preview.sellTotal > 0 ? (netProfit / preview.sellTotal) * 100 : 0;
+  const qtyForUnit = form.quantity || 0;
+  const profitPerUnit = qtyForUnit > 0 ? netProfit / qtyForUnit : 0;
+
+  function applyBankCostOverrides(id: string, value: number) {
+    setBankCostOverrides((prev) => ({ ...prev, [id]: value }));
+  }
+  function resetBankCostOverrides() {
+    setBankCostOverrides({});
+  }
 
   async function save() {
     if (!form.name) { toast.error("Name is required."); return; }
@@ -910,7 +1273,9 @@ function CalcFormDialog({
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 py-2">
+          <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="md:col-span-2 space-y-1.5">
             <Label>Name *</Label>
             <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Sugar IC45 — Brazil → Montenegro (CIF)" />
@@ -929,18 +1294,12 @@ function CalcFormDialog({
                 </Badge>
               )}
             </Label>
-            <Select
-              value={form.product_id || "__none__"}
-              onValueChange={(v) => selectProduct(v === "__none__" ? null : v)}
-            >
-              <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value="__none__">No product</SelectItem>
-                {catalog.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ProductPicker
+              value={form.product_id || ""}
+              onSelect={(p) => selectProduct(p?.id || null)}
+              placeholder="Search products…"
+              className="h-9"
+            />
           </div>
 
           {/* Product context panel */}
@@ -1006,23 +1365,17 @@ function CalcFormDialog({
                 </Badge>
               )}
             </Label>
-            <Select
-              value={form.supplier_id || "__none__"}
-              onValueChange={(v) => {
-                const sid = v === "__none__" ? null : v;
-                set("supplier_id", sid as string | null);
+            <PartnerPicker
+              value={form.supplier_id || ""}
+              filterType="supplier"
+              onSelect={(p) => {
+                const sid = p?.id || null;
+                set("supplier_id", sid);
                 if (sid) fetchSupplierContext(sid);
                 else setSupplierContext(null);
               }}
-            >
-              <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value="__none__">No supplier</SelectItem>
-                {supplierPartners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Search suppliers…"
+            />
           </div>
 
           {/* Supplier context panel */}
@@ -1070,18 +1423,12 @@ function CalcFormDialog({
 
           <div className="space-y-1.5">
             <Label>Buyer</Label>
-            <Select
-              value={form.buyer_id || "__none__"}
-              onValueChange={(v) => set("buyer_id", v === "__none__" ? null : v)}
-            >
-              <SelectTrigger><SelectValue placeholder="Select buyer" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value="__none__">No buyer</SelectItem>
-                {buyerPartners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PartnerPicker
+              value={form.buyer_id || ""}
+              filterType="buyer"
+              onSelect={(p) => set("buyer_id", p?.id || null)}
+              placeholder="Search buyers…"
+            />
           </div>
 
           <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Quantity & Transport</p></div>
@@ -1090,41 +1437,164 @@ function CalcFormDialog({
             <Input type="number" min={0} value={form.quantity ?? 0} onChange={(e) => set("quantity", Number(e.target.value))} className="tabular" />
           </div>
           <div className="space-y-1.5">
-            <Label>Unit</Label>
+            <Label className="flex items-center gap-1.5">
+              Unit
+              {conversionHint && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5 text-amber-600 border-amber-500/30">
+                  <ArrowLeftRight className="size-2.5" /> Auto-converted
+                </Badge>
+              )}
+            </Label>
             <UnitSelect
               value={form.unit || "MT"}
-              onChange={(v) => set("unit", v)}
+              onChange={handleUnitChange}
               className="w-full"
             />
+            {conversionHint && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <ArrowLeftRight className="size-3 shrink-0" />
+                <span>{conversionHint}</span>
+              </p>
+            )}
           </div>
-          <div className="space-y-1.5">
-            <Label>Num containers</Label>
-            <Input type="number" min={0} value={form.num_containers ?? 1} onChange={(e) => set("num_containers", Number(e.target.value))} className="tabular" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Container type</Label>
-            <Select value={form.container_type || "40HC"} onValueChange={(v) => set("container_type", v)}>
+
+          {/* Transport mode — drives which fields appear below */}
+          <div className="space-y-1.5 md:col-span-2">
+            <Label className="flex items-center gap-1.5">
+              Transport mode
+              {(() => {
+                const Mode = transportModeIcon(form.transport_mode);
+                return <Mode className="size-3.5 text-muted-foreground" />;
+              })()}
+            </Label>
+            <Select value={form.transport_mode || "SEA"} onValueChange={(v) => set("transport_mode", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {CONTAINER_TYPES.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    <span className="font-mono mr-2">{c.code}</span> {c.name}
+              <SelectContent>
+                {ENHANCED_TRANSPORT_MODES.map((t) => (
+                  <SelectItem key={t.code} value={t.code}>
+                    <span className="mr-2">{t.name}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {ENHANCED_TRANSPORT_MODES.find((t) => t.code === form.transport_mode)?.hint || "Select a transport mode to see applicable fields."}
+            </p>
           </div>
-          <div className="space-y-1.5">
-            <Label>Transport mode</Label>
-            <Select value={form.transport_mode || "SEA"} onValueChange={(v) => set("transport_mode", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {TRANSPORT_MODES.map((t) => (
-                  <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+
+          {/* ── Container fields — shown for SEA / RAIL / MULTIMODAL ── */}
+          {(form.transport_mode === "SEA" ||
+            form.transport_mode === "RAIL" ||
+            form.transport_mode === "MULTIMODAL" ||
+            !form.transport_mode) && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Container type</Label>
+                <Select value={form.container_type || "40HC"} onValueChange={(v) => set("container_type", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {CONTAINER_TYPES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        <span className="font-mono mr-2">{c.code}</span> {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{form.transport_mode === "RAIL" ? "Num wagons / containers" : "Num containers"}</Label>
+                <Input type="number" min={0} value={form.num_containers ?? 1} onChange={(e) => set("num_containers", Number(e.target.value))} className="tabular" />
+              </div>
+            </>
+          )}
+
+          {/* ── Bulk vessel fields — shown for SEA_BULK ── */}
+          {form.transport_mode === "SEA_BULK" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Vessel capacity (MT)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={transportExtras.vessel_capacity_mt ?? 0}
+                  onChange={(e) => setTransportExtras((s) => ({ ...s, vessel_capacity_mt: Number(e.target.value) }))}
+                  className="tabular"
+                  placeholder="e.g. 30000"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Freight rate / MT</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={transportExtras.freight_rate_per_mt ?? 0}
+                  onChange={(e) => setTransportExtras((s) => ({ ...s, freight_rate_per_mt: Number(e.target.value) }))}
+                  className="tabular"
+                  placeholder="Freight rate per metric ton"
+                />
+              </div>
+              <p className="md:col-span-2 text-[11px] text-muted-foreground">
+                Use the Loading &amp; Delivery port fields below for port of loading / discharge.
+                Vessel capacity &amp; per-MT rate are advisory — add them as a FREIGHT cost line.
+              </p>
+            </>
+          )}
+
+          {/* ── Truck fields — shown for ROAD ── */}
+          {form.transport_mode === "ROAD" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Truck type</Label>
+                <Select
+                  value={transportExtras.truck_type || "standard"}
+                  onValueChange={(v) => setTransportExtras((s) => ({ ...s, truck_type: v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {TRUCK_TYPES.map((t) => (
+                      <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Num trucks</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={transportExtras.num_trucks ?? 1}
+                  onChange={(e) => setTransportExtras((s) => ({ ...s, num_trucks: Number(e.target.value) }))}
+                  className="tabular"
+                />
+              </div>
+              <p className="md:col-span-2 text-[11px] text-muted-foreground">
+                Use the Loading port field below for the pickup address and the Delivery port field for the drop-off address.
+              </p>
+            </>
+          )}
+
+          {/* ── Air freight fields — shown for AIR ── */}
+          {form.transport_mode === "AIR" && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Chargeable weight (kg)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={transportExtras.air_chargeable_weight_kg ?? 0}
+                  onChange={(e) => setTransportExtras((s) => ({ ...s, air_chargeable_weight_kg: Number(e.target.value) }))}
+                  className="tabular"
+                  placeholder="Greater of gross or volumetric weight"
+                />
+              </div>
+              <p className="md:col-span-2 text-[11px] text-muted-foreground">
+                Air freight uses IATA AWB. Use Loading &amp; Delivery port fields for origin / destination airports.
+              </p>
+            </>
+          )}
 
           <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Buy Side</p></div>
           <div className="space-y-1.5">
@@ -1145,8 +1615,13 @@ function CalcFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Buy incoterm</Label>
-            <Select value={form.buy_incoterm || "FOB"} onValueChange={(v) => set("buy_incoterm", v)}>
+            <Label className="flex items-center gap-1.5">
+              Buy incoterm
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                <Sparkles className="size-2.5 text-amber-500" /> Auto-sets loading
+              </Badge>
+            </Label>
+            <Select value={form.buy_incoterm || "FOB"} onValueChange={handleIncotermChange}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
                 {INCOTERMS.map((i) => (
@@ -1206,8 +1681,66 @@ function CalcFormDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Exchange rate</Label>
-            <Input type="number" min={0} step="0.0001" value={form.exchange_rate ?? 1} onChange={(e) => set("exchange_rate", Number(e.target.value))} className="tabular" />
+            <Label className="flex items-center gap-1.5">
+              Exchange rate
+              {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                  1 {form.buy_currency} = {Number(form.exchange_rate || 0).toFixed(4)} {form.sell_currency}
+                </Badge>
+              )}
+            </Label>
+            <div className="flex gap-1.5">
+              <Input
+                type="number"
+                min={0}
+                step="0.0001"
+                value={form.exchange_rate ?? 1}
+                onChange={(e) => set("exchange_rate", Number(e.target.value))}
+                className="tabular flex-1"
+                disabled={
+                  !!form.buy_currency &&
+                  !!form.sell_currency &&
+                  form.buy_currency === form.sell_currency
+                }
+              />
+              {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 px-2"
+                  disabled={fetchingRate}
+                  onClick={async () => {
+                    if (!form.buy_currency || !form.sell_currency) return;
+                    setFetchingRate(true);
+                    try {
+                      const rate = await getExchangeRate(form.buy_currency, form.sell_currency);
+                      if (rate !== null) {
+                        set("exchange_rate", Math.round(rate * 10000) / 10000);
+                        toast.success(`Fetched 1 ${form.buy_currency} = ${rate.toFixed(4)} ${form.sell_currency}`);
+                      } else {
+                        toast.error("Could not fetch exchange rate. Enter manually.");
+                      }
+                    } finally {
+                      setFetchingRate(false);
+                    }
+                  }}
+                  title="Fetch live rate from open.er-api.com"
+                >
+                  {fetchingRate ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3.5" />
+                  )}
+                  <span className="sr-only">Fetch live rate</span>
+                </Button>
+              )}
+            </div>
+            {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
+              <p className="text-[11px] text-muted-foreground">
+                Auto-fetched live when currencies change. Override manually if needed.
+              </p>
+            )}
           </div>
 
           {/* Cost lines editor */}
@@ -1288,37 +1821,254 @@ function CalcFormDialog({
             )}
           </div>
 
-          {/* Live preview */}
+          {/* Payment terms — drives the bank costs calculator below */}
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Payment & Trade Finance</p></div>
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              Payment terms
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                <Landmark className="size-2.5" /> Drives bank costs
+              </Badge>
+            </Label>
+            <Select
+              value={paymentTerms || "__none__"}
+              onValueChange={(v) => setPaymentTerms(v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger><SelectValue placeholder="Select payment terms…" /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value="__none__">— None —</SelectItem>
+                {PAYMENT_TERMS_LOCAL.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Bank / Trade Finance Costs (auto-calculated from payment method) */}
           <div className="md:col-span-2">
-            <Separator className="my-2" />
-            <p className="text-xs text-muted-foreground mb-2">Live preview (auto-calculated)</p>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-2 p-3 rounded-md bg-muted/30 border border-border/60">
-              <PreviewCell label="Buy Total" value={fmtMoney(preview.buyTotal, form.buy_currency || "USD")} />
-              <PreviewCell label="Landed Cost" value={fmtMoney(preview.landedCost, form.buy_currency || "USD")} />
-              {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
-                <PreviewCell
-                  label={`Landed (${form.sell_currency})`}
-                  value={fmtMoney(preview.landedCostInSellCurrency, form.sell_currency || "USD")}
-                />
-              )}
-              <PreviewCell label="Sell Revenue" value={fmtMoney(preview.sellTotal, form.sell_currency || "USD")} />
-              <PreviewCell
-                label="Margin"
-                value={fmtMoney(preview.margin, form.sell_currency || "USD")}
-                accent={preview.margin >= 0 ? "text-chart-1" : "text-destructive"}
-              />
-              <PreviewCell
-                label="Margin %"
-                value={`${preview.marginPct.toFixed(2)}%`}
-                accent={preview.marginPct >= 0 ? "text-chart-1" : "text-destructive"}
-              />
+            <Collapsible open={bankCostsOpen} onOpenChange={setBankCostsOpen}>
+              <div className="flex items-center justify-between mb-1.5">
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 hover:bg-muted/50">
+                    <Landmark className="size-3.5" />
+                    <span className="text-xs font-medium">Bank / Trade Finance Costs</span>
+                    {bankCosts.length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{bankCosts.length}</Badge>
+                    )}
+                    <ChevronDown className={`size-3.5 transition-transform ${bankCostsOpen ? "rotate-180" : ""}`} />
+                  </Button>
+                </CollapsibleTrigger>
+                {bankCosts.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowBankOverrides(true)}
+                  >
+                    Edit Rates
+                  </Button>
+                )}
+              </div>
+              <CollapsibleContent>
+                {!paymentTerms ? (
+                  <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
+                    Select a payment method above to auto-calculate applicable bank/trade finance costs
+                    (LC issuance, advising, confirmation, SWIFT, etc.).
+                  </p>
+                ) : bankCosts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
+                    No bank costs applicable for this payment method.
+                  </p>
+                ) : (
+                  <div className="border border-border/60 rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/40">
+                        <TableRow>
+                          <TableHead className="h-8 text-xs">Cost item</TableHead>
+                          <TableHead className="h-8 text-xs">Basis</TableHead>
+                          <TableHead className="h-8 text-xs text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {bankCosts.map((cost) => {
+                          const item = applicableBankCostItems.find((c) => c.id === cost.id);
+                          const overridden = bankCostOverrides[cost.id] !== undefined;
+                          return (
+                            <TableRow key={cost.id} className="text-xs">
+                              <TableCell>
+                                <div className="font-medium">{cost.label}</div>
+                                {item?.description && (
+                                  <div className="text-[10px] text-muted-foreground">{item.description}</div>
+                                )}
+                                {overridden && (
+                                  <Badge variant="outline" className="text-[9px] mt-0.5 h-3.5 px-1 gap-0.5 text-amber-600 border-amber-500/30">
+                                    <Sparkles className="size-2" /> Custom rate
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{cost.basis}</TableCell>
+                              <TableCell className="text-right tabular font-medium">
+                                {fmtMoney(cost.amount, form.sell_currency || "USD")}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow className="font-semibold bg-muted/20">
+                          <TableCell>Total Bank Costs</TableCell>
+                          <TableCell />
+                          <TableCell className="text-right tabular">
+                            {fmtMoney(totalBankCosts, form.sell_currency || "USD")}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Based on ICC Banking Commission survey averages. Click &ldquo;Edit Rates&rdquo;
+                  to override per cost item for this calculation.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+
+          {/* Commission (live — based on current profit) */}
+          <div className="md:col-span-2">
+            <Separator className="my-1 mb-2" />
+            <div className="border border-border/60 rounded-lg p-3 space-y-3 bg-muted/10">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Percent className="size-3.5" /> Commission (live calculation)
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {/* Agent selector */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Commission agent</Label>
+                  <Select
+                    value={commissionAgentId || "__none__"}
+                    onValueChange={(v) => setCommissionAgentId(v === "__none__" ? null : v)}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Select agent…" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      <SelectItem value="__none__">— None —</SelectItem>
+                      {commissionAgents.map((a) => {
+                        const partner = partners.find((p) => p.id === a.partner_id);
+                        return (
+                          <SelectItem key={a.id} value={a.id}>
+                            {partner?.name || "Unknown agent"} ({a.commission_type})
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Commission type */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Type</Label>
+                  <Select
+                    value={commissionType}
+                    onValueChange={(v) => setCommissionType(v as CommissionTypeLocal)}
+                  >
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {COMMISSION_TYPE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Rate / amount */}
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {commissionType.startsWith("percent") ? "Rate (%)" : `Amount (${form.sell_currency || "USD"})`}
+                  </Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={commissionRate}
+                    onChange={(e) => setCommissionRate(Number(e.target.value))}
+                    className="h-9 text-xs tabular"
+                  />
+                </div>
+              </div>
+
+              {/* Live calculation summary */}
+              <div className="bg-background rounded p-2.5 space-y-1 text-xs border border-border/40">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Gross Profit:</span>
+                  <span className="font-mono">{fmtMoney(preview.margin, form.sell_currency || "USD")}</span>
+                </div>
+                <div className="flex justify-between text-amber-600">
+                  <span>
+                    Commission
+                    {commissionType === "percent_profit" && ` (${commissionRate}% of profit)`}
+                    {commissionType === "percent_revenue" && ` (${commissionRate}% of revenue)`}
+                    {commissionType === "fixed_per_unit" && ` (${fmtMoney(commissionRate, form.sell_currency || "USD")} × ${fmtNumber(form.quantity || 0)} ${form.unit || "MT"})`}
+                    {commissionType === "fixed_total" && " (fixed)"}
+                    :
+                  </span>
+                  <span className="font-mono">-{fmtMoney(commissionAmount, form.sell_currency || "USD")}</span>
+                </div>
+                <div className="flex justify-between text-amber-600">
+                  <span>Bank Costs:</span>
+                  <span className="font-mono">-{fmtMoney(totalBankCosts, form.sell_currency || "USD")}</span>
+                </div>
+                <div className="flex justify-between font-semibold border-t border-border/40 pt-1">
+                  <span>Net Profit:</span>
+                  <span className={`font-mono ${netProfit >= 0 ? "text-chart-1" : "text-destructive"}`}>
+                    {fmtMoney(netProfit, form.sell_currency || "USD")}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted-foreground text-[11px]">
+                  <span>Net Margin:</span>
+                  <span>{netMarginPct.toFixed(1)}%</span>
+                </div>
+              </div>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1.5">
-              Backend recomputes final totals on save using the same algorithm.
-              {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
-                <> Landed cost is converted from {form.buy_currency} to {form.sell_currency} at the configured exchange rate before margin is computed.</>
-              )}
-            </p>
+          </div>
+
+          </div>
+          </div>
+
+          {/* RIGHT: Live Cost Breakdown Panel (sticky) */}
+          <div className="lg:col-span-1">
+            <CostBreakdownPanel
+              quantity={form.quantity || 0}
+              unit={form.unit || "MT"}
+              buyPricePerUnit={form.buy_price_per_unit || 0}
+              buyCurrency={form.buy_currency || "USD"}
+              buyTotal={preview.buyTotal}
+              sellPricePerUnit={form.sell_price_per_unit || 0}
+              sellCurrency={form.sell_currency || "USD"}
+              sellTotal={preview.sellTotal}
+              exchangeRate={form.exchange_rate || 1}
+              currenciesDiffer={
+                !!form.buy_currency &&
+                !!form.sell_currency &&
+                form.buy_currency !== form.sell_currency
+              }
+              buyTotalInSellCurrency={preview.buyTotalInSellCurrency}
+              costLines={preview.computedLines}
+              totalCosts={preview.totalCosts}
+              totalCostsInSellCurrency={preview.totalCostsInSellCurrency}
+              landedCost={preview.landedCost}
+              landedCostInSellCurrency={preview.landedCostInSellCurrency}
+              bankCosts={bankCosts}
+              totalBankCosts={totalBankCosts}
+              commissionType={commissionType}
+              commissionRate={commissionRate}
+              commissionAmount={commissionAmount}
+              grossProfit={preview.margin}
+              grossMarginPct={preview.marginPct}
+              netProfit={netProfit}
+              netMarginPct={netMarginPct}
+              landedCostPerUnit={preview.landedCostPerUnit}
+              profitPerUnit={profitPerUnit}
+            />
           </div>
         </div>
         </div>
@@ -1330,6 +2080,81 @@ function CalcFormDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Bank cost rate overrides dialog */}
+      <Dialog open={showBankOverrides} onOpenChange={setShowBankOverrides}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Landmark className="size-4" /> Edit Bank Cost Rates
+            </DialogTitle>
+            <DialogDescription>
+              Override the default rates (ICC Banking Commission averages) for this calculation.
+              Values are percentages (for percent/per_period basis) or fixed amounts in sell currency
+              ({form.sell_currency || "USD"}).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            {applicableBankCostItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic py-4 text-center">
+                Select a payment method first to see editable rates.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {applicableBankCostItems.map((item) => {
+                  const current = bankCostOverrides[item.id] ?? item.defaultValue;
+                  const isOverridden = bankCostOverrides[item.id] !== undefined;
+                  return (
+                    <div key={item.id} className="grid grid-cols-12 gap-3 items-start">
+                      <div className="col-span-7">
+                        <Label className="text-xs font-medium">{item.label}</Label>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{item.description}</p>
+                        <Badge variant="outline" className="text-[10px] mt-1 h-4 px-1.5 font-mono">
+                          basis: {item.basis}
+                        </Badge>
+                      </div>
+                      <div className="col-span-5 flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.001"
+                          min={0}
+                          value={current}
+                          onChange={(e) => applyBankCostOverrides(item.id, Number(e.target.value))}
+                          className="h-9 text-xs tabular"
+                        />
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                          {item.basis === "percent" || item.basis === "per_period" ? "%" : form.sell_currency || "USD"}
+                        </span>
+                        {isOverridden && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-9 px-2 text-[11px]"
+                            onClick={() => {
+                              const next = { ...bankCostOverrides };
+                              delete next[item.id];
+                              setBankCostOverrides(next);
+                            }}
+                          >
+                            Reset
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={resetBankCostOverrides}>
+              Reset All to Defaults
+            </Button>
+            <Button onClick={() => setShowBankOverrides(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
