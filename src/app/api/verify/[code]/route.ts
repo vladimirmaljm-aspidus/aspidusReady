@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     // Even for unknown codes, attempt to log the attempt for fraud analysis.
     // The store.getDocumentVerificationByCode already returned null — we don't
     // have a verification_id, but we still want to know WHO probed a bad code.
-    void logVerificationAttempt(_req, code, null, "invalid", null);
+    void logVerificationAttempt(_req, code, null, "invalid", null, null);
     return NextResponse.json({
       valid: false,
       result: "invalid",
@@ -56,12 +56,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
   }
 
   // ── Detailed document_verification_logs row (WHO/WHERE/HOW) ───────────
+  // GET path: no GPS available (server-rendered / direct API call) —
+  // falls back to IP-based geo only.
   void logVerificationAttempt(
     _req,
     v.verification_code,
     v.tenant_id,
     logResult,
     v,
+    null, // gpsCoords — not available on GET
   );
 
   if (v.status !== "active") {
@@ -89,12 +92,119 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
   });
 }
 
+// ─── POST: GPS-enriched verification log ─────────────────────────────────
+//
+// Called by the public verify page (src/components/verify/verify-client.tsx)
+// AFTER the browser resolves precise GPS via `navigator.geolocation.
+// getCurrentPosition`. The page passes { latitude, longitude, accuracy,
+// source } in the body.
+//
+// GPS coordinates take PRIORITY over IP-based geo in the stored row —
+// this matches the portal's behaviour (src/lib/portal/use-geolocation.ts)
+// so document verification now records the SAME level of precision as
+// portal client login.
+//
+// Source field ("browser" | "ip") is persisted into `raw_headers.gps`
+// so super-admins can distinguish precise-GPS rows from IP-only rows.
+//
+// Resilient: any failure (logging, missing table, supabase down) MUST
+// NOT turn a valid verification into a 500 — the response is `{ ok }`
+// and the page has already rendered the verification result.
+export async function POST(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
+
+  // Body is optional — empty body is fine (treated as IP-only).
+  let body: {
+    latitude?: number | null;
+    longitude?: number | null;
+    accuracy?: number | null;
+    source?: string;
+  } = {};
+  try {
+    const parsed = await req.json();
+    if (parsed && typeof parsed === "object") body = parsed;
+  } catch {
+    /* empty or invalid body — fall through with {} */
+  }
+
+  const store = await getStore();
+  const v = await store.getDocumentVerificationByCode(code);
+
+  // Resolve result so the log records the actual outcome seen by the
+  // user — not just "valid/invalid" but the revoked/superseded state too.
+  const result: "valid" | "invalid" | "revoked" | "modified" = !v
+    ? "invalid"
+    : v.status === "active"
+    ? "valid"
+    : v.status === "revoked"
+    ? "revoked"
+    : v.status === "superseded"
+    ? "modified"
+    : "invalid";
+
+  // ── Original verification_logs table (back-compat) ───────────────────
+  // Only log if we have a verification record — the legacy table requires
+  // a non-null verification_id (FK constraint).
+  if (v) {
+    try {
+      await store.logVerification({
+        verification_id: v.id,
+        code: v.verification_code,
+        ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+        user_agent: req.headers.get("user-agent") || null,
+        result,
+        // Stash the GPS coords (if any) into the JSON details column so
+        // the legacy viewer can show them too.
+        details: body.latitude != null && body.longitude != null
+          ? JSON.stringify({
+              gps: {
+                lat: body.latitude,
+                lng: body.longitude,
+                accuracy: body.accuracy ?? null,
+                source: body.source ?? "browser",
+              },
+            })
+          : null,
+      });
+    } catch (e) {
+      console.error("[verify POST] legacy logVerification failed:", e);
+    }
+  }
+
+  // ── Detailed document_verification_logs row (WHO/WHERE/HOW + GPS) ────
+  const gpsCoords =
+    body.latitude != null && body.longitude != null
+      ? {
+          latitude: body.latitude,
+          longitude: body.longitude,
+          accuracy: typeof body.accuracy === "number" ? body.accuracy : null,
+          source: body.source ?? "browser",
+        }
+      : null;
+
+  void logVerificationAttempt(
+    req,
+    code,
+    v?.tenant_id ?? null,
+    result,
+    v,
+    gpsCoords,
+  );
+
+  return NextResponse.json({ ok: true, result });
+}
+
 // ─── Helper: capture detailed verification metadata ────────────────────────
 //
 // Persisted via service_role (bypasses RLS). The table is created by
 // supabase/migrations/006_document_verification_logs.sql. If the table is
 // missing (migration not yet applied), the insert fails silently — the
 // public verify endpoint continues to function.
+//
+// GPS coordinates (when provided by the POST handler) take PRIORITY over
+// the IP-based lat/lng — they're written into the `latitude` / `longitude`
+// columns so the super-admin viewer's Google Maps link points at the
+// verifier's EXACT location rather than their ISP's city.
 async function logVerificationAttempt(
   req: NextRequest,
   code: string,
@@ -102,9 +212,16 @@ async function logVerificationAttempt(
   result: "valid" | "invalid" | "revoked" | "modified",
   v: {
     id: string;
+    verification_code?: string;
     document_type?: string | null;
     document_id?: string | null;
     document_number?: string | null;
+  } | null,
+  gpsCoords: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number | null;
+    source?: string;
   } | null,
 ): Promise<void> {
   try {
@@ -133,6 +250,12 @@ async function logVerificationAttempt(
       // Keep the empty-geo default; the row is still useful for IP/UA analysis.
     }
 
+    // GPS coordinates take PRIORITY over IP-based lat/lng when available.
+    // Country/city/region still come from the IP lookup (GPS doesn't carry
+    // those) — so a row can have precise lat/lng + IP-derived country.
+    const finalLatitude = gpsCoords?.latitude ?? geo.latitude;
+    const finalLongitude = gpsCoords?.longitude ?? geo.longitude;
+
     const sb = getSupabase();
     const { error } = await sb.from("document_verification_logs").insert({
       tenant_id: tenantId,
@@ -144,8 +267,8 @@ async function logVerificationAttempt(
       country: geo.country,
       city: geo.city,
       region: geo.region,
-      latitude: geo.latitude,
-      longitude: geo.longitude,
+      latitude: finalLatitude,
+      longitude: finalLongitude,
       user_agent: userAgent,
       device_type: device.deviceType,
       browser: device.browser,
@@ -155,6 +278,20 @@ async function logVerificationAttempt(
       verification_id: v?.id ?? null,
       referrer: req.headers.get("referer") || null,
       accept_language: req.headers.get("accept-language") || null,
+      // raw_headers preserves BOTH sources for forensic analysis:
+      //  - gps.source = "browser" → user granted precise GPS
+      //  - gps.source = "ip"      → GPS denied/unavailable, fell back to IP
+      // The lat/lng stored above is whichever source provided the coords.
+      raw_headers: {
+        gps: gpsCoords
+          ? {
+              lat: gpsCoords.latitude,
+              lng: gpsCoords.longitude,
+              accuracy: gpsCoords.accuracy ?? null,
+              source: gpsCoords.source ?? "browser",
+            }
+          : { lat: null, lng: null, accuracy: null, source: "ip" },
+      },
     });
     if (error) {
       // Most common cause: migration 006 not yet applied (table missing).
