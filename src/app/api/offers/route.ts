@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
+import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,39 @@ export async function POST(req: NextRequest) {
   }
   body.tenant_id = tid!;
   if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
+  // ── Strip `_` prefixed metadata fields BEFORE upserting ──────────────
+  // These are passed through by the offer form when the offer was pre-filled
+  // from a Trade Calculator preview (Fix 1). They carry trade-calc-only
+  // metadata (commission agent, buy price, margin…) used downstream by the
+  // auto-track commission obligation block (Fix 2). They MUST be stripped
+  // before `upsertOffer` because they're not real columns on the offers
+  // table — leaving them in would make PostgREST reject the upsert with a
+  // "column does not exist" error.
+  const tradeCalcMeta = {
+    _trade_calc_id: (body as any)._trade_calc_id || null,
+    _commission_agent_id: (body as any)._commission_agent_id || null,
+    _commission_type: (body as any)._commission_type || null,
+    _commission_rate: Number((body as any)._commission_rate) || 0,
+    _commission_amount: Number((body as any)._commission_amount) || 0,
+    _buy_price_per_unit: Number((body as any)._buy_price_per_unit) || 0,
+    _buy_currency: (body as any)._buy_currency || null,
+    _landed_cost: Number((body as any)._landed_cost) || 0,
+    _margin: Number((body as any)._margin) || 0,
+  };
+  for (const k of [
+    "_trade_calc_id",
+    "_commission_agent_id",
+    "_commission_type",
+    "_commission_rate",
+    "_commission_amount",
+    "_buy_price_per_unit",
+    "_buy_currency",
+    "_landed_cost",
+    "_margin",
+  ]) {
+    delete (body as any)[k];
+  }
+
   // Always recompute totals from items when items are provided — never trust
   // client-supplied totals (FLOW-7: previously skipped when body.total was
   // present, allowing tampered totals to disagree with line items).
@@ -134,5 +168,138 @@ export async function POST(req: NextRequest) {
     }
   }
   await audit(auth.store, getAuthUser(auth), req, body.id ? "offer.update" : "offer.create", "offer", created.id, { number: created.number });
+
+  // ── Fix 2: Auto-track commission obligation ─────────────────────────
+  // When an offer is created from a trade calc that carried commission data
+  // (agent_id + rate), automatically:
+  //   1. Find or create a Deal linked to this offer
+  //   2. Insert a `deal_commissions` row with status "pending" so the
+  //      obligation is tracked from offer creation → invoice payment.
+  //
+  // Failures here MUST NOT fail the offer creation — we log + audit, and
+  // the user can still create the commission manually from the deals view.
+  if (!body.id && tradeCalcMeta._trade_calc_id && tradeCalcMeta._commission_agent_id) {
+    try {
+      const sb = getSupabase();
+
+      // 1. Find or create a deal for this offer.
+      let dealId: string | null = (created as any).deal_id || null;
+      if (!dealId) {
+        const dealRow = {
+          tenant_id: tid,
+          title: created.subject || `Deal for ${created.number}`,
+          partner_id: created.partner_id,
+          owner_id: "user" in auth ? auth.user.id : null,
+          stage: "qualified",
+          value: created.total,
+          currency: created.currency,
+          // Cost tracking — store buy cost so commission "profit_percent"
+          // calculations work out of the box.
+          buy_cost: tradeCalcMeta._landed_cost || 0,
+          quantity: (created.items?.[0]?.quantity) || 0,
+          unit: (created.items?.[0]?.unit) || "MT",
+          commission_agent_id: tradeCalcMeta._commission_agent_id,
+        };
+        const { data: deal, error: dealErr } = await sb
+          .from("deals")
+          .insert(dealRow)
+          .select()
+          .maybeSingle();
+        if (dealErr) throw dealErr;
+        dealId = deal?.id || null;
+
+        // Link offer to deal so future deal→commission flows can find it.
+        if (dealId) {
+          await sb.from("offers").update({ deal_id: dealId }).eq("id", created.id);
+        }
+      }
+
+      // 2. Create pending commission record.
+      if (dealId) {
+        // Look up the agent's default settings so we can fall back when the
+        // trade calc didn't carry an explicit rate / type.
+        let commissionType = tradeCalcMeta._commission_type;
+        let commissionRate = tradeCalcMeta._commission_rate;
+        let commissionCurrency = created.currency || "USD";
+        let commissionPerUnit = 0;
+        let agentPartnerId: string | null = null;
+        try {
+          const { data: agent } = await sb
+            .from("commission_agents")
+            .select("*")
+            .eq("id", tradeCalcMeta._commission_agent_id)
+            .maybeSingle();
+          if (agent) {
+            commissionType = commissionType || agent.commission_type;
+            commissionRate = commissionRate || Number(agent.commission_rate) || 0;
+            commissionPerUnit = Number(agent.commission_per_unit) || 0;
+            commissionCurrency = agent.commission_currency || commissionCurrency;
+            agentPartnerId = agent.partner_id || null;
+          }
+        } catch { /* keep defaults */ }
+
+        // Compute the commission amount. If the trade calc carried an
+        // explicit `_commission_amount` (e.g. the calc UI computed it),
+        // use it verbatim. Otherwise fall back to rate × base.
+        const dealValue = Number(created.total) || 0;
+        const dealProfit = Number(tradeCalcMeta._margin) || 0;
+        let calculatedCommission = tradeCalcMeta._commission_amount;
+        if (!calculatedCommission) {
+          switch (commissionType) {
+            case "profit_percent":
+              calculatedCommission = (dealProfit * commissionRate) / 100;
+              break;
+            case "revenue_percent":
+              calculatedCommission = (dealValue * commissionRate) / 100;
+              break;
+            case "per_unit":
+              calculatedCommission = commissionPerUnit *
+                (Number((created.items?.[0]?.quantity)) || 0);
+              break;
+            case "fixed":
+              calculatedCommission = commissionRate;
+              break;
+            default:
+              calculatedCommission = 0;
+          }
+        }
+
+        const commissionRow = {
+          tenant_id: tid,
+          deal_id: dealId,
+          agent_id: tradeCalcMeta._commission_agent_id,
+          partner_id: agentPartnerId,
+          commission_type: commissionType || "profit_percent",
+          commission_rate: commissionRate,
+          commission_per_unit: commissionPerUnit,
+          commission_custom_formula: null,
+          commission_currency: commissionCurrency,
+          deal_value: dealValue,
+          deal_profit: dealProfit,
+          deal_quantity: Number((created.items?.[0]?.quantity)) || 0,
+          deal_unit: (created.items?.[0]?.unit) || "MT",
+          calculated_commission: Number(calculatedCommission) || 0,
+          status: "pending",
+          notes: `Auto-created from trade calculation ${tradeCalcMeta._trade_calc_id}`,
+        };
+        const { error: commErr } = await sb
+          .from("deal_commissions")
+          .insert(commissionRow);
+        if (commErr) throw commErr;
+
+        await audit(auth.store, getAuthUser(auth), req, "commission.obligation_created", "deal_commission", dealId, {
+          agent_id: tradeCalcMeta._commission_agent_id,
+          amount: calculatedCommission,
+          trade_calc_id: tradeCalcMeta._trade_calc_id,
+          offer_id: created.id,
+          deal_id: dealId,
+        });
+      }
+    } catch (e: any) {
+      // Don't fail the offer creation — just log so ops can investigate.
+      console.error("[offers.post] commission auto-track failed:", e);
+    }
+  }
+
   return NextResponse.json(created);
 }

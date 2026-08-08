@@ -53,6 +53,7 @@ import {
   CONTAINER_TYPES, TRANSPORT_MODES, PAYMENT_TERMS_LOCAL,
 } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useAppStore } from "@/lib/store/app-store";
 import {
   calculateBankCosts, BANK_COSTS, BankCostResult,
   calculateTransferFees, getNumTransfersForPaymentMethod,
@@ -295,6 +296,9 @@ function computeTotals(
 export function TradeCalculatorView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const setView = useAppStore((s) => s.setView);
+  const setPendingOfferData = useAppStore((s) => s.setPendingOfferData);
+  const [creatingOffer, setCreatingOffer] = useState(false);
 
   const qc = useQueryClient();
   const [editing, setEditing] = useState<TradeCalculation | null>(null);
@@ -504,27 +508,50 @@ export function TradeCalculatorView() {
           {detail.data && (
             <SheetFooter className="mt-4 pt-4 border-t border-border/60">
               <Button
+                disabled={creatingOffer}
                 onClick={async () => {
+                  if (!detail.data) return;
+                  setCreatingOffer(true);
                   try {
-                    const r = await fetch(api(`/api/trade-calculator/${detail.data!.id}/create-offer`), {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({}),
-                    });
+                    // ── Review step (Fix 1) ──────────────────────────────
+                    // Don't create the offer yet — fetch a pre-filled offer
+                    // payload + a list of fields the trade calc couldn't
+                    // auto-fill, then hand them off to the OffersView via
+                    // the app store. The OffersView opens the form dialog
+                    // pre-filled and paints the missing fields in orange so
+                    // the user can review / fix them before saving.
+                    const r = await fetch(api(`/api/trade-calculator/${detail.data.id}/offer-preview`));
                     if (!r.ok) {
                       const e = await r.json().catch(() => ({}));
-                      throw new Error(e.error || "Failed to create offer");
+                      throw new Error(e.error || "Failed to build offer preview");
                     }
-                    const offer = await r.json();
-                    toast.success(`Offer ${offer.number} created!`);
+                    const preview = await r.json();
+                    setPendingOfferData({
+                      offer: preview.offer,
+                      missingFields: preview.missingFields || [],
+                      tradeCalcId: detail.data.id,
+                    });
                     setDetailId(null);
+                    // Switch to the offers view — OffersView consumes
+                    // pendingOfferData on mount and opens the form dialog.
+                    setView("offers");
+                    toast.success("Offer form pre-filled — review and save.", {
+                      description: "Fields highlighted in orange need your attention.",
+                    });
                   } catch (e: any) {
                     toast.error(e.message || "Failed to create offer");
+                  } finally {
+                    setCreatingOffer(false);
                   }
                 }}
                 className="gap-2"
               >
-                <FileText className="size-4" /> Create Offer from Calculation
+                {creatingOffer ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <FileText className="size-4" />
+                )}
+                Create Offer from Calculation
               </Button>
             </SheetFooter>
           )}

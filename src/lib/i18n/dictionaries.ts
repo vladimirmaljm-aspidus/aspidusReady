@@ -53,6 +53,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     "api-integrations": "API Integrations",
     commissions: "Commissions",
     erp: "ERP / Accounting",
+    "verification-logs": "Verification Logs",
   },
   sr: {
     dashboard: "Kontrolna tabla",
@@ -99,6 +100,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     "api-integrations": "API integracije",
     commissions: "Provizije",
     erp: "ERP / Knjigovodstvo",
+    "verification-logs": "Evidencija verifikacija",
   },
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -56,7 +56,7 @@ import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { ProductPicker } from "@/components/common/product-picker";
 import { cn } from "@/lib/utils";
-import { useEffectiveTenantId } from "@/lib/store/app-store";
+import { useEffectiveTenantId, useAppStore } from "@/lib/store/app-store";
 import { checkOfferCompleteness } from "@/lib/utils/completeness-checker";
 import { CompletenessChecker } from "@/components/common/completeness-checker";
 import { downloadPdf } from "@/lib/utils/download";
@@ -85,6 +85,45 @@ function lineTotal(it: OfferLineItem): number {
   const net = line - disc;
   const tax = net * (Number(it.tax_rate) || 0) / 100;
   return net + tax;
+}
+
+/**
+ * Orange highlight class applied to form inputs whose value couldn't be
+ * auto-filled from the trade calculation. Used together with the
+ * `MissingFieldWrap` tooltip wrapper so the user gets both a visual cue and
+ * an explanatory tooltip when hovering the field.
+ */
+const MISSING_FIELD_CLS = "border-orange-400 bg-orange-50 dark:bg-orange-950/20 focus-visible:ring-orange-300";
+
+/**
+ * Wraps a form field in a hover-tooltip that explains why the input is
+ * highlighted in orange. Only renders the tooltip wrapper when `missing`
+ * is true — when the field WAS auto-filled (or we're not in trade-calc
+ * preview mode at all), the wrapper is a no-op fragment so existing
+ * layout / behavior is unchanged.
+ *
+ * Used by the Trade Calculator → offer preview flow (Fix 1).
+ */
+function MissingFieldWrap({
+  missing,
+  children,
+  tooltip,
+}: {
+  missing: boolean;
+  children: ReactNode;
+  tooltip?: string;
+}) {
+  if (!missing) return <>{children}</>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="w-full">{children}</div>
+      </TooltipTrigger>
+      <TooltipContent>
+        {tooltip || "This field was not filled from trade calculation"}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 function computeTotals(items: OfferLineItem[]) {
@@ -430,6 +469,8 @@ function ProductContextPreview({
 export function OffersView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const pendingOfferData = useAppStore((s) => s.pendingOfferData);
+  const setPendingOfferData = useAppStore((s) => s.setPendingOfferData);
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -443,6 +484,26 @@ export function OffersView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDealPicker, setShowDealPicker] = useState(false);
   const [page, setPage] = useState(0);
+  // Pre-filled offer payload handed off from the Trade Calculator view's
+  // "Create Offer from Calculation" button (Fix 1). Set on mount when the
+  // app store carries pending data; cleared immediately so a refresh on
+  // the offers view doesn't re-open a stale draft.
+  const [prefilledOffer, setPrefilledOffer] = useState<Record<string, any> | null>(null);
+  const [missingFields, setMissingFields] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (pendingOfferData) {
+      setPrefilledOffer(pendingOfferData.offer);
+      setMissingFields(new Set(pendingOfferData.missingFields || []));
+      setEditing(null);
+      setShowForm(true);
+      setPendingOfferData(null);
+    }
+    // We only want this to fire once when the view mounts with pending data
+    // — `pendingOfferData` is cleared synchronously above so subsequent
+    // renders won't re-trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ["offers", tenantKey, debouncedSearch, statusFilter, partnerFilter, page],
@@ -748,11 +809,23 @@ export function OffersView() {
       {/* Form dialog */}
       <OfferFormDialog
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={(o) => {
+          setShowForm(o);
+          // When the form closes (cancelled or saved), drop any pre-fill
+          // state so the next "New offer" click starts fresh.
+          if (!o) {
+            setPrefilledOffer(null);
+            setMissingFields(null);
+          }
+        }}
         offer={editing}
+        prefilledOffer={prefilledOffer}
+        missingFields={missingFields}
         partners={partnerList}
-        onSaved={() => {
+        onSaved={(offerNumber) => {
           setShowForm(false);
+          setPrefilledOffer(null);
+          setMissingFields(null);
           qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
           qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
@@ -1608,11 +1681,20 @@ function OfferDetail({
 
 // ─── Form dialog ───
 function OfferFormDialog({
-  open, onOpenChange, offer, partners, onSaved,
+  open, onOpenChange, offer, prefilledOffer, missingFields, partners, onSaved,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   offer: Offer | null;
+  /** Pre-filled offer payload handed off from the Trade Calculator's
+   *  "Create Offer from Calculation" flow (Fix 1). When present, the form
+   *  initializes from this object instead of the empty defaults so the user
+   *  can review the pre-filled data before saving. Cleared on close. */
+  prefilledOffer?: Record<string, any> | null;
+  /** Set of field keys the trade calc couldn't auto-fill. Inputs matching
+   *  these keys are painted with an orange border + tooltip so the user
+   *  knows to fill them in. Null when not in trade-calc preview mode. */
+  missingFields?: Set<string> | null;
   partners: Partner[];
   onSaved: (offerNumber?: string) => void;
 }) {
@@ -1696,6 +1778,41 @@ function OfferFormDialog({
           items: (offer.items || []).map((i) => ({ ...i })),
         });
         setMoreDetailsOpen(true);
+      } else if (prefilledOffer) {
+        // ── Trade calc preview handoff (Fix 1) ────────────────────────
+        // The Trade Calculator view called /api/trade-calculator/[id]/offer-preview
+        // and stashed the pre-filled payload on the app store. We initialize
+        // the form from it so the user can review + fix the orange-highlighted
+        // missing fields before saving. The `_` prefixed fields are passed
+        // through to the save() payload verbatim — POST /api/offers strips
+        // them before persisting and uses them to auto-track commission
+        // obligations (Fix 2).
+        const p = prefilledOffer as any;
+        // Always carry the pre-filled line items so the form opens with the
+        // trade calc's product, qty, unit price already filled in.
+        const items = Array.isArray(p.items)
+          ? p.items.map((it: any) => ({ ...it }))
+          : [];
+        setForm({
+          status: "draft",
+          currency: p.currency || "USD",
+          payment_terms: p.payment_terms || "net30",
+          valid_until: p.valid_until || thirtyDaysFromNow(),
+          notes: p.notes ?? "",
+          terms: "",
+          origin_country: null,
+          inspection: null,
+          certificate: null,
+          // Spread the pre-filled payload last so partner_id, incoterm, pol,
+          // pod, subject, currency, items, etc. take precedence over the
+          // defaults above.
+          ...p,
+          // Re-map items — the spread above can re-introduce the original
+          // array reference, but we want a fresh copy so edits don't mutate
+          // the prefilledOffer object.
+          items,
+        } as any);
+        setMoreDetailsOpen(true);
       } else {
         setForm({
           status: "draft",
@@ -1720,7 +1837,15 @@ function OfferFormDialog({
       setSelectedBankAccountIdx(null);
       setManualBankOverride(false);
     }
-  }, [open, offer]);
+  }, [open, offer, prefilledOffer]);
+
+  /** Returns true when `field` is in the trade-calc missingFields set —
+   *  used to paint the corresponding input with an orange border + tooltip
+   *  so the user can see at a glance what the trade calc couldn't auto-fill. */
+  const isMissingField = useCallback(
+    (field: string) => !!missingFields && missingFields.has(field),
+    [missingFields],
+  );
 
   function set<K extends keyof Offer>(k: K, v: Offer[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -2149,6 +2274,37 @@ function OfferFormDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* ─── Trade calc preview banner (Fix 1) ────────────────────────
+            When this offer was pre-filled from a trade calculation, surface
+            an inline banner explaining the orange highlights so the user
+            knows what the visual cue means. */}
+        {missingFields && missingFields.size > 0 && (
+          <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 p-3 flex items-start gap-3">
+            <Info className="size-4 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-orange-900 dark:text-orange-200">
+              <div className="font-semibold mb-0.5">Review pre-filled offer</div>
+              <div>
+                This offer was pre-filled from a trade calculation. Fields
+                highlighted in <span className="font-semibold">orange</span>
+                {" "}couldn't be auto-filled — please review and complete them
+                before saving. Hover an orange field for details.
+              </div>
+            </div>
+          </div>
+        )}
+        {missingFields && missingFields.size === 0 && (
+          <div className="rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-3 flex items-start gap-3">
+            <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-emerald-900 dark:text-emerald-200">
+              <div className="font-semibold mb-0.5">Pre-filled from trade calculation</div>
+              <div>
+                All fields were auto-filled from the trade calculation. Review
+                the data and save when ready.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-4 py-2">
 
           {/* ─── Partner Selection (top — auto-fill partner details) ─── */}
@@ -2168,36 +2324,44 @@ function OfferFormDialog({
                   Partner *
                   {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
                 </Label>
-                <Select
-                  value={form.partner_id || ""}
-                  onValueChange={(v) => {
-                    set("partner_id", v);
-                    fetchPartnerContext(v);
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
-                  <SelectContent>
-                    {partners.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{p.name}</span>
-                          <span className="text-xs text-muted-foreground">({p.type})</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MissingFieldWrap missing={isMissingField("partner_id")}>
+                  <Select
+                    value={form.partner_id || ""}
+                    onValueChange={(v) => {
+                      set("partner_id", v);
+                      fetchPartnerContext(v);
+                    }}
+                  >
+                    <SelectTrigger className={cn(isMissingField("partner_id") && MISSING_FIELD_CLS)}>
+                      <SelectValue placeholder="Select a partner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            <span className="text-xs text-muted-foreground">({p.type})</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </MissingFieldWrap>
               </div>
 
               {/* Currency */}
               <div className="space-y-1.5">
                 <Label>Currency</Label>
-                <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <MissingFieldWrap missing={isMissingField("currency")}>
+                  <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
+                    <SelectTrigger className={cn(isMissingField("currency") && MISSING_FIELD_CLS)}>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </MissingFieldWrap>
               </div>
             </div>
 
@@ -2323,29 +2487,37 @@ function OfferFormDialog({
               {/* Incoterm */}
               <div className="space-y-1.5">
                 <Label>Incoterm *</Label>
-                <Select
-                  value={form.incoterm || "__none__"}
-                  onValueChange={(v) => set("incoterm", v === "__none__" ? null : v)}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select incoterm" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— None —</SelectItem>
-                    {INCOTERM_CODES.map((code) => (
-                      <SelectItem key={code} value={code}>{code}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MissingFieldWrap missing={isMissingField("incoterm")}>
+                  <Select
+                    value={form.incoterm || "__none__"}
+                    onValueChange={(v) => set("incoterm", v === "__none__" ? null : v)}
+                  >
+                    <SelectTrigger className={cn(isMissingField("incoterm") && MISSING_FIELD_CLS)}>
+                      <SelectValue placeholder="Select incoterm" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— None —</SelectItem>
+                      {INCOTERM_CODES.map((code) => (
+                        <SelectItem key={code} value={code}>{code}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </MissingFieldWrap>
               </div>
 
               {/* Payment Terms */}
               <div className="space-y-1.5">
                 <Label>Payment Terms *</Label>
-                <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <MissingFieldWrap missing={isMissingField("payment_terms")}>
+                  <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
+                    <SelectTrigger className={cn(isMissingField("payment_terms") && MISSING_FIELD_CLS)}>
+                      <SelectValue placeholder="Select payment terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </MissingFieldWrap>
               </div>
 
               {/* Valid Until */}
@@ -2361,21 +2533,27 @@ function OfferFormDialog({
               {/* Loading Port (POL) */}
               <div className="space-y-1.5">
                 <Label>Loading Port (POL)</Label>
-                <PortAutocomplete
-                  value={form.pol || ""}
-                  onChange={(v) => set("pol", v)}
-                  placeholder="e.g., Hamburg"
-                />
+                <MissingFieldWrap missing={isMissingField("pol")}>
+                  <PortAutocomplete
+                    value={form.pol || ""}
+                    onChange={(v) => set("pol", v)}
+                    placeholder="e.g., Hamburg"
+                    className={cn(isMissingField("pol") && MISSING_FIELD_CLS)}
+                  />
+                </MissingFieldWrap>
               </div>
 
               {/* Discharge Port (POD) */}
               <div className="space-y-1.5">
                 <Label>Discharge Port (POD)</Label>
-                <PortAutocomplete
-                  value={form.pod || ""}
-                  onChange={(v) => set("pod", v)}
-                  placeholder="e.g., Jebel Ali"
-                />
+                <MissingFieldWrap missing={isMissingField("pod")}>
+                  <PortAutocomplete
+                    value={form.pod || ""}
+                    onChange={(v) => set("pod", v)}
+                    placeholder="e.g., Jebel Ali"
+                    className={cn(isMissingField("pod") && MISSING_FIELD_CLS)}
+                  />
+                </MissingFieldWrap>
               </div>
 
               {/* Lead Time */}
@@ -2401,11 +2579,14 @@ function OfferFormDialog({
               {/* Origin Country */}
               <div className="space-y-1.5">
                 <Label>Origin Country</Label>
-                <CountrySelect
-                  value={(form as any).origin_country ?? null}
-                  onChange={(v) => setExtra("origin_country", v || null)}
-                  placeholder="Select origin country"
-                />
+                <MissingFieldWrap missing={isMissingField("origin_country")}>
+                  <CountrySelect
+                    value={(form as any).origin_country ?? null}
+                    onChange={(v) => setExtra("origin_country", v || null)}
+                    placeholder="Select origin country"
+                    className={cn(isMissingField("origin_country") && MISSING_FIELD_CLS)}
+                  />
+                </MissingFieldWrap>
               </div>
 
               {/* Inspection */}

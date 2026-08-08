@@ -12,6 +12,7 @@ import {
   ChevronLeft, ChevronRight, Building2, Calculator,
   ToggleRight, LayoutGrid, Plug, DollarSign, BookMarked, Calendar,
   StickyNote, Briefcase, Settings2, TrendingUp, Truck, MapPin,
+  Shield,
 } from "lucide-react";
 import {
   Tooltip,
@@ -147,6 +148,7 @@ const SECTIONS: NavSection[] = [
       { key: "platform-health", i18nKey: "platform-health", i18nSection: "platform", icon: ShieldCheck, permission: "platform.health.read" },
       { key: "feature-flags", i18nKey: "feature-flags", i18nSection: "platform", icon: ToggleRight, permission: "platform.feature_flags.read" },
       { key: "plan-upgrade-queue", i18nKey: "plan-upgrade-queue", i18nSection: "platform", icon: TrendingUp, permission: "platform.plans.write" },
+      { key: "verification-logs", i18nKey: "verification-logs", i18nSection: "platform", icon: Shield, superAdminOnly: true },
     ],
   },
 ];

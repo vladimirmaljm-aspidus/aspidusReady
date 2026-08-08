@@ -60,6 +60,8 @@ export type ViewKey =
   | "logistics-requests"
   | "plan-upgrade-queue"
   | "portal-locations"
+  // Verification logs (super-admin only — fraud prevention)
+  | "verification-logs"
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"
@@ -113,6 +115,27 @@ interface AppState {
   activeTenantId: string | null;
   activeTenantName: string | null;
   setActiveTenant: (id: string | null, name: string | null) => void;
+
+  // ── Trade calc → offer preview (cross-view handoff) ────────────────
+  // When the user clicks "Create Offer from Calculation" in the Trade
+  // Calculator view, we fetch a pre-filled offer payload from
+  // /api/trade-calculator/[id]/offer-preview (no offer is created yet),
+  // store it here, then switch the view to "offers" — the OffersView reads
+  // this state on mount, opens the form dialog pre-filled, and paints the
+  // `missingFields` inputs with an orange highlight so the user knows what
+  // the trade calc couldn't auto-fill. Cleared immediately after the form
+  // consumes it. Kept here (instead of URL params) so the offer payload
+  // (line items, totals, metadata) doesn't bloat the URL.
+  pendingOfferData: {
+    offer: Record<string, any>;
+    missingFields: string[];
+    tradeCalcId: string;
+  } | null;
+  setPendingOfferData: (data: {
+    offer: Record<string, any>;
+    missingFields: string[];
+    tradeCalcId: string;
+  } | null) => void;
 }
 
 function loadActiveTenant(): { id: string | null; name: string | null } {
@@ -180,6 +203,12 @@ export const useAppStore = create<AppState>((set) => ({
       }
     }
   },
+
+  // Trade calc → offer preview handoff. Cleared by the OffersView once it
+  // consumes the payload (so a refresh on the offers view doesn't re-open
+  // a stale draft).
+  pendingOfferData: null,
+  setPendingOfferData: (data) => set({ pendingOfferData: data }),
 }));
 
 /**

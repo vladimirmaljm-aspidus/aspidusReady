@@ -68,6 +68,7 @@ const PortalLocationsView = dynamic(() => import("@/components/views/portal-loca
 const PlatformAuditView = dynamic(() => import("@/components/views/platform-audit-view").then((m) => m.PlatformAuditView), { ssr: false });
 const PlatformUsersView = dynamic(() => import("@/components/views/platform-users-view").then((m) => m.PlatformUsersView), { ssr: false });
 const PlatformHealthView = dynamic(() => import("@/components/views/platform-health-view").then((m) => m.PlatformHealthView), { ssr: false });
+const VerificationLogsView = dynamic(() => import("@/components/views/verification-logs-view").then((m) => m.VerificationLogsView), { ssr: false });
 
 /* -------------------------------------------------------------------------- */
 /*  View renderer                                                             */
@@ -123,6 +124,7 @@ function ViewContent({ view }: { view: string }) {
     case "platform-audit":       return <PlatformAuditView />;
     case "platform-users":       return <PlatformUsersView />;
     case "platform-health":      return <PlatformHealthView />;
+    case "verification-logs":   return <VerificationLogsView />;
     default:                     return <DashboardView />;
   }
 }
