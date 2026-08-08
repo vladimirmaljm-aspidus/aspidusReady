@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { uploadFile } from "@/lib/upload/service";
+import { verifyLogoUpload } from "@/lib/upload/verify-file";
 
 export const runtime = "nodejs";
 
@@ -28,13 +29,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (file.size > 2 * 1024 * 1024) {
     return NextResponse.json({ error: "Logo too large. Max 2MB." }, { status: 400 });
   }
-  const allowedTypes = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+  const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
   if (!allowedTypes.includes(file.type)) {
-    return NextResponse.json({ error: "Invalid type. Allowed: PNG, JPEG, WebP, SVG." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid type. Allowed: PNG, JPEG, WebP." }, { status: 400 });
   }
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  // Verify actual content via magic bytes (SVG banned — stored XSS risk via <script> tags)
+  const verification = verifyLogoUpload(buffer, file.type);
+  if (!verification.isValid) {
+    return NextResponse.json({ error: verification.error }, { status: 400 });
+  }
   const ext = file.name.split(".").pop() || "png";
   const path = `${id}/logo.${ext}`;
 

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { verifyPassword } from "@/lib/auth/password";
-import { createSession, setSessionCookie } from "@/lib/auth/session";
+import {
+  createSession,
+  setSessionCookie,
+  enforceConcurrentSessionLimit,
+} from "@/lib/auth/session";
+import { lookupIp } from "@/lib/utils/geo-ip";
 import { createHash } from "crypto";
 
 export const runtime = "nodejs";
@@ -75,6 +80,14 @@ export async function POST(req: NextRequest) {
     const ip = getRequestIp(req);
     const userAgent = req.headers.get("user-agent") || null;
 
+    // ── IP → Country resolution ───────────────────────────────────────────
+    // Kick off the geo lookup early (runs concurrently with the lookup work
+    // below). 5s timeout + null fallback means this can never block a login.
+    const geoPromise = lookupIp(ip).catch(() => ({
+      country: null as string | null,
+      city: null, region: null, latitude: null, longitude: null,
+    }));
+
     // ---- User does not exist OR is inactive ----
     if (!user || !user.active) {
       // The LoginHistoryEntry model has a non-nullable user_id with a FK to User.
@@ -99,6 +112,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Resolve geo (awaited here — by now the lookup has run in parallel
+    //    with the user query above, so this await is usually instant).
+    const geo = await geoPromise;
+    const country = geo?.country ?? null;
+
     // ---- Lockout check ----
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
       try {
@@ -107,7 +125,7 @@ export async function POST(req: NextRequest) {
           username: user.username,
           ip,
           user_agent: userAgent,
-          country: null,
+          country,
           success: false,
           reason: "Account locked",
         });
@@ -144,7 +162,7 @@ export async function POST(req: NextRequest) {
           username: user.username,
           ip,
           user_agent: userAgent,
-          country: null,
+          country,
           success: false,
           reason: "Wrong password",
         });
@@ -177,7 +195,7 @@ export async function POST(req: NextRequest) {
             username: user.username,
             ip,
             user_agent: userAgent,
-            country: null,
+            country,
             success: false,
             reason: `Tenant ${tenant.status}`,
           });
@@ -237,13 +255,21 @@ export async function POST(req: NextRequest) {
     // trying to insert null tenant_id crashes with 23502.
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     if (user.tenant_id) {
+      // ── Concurrent session limit (LRU eviction) ───────────────────────
+      // Cap each user to MAX_CONCURRENT_SESSIONS active sessions. When the
+      // limit is reached, the oldest session is revoked before the new one
+      // is created. Defense against stolen-cookie farms and "session
+      // sharing" abuse. Implemented centrally in session.ts so the cap is
+      // enforced identically across every login surface.
+      await enforceConcurrentSessionLimit(user.id, user.tenant_id);
+
       try {
         await store.createSession({
           user_id: user.id,
           tenant_id: user.tenant_id,
           ip,
           user_agent: userAgent,
-          country: null,
+          country,
           expires_at: expiresAt,
           current: true,
         } as any);
@@ -258,7 +284,7 @@ export async function POST(req: NextRequest) {
         username: user.username,
         ip,
         user_agent: userAgent,
-        country: null,
+        country,
         success: true,
         reason: null,
       });
@@ -272,7 +298,7 @@ export async function POST(req: NextRequest) {
           user_id: user.id,
           tenant_id: user.tenant_id,
           ip,
-          country: null,
+          country,
         } as any);
       } catch (e) {
         console.error("[login] upsertKnownIp failed:", e);

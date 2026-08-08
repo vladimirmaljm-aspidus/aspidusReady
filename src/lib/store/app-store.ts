@@ -59,6 +59,7 @@ export type ViewKey =
   | "portal-uploads"
   | "logistics-requests"
   | "plan-upgrade-queue"
+  | "portal-locations"
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"

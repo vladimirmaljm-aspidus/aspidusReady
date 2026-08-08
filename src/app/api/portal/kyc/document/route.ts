@@ -3,6 +3,7 @@ import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
 import { uploadKycDocument } from "@/lib/upload/service";
 import { audit } from "@/lib/api/helpers";
+import { verifyKycUpload } from "@/lib/upload/verify-file";
 
 export const runtime = "nodejs";
 
@@ -37,9 +38,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Save KYC form first." }, { status: 400 });
   }
 
-  // Read file buffer
+  // Read file buffer once and verify actual content via magic bytes (prevents MIME spoofing)
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  const verification = verifyKycUpload(buffer, file.type);
+  if (!verification.isValid) {
+    return NextResponse.json({ error: verification.error }, { status: 400 });
+  }
 
   // Upload to storage
   const uploadResult = await uploadKycDocument(

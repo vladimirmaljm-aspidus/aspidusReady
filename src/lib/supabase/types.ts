@@ -834,6 +834,13 @@ export interface PortalAccess {
   must_set_password: boolean;
   last_login_at: string | null;
   last_login_ip: string | null;
+  /**
+   * Country of the most recent successful login (resolved from last_login_ip
+   * via ipapi.co). Optional because the underlying column is added by
+   * migration `005_portal_access_last_login_country.sql` and may not yet
+   * exist on every deployment — the store layer falls back gracefully.
+   */
+  last_login_country?: string | null;
   created_at: string;
   updated_at: string;
   // Brute-force protection + session revocation on password change

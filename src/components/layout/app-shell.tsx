@@ -64,6 +64,7 @@ const FeatureFlagsView = dynamic(() => import("@/components/views/feature-flags-
 const PortalUploadsView = dynamic(() => import("@/components/views/portal-uploads-view").then((m) => m.PortalUploadsView), { ssr: false });
 const LogisticsRequestsView = dynamic(() => import("@/components/views/logistics-requests-view").then((m) => m.LogisticsRequestsView), { ssr: false });
 const PlanUpgradeQueueView = dynamic(() => import("@/components/views/plan-upgrade-queue-view").then((m) => m.PlanUpgradeQueueView), { ssr: false });
+const PortalLocationsView = dynamic(() => import("@/components/views/portal-locations-view").then((m) => m.PortalLocationsView), { ssr: false });
 const PlatformAuditView = dynamic(() => import("@/components/views/platform-audit-view").then((m) => m.PlatformAuditView), { ssr: false });
 const PlatformUsersView = dynamic(() => import("@/components/views/platform-users-view").then((m) => m.PlatformUsersView), { ssr: false });
 const PlatformHealthView = dynamic(() => import("@/components/views/platform-health-view").then((m) => m.PlatformHealthView), { ssr: false });
@@ -118,6 +119,7 @@ function ViewContent({ view }: { view: string }) {
     case "portal-uploads":       return <PortalUploadsView />;
     case "logistics-requests":   return <LogisticsRequestsView />;
     case "plan-upgrade-queue":   return <PlanUpgradeQueueView />;
+    case "portal-locations":     return <PortalLocationsView />;
     case "platform-audit":       return <PlatformAuditView />;
     case "platform-users":       return <PlatformUsersView />;
     case "platform-health":      return <PlatformHealthView />;

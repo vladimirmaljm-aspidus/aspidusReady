@@ -4,6 +4,7 @@ import { uploadPortalFile } from "@/lib/upload/service";
 import { recordPortalUpload, PortalUploadCategory } from "@/lib/portal/uploads";
 import { getStore } from "@/lib/data/store";
 import { audit } from "@/lib/api/helpers";
+import { verifyPortalUpload } from "@/lib/upload/verify-file";
 
 export const runtime = "nodejs";
 
@@ -43,8 +44,14 @@ export async function POST(req: NextRequest) {
   if (file.size > MAX_SIZE) return NextResponse.json({ error: "File too large. Max 25 MB." }, { status: 400 });
   if (!ALLOWED.has(file.type)) return NextResponse.json({ error: `Unsupported file type: ${file.type}` }, { status: 400 });
 
+  // Read file once and verify actual content via magic bytes (prevents MIME spoofing)
+  const buf = Buffer.from(await file.arrayBuffer());
+  const verification = verifyPortalUpload(buf, file.type);
+  if (!verification.isValid) {
+    return NextResponse.json({ error: verification.error }, { status: 400 });
+  }
+
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
     const uploaded = await uploadPortalFile({
       tenantId: access.tenant_id,
       partnerId: access.partner_id,

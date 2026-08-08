@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { hashPassword } from "@/lib/auth/password";
+import { rotateUserSessions } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,7 @@ function whitelistUserFields(body: Record<string, unknown>): Record<string, unkn
   const allowed = new Set([
     "tenant_id", "username", "email", "full_name", "role",
     "permissions", "active", "must_change_password", "password_hash",
+    "token_version",
   ]);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
@@ -96,6 +98,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       body.password_hash = await hashPassword(body.password);
       delete body.password;
       body.must_change_password = false;
+      // Bump token_version so every JWT issued before this password change
+      // is rejected on its next request (see requireAuth's token_version
+      // check). Without this, old cookies on lost / stolen devices stay
+      // valid for up to 7 days after a password reset.
+      body.token_version = (existing.token_version || 0) + 1;
     }
     // Preserve the user's tenant_id (regular users/admins cannot move users to another tenant)
     const whitelisted = whitelistUserFields(body);
@@ -111,6 +118,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     const updated = await auth.store.upsertUser({ ...whitelisted, id });
     await audit(auth.store, auth.user, req, "user.update", "user", id, { username: updated.username });
+
+    // ── Session rotation on password change ───────────────────────────────
+    // If the password (and therefore token_version) was changed, every
+    // previously-issued session must be torn down — both the stateless JWT
+    // (handled by the token_version bump above) and the DB rows in
+    // `sessions` (handled here). Without this, an attacker who stole a
+    // cookie before the password reset could keep using the dashboard until
+    // the JWT's natural 7-day expiry.
+    if (body.password) {
+      await rotateUserSessions(updated.id, updated.tenant_id);
+    }
+
     const { password_hash, totp_secret, ...safe } = updated;
     return NextResponse.json(safe);
   } catch (error: any) {

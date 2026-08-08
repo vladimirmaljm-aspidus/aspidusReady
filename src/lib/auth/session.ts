@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { getStore } from "@/lib/data/store";
 
 const COOKIE_NAME = "crm_session";
 const SESSION_TTL_DAYS = 7;
@@ -77,3 +78,99 @@ export async function clearSessionCookie(): Promise<void> {
 }
 
 export const SESSION_COOKIE_NAME = COOKIE_NAME;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session security helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Maximum number of concurrent active sessions a single user may hold.
+ * Enforced by `enforceConcurrentSessionLimit` below on every successful
+ * login — oldest session is revoked (LRU) when the limit is exceeded.
+ *
+ * 5 is generous enough that a user with a phone, laptop, tablet, and two
+ * browser profiles never hits it, but tight enough that a stolen-cookie
+ * farm can't accumulate hundreds of sessions.
+ */
+export const MAX_CONCURRENT_SESSIONS = 5;
+
+/**
+ * Revoke every active session for a user.
+ *
+ * Called after a password change (admin reset OR user self-change) so that
+ * any session cookies issued before the change — including ones on lost or
+ * stolen devices — stop being accepted on their very next request.
+ *
+ * The JWT layer's `token_version` check already short-circuits revoked
+ * sessions at the auth layer (`requireAuth`); this function performs the
+ * matching DB-side cleanup so the admin "Sessions" panel reflects reality
+ * and revocation survives across server restarts (JWT validation alone
+ * can't, because the JWT is stateless).
+ *
+ * Failures are logged but never thrown — a password change must succeed even
+ * if the sessions table is briefly unreachable.
+ */
+export async function rotateUserSessions(userId: string, tenantId: string | null): Promise<void> {
+  if (!tenantId) {
+    // Platform-level (super_admin) accounts have no tenant_id and the
+    // sessions table has a NOT NULL constraint on tenant_id — there's
+    // nothing to revoke. Their token_version is still bumped by callers
+    // for the JWT-side invalidation.
+    return;
+  }
+  try {
+    const store = await getStore();
+    const sessions = await store.listSessions(tenantId, userId);
+    const active = sessions.filter((s) => !s.revoked);
+    if (active.length === 0) return;
+    // Revoke in parallel — best-effort, individual failures don't abort the rest.
+    await Promise.all(
+      active.map((s) =>
+        store.revokeSession(s.id).catch((e) => {
+          console.error("[rotateUserSessions] revokeSession failed for", s.id, e);
+        })
+      )
+    );
+  } catch (e) {
+    console.error("[rotateUserSessions] failed for", userId, e);
+  }
+}
+
+/**
+ * Enforce the concurrent-session limit by revoking the oldest active session
+ * if the user is already at the cap. Called by login routes BEFORE creating
+ * a new session row.
+ *
+ * Idempotent + safe to call on every login: if the user is under the limit,
+ * this is a no-op.
+ */
+export async function enforceConcurrentSessionLimit(
+  userId: string,
+  tenantId: string,
+  max: number = MAX_CONCURRENT_SESSIONS
+): Promise<void> {
+  try {
+    const store = await getStore();
+    const sessions = await store.listSessions(tenantId, userId);
+    const active = sessions
+      .filter((s) => !s.revoked)
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    // If we're at or above the limit, revoke the OLDEST session(s) until we
+    // are exactly one under the cap — leaving room for the new session the
+    // caller is about to create.
+    while (active.length >= max) {
+      const oldest = active.shift();
+      if (!oldest) break;
+      try {
+        await store.revokeSession(oldest.id);
+      } catch (e) {
+        console.error("[enforceConcurrentSessionLimit] revokeSession failed:", e);
+      }
+    }
+  } catch (e) {
+    console.error("[enforceConcurrentSessionLimit] failed for", userId, e);
+  }
+}

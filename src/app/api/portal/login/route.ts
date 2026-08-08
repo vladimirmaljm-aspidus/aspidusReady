@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { audit } from "@/lib/api/helpers";
+import { lookupIp } from "@/lib/utils/geo-ip";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,16 @@ export async function POST(req: NextRequest) {
     }
     const store = await getStore();
     const ip = getRequestIp(req);
+
+    // ── IP → Country resolution ───────────────────────────────────────────
+    // Kick off the geo lookup early (runs concurrently with the credential
+    // verification below). 5s timeout + null fallback means this can never
+    // block a portal login. Country is recorded in the audit log details and,
+    // when migration 005 is applied, on portal_access.last_login_country.
+    const geoPromise = lookupIp(ip).catch(() => ({
+      country: null as string | null,
+      city: null, region: null, latitude: null, longitude: null,
+    }));
 
     // If no tenant_id is provided, look up ALL matching accounts for this email.
     // If more than one exists (same email across tenants), the client MUST
@@ -51,6 +62,11 @@ export async function POST(req: NextRequest) {
       ? await store.getPortalAccessByEmail(tenant_id, email)
       : await store.getPortalAccessByEmailAnyTenant(email);
 
+    // ── Resolve geo (by now the lookup has been running in parallel with the
+    //    existing-account query above, so this await is usually instant).
+    const geo = await geoPromise;
+    const country = geo?.country ?? null;
+
     if (existing?.locked_until && new Date(existing.locked_until) > new Date()) {
       try {
         await audit(
@@ -60,7 +76,7 @@ export async function POST(req: NextRequest) {
           "portal.login_failed",
           "portal_access",
           existing.id,
-          { email, ip, reason: "account_locked" },
+          { email, ip, country, reason: "account_locked" },
         );
       } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "Account is temporarily locked. Try again later." }, { status: 423 });
@@ -93,7 +109,7 @@ export async function POST(req: NextRequest) {
           "portal.login_failed",
           "portal_access",
           existing?.id,
-          { email, ip, reason: existing ? "invalid_credentials" : "account_not_found" },
+          { email, ip, country, reason: existing ? "invalid_credentials" : "account_not_found" },
         );
       } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "Invalid credentials or account not active." }, { status: 401 });
@@ -109,7 +125,7 @@ export async function POST(req: NextRequest) {
           "portal.login_failed",
           "portal_access",
           access.id,
-          { email, ip, reason: "account_not_active" },
+          { email, ip, country, reason: "account_not_active" },
         );
       } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "Account is not yet active. Please set up your password first." }, { status: 403 });
@@ -127,7 +143,7 @@ export async function POST(req: NextRequest) {
           "portal.login_failed",
           "portal_access",
           access.id,
-          { email, ip, reason: "tenant_suspended", tenant_status: tenant.status },
+          { email, ip, country, reason: "tenant_suspended", tenant_status: tenant.status },
         );
       } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({
@@ -147,7 +163,7 @@ export async function POST(req: NextRequest) {
           "portal.login_failed",
           "portal_access",
           access.id,
-          { email, ip, reason: "subscription_expired" },
+          { email, ip, country, reason: "subscription_expired" },
         );
       } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "This workspace's subscription has expired.", subscription_expired: true }, { status: 402 });
@@ -161,7 +177,7 @@ export async function POST(req: NextRequest) {
           "portal.login_failed",
           "portal_access",
           access.id,
-          { email, ip, reason: "trial_expired" },
+          { email, ip, country, reason: "trial_expired" },
         );
       } catch (e) { console.error("[audit]", e); }
       return NextResponse.json({ error: "This workspace's trial period has ended.", subscription_expired: true }, { status: 402 });
@@ -177,6 +193,9 @@ export async function POST(req: NextRequest) {
     await setSessionCookie(token);
 
     // Success: reset the failed-attempt counter and record the login.
+    // Also persist the resolved country on portal_access.last_login_country
+    // (no-op on deployments where migration 005 hasn't been applied — the
+    // store layer retries the upsert without the column on schema error).
     try {
       await store.upsertPortalAccess({
         id: access.id,
@@ -184,6 +203,7 @@ export async function POST(req: NextRequest) {
         locked_until: null,
         last_login_at: new Date().toISOString(),
         last_login_ip: ip,
+        last_login_country: country,
       });
     } catch { /* non-critical */ }
 
@@ -195,7 +215,7 @@ export async function POST(req: NextRequest) {
         "portal.login",
         "portal_access",
         access.id,
-        { email, ip },
+        { email, ip, country },
       );
     } catch (e) { console.error("[audit]", e); }
 

@@ -11,7 +11,7 @@ import {
   Webhook, Lock, Mail, Receipt, FileSignature, Boxes,
   ChevronLeft, ChevronRight, Building2, Calculator,
   ToggleRight, LayoutGrid, Plug, DollarSign, BookMarked, Calendar,
-  StickyNote, Briefcase, Settings2, TrendingUp, Truck,
+  StickyNote, Briefcase, Settings2, TrendingUp, Truck, MapPin,
 } from "lucide-react";
 import {
   Tooltip,
@@ -133,6 +133,7 @@ const SECTIONS: NavSection[] = [
       { key: "vault", i18nKey: "vault", i18nSection: "administration", icon: Lock, permission: "vault.read", featureFlag: "module_vault" },
       { key: "api-keys", i18nKey: "api-keys", i18nSection: "administration", icon: Key, permission: "api-keys.read", featureFlag: "module_api_keys" },
       { key: "audit", i18nKey: "audit", i18nSection: "administration", icon: ScrollText, permission: "audit.read" },
+      { key: "portal-locations", i18nKey: "portal-locations", i18nSection: "administration", icon: MapPin, permission: "portal-access.read" },
       { key: "plans", i18nKey: "plans", i18nSection: "administration", icon: TrendingUp, permission: "platform.plans.read" },
     ],
   },

@@ -948,48 +948,81 @@ export class SupabaseStore implements Store {
     return (data as PortalAccess[]) || [];
   }
   async upsertPortalAccess(p: Partial<PortalAccess> & { id?: string }): Promise<PortalAccess> {
-    const payload: SupaRow = { ...p };
-    // Strip columns that may not exist in the database yet (added gracefully)
+    // Columns that have been added to portal_access at various points in the
+    // schema's history. We only strip when they are explicitly undefined so
+    // callers can still set them when the column is present in the live DB.
     const columnsThatMayNotExist = [
       "feature_flags", "onboarding_status", "portal_locked_until",
       "failed_login_attempts", "lockout_until", "notes",
       "failed_attempts", "locked_until", "token_version",
+      // ↑ existing columns (present in current schema) — kept as a safety net
+      //   for older deployments that may be missing one.
+      // ↓ newly-introduced columns — see migration 005_portal_access_last_login_country.sql.
+      "last_login_country",
     ];
-    for (const col of columnsThatMayNotExist) {
-      if (payload[col] === undefined) delete payload[col];
-    }
-    // When id is provided, use UPDATE — avoids NOT NULL constraint violations
-    // on columns like partner_id that aren't in the partial payload.
-    if (p.id) {
-      const { id, ...fields } = payload;
-      // Strip any undefined values to avoid overwriting with null
-      const cleanFields: SupaRow = {};
-      for (const [k, v] of Object.entries(fields)) {
-        if (v !== undefined) cleanFields[k] = v;
+    const stripOptionalColumns = (row: SupaRow): SupaRow => {
+      const out: SupaRow = { ...row };
+      for (const col of columnsThatMayNotExist) {
+        if (out[col] === undefined) delete out[col];
       }
-      const { data, error } = await this.sb()
-        .from("portal_access")
-        .update(cleanFields)
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      if (!data) {
-        // Row doesn't exist yet — fall back to insert with full payload
-        const { data: ins, error: insErr } = await this.sb()
+      return out;
+    };
+
+    // Inner worker that performs the actual upsert. Throws on DB error.
+    const doUpsert = async (input: Partial<PortalAccess> & { id?: string }): Promise<PortalAccess> => {
+      const payload = stripOptionalColumns(input as SupaRow);
+      // When id is provided, use UPDATE — avoids NOT NULL constraint violations
+      // on columns like partner_id that aren't in the partial payload.
+      if (input.id) {
+        const { id, ...fields } = payload;
+        // Strip any undefined values to avoid overwriting with null
+        const cleanFields: SupaRow = {};
+        for (const [k, v] of Object.entries(fields)) {
+          if (v !== undefined) cleanFields[k] = v;
+        }
+        const { data, error } = await this.sb()
           .from("portal_access")
-          .insert(payload)
+          .update(cleanFields)
+          .eq("id", id)
           .select()
           .single();
-        if (insErr) throw insErr;
-        return ins as PortalAccess;
+        if (error) throw error;
+        if (!data) {
+          // Row doesn't exist yet — fall back to insert with full payload
+          const { data: ins, error: insErr } = await this.sb()
+            .from("portal_access")
+            .insert(payload)
+            .select()
+            .single();
+          if (insErr) throw insErr;
+          return ins as PortalAccess;
+        }
+        return data as PortalAccess;
       }
+      // No id — insert new portal access
+      const { data, error } = await this.sb().from("portal_access").insert(payload).select().single();
+      if (error) throw error;
       return data as PortalAccess;
+    };
+
+    try {
+      return await doUpsert(p);
+    } catch (e: any) {
+      // If the failure looks like "column X doesn't exist in the schema", retry
+      // once without that column. This makes the upsert tolerant of deployments
+      // where migration 005 (portal_access.last_login_country) hasn't been
+      // applied yet — the login flow stays working and the country is still
+      // captured in the audit log + login_history.
+      const msg = String((e && (e.message || e.code)) || "");
+      const missingColMatch = msg.match(/Could not find the ['"]?([\w_]+)['"]? column/);
+      if (missingColMatch) {
+        const missingCol = missingColMatch[1];
+        const safeInput = { ...p } as Record<string, unknown>;
+        delete safeInput[missingCol];
+        return await doUpsert(safeInput as Partial<PortalAccess> & { id?: string });
+      }
+      throw e;
     }
-    // No id — insert new portal access
-    const { data, error } = await this.sb().from("portal_access").insert(payload).select().single();
-    if (error) throw error;
-    return data as PortalAccess;
   }
   async deletePortalAccess(id: string): Promise<void> {
     const { error } = await this.sb().from("portal_access").delete().eq("id", id);
