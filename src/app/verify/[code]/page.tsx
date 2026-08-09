@@ -1,6 +1,7 @@
 import { getStore } from "@/lib/data/store";
 import type { DocumentVerification } from "@/lib/supabase/types";
 import { VerifyClient } from "@/components/verify/verify-client";
+import "../verify.css";
 
 export const dynamic = "force-dynamic";
 
