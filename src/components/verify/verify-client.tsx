@@ -21,9 +21,10 @@ import type { DocumentVerification } from "@/lib/supabase/types";
 interface VerifyClientProps {
   verification: DocumentVerification | null;
   code: string;
+  cipheredRecipient?: string;
 }
 
-export function VerifyClient({ verification: v, code }: VerifyClientProps) {
+export function VerifyClient({ verification: v, code, cipheredRecipient = "—" }: VerifyClientProps) {
   const [phase, setPhase] = React.useState<"requesting" | "denied" | "ready">("requesting");
   const [gpsCoords, setGpsCoords] = React.useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
   const submittedRef = React.useRef(false);
@@ -265,13 +266,13 @@ export function VerifyClient({ verification: v, code }: VerifyClientProps) {
                   </div>
                 )}
 
-                {/* Issued by */}
+                {/* Issued to (ciphered) */}
                 <div className="verify-detail-row">
                   <div className="verify-detail-icon">
                     <Building2 className="size-3.5" />
                   </div>
-                  <span className="verify-detail-label">Issued By</span>
-                  <span className="verify-detail-value">Aspidus DMCC</span>
+                  <span className="verify-detail-label">Issued To</span>
+                  <span className="verify-detail-value font-mono tracking-wider">{cipheredRecipient}</span>
                 </div>
 
                 {/* Verification count */}
