@@ -145,18 +145,62 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    // ── Update invoice status ────────────────────────────────────────────
+    // ── Update invoice status (cumulative total check) ──────────────────
+    // The "paid vs partial" decision MUST be based on the SUM of all
+    // payments recorded against this invoice — not the single payment amount
+    // we just received. Otherwise two $500 payments on a $1000 invoice both
+    // register as "partial" and the invoice never reaches "paid".
+    //
+    // We resolve prior payments via `erp_bank_transactions` filtered by the
+    // invoice's `number` + `tenant_id` (this is exactly how the
+    // create-bank-txn step above tags the row).
+    //
+    // Fix 3 (Re-Audit-2 N1): we additionally filter `transaction_type = "credit"
+    // and `category = "invoice_payment"` — without this filter, refunds (debits)
+    // or manual adjustments are summed as positive contributions, inflating
+    // `totalPaid` and marking the invoice "paid" prematurely.
     const invoiceTotal = Number(invoice.total ?? 0);
-    const isFullPayment = numericAmount >= invoiceTotal - 0.01; // 1 cent tolerance
+    let totalPaid = numericAmount; // include the payment we just recorded
+    try {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const sb = getSupabase();
+      const { data: priorTxns, error: txErr } = await sb
+        .from("erp_bank_transactions")
+        .select("amount")
+        .eq("invoice_number", invoice.number)
+        .eq("tenant_id", tid)
+        .eq("transaction_type", "credit")
+        .eq("category", "invoice_payment");
+      if (txErr) {
+        console.warn("[record-payment] cumulative lookup failed:", txErr.message);
+      } else if (priorTxns && priorTxns.length > 0) {
+        totalPaid = (priorTxns as Array<{ amount: number | string }>).reduce(
+          (sum, t) => sum + Number(t.amount || 0),
+          0,
+        );
+      }
+    } catch (e) {
+      console.warn("[record-payment] cumulative lookup threw:", e);
+    }
+
+    const isFullPayment = totalPaid >= invoiceTotal - 0.01; // 1 cent tolerance
     const newStatus: string = isFullPayment ? "paid" : "partial";
     const nowIso = new Date().toISOString();
 
     try {
-      await auth.store.upsertInvoice({
+      // Only stamp `paid_at` when transitioning to "paid". On a partial
+      // payment we preserve any existing `paid_at` (which should be null,
+      // but we don't want to overwrite a prior "paid" mark if the invoice
+      // is somehow re-opened later).
+      const patch: { id: string; status: any; paid_at?: string; updated_at: string } = {
         id,
         status: newStatus as any,
-        paid_at: nowIso,
-      } as any);
+        updated_at: nowIso,
+      };
+      if (isFullPayment) {
+        patch.paid_at = nowIso;
+      }
+      await auth.store.upsertInvoice(patch as any);
     } catch (e: any) {
       console.error("[record-payment] invoice update failed:", e);
       return NextResponse.json(
@@ -215,6 +259,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     //   1. `invoice.proforma_id` if it ever exists (forward-compat), else
     //   2. the most recent non-paid proforma linked to `invoice.offer_id`
     //      (skipped when offer_id is null — no way to know which proforma).
+    //
+    // Fix 2 (Re-Audit-2 N2): idempotency check — skip the cascade if the
+    // proforma is already "paid". Two concurrent record-payment calls on the
+    // same invoice would both fire this cascade, double-record the revision,
+    // and double-audit. The `maybeSingle()` + `status === "paid"` guard makes
+    // the second call a no-op.
     if (isFullPayment) {
       try {
         const { getSupabase } = await import("@/lib/supabase/client");
@@ -246,6 +296,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
 
         if (proformaId) {
+          // Idempotency check: skip the cascade if the proforma is already
+          // paid (a concurrent record-payment call beat us to it).
+          const { data: proformaNow } = await sb
+            .from("proformas")
+            .select("id, status, tenant_id")
+            .eq("id", proformaId)
+            .eq("tenant_id", tid)
+            .maybeSingle();
+
+          if (proformaNow && (proformaNow as any).status === "paid") {
+            console.log("[proforma auto-paid] already paid, skipping cascade");
+          } else {
           // Fetch the BEFORE snapshot so we can record a proper revision.
           const { data: beforeProforma } = await sb
             .from("proformas")
@@ -254,7 +316,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .eq("tenant_id", tid)
             .maybeSingle();
 
-          const { error: updErr } = await sb
+          const { data: updatedRows, error: updErr } = await sb
             .from("proformas")
             .update({
               status: "paid",
@@ -262,10 +324,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               updated_at: paidAtIso,
             })
             .eq("id", proformaId)
-            .eq("tenant_id", tid);
+            .eq("tenant_id", tid)
+            // Conditional update — only fire if status is not already "paid".
+            // This is the second layer of idempotency (race-safe at the DB
+            // layer: if the row flips to "paid" between our SELECT above and
+            // this UPDATE, the WHERE clause returns 0 rows affected and we
+            // skip the revision + audit).
+            .neq("status", "paid")
+            .select("id");
           if (updErr) {
             console.warn("[proforma auto-paid] update failed:", updErr.message);
-          } else {
+          } else if (updatedRows && updatedRows.length > 0) {
+            // Update succeeded → record revision + audit. The `updatedRows.length > 0`
+            // guard prevents the double-fire when a concurrent call already
+            // flipped the proforma to "paid" between our SELECT and UPDATE.
             // Fetch the AFTER snapshot for the revision diff.
             const { data: afterProforma } = await sb
               .from("proformas")
@@ -301,9 +373,179 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               },
             ).catch(() => {});
           }
+          }
         }
       } catch (e) {
         console.error("[proforma auto-paid] failed:", e);
+      }
+    }
+
+    // ── Cascade: auto-create a balanced journal entry for the payment ────
+    // When the invoice transitions to "paid", we record a DR Bank / CR Revenue
+    // entry so finance reports reflect the cash received. The lines use the
+    // tenant's ERP chart-of-accounts — we resolve `cash_account_id` (or fall
+    // back to the linked bank account's `account_id`) for the debit, and
+    // `revenue_account_id` for the credit. Skipped silently if the tenant has
+    // not configured ERP accounts yet (e.g. ERP module not initialized).
+    //
+    // Fix 2 (Re-Audit-2 N2): idempotency check — before inserting, we look
+    // for an existing posted journal entry with `reference_type=invoice` +
+    // `reference_id=<invoice id>`. Two concurrent record-payment calls on the
+    // same invoice would both reach this block and insert two DR Bank / CR
+    // Revenue entries → revenue double-counted. The check makes the second
+    // call a no-op.
+    //
+    // Fix 11 (Re-Audit-2 N3): removed the `receivable_account_id` fallback —
+    // crediting AR instead of Revenue is wrong for cash-basis. If
+    // `revenue_account_id` is unset we skip cleanly.
+    //
+    // Fix 11b (Re-Audit-2 N16): `entry_number` now uses a crypto.randomUUID
+    // suffix instead of `Date.now()` — concurrent calls in the same
+    // millisecond would otherwise mint the same `entry_number`.
+    if (newStatus === "paid") {
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+
+        // Idempotency check — bail if a posted journal entry already exists
+        // for this invoice (concurrent record-payment call already fired).
+        const { data: existingJE } = await sb
+          .from("erp_journal_entries")
+          .select("id, entry_number")
+          .eq("reference_type", "invoice")
+          .eq("reference_id", id)
+          .eq("tenant_id", tid)
+          .eq("status", "posted")
+          .maybeSingle();
+
+        if (existingJE) {
+          console.log("[record-payment] journal entry already exists, skipping");
+        } else {
+        // Resolve the real erp_accounts IDs (FK-constrained, can't use string
+        // literals like "bank" / "sales_revenue"). The settings row holds the
+        // tenant's preferred accounts; if it's missing we abort cleanly.
+        const { data: settings } = await sb
+          .from("erp_settings")
+          .select("cash_account_id, revenue_account_id, auto_post_journal, default_currency")
+          .eq("tenant_id", tid)
+          .maybeSingle();
+
+        let bankAccountIdResolved: string | null = (settings as any)?.cash_account_id || null;
+        if (!bankAccountIdResolved && bankAccountId) {
+          // Fall back to the erp_bank_accounts row used for the payment.
+          const { data: ba } = await sb
+            .from("erp_bank_accounts")
+            .select("account_id")
+            .eq("id", bankAccountId)
+            .maybeSingle();
+          if (ba?.account_id) bankAccountIdResolved = (ba as any).account_id;
+        }
+        // Re-Audit-2 N3: removed the `receivable_account_id` fallback.
+        // Crediting AR instead of Revenue is wrong for cash-basis; if
+        // `revenue_account_id` is unset, we skip the auto-journal cleanly.
+        const revenueAccountId: string | null =
+          (settings as any)?.revenue_account_id || null;
+
+        // Fix 11: validate that the resolved account_ids actually exist in
+        // erp_accounts before inserting — a stale settings row pointing at a
+        // deleted account would otherwise produce a FK violation.
+        let bankAccountValid = false;
+        let revenueAccountValid = false;
+        if (bankAccountIdResolved) {
+          const { data: ba } = await sb
+            .from("erp_accounts")
+            .select("id")
+            .eq("id", bankAccountIdResolved)
+            .eq("tenant_id", tid)
+            .maybeSingle();
+          bankAccountValid = !!ba;
+        }
+        if (revenueAccountId) {
+          const { data: ra } = await sb
+            .from("erp_accounts")
+            .select("id")
+            .eq("id", revenueAccountId)
+            .eq("tenant_id", tid)
+            .maybeSingle();
+          revenueAccountValid = !!ra;
+        }
+
+        if (bankAccountIdResolved && revenueAccountId && bankAccountValid && revenueAccountValid) {
+          // Generate a unique journal entry number. The `get_next_doc_number`
+          // RPC only supports offer/invoice/proforma, so we synthesize one.
+          // Re-Audit-2 N16: use crypto.randomUUID() suffix instead of Date.now()
+          // so concurrent calls in the same millisecond don't collide.
+          const { randomUUID } = await import("node:crypto");
+          const jeNumber = `PMT-${invoice.number}-${randomUUID().slice(0, 8)}`;
+          const todayIso = new Date().toISOString().slice(0, 10);
+          const jeCurrency = (invoice.currency as string) || (settings as any)?.default_currency || "USD";
+          const shouldPost = Boolean((settings as any)?.auto_post_journal);
+
+          const { data: je, error: jeError } = await sb
+            .from("erp_journal_entries")
+            .insert({
+              tenant_id: tid,
+              entry_number: jeNumber,
+              date: todayIso,
+              description: `Auto-journal for invoice ${invoice.number} payment`,
+              reference_type: "invoice",
+              reference_id: id,
+              status: shouldPost ? "posted" : "draft",
+              source_type: "auto",
+              debit_total: numericAmount,
+              credit_total: numericAmount,
+              currency: jeCurrency,
+              exchange_rate: 1,
+              created_by: auth.user.id,
+              posted_by: shouldPost ? auth.user.id : null,
+              posted_at: shouldPost ? new Date().toISOString() : null,
+            })
+            .select()
+            .maybeSingle();
+
+          if (jeError) {
+            console.warn("[record-payment] auto journal header insert failed:", jeError.message);
+          } else if (je) {
+            const { error: linesError } = await sb.from("erp_journal_lines").insert([
+              {
+                journal_entry_id: (je as any).id,
+                tenant_id: tid,
+                account_id: bankAccountIdResolved,
+                description: `Payment received - ${invoice.number}`,
+                debit: numericAmount,
+                credit: 0,
+                line_number: 1,
+                currency: jeCurrency,
+                partner_id: invoice.partner_id || null,
+              },
+              {
+                journal_entry_id: (je as any).id,
+                tenant_id: tid,
+                account_id: revenueAccountId,
+                description: `Revenue - ${invoice.number}`,
+                debit: 0,
+                credit: numericAmount,
+                line_number: 2,
+                currency: jeCurrency,
+                partner_id: invoice.partner_id || null,
+              },
+            ]);
+            if (linesError) {
+              console.warn("[record-payment] auto journal lines insert failed:", linesError.message);
+            }
+          }
+        } else {
+          // Settings row missing or referenced accounts no longer exist —
+          // log + skip silently so the payment workflow isn't blocked on
+          // finance configuration.
+          console.warn(
+            "[record-payment] auto journal skipped: revenue_account_id unset or account_ids invalid",
+            { bankAccountIdResolved, revenueAccountId, bankAccountValid, revenueAccountValid }
+          );
+        }
+        } // end of `else` (no existing JE) branch
+      } catch (e) {
+        console.error("[record-payment] auto journal failed:", e);
       }
     }
 

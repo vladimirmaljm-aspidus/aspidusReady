@@ -9,41 +9,45 @@ export const runtime = "nodejs";
  * Strips the `impersonating` claim from the cookie, restoring the super_admin.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireSuperAdmin();
-  if (auth instanceof NextResponse) return auth;
+  try {
+    const auth = await requireSuperAdmin();
+    if (auth instanceof NextResponse) return auth;
 
-  const session = await getSessionFromCookie();
-  if (!session) return NextResponse.json({ error: "No session." }, { status: 401 });
+    const session = await getSessionFromCookie();
+    if (!session) return NextResponse.json({ error: "No session." }, { status: 401 });
 
-  if (!session.impersonating) {
-    return NextResponse.json({ ok: true, note: "Not impersonating" });
+    if (!session.impersonating) {
+      return NextResponse.json({ ok: true, note: "Not impersonating" });
+    }
+
+    const original = session.impersonating;
+
+    // Re-mint the cookie WITHOUT the impersonating claim.
+    const token = await createSession({
+      sub: session.sub,
+      username: session.username,
+      role: session.role,
+      tenant_id: session.tenant_id,
+      token_version: session.token_version,
+    });
+    await setSessionCookie(token);
+
+    await audit(
+      auth.store,
+      { id: session.sub, username: session.username, tenant_id: null },
+      req,
+      "super_admin.impersonate.end",
+      "user",
+      original.target_user_id,
+      {
+        target_user_id: original.target_user_id,
+        target_tenant_id: original.target_tenant_id,
+        original_expires_at: original.expires_at,
+      },
+    );
+
+    return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
-
-  const original = session.impersonating;
-
-  // Re-mint the cookie WITHOUT the impersonating claim.
-  const token = await createSession({
-    sub: session.sub,
-    username: session.username,
-    role: session.role,
-    tenant_id: session.tenant_id,
-    token_version: session.token_version,
-  });
-  await setSessionCookie(token);
-
-  await audit(
-    auth.store,
-    { id: session.sub, username: session.username, tenant_id: null },
-    req,
-    "super_admin.impersonate.end",
-    "user",
-    original.target_user_id,
-    {
-      target_user_id: original.target_user_id,
-      target_tenant_id: original.target_tenant_id,
-      original_expires_at: original.expires_at,
-    },
-  );
-
-  return NextResponse.json({ ok: true });
 }

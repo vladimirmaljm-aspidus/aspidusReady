@@ -5,6 +5,7 @@ import { toCSV, csvResponse, parseExportParams } from "@/lib/export/csv";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (offers.read)
@@ -25,4 +26,7 @@ export async function GET(req: NextRequest) {
 
   const csv = toCSV(result.items as unknown as Record<string, unknown>[], cols);
   return csvResponse(`offers-${new Date().toISOString().split("T")[0]}.csv`, csv);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

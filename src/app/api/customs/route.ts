@@ -97,9 +97,10 @@ const HS_CODES = [
 ];
 
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (erp.read)
+    // Permission gate (trade-calculator.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "trade-calculator.read"); if (_d) return _d; } /* requirePermission wired */
   // Feature gate (module_trade)
@@ -141,4 +142,7 @@ export async function GET(req: NextRequest) {
     totalCodes: HS_CODES.length,
     source: "embedded-wco-hs + wits-integration",
   });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

@@ -9,6 +9,7 @@ export const runtime = "nodejs";
  *   params: partner_id, status, search, limit, offset
  */
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -35,4 +36,7 @@ export async function GET(req: NextRequest) {
   const { data, count, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ items: data || [], total: count || 0 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

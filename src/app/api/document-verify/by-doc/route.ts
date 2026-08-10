@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 // Admin: look up verification by document (offer/invoice/proforma)
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (document-verify.read)
@@ -27,4 +28,7 @@ export async function GET(req: NextRequest) {
   const v = await auth.store.getDocumentVerificationByDoc(tenantId, docType, docId);
   if (!v) return NextResponse.json({ verification: null });
   return NextResponse.json({ verification: v });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

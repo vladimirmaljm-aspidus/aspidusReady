@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 // Send welcome email to a portal client with password setup link
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (portal.create)
@@ -70,4 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Email failed to send. Queued for retry.", details: result.error }, { status: 500 });
   }
   return NextResponse.json({ ok: true, sent: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

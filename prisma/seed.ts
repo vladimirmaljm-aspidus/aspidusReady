@@ -1,9 +1,15 @@
 // Seed script for local Prisma/SQLite development.
 // Creates: 2 tenants, 1 super_admin, 1 tenant admin, 1 tenant user, sample data.
 // Run: bun run prisma/seed.ts
+//
+// WARNING: Set ADMIN_PASSWORD, SEED_ADMIN_PASSWORD, and SEED_USER_PASSWORD env
+// variables before seeding in any non-local environment. If they are not set,
+// non-admin accounts get a random UUID password (printed once to stdout) so the
+// seeded accounts cannot be logged into with a publicly-known password.
 
 import { db } from "../src/lib/db";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 async function main() {
   console.log("→ Seeding database…");
@@ -56,9 +62,15 @@ async function main() {
   console.log("  ✓ Tenants:", tenant1.id, "|", tenant2.id);
 
   // ── 2. Users ──────────────────────────────────────────────────────────
-  const superAdminHash = await bcrypt.hash("Vladimir2026", 10);
-  const adminHash = await bcrypt.hash("Admin2026", 10);
-  const userHash = await bcrypt.hash("User2026", 10);
+  // WARNING: Change these passwords immediately after seeding in production!
+  // Or set the env variables below before running seed.
+  const superAdminPassword = process.env.ADMIN_PASSWORD || "ChangeMe!";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || crypto.randomUUID();
+  const userPassword = process.env.SEED_USER_PASSWORD || crypto.randomUUID();
+
+  const superAdminHash = await bcrypt.hash(superAdminPassword, 10);
+  const adminHash = await bcrypt.hash(adminPassword, 10);
+  const userHash = await bcrypt.hash(userPassword, 10);
 
   const superAdmin = (await db.user.findFirst({ where: { email: "vladimir@example.com" } })) ??
     await db.user.create({
@@ -207,9 +219,21 @@ async function main() {
 
   console.log("\n✅ Seed complete.\n");
   console.log("Login credentials:");
-  console.log("  Super admin : vladimir / Vladimir2026");
-  console.log("  Tenant admin: admin    / Admin2026");
-  console.log("  Tenant user : user     / User2026");
+  if (process.env.ADMIN_PASSWORD) {
+    console.log("  Super admin : vladimir / (from $ADMIN_PASSWORD)");
+  } else {
+    console.log("  Super admin : vladimir / ChangeMe!  ⚠️  Set $ADMIN_PASSWORD and reseed for production.");
+  }
+  if (process.env.SEED_ADMIN_PASSWORD) {
+    console.log("  Tenant admin: admin    / (from $SEED_ADMIN_PASSWORD)");
+  } else {
+    console.log("  Tenant admin: admin    / " + adminPassword);
+  }
+  if (process.env.SEED_USER_PASSWORD) {
+    console.log("  Tenant user : user     / (from $SEED_USER_PASSWORD)");
+  } else {
+    console.log("  Tenant user : user     / " + userPassword);
+  }
 }
 
 main()

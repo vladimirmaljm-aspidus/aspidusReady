@@ -4,6 +4,7 @@ import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (security.read)
@@ -24,4 +25,7 @@ export async function GET(req: NextRequest) {
   const userId = explicitUserId ?? (auth.isSuperAdmin ? undefined : auth.user.id);
   const sessions = await auth.store.listSessions(tid, userId);
   return NextResponse.json({ items: sessions });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

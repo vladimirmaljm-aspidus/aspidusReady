@@ -11,6 +11,7 @@ export const runtime = "nodejs";
 // request from another partner returns 404 (not 403) so we don't leak
 // existence across tenants.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const access = await getPortalSessionAccess();
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
@@ -60,4 +61,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       "Cache-Control": "no-store",
     },
   });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

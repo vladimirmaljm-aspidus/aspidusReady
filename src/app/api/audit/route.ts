@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 // not for exposing live credentials to anyone who can read it.
 
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (audit.read)
@@ -28,4 +29,7 @@ export async function GET(req: NextRequest) {
     ...result,
     items: result.items.map((item) => ({ ...item, details: redactDetails(item.details, TENANT_REDACT_KEYS) })),
   });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

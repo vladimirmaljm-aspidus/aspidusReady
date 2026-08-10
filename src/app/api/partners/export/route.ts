@@ -9,6 +9,7 @@ export const runtime = "nodejs";
  * Exports partners as CSV.
  */
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (partners.read)
@@ -28,4 +29,7 @@ export async function GET(req: NextRequest) {
 
   const csv = toCSV(result.items as unknown as Record<string, unknown>[], cols);
   return csvResponse(`partners-${new Date().toISOString().split("T")[0]}.csv`, csv);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

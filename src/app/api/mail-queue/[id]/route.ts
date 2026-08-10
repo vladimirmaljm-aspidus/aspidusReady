@@ -4,6 +4,7 @@ import { requireAuth, audit } from "@/lib/api/helpers";
 export const runtime = "nodejs";
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (mail-queue.delete)
@@ -25,4 +26,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   await auth.store.deleteMailQueueEntry(id);
   await audit(auth.store, auth.user, req, "mail.delete", "mail_queue", id);
   return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

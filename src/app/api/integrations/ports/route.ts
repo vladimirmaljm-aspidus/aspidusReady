@@ -175,6 +175,7 @@ const PORTS: Array<{
 ];
 
 export async function GET(req: NextRequest) {
+  try {
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") || "").trim().toLowerCase();
   const limit = Math.min(Number(url.searchParams.get("limit") || 20), 50);
@@ -205,4 +206,7 @@ export async function GET(req: NextRequest) {
     total: results.length,
     totalPorts: PORTS.length,
   });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

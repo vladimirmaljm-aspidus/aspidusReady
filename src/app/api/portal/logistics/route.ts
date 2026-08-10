@@ -3,6 +3,7 @@ import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getSupabase } from "@/lib/supabase/client";
 import { getStore } from "@/lib/data/store";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,8 @@ export async function POST(req: NextRequest) {
   if (!access.partner_id) {
     return NextResponse.json({ error: "Portal account is not linked to a partner. Ask your admin to link it before submitting a request." }, { status: 400 });
   }
+
+  const store = await getStore();
 
   let body;
   try {
@@ -128,9 +131,26 @@ export async function POST(req: NextRequest) {
     });
   } catch { /* non-critical */ }
 
+  // Audit the portal logistics request creation
+  try {
+    await audit(
+      store,
+      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      req,
+      "portal.logistics_request_created",
+      "logistics_request",
+      (data as any)?.id,
+      {
+        number: insert.number,
+        mode: insert.mode,
+        origin_country: insert.origin_country,
+        destination_country: insert.destination_country,
+      },
+    );
+  } catch (e) { console.error("[audit]", e); }
+
   // Notify tenant admins in-app
   try {
-    const store = await getStore();
     const partner = await store.getPartner(access.partner_id);
     await store.createNotification({
       tenant_id: access.tenant_id,

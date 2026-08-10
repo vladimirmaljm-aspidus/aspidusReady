@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json();
     // Preserve the entity's tenant_id
     body.tenant_id = existing.tenant_id;
+    // FIX-P1-LOGIC Fix 1: enforce valid status transitions. Super-admins
+    // bypass so they can correct bad data.
+    if (body.status && body.status !== existing.status && !auth.isSuperAdmin) {
+      const transition = validateStatusTransition("offer", existing.status, body.status);
+      if (!transition.valid) {
+        return NextResponse.json({ error: transition.error }, { status: 400 });
+      }
+    }
     // Always recompute totals from items when items are provided — never trust
     // client-supplied totals (FLOW-7: previously skipped when body.total was
     // present, allowing tampered totals to disagree with line items).
@@ -89,6 +98,62 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             }
           })
           .catch(() => {});
+      }
+    }
+    // ── Inventory movement on offer acceptance ───────────────────────────
+    // When the offer transitions to "accepted", decrement stock for each line
+    // item and log a stock-out `inventory_movements` row so the audit trail
+    // reflects *why* the stock changed.
+    //
+    // Re-Audit-2 N6/N7/N8: extracted into a shared helper
+    // (`deductStockForOffer` / `restoreStockForOffer` in
+    // `lib/api/inventory-cascade.ts`) so the portal-respond route can call
+    // the same code, and so the helper enforces:
+    //   • Idempotency — skip if a movement already exists for the offer id
+    //     (prevents double-deduction on super-admin re-accept or concurrent
+    //     calls). [N7]
+    //   • Stock restoration — when the offer transitions OUT of "accepted"
+    //     (e.g. cancelled), `restoreStockForOffer` inserts a positive-delta
+    //     movement row reversing the deduction. [N8]
+    //   • notifyLowStock — fires a low-stock notification when the new stock
+    //     is at/below reorder_level. [LOGIC §8.3]
+    const newStatusNorm = String(body.status || "").toLowerCase();
+    const oldStatusNorm = String(existing.status || "").toLowerCase();
+    if (newStatusNorm === "accepted" && oldStatusNorm !== "accepted") {
+      try {
+        const { deductStockForOffer } = await import("@/lib/api/inventory-cascade");
+        const items = Array.isArray((updated as any).items) ? (updated as any).items : [];
+        await deductStockForOffer({
+          tenantId: existing.tenant_id,
+          offerId: String(updated.id || id),
+          offerNumber: (updated as any).number || null,
+          partnerId: (updated as any).partner_id || existing.partner_id || null,
+          items,
+          source: "admin",
+        });
+      } catch (e) {
+        console.error("[offers] inventory movement failed:", e);
+      }
+    } else if (
+      oldStatusNorm === "accepted" &&
+      newStatusNorm &&
+      newStatusNorm !== "accepted" &&
+      body.status // explicit status change requested
+    ) {
+      // Offer transitioning OUT of accepted (e.g. → cancelled). Restore stock.
+      try {
+        const { restoreStockForOffer } = await import("@/lib/api/inventory-cascade");
+        const items = Array.isArray((updated as any).items) ? (updated as any).items : [];
+        await restoreStockForOffer({
+          tenantId: existing.tenant_id,
+          offerId: String(updated.id || id),
+          offerNumber: (updated as any).number || null,
+          partnerId: (updated as any).partner_id || existing.partner_id || null,
+          items,
+          reason: `Status changed ${oldStatusNorm} → ${newStatusNorm} by admin`,
+        });
+      } catch (e) {
+        console.error("[offers] inventory restore failed:", e);
       }
     }
     await audit(auth.store, auth.user, req, "offer.update", "offer", id, { status: updated.status });

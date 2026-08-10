@@ -4,6 +4,7 @@ import { requireAuth, audit } from "@/lib/api/helpers";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (security.create)
@@ -26,4 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await auth.store.revokeSession(id);
   await audit(auth.store, auth.user, req, "session.revoke", "session", id);
   return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

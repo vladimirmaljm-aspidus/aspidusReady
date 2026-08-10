@@ -60,6 +60,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Preserve the entity's tenant_id (regular users cannot move it to another tenant)
     body.tenant_id = (existing as any).tenant_id || tenantId;
 
+    // Validate exchange_rate (Fix 8): must be positive when provided. Reuse
+    // the existing value (already validated on POST) when not supplied.
+    if (body.exchange_rate !== undefined && body.exchange_rate !== null) {
+      const rate = Number(body.exchange_rate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        return NextResponse.json({ error: "Exchange rate must be a positive number." }, { status: 400 });
+      }
+    }
+
+    // Validate commission_rate (Fix 8): non-negative.
+    if (body.commission_rate !== undefined && body.commission_rate !== null) {
+      const cr = Number(body.commission_rate);
+      if (!Number.isFinite(cr) || cr < 0) {
+        return NextResponse.json({ error: "Commission rate must be a non-negative number." }, { status: 400 });
+      }
+      body.commission_rate = cr;
+    }
+
+    // Preserve commission tracking fields (Fix 1) — when the body doesn't
+    // supply them, fall back to the existing values so partial PUTs don't
+    // silently clear the commission chain on a calc that already had it set.
+    body.commission_agent_id = body.commission_agent_id ?? (existing as any).commission_agent_id ?? null;
+    body.commission_type = body.commission_type ?? (existing as any).commission_type ?? null;
+    body.commission_rate = body.commission_rate ?? (existing as any).commission_rate ?? 0;
+
     // Compute totals from cost lines
     const qty = body.quantity || (existing as any).quantity || 0;
     const numContainers = body.num_containers || (existing as any).num_containers || 1;

@@ -55,6 +55,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2b. FIX-P1-LOGIC Fix 2: prevent duplicate invoices for the same offer.
+    //     Two clicks on the "create invoice" button must not produce two
+    //     invoices — return 409 with the existing invoice's id/number.
+    //
+    //     Re-Audit-2 N5: exclude cancelled invoices from the duplicate check.
+    //     Previously, cancelling an invoice and then re-creating from the same
+    //     offer would 409 pointing at the cancelled record.
+    {
+      const existingInvoices = await store.listInvoices(tid, { limit: 1000 });
+      const existing = existingInvoices.items.find(
+        (inv: any) => inv.offer_id === offer_id && inv.status !== "cancelled",
+      );
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: "An invoice already exists for this offer.",
+            existing_invoice_id: existing.id,
+            existing_invoice_number: existing.number,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     // 3. Fetch partner data for auto-fill
     const partner = await store.getPartner(offer.partner_id);
     if (!partner) {
@@ -95,6 +119,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. Build the invoice object
+    //
+    //    Copy ALL trade-term fields that exist on BOTH the `offers` and
+    //    `invoices` tables (supabase-schema-live.sql:766-812 + 496-545).
+    //    Previously the automation dropped incoterm/pol/pod/vessel/etc.,
+    //    silently losing trade data downstream (DEEP-AUDIT-LOGIC §2.2).
+    //    `bank_details` is intentionally omitted — it only exists on offers.
+    const offerAny = offer as any;
     const invoiceData = {
       tenant_id: tid,
       number: invoiceNumber,
@@ -114,6 +145,24 @@ export async function POST(req: NextRequest) {
         ? `Auto-generated from offer: ${offer.number}. ${offer.notes}`
         : `Auto-generated from offer: ${offer.number}`,
       items: offer.items,
+      // Trade terms (copied from source offer):
+      incoterm: offerAny.incoterm ?? null,
+      pol: offerAny.pol ?? null,
+      pol_country: offerAny.pol_country ?? null,
+      pod: offerAny.pod ?? null,
+      pod_country: offerAny.pod_country ?? null,
+      vessel: offerAny.vessel ?? null,
+      container_no: offerAny.container_no ?? null,
+      lead_time: offerAny.lead_time ?? null,
+      packaging: offerAny.packaging ?? null,
+      delivery_address: offerAny.delivery_address ?? null,
+      delivery_city: offerAny.delivery_city ?? null,
+      delivery_country: offerAny.delivery_country ?? null,
+      specification: offerAny.specification ?? null,
+      origin_country: offerAny.origin_country ?? null,
+      exchange_rate: offerAny.exchange_rate ?? null,
+      exchange_rate_date: offerAny.exchange_rate_date ?? null,
+      exchange_rate_note: offerAny.exchange_rate_note ?? null,
     };
 
     // 7. Enforce monthly_documents quota (parity with POST /api/invoices)

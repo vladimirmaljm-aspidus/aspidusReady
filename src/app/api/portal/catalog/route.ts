@@ -56,20 +56,28 @@ function productToCatalogShape(p: Product): ProductCatalogEntry {
 }
 
 export async function GET() {
-  const access = await getPortalSessionAccess();
-  if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
-  if (!access.can_view_catalog) return NextResponse.json({ error: "Not permitted." }, { status: 403 });
-  const kycBlock = await requireKycApproved(access);
-  if (kycBlock) return kycBlock;
+  try {
+    const access = await getPortalSessionAccess();
+    if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    if (!access.can_view_catalog) return NextResponse.json({ error: "Not permitted." }, { status: 403 });
+    const kycBlock = await requireKycApproved(access);
+    if (kycBlock) return kycBlock;
 
-  const store = await getStore();
-  // Pull a generous slice of products for this tenant, then filter to the
-  // admin-curated subset. (Portal clients only see products the tenant has
-  // explicitly opted in via `show_in_catalog=true` AND `active=true`.)
-  const productsRes = await store.listProducts(access.tenant_id, { limit: 1000 });
-  const catalogItems: ProductCatalogEntry[] = productsRes.items
-    .filter((p) => p.show_in_catalog && p.active)
-    .map((p) => productToCatalogShape(p));
+    const store = await getStore();
+    // Pull a generous slice of products for this tenant, then filter to the
+    // admin-curated subset. (Portal clients only see products the tenant has
+    // explicitly opted in via `show_in_catalog=true` AND `active=true`.)
+    const productsRes = await store.listProducts(access.tenant_id, { limit: 1000 });
+    const catalogItems: ProductCatalogEntry[] = productsRes.items
+      .filter((p) => p.show_in_catalog && p.active)
+      .map((p) => productToCatalogShape(p));
 
-  return NextResponse.json(redactListForPortal({ items: catalogItems, total: catalogItems.length }));
+    return NextResponse.json(redactListForPortal({ items: catalogItems, total: catalogItems.length }));
+  } catch (e: any) {
+    console.error("[portal/catalog]", e);
+    return NextResponse.json(
+      { error: e.message || "Internal server error" },
+      { status: 500 },
+    );
+  }
 }

@@ -11,6 +11,7 @@ export const runtime = "nodejs";
  * Scope: partner must own the upload.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const access = await getPortalSessionAccess();
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
@@ -29,4 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .createSignedUrl((upload as any).storage_path, 300, inline ? undefined : { download: (upload as any).filename || true });
   if (error || !data?.signedUrl) return NextResponse.json({ error: "Storage unavailable." }, { status: 502 });
   return NextResponse.redirect(data.signedUrl, 302);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

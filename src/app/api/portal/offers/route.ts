@@ -12,6 +12,7 @@ const PORTAL_OFFER_STATUSES = new Set(["sent", "viewed", "accepted", "rejected",
 
 // Portal: list offers for the logged-in partner
 export async function GET() {
+  try {
   const access = await getPortalSessionAccess();
   if (!access) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
@@ -28,4 +29,7 @@ export async function GET() {
   // "status IN (...)" filter, so we apply it here on the result set.
   const visible = (result.items || []).filter((o) => PORTAL_OFFER_STATUSES.has(String(o.status || "").toLowerCase()));
   return NextResponse.json(redactListForPortal({ ...result, items: visible, total: visible.length }));
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

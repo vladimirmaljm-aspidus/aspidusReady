@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 // Admin: read the append-only timeline for a logistics request.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -21,4 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
   const events = await listLogisticsEvents((lr as any).tenant_id, id);
   return NextResponse.json({ items: events });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

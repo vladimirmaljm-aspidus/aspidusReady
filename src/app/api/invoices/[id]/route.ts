@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const body = await req.json();
+    // FIX-P1-LOGIC Fix 1: enforce valid status transitions. Super-admins
+    // bypass so they can correct bad data.
+    if (body.status && body.status !== existing.status && !auth.isSuperAdmin) {
+      const transition = validateStatusTransition("invoice", existing.status, body.status);
+      if (!transition.valid) {
+        return NextResponse.json({ error: transition.error }, { status: 400 });
+      }
+    }
+    // FIX-P1-LOGIC Fix 5: recompute totals from line items — never trust
+    // client-supplied totals (parity with offers PUT). Always overwrite.
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      let subtotal = 0, discountTotal = 0, taxTotal = 0;
+      for (const it of body.items) {
+        const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+        const disc = line * (Number(it.discount) || 0) / 100;
+        const net = line - disc;
+        const tax = net * (Number(it.tax_rate) || 0) / 100;
+        subtotal += line;
+        discountTotal += disc;
+        taxTotal += tax;
+        it.total = net + tax;
+      }
+      body.subtotal = subtotal;
+      body.discount_total = discountTotal;
+      body.tax_total = taxTotal;
+      body.total = subtotal - discountTotal + taxTotal;
+    }
     const updated = await auth.store.upsertInvoice({ ...body, id, tenant_id: existing.tenant_id });
     try {
       const { recordRevision } = await import("@/lib/api/doc-revisions");
