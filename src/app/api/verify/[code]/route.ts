@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 // can review every verification via /api/super-admin/verification-logs.
 // The write is best-effort — if the table is missing or the insert fails,
 // the public verify endpoint MUST still return the correct result.
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const store = await getStore();
   const v = await store.getDocumentVerificationByCode(code);
@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     // Even for unknown codes, attempt to log the attempt for fraud analysis.
     // The store.getDocumentVerificationByCode already returned null — we don't
     // have a verification_id, but we still want to know WHO probed a bad code.
-    void logVerificationAttempt(_req, code, null, "invalid", null, null);
+    void logVerificationAttempt(req, code, null, "invalid", null, null);
     return NextResponse.json({
       valid: false,
       result: "invalid",
@@ -46,8 +46,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     await store.logVerification({
       verification_id: v.id,
       code: v.verification_code,
-      ip: _req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-      user_agent: _req.headers.get("user-agent") || null,
+      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      user_agent: req.headers.get("user-agent") || null,
       result: logResult,
       details: null,
     });
@@ -59,7 +59,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
   // GET path: no GPS available (server-rendered / direct API call) —
   // falls back to IP-based geo only.
   void logVerificationAttempt(
-    _req,
+    req,
     v.verification_code,
     v.tenant_id,
     logResult,
@@ -80,6 +80,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     });
   }
 
+  // ── GPS gate (audit finding E P0 #3) ────────────────────────────────────
+  // Without `?gps=1`, return only a masked preview + a `requires_gps` flag.
+  // The full payload (document_number, etc.) is gated behind explicit GPS
+  // verification — the UI gates this client-side, but the server now refuses
+  // to leak sensitive fields when the gate isn't passed. The unlock flow
+  // (POST /api/verify/[code]/unlock with token + GPS coords) is left for a
+  // future task; this is the minimum-viable server-side gate.
+  const gpsVerified = req.nextUrl.searchParams.get("gps") === "1";
+  if (!gpsVerified) {
+    return NextResponse.json({
+      valid: true,
+      result: "valid",
+      requires_gps: true,
+      document_type: v.document_type,
+      document_number_masked:
+        (v.document_number?.slice(0, 4) ?? "") + "••••",
+      issued_at: v.issued_at,
+      verification_count: v.verification_count + 1,
+    });
+  }
+
+  // GPS verified — return full payload.
   return NextResponse.json({
     valid: true,
     result: "valid",

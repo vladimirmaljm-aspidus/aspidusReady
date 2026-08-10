@@ -4,6 +4,7 @@ import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
 import { notifyRfqReceived } from "@/lib/notif/helper";
 import { audit } from "@/lib/api/helpers";
+import { nextDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
 
@@ -44,12 +45,23 @@ export async function POST(req: NextRequest) {
   body.tenant_id = access.tenant_id;
   body.portal_access_id = access.id;
 
-  // Auto-generate RFQ number (format: RFQ-2026-001)
+  // Auto-generate RFQ number — atomic via Postgres SEQUENCE (C-2).
+  // Falls back to the legacy `listRfqsByPartner(year).length + 1` if the
+  // `get_next_doc_number('rfq')` RPC isn't available (e.g. before the
+  // SQL migration adding the `rfq_number_seq` sequence has been applied).
+  //   Format: RFQ-YYYY-NNNN (4-digit zero-padded sequence)
+  //   Note: the previous 3-digit format (RFQ-YYYY-NNN) is preserved for
+  //   legacy rows; new RFQs minted through the RPC will be 4-digit padded.
   const year = new Date().getFullYear();
-  const existingRfqs = await store.listPortalRfqsByPartner(access.partner_id);
-  const yearRfqs = existingRfqs.filter((r: any) => r.number?.includes(`RFQ-${year}`));
-  const nextNum = yearRfqs.length + 1;
-  body.number = `RFQ-${year}-${String(nextNum).padStart(3, "0")}`;
+  const seqNum = await nextDocNumber("rfq");
+  if (seqNum) {
+    body.number = seqNum;
+  } else {
+    const existingRfqs = await store.listPortalRfqsByPartner(access.partner_id);
+    const yearRfqs = existingRfqs.filter((r: any) => r.number?.includes(`RFQ-${year}`));
+    const nextNum = yearRfqs.length + 1;
+    body.number = `RFQ-${year}-${String(nextNum).padStart(3, "0")}`;
+  }
 
   // Set default status
   if (!body.status) body.status = "pending";

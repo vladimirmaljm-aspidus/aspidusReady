@@ -1828,6 +1828,26 @@ export class SupabaseStore implements Store {
   }
 
   async postErpJournalEntry(id: string, postedBy: string): Promise<ErpJournalEntry> {
+    // Fiscal-period validation (audit finding E P0 #2): refuse to post entries
+    // into closed/locked periods. We fetch the entry first to read its date —
+    // the method signature takes `id` (not the full entry) so the lookup is
+    // required. If no fiscal period is configured for the entry's date, we
+    // allow the post (don't block on missing config).
+    const existing = await this.getErpJournalEntry(id);
+    if (existing && existing.date) {
+      const period = await this.sb()
+        .from("fiscal_periods")
+        .select("id, status")
+        .lte("start_date", existing.date)
+        .gte("end_date", existing.date)
+        .maybeSingle();
+      if (period.error) throw period.error;
+      if (period.data && period.data.status === "closed") {
+        throw new Error(`Fiscal period is closed for ${existing.date}`);
+      }
+      // If no period found, allow (period not configured) — don't block.
+    }
+
     const { data, error } = await this.sb()
       .from("erp_journal_entries")
       .update({ status: "posted", posted_by: postedBy, posted_at: new Date().toISOString() })

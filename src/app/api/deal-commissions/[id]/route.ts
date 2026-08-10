@@ -47,6 +47,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Handle approve action
     if (body.action === "approve") {
+      // Status guard (H-4) — only pending commissions can be approved.
+      // Prevents re-approving a paid/cancelled/voided commission.
+      if (existing.status !== "pending") {
+        return NextResponse.json(
+          { error: `Cannot approve commission in status '${existing.status}'.` },
+          { status: 409 },
+        );
+      }
       const updated = await auth.store.approveDealCommission(id, auth.user.id);
       await audit(auth.store, auth.user, req, "deal_commission.approve", "deal_commission", id);
       return NextResponse.json(updated);
@@ -54,8 +62,38 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Handle mark as paid action
     if (body.action === "mark_paid") {
+      // Status guard (H-4) — only approved commissions can be marked paid.
+      // Prevents paying a pending commission directly (skips approval) or
+      // resurrecting a cancelled commission.
+      if (existing.status !== "approved") {
+        return NextResponse.json(
+          { error: `Cannot mark commission paid from status '${existing.status}'. Approve first.` },
+          { status: 409 },
+        );
+      }
       const updated = await auth.store.markDealCommissionPaid(id, body.payout_reference);
       await audit(auth.store, auth.user, req, "deal_commission.mark_paid", "deal_commission", id);
+      return NextResponse.json(updated);
+    }
+
+    // Handle void action
+    if (body.action === "void") {
+      // Status guard (H-4) — only commissions NOT already cancelled can be
+      // voided. Idempotency: a second void call on an already-cancelled
+      // commission is a no-op and returns 409.
+      if (existing.status === "cancelled") {
+        return NextResponse.json(
+          { error: `Commission is already cancelled.` },
+          { status: 409 },
+        );
+      }
+      const updated = await auth.store.upsertDealCommission({
+        id,
+        tenant_id: existing.tenant_id,
+        status: "cancelled",
+        notes: body.reason ? `Voided: ${body.reason}` : "Voided by admin.",
+      } as any);
+      await audit(auth.store, auth.user, req, "deal_commission.void", "deal_commission", id, { reason: body.reason });
       return NextResponse.json(updated);
     }
 

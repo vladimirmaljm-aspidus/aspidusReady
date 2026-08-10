@@ -18,81 +18,86 @@ export const runtime = "nodejs";
  *   5. audit-log the change with the old + new address for the record
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "portal.change_email"); if (_d) return _d; }
-  { const { requireFeature } = await import("@/lib/api/feature-guard");
-    const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; }
-
-  if (!auth.isSuperAdmin && auth.user.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
-  }
-
-  const { id } = await params;
-  let body;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-  const { new_email, send_reset_link = true, silent = false } = body;
-  if (!new_email || typeof new_email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
-    return NextResponse.json({ error: "Valid email is required." }, { status: 400 });
-  }
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "portal.change_email"); if (_d) return _d; }
+    { const { requireFeature } = await import("@/lib/api/feature-guard");
+      const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; }
 
-  const access = await auth.store.getPortalAccessById(id);
-  if (!access) return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
-  if (!auth.isSuperAdmin && access.tenant_id !== auth.tenantId) {
-    return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
-  }
+    if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+      return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    }
 
-  const oldEmail = access.portal_email;
-  if (oldEmail === new_email) {
-    return NextResponse.json({ ok: true, message: "Email unchanged." });
-  }
-
-  // Guard: don't allow two portal_access rows to share the same email in the same tenant.
-  const existing = await auth.store.getPortalAccessByEmail(access.tenant_id, new_email).catch(() => null);
-  if (existing && existing.id !== id) {
-    return NextResponse.json({ error: `Another portal account already uses ${new_email}.` }, { status: 409 });
-  }
-
-  const updated = await auth.store.upsertPortalAccess({
-    id,
-    portal_email: new_email,
-    // Force re-authentication with a new password.
-    must_set_password: send_reset_link,
-    token_version: (access.token_version || 0) + 1,
-    welcome_email_sent: false,
-  } as any);
-
-  await audit(auth.store, auth.user, req, "portal_access.email_change", "portal_access", id, {
-    old_email: oldEmail,
-    new_email,
-    sent_reset_link: !!send_reset_link,
-  });
-
-  // Optionally email the NEW address so the client knows to log in fresh.
-  let email_sent: string | null = null;
-  if (send_reset_link && !silent) {
+    const { id } = await params;
+    let body;
     try {
-      const tenant = await auth.store.getTenant(access.tenant_id);
-      const partner = access.partner_id ? await auth.store.getPartner(access.partner_id) : null;
-      const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
-      const { subject, html } = welcomePortalEmail({
-        partnerName: partner?.name || "Client",
-        portalEmail: new_email,
-        accessId: id,
-        tenantName: tenant?.name || "Aspidus",
-        baseUrl,
-        tier: access.tier || "business",
-      });
-      await sendEmail({ to: new_email, subject: `Portal email changed — ${subject}`, html, tenantId: access.tenant_id });
-      email_sent = new_email;
-      await auth.store.upsertPortalAccess({ id, welcome_email_sent: true } as any);
-    } catch (e) { console.warn("[change-email.email]", e); }
-  }
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
+    const { new_email, send_reset_link = true, silent = false } = body;
+    if (!new_email || typeof new_email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
+      return NextResponse.json({ error: "Valid email is required." }, { status: 400 });
+    }
 
-  return NextResponse.json({ ok: true, updated: { ...updated, password_hash: undefined }, email_sent });
+    const access = await auth.store.getPortalAccessById(id);
+    if (!access) return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && access.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    }
+
+    const oldEmail = access.portal_email;
+    if (oldEmail === new_email) {
+      return NextResponse.json({ ok: true, message: "Email unchanged." });
+    }
+
+    // Guard: don't allow two portal_access rows to share the same email in the same tenant.
+    const existing = await auth.store.getPortalAccessByEmail(access.tenant_id, new_email).catch(() => null);
+    if (existing && existing.id !== id) {
+      return NextResponse.json({ error: `Another portal account already uses ${new_email}.` }, { status: 409 });
+    }
+
+    const updated = await auth.store.upsertPortalAccess({
+      id,
+      portal_email: new_email,
+      // Force re-authentication with a new password.
+      must_set_password: send_reset_link,
+      token_version: (access.token_version || 0) + 1,
+      welcome_email_sent: false,
+    } as any);
+
+    await audit(auth.store, auth.user, req, "portal_access.email_change", "portal_access", id, {
+      old_email: oldEmail,
+      new_email,
+      sent_reset_link: !!send_reset_link,
+    });
+
+    // Optionally email the NEW address so the client knows to log in fresh.
+    let email_sent: string | null = null;
+    if (send_reset_link && !silent) {
+      try {
+        const tenant = await auth.store.getTenant(access.tenant_id);
+        const partner = access.partner_id ? await auth.store.getPartner(access.partner_id) : null;
+        const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
+        const { subject, html } = welcomePortalEmail({
+          partnerName: partner?.name || "Client",
+          portalEmail: new_email,
+          accessId: id,
+          tenantName: tenant?.name || "Aspidus",
+          baseUrl,
+          tier: access.tier || "business",
+        });
+        await sendEmail({ to: new_email, subject: `Portal email changed — ${subject}`, html, tenantId: access.tenant_id });
+        email_sent = new_email;
+        await auth.store.upsertPortalAccess({ id, welcome_email_sent: true } as any);
+      } catch (e) { console.warn("[change-email.email]", e); }
+    }
+
+    return NextResponse.json({ ok: true, updated: { ...updated, password_hash: undefined }, email_sent });
+  } catch (e: any) {
+    console.error("[portal-access.change-email.POST]", e);
+    return NextResponse.json({ error: e?.message || "Internal server error." }, { status: 500 });
+  }
 }

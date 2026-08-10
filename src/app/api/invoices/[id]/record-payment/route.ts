@@ -481,6 +481,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const jeCurrency = (invoice.currency as string) || (settings as any)?.default_currency || "USD";
           const shouldPost = Boolean((settings as any)?.auto_post_journal);
 
+          // When this payment flips the invoice to "paid", book the FULL cumulative
+          // revenue (totalPaid) — the prior partial payments were booked as advances
+          // or were not booked at all. For partial payments that don't flip the
+          // status, book only this payment's amount. (Audit finding E P0 #1.)
+          const jeAmount = (newStatus === "paid") ? totalPaid : numericAmount;
+
           const { data: je, error: jeError } = await sb
             .from("erp_journal_entries")
             .insert({
@@ -492,8 +498,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               reference_id: id,
               status: shouldPost ? "posted" : "draft",
               source_type: "auto",
-              debit_total: numericAmount,
-              credit_total: numericAmount,
+              debit_total: jeAmount,
+              credit_total: jeAmount,
               currency: jeCurrency,
               exchange_rate: 1,
               created_by: auth.user.id,
@@ -512,7 +518,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 tenant_id: tid,
                 account_id: bankAccountIdResolved,
                 description: `Payment received - ${invoice.number}`,
-                debit: numericAmount,
+                debit: jeAmount,
                 credit: 0,
                 line_number: 1,
                 currency: jeCurrency,
@@ -524,7 +530,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 account_id: revenueAccountId,
                 description: `Revenue - ${invoice.number}`,
                 debit: 0,
-                credit: numericAmount,
+                credit: jeAmount,
                 line_number: 2,
                 currency: jeCurrency,
                 partner_id: invoice.partner_id || null,

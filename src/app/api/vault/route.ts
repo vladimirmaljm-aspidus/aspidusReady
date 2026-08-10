@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
 import { encrypt, decrypt } from "@/lib/api/vault-crypto";
 
 export const runtime = "nodejs";
@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
     { const { requireFeature } = await import("@/lib/api/feature-guard");
       const _f = await requireFeature(auth.tenantId, "module_vault", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
-    const tid = auth.tenantId!;
+    const tid = resolveTenantId(auth, req);
+    if (!tid) {
+      return NextResponse.json({ error: "No tenant context." }, { status: 400 });
+    }
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || undefined;
     const category = url.searchParams.get("category") || undefined;
@@ -42,6 +45,16 @@ export async function GET(req: NextRequest) {
       const { encrypted_value, ...rest } = s;
       return rest;
     });
+    // Audit: log the count of vault secrets returned (not each one). (Audit
+    // finding D P1 #5 — vault reads were silent.)
+    try {
+      await audit(auth.store, auth.user, req, "vault.read", "vault_secret", undefined, {
+        count: items.length,
+        reveal,
+      });
+    } catch (e) {
+      console.error("[vault GET audit]", e);
+    }
     return NextResponse.json({ items, total: result.total });
   } catch (e: any) {
     console.error("[vault GET]", e);

@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "deals.read"); if (_d) return _d; } } /* requirePermission wired */
 
     const tid = resolveTenantId(auth, req);
+    if (!tid) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
 
     if ("apiKeyId" in auth && !hasPermission(auth.permissions, "deals:read")) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     const stage = url.searchParams.get("stage") || undefined;
     const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
-    const result = await auth.store.listDeals(tid!, { search, limit, offset, filters: { partner_id, stage } });
+    const result = await auth.store.listDeals(tid, { search, limit, offset, filters: { partner_id, stage } });
     // Defense-in-depth: even though SupabaseStore filters by tenant_id,
     // this post-filter provides an extra safety layer. Do NOT remove.
     const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
@@ -50,15 +51,21 @@ export async function POST(req: NextRequest) {
   // Permission gate (deals.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
     if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "deals.create"); if (_d) return _d; } } /* requirePermission wired */
+  // Feature gate (module_crm)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_crm", _isSA); if (_f) return _f; } /* requireFeature wired */
 
     const tid = resolveTenantId(auth, req);
+    if (!tid) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
 
     if ("apiKeyId" in auth && !hasPermission(auth.permissions, "deals:write")) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
 
     const body = await req.json();
-    body.tenant_id = tid!;
+    body.tenant_id = tid;
     if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
     const created = await auth.store.upsertDeal(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "deal.update" : "deal.create", "deal", created.id, { title: created.title });

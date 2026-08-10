@@ -31,6 +31,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // Permission gate (offers.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "offers.update"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_trade)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_trade", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const { id } = await params;
     const tid = resolveTenantId(auth, req);
@@ -170,12 +173,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Permission gate (offers.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "offers.delete"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_trade)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_trade", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const { id } = await params;
     const existing = await auth.store.getOffer(id);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
     if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+    // Status guard (H-6) — only draft/cancelled/rejected offers can be
+    // hard-deleted. Accepted/sent offers carry an audit trail.
+    if (existing.status && !["draft", "cancelled", "rejected"].includes(existing.status)) {
+      return NextResponse.json(
+        { error: `Cannot delete a record in status '${existing.status}'.` },
+        { status: 409 },
+      );
     }
     // Void commissions tied to this offer's deal before we hard-delete.
     if ((existing as any).deal_id) {

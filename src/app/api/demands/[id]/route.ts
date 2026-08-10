@@ -30,6 +30,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // Permission gate (demands.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "demands.update"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_crm)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_crm", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const { id } = await params;
     const existing = await auth.store.getDemand(id);
@@ -53,6 +56,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Permission gate (demands.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "demands.delete"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_crm)
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_crm", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
     const { id } = await params;
     const existing = await auth.store.getDemand(id);

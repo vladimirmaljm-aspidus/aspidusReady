@@ -17,7 +17,7 @@
 
 import { isSupabaseConfigured, getSupabase } from "@/lib/supabase/client";
 
-export type DocType = "offer" | "invoice" | "proforma";
+export type DocType = "offer" | "invoice" | "proforma" | "rfq";
 
 /**
  * Atomically reserve the next document number for the given type.
@@ -26,6 +26,12 @@ export type DocType = "offer" | "invoice" | "proforma";
  *   - offer    → OF-2025-0042
  *   - invoice  → INV-2025-0042
  *   - proforma → PRO-2025-0042
+ *   - rfq      → RFQ-2025-0042  (Tier 2 fix C-2; requires SQL migration —
+ *                see supabase/migrations/004_document_sequences.sql + the
+ *                worklog entry for G-fixes-tier2. If the migration hasn't
+ *                been applied yet, the RPC will raise 'unknown doc_type'
+ *                and this function returns null so callers fall back to
+ *                their legacy `listX().total + 1` pattern.)
  *
  * Strategy:
  *   1. Call `get_next_doc_number(doc_type)` via Supabase RPC — atomic
@@ -71,6 +77,12 @@ export function formatDocNumber(
   seq: number,
 ): string {
   const prefix =
-    docType === "offer" ? "OF" : docType === "invoice" ? "INV" : "PRO";
+    docType === "offer"
+      ? "OF"
+      : docType === "invoice"
+        ? "INV"
+        : docType === "proforma"
+          ? "PRO"
+          : "RFQ";
   return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
 }

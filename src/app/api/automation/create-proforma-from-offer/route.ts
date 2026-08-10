@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
@@ -20,9 +20,13 @@ export async function POST(req: NextRequest) {
     // Permission gate (proformas.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "proformas.create"); if (_d) return _d; } /* requirePermission wired */
+  // Feature gate (module_finance) — proformas are a finance document.
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
 
 
-  const tid = auth.tenantId!;
+  const tid = resolveTenantId(auth, req);
+  if (!tid) return NextResponse.json({ error: "No tenant context." }, { status: 400 });
   try {
     const body = await req.json();
     const { offer_id } = body;
