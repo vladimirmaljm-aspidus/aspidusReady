@@ -7,6 +7,7 @@ import { redactListForPortal } from "@/lib/portal/redact";
 export const runtime = "nodejs";
 
 export async function GET() {
+  try {
   const access = await getPortalSessionAccess();
   if (!access) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
@@ -21,4 +22,7 @@ export async function GET() {
   // only show docs visible to partner
   result.items = result.items.filter((d) => d.visible_to_partner);
   return NextResponse.json(redactListForPortal(result));
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

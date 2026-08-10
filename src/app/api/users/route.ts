@@ -71,6 +71,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Only a super-admin can grant super-admin access." }, { status: 403 });
     }
 
+    // Only a super-admin can grant wildcard ("*") permissions — otherwise a
+    // tenant admin could escalate themselves or another user to super-admin
+    // equivalent by setting permissions: ["*"].
+    if (!auth.isSuperAdmin && Array.isArray(body.permissions) && body.permissions.includes("*")) {
+      return NextResponse.json({ error: "Only super-admin can grant wildcard permissions." }, { status: 403 });
+    }
+
     // Enforce tenant on new user
     // Super-admin can pick which tenant the user belongs to
     // Regular admin can only create users in their own tenant

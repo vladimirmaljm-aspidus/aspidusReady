@@ -15,6 +15,7 @@ const BUCKET = "shared-documents";
  * Scope: partner-owned + visible_to_partner + KYC approved.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const access = await getPortalSessionAccess();
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   if (!access.can_view_documents) return NextResponse.json({ error: "Not permitted." }, { status: 403 });
@@ -40,4 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (error || !data?.signedUrl) return NextResponse.json({ error: "Storage unavailable." }, { status: 502 });
 
   return NextResponse.redirect(data.signedUrl, 302);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

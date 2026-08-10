@@ -17,42 +17,50 @@ export const runtime = "nodejs";
  */
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "portal-uploads.read"); if (_d) return _d; }
+  try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "portal-uploads.read"); if (_d) return _d; }
 
-  const { id } = await params;
-  const finalUpload = auth.isSuperAdmin
-    ? await findAnyUpload(id)
-    : await getPortalUpload(id, auth.tenantId || "");
-  if (!finalUpload) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  if (!auth.isSuperAdmin && finalUpload.tenant_id !== auth.tenantId) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
+    const { id } = await params;
+    const finalUpload = auth.isSuperAdmin
+      ? await findAnyUpload(id)
+      : await getPortalUpload(id, auth.tenantId || "");
+    if (!finalUpload) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && finalUpload.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+    return NextResponse.json(finalUpload);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
-  return NextResponse.json(finalUpload);
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "portal-uploads.delete"); if (_d) return _d; }
+  try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "portal-uploads.delete"); if (_d) return _d; }
 
-  const { id } = await params;
-  const upload = await getPortalUpload(id, auth.tenantId || "");
-  if (!upload) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  if (!auth.isSuperAdmin && upload.tenant_id !== auth.tenantId) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
-  }
+    const { id } = await params;
+    const upload = await getPortalUpload(id, auth.tenantId || "");
+    if (!upload) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && upload.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
 
-  const hard = new URL(req.url).searchParams.get("hard") === "1";
-  if (hard) {
-    await hardDeletePortalUpload(id, upload.tenant_id);
-    await audit(auth.store, auth.user, req, "portal_upload.hard_delete", "portal_upload", id, { filename: upload.filename, storage_path: upload.storage_path });
-    return NextResponse.json({ ok: true, hard: true });
+    const hard = new URL(req.url).searchParams.get("hard") === "1";
+    if (hard) {
+      await hardDeletePortalUpload(id, upload.tenant_id);
+      await audit(auth.store, auth.user, req, "portal_upload.hard_delete", "portal_upload", id, { filename: upload.filename, storage_path: upload.storage_path });
+      return NextResponse.json({ ok: true, hard: true });
+    }
+    await softDeletePortalUpload(id, upload.tenant_id, auth.user.username);
+    await audit(auth.store, auth.user, req, "portal_upload.soft_delete", "portal_upload", id, { filename: upload.filename });
+    return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
-  await softDeletePortalUpload(id, upload.tenant_id, auth.user.username);
-  await audit(auth.store, auth.user, req, "portal_upload.soft_delete", "portal_upload", id, { filename: upload.filename });
-  return NextResponse.json({ ok: true });
 }

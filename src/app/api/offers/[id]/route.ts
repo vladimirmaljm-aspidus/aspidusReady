@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json();
     // Preserve the entity's tenant_id
     body.tenant_id = existing.tenant_id;
+    // FIX-P1-LOGIC Fix 1: enforce valid status transitions. Super-admins
+    // bypass so they can correct bad data.
+    if (body.status && body.status !== existing.status && !auth.isSuperAdmin) {
+      const transition = validateStatusTransition("offer", existing.status, body.status);
+      if (!transition.valid) {
+        return NextResponse.json({ error: transition.error }, { status: 400 });
+      }
+    }
     // Always recompute totals from items when items are provided — never trust
     // client-supplied totals (FLOW-7: previously skipped when body.total was
     // present, allowing tampered totals to disagree with line items).
@@ -89,6 +98,60 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             }
           })
           .catch(() => {});
+      }
+    }
+    // ── Inventory movement on offer acceptance ───────────────────────────
+    // When the offer transitions to "accepted", decrement stock for each line
+    // item and log a stock-out `inventory_movements` row so the audit trail
+    // reflects *why* the stock changed. Idempotent: skipped when the previous
+    // status was already "accepted" (prevents double-deductions on subsequent
+    // edits that re-save the accepted offer).
+    if (
+      body.status &&
+      String(body.status).toLowerCase() === "accepted" &&
+      String(existing.status || "").toLowerCase() !== "accepted"
+    ) {
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+        const tenantIdForInv = existing.tenant_id;
+        const offerPartnerId = (updated as any).partner_id || existing.partner_id || null;
+        const items = Array.isArray((updated as any).items) ? (updated as any).items : [];
+        for (const item of items) {
+          const productId = item?.product_id;
+          if (!productId) continue;
+          const qty = Math.abs(Number(item.quantity) || 0);
+          if (qty <= 0) continue;
+
+          // 1) Log the movement (delta negative = stock out).
+          await sb.from("inventory_movements").insert({
+            tenant_id: tenantIdForInv,
+            product_id: productId,
+            partner_id: offerPartnerId,
+            delta: -qty,
+            reason: `Offer ${updated.number || updated.id} accepted`,
+            reference: String(updated.id || id),
+          });
+
+          // 2) Fetch current stock and decrement (clamped at 0).
+          const { data: productRow } = await sb
+            .from("products")
+            .select("id, stock")
+            .eq("id", productId)
+            .eq("tenant_id", tenantIdForInv)
+            .maybeSingle();
+          if (productRow) {
+            const currentStock = Number((productRow as any).stock ?? 0) || 0;
+            const newStock = Math.max(0, currentStock - qty);
+            await sb
+              .from("products")
+              .update({ stock: newStock, updated_at: new Date().toISOString() })
+              .eq("id", productId)
+              .eq("tenant_id", tenantIdForInv);
+          }
+        }
+      } catch (e) {
+        console.error("[offers] inventory movement failed:", e);
       }
     }
     await audit(auth.store, auth.user, req, "offer.update", "offer", id, { status: updated.status });

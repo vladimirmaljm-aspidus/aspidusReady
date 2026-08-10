@@ -4,6 +4,7 @@ import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
 import { audit } from "@/lib/api/helpers";
 import { notify } from "@/lib/notif/helper";
+import { createCommissionOnOfferAccepted } from "@/lib/api/commission-cascade";
 
 export const runtime = "nodejs";
 
@@ -77,6 +78,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       client_signature: signature ?? null,
       admin_reviewed_by_client: true,
     } as any);
+
+    // ── Cascade: when the portal client ACCEPTS an offer, auto-create the
+    //    pending DealCommission row if the offer's linked deal has a
+    //    commission_agent_id. This matches the behaviour of the admin-side
+    //    PUT /api/offers/[id] path (route.ts:84-92). Without this branch, an
+    //    offer accepted via the portal would silently skip the commission
+    //    obligation (DEEP-AUDIT-LOGIC §3.1 / §5.1). Fire-and-forget — failures
+    //    are logged but do not block the response.
+    if (decision === "accept") {
+      try {
+        const dealId = (offer as any)?.deal_id || null;
+        if (dealId) {
+          await createCommissionOnOfferAccepted(
+            store,
+            dealId,
+            access.tenant_id,
+          );
+        }
+      } catch (e) {
+        console.error("[portal.respond] commission cascade failed:", e);
+      }
+    }
 
     // Notify tenant admins (broadcast = user_id null).
     try {

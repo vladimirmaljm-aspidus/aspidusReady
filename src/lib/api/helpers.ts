@@ -132,6 +132,38 @@ export async function requireApiKeyAuth(req: NextRequest): Promise<ApiKeyAuthCon
     return NextResponse.json({ error: "Invalid or expired API key." }, { status: 401 });
   }
 
+  // FIX-P1-LOGIC Fix 4: enforce tenant suspension/expiry for API key auth,
+  // mirroring the same checks `requireAuth` applies to cookie sessions.
+  // Without this, a suspended tenant's API key kept working indefinitely.
+  try {
+    const tenant = await store.getTenant(result.tenantId);
+    if (tenant) {
+      if (tenant.status === "suspended" || tenant.status === "cancelled") {
+        return NextResponse.json(
+          { error: "Account suspended. Contact your platform administrator.", subscription_expired: true },
+          { status: 402 }
+        );
+      }
+      const now = new Date();
+      const subEnd = (tenant as any).subscription_end ? new Date((tenant as any).subscription_end) : null;
+      const trialEnd = (tenant as any).trial_ends_at ? new Date((tenant as any).trial_ends_at) : null;
+      if (subEnd && subEnd < now) {
+        return NextResponse.json(
+          { error: "Subscription expired. Contact your platform administrator to renew.", subscription_expired: true },
+          { status: 402 }
+        );
+      }
+      if (String(tenant.status) === "trial" && trialEnd && trialEnd < now) {
+        return NextResponse.json(
+          { error: "Trial period expired. Subscribe to continue.", subscription_expired: true },
+          { status: 402 }
+        );
+      }
+    }
+  } catch (e) {
+    console.error("[requireApiKeyAuth] Subscription check failed:", e);
+  }
+
   const ip = getIp(req);
 
   // Update last used (fire-and-forget)

@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 // Admin: download the professional packing list PDF for a logistics request.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -31,6 +32,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       "Cache-Control": "no-store",
     },
   });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }
 
 function buildPackingListInput(lr: any, tenantName: string) {

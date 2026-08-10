@@ -76,6 +76,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Only a super-admin can grant super-admin access." }, { status: 403 });
     }
 
+    // Only a super-admin can grant wildcard ("*") permissions — otherwise a
+    // tenant admin (or a regular user editing their own record before the
+    // self-service stripping below) could escalate to super-admin equivalent.
+    if (!auth.isSuperAdmin && Array.isArray(body.permissions) && body.permissions.includes("*")) {
+      return NextResponse.json({ error: "Only super-admin can grant wildcard permissions." }, { status: 403 });
+    }
+
     // Prevent more than 2 admins per tenant when promoting to admin
     if (body.role === "admin" && existing.role !== "admin" && existing.tenant_id) {
       const existingUsers = await auth.store.listUsers(existing.tenant_id);

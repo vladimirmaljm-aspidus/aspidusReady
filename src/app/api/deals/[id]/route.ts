@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const body = await req.json();
+    // FIX-P1-LOGIC Fix 1: enforce valid stage transitions. Deals use the
+    // `stage` column (semantically equivalent to `status` for the other
+    // doc types). Super-admins bypass so they can correct bad data.
+    if (body.stage && body.stage !== existing.stage && !auth.isSuperAdmin) {
+      const transition = validateStatusTransition("deal", existing.stage, body.stage);
+      if (!transition.valid) {
+        return NextResponse.json({ error: transition.error }, { status: 400 });
+      }
+    }
     const updated = await auth.store.upsertDeal({ ...body, id, tenant_id: existing.tenant_id });
     await audit(auth.store, auth.user, req, "deal.update", "deal", id, { stage: updated.stage });
     return NextResponse.json(updated);

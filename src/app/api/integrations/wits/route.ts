@@ -315,6 +315,7 @@ const DOCUMENT_INFO: Record<string, { name: string; description: string; where: 
 };
 
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (integrations.read)
@@ -440,4 +441,7 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json(advisor);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

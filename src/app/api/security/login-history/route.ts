@@ -4,6 +4,7 @@ import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
     // Permission gate (security.read)
@@ -25,4 +26,7 @@ export async function GET(req: NextRequest) {
   const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 50;
   const items = await auth.store.listLoginHistory(tid, userId, limit);
   return NextResponse.json({ items });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

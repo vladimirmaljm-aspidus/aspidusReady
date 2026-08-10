@@ -145,18 +145,55 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    // ── Update invoice status ────────────────────────────────────────────
+    // ── Update invoice status (cumulative total check) ──────────────────
+    // The "paid vs partial" decision MUST be based on the SUM of all
+    // payments recorded against this invoice — not the single payment amount
+    // we just received. Otherwise two $500 payments on a $1000 invoice both
+    // register as "partial" and the invoice never reaches "paid".
+    //
+    // We resolve prior payments via `erp_bank_transactions` filtered by the
+    // invoice's `number` + `tenant_id` (this is exactly how the
+    // create-bank-txn step above tags the row).
     const invoiceTotal = Number(invoice.total ?? 0);
-    const isFullPayment = numericAmount >= invoiceTotal - 0.01; // 1 cent tolerance
+    let totalPaid = numericAmount; // include the payment we just recorded
+    try {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const sb = getSupabase();
+      const { data: priorTxns, error: txErr } = await sb
+        .from("erp_bank_transactions")
+        .select("amount")
+        .eq("invoice_number", invoice.number)
+        .eq("tenant_id", tid);
+      if (txErr) {
+        console.warn("[record-payment] cumulative lookup failed:", txErr.message);
+      } else if (priorTxns && priorTxns.length > 0) {
+        totalPaid = (priorTxns as Array<{ amount: number | string }>).reduce(
+          (sum, t) => sum + Number(t.amount || 0),
+          0,
+        );
+      }
+    } catch (e) {
+      console.warn("[record-payment] cumulative lookup threw:", e);
+    }
+
+    const isFullPayment = totalPaid >= invoiceTotal - 0.01; // 1 cent tolerance
     const newStatus: string = isFullPayment ? "paid" : "partial";
     const nowIso = new Date().toISOString();
 
     try {
-      await auth.store.upsertInvoice({
+      // Only stamp `paid_at` when transitioning to "paid". On a partial
+      // payment we preserve any existing `paid_at` (which should be null,
+      // but we don't want to overwrite a prior "paid" mark if the invoice
+      // is somehow re-opened later).
+      const patch: { id: string; status: any; paid_at?: string; updated_at: string } = {
         id,
         status: newStatus as any,
-        paid_at: nowIso,
-      } as any);
+        updated_at: nowIso,
+      };
+      if (isFullPayment) {
+        patch.paid_at = nowIso;
+      }
+      await auth.store.upsertInvoice(patch as any);
     } catch (e: any) {
       console.error("[record-payment] invoice update failed:", e);
       return NextResponse.json(
@@ -304,6 +341,107 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
       } catch (e) {
         console.error("[proforma auto-paid] failed:", e);
+      }
+    }
+
+    // ── Cascade: auto-create a balanced journal entry for the payment ────
+    // When the invoice transitions to "paid", we record a DR Bank / CR Revenue
+    // entry so finance reports reflect the cash received. The lines use the
+    // tenant's ERP chart-of-accounts — we resolve `cash_account_id` (or fall
+    // back to the linked bank account's `account_id`) for the debit, and
+    // `revenue_account_id` for the credit. Skipped silently if the tenant has
+    // not configured ERP accounts yet (e.g. ERP module not initialized).
+    if (newStatus === "paid") {
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+
+        // Resolve the real erp_accounts IDs (FK-constrained, can't use string
+        // literals like "bank" / "sales_revenue"). The settings row holds the
+        // tenant's preferred accounts; if it's missing we abort cleanly.
+        const { data: settings } = await sb
+          .from("erp_settings")
+          .select("cash_account_id, revenue_account_id, receivable_account_id, auto_post_journal, default_currency")
+          .eq("tenant_id", tid)
+          .maybeSingle();
+
+        let bankAccountIdResolved: string | null = (settings as any)?.cash_account_id || null;
+        if (!bankAccountIdResolved && bankAccountId) {
+          // Fall back to the erp_bank_accounts row used for the payment.
+          const { data: ba } = await sb
+            .from("erp_bank_accounts")
+            .select("account_id")
+            .eq("id", bankAccountId)
+            .maybeSingle();
+          if (ba?.account_id) bankAccountIdResolved = (ba as any).account_id;
+        }
+        const revenueAccountId: string | null =
+          (settings as any)?.revenue_account_id || (settings as any)?.receivable_account_id || null;
+
+        if (bankAccountIdResolved && revenueAccountId) {
+          // Generate a unique journal entry number. The `get_next_doc_number`
+          // RPC only supports offer/invoice/proforma, so we synthesize one.
+          const jeNumber = `PMT-${invoice.number}-${Date.now()}`;
+          const todayIso = new Date().toISOString().slice(0, 10);
+          const jeCurrency = (invoice.currency as string) || (settings as any)?.default_currency || "USD";
+          const shouldPost = Boolean((settings as any)?.auto_post_journal);
+
+          const { data: je, error: jeError } = await sb
+            .from("erp_journal_entries")
+            .insert({
+              tenant_id: tid,
+              entry_number: jeNumber,
+              date: todayIso,
+              description: `Auto-journal for invoice ${invoice.number} payment`,
+              reference_type: "invoice",
+              reference_id: id,
+              status: shouldPost ? "posted" : "draft",
+              source_type: "auto",
+              debit_total: numericAmount,
+              credit_total: numericAmount,
+              currency: jeCurrency,
+              exchange_rate: 1,
+              created_by: auth.user.id,
+              posted_by: shouldPost ? auth.user.id : null,
+              posted_at: shouldPost ? new Date().toISOString() : null,
+            })
+            .select()
+            .maybeSingle();
+
+          if (jeError) {
+            console.warn("[record-payment] auto journal header insert failed:", jeError.message);
+          } else if (je) {
+            const { error: linesError } = await sb.from("erp_journal_lines").insert([
+              {
+                journal_entry_id: (je as any).id,
+                tenant_id: tid,
+                account_id: bankAccountIdResolved,
+                description: `Payment received - ${invoice.number}`,
+                debit: numericAmount,
+                credit: 0,
+                line_number: 1,
+                currency: jeCurrency,
+                partner_id: invoice.partner_id || null,
+              },
+              {
+                journal_entry_id: (je as any).id,
+                tenant_id: tid,
+                account_id: revenueAccountId,
+                description: `Revenue - ${invoice.number}`,
+                debit: 0,
+                credit: numericAmount,
+                line_number: 2,
+                currency: jeCurrency,
+                partner_id: invoice.partner_id || null,
+              },
+            ]);
+            if (linesError) {
+              console.warn("[record-payment] auto journal lines insert failed:", linesError.message);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[record-payment] auto journal failed:", e);
       }
     }
 

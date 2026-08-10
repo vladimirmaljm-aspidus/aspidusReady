@@ -161,18 +161,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const tenantId = resolveTenantId(auth, req);
-    // Super-admin without tenant_id param: fall back to first tenant
-    let effectiveTenantId = tenantId;
-    if (!effectiveTenantId && auth.isSuperAdmin) {
-      const tenants = await auth.store.listTenants();
-      effectiveTenantId = tenants[0]?.id || null;
-    }
-    if (!effectiveTenantId) {
-      return NextResponse.json({ error: "No tenant." }, { status: 400 });
+    // Super-admin without ?tenant_id= must not silently fall back to the first
+    // tenant (would leak / cross-show data). Return an empty templates list.
+    if (!tenantId) {
+      if (auth.isSuperAdmin) {
+        return NextResponse.json({ templates: [], source: "empty" });
+      }
+      return NextResponse.json({ error: "No tenant context." }, { status: 400 });
     }
 
     // Fetch real templates from the database
-    const dbTemplates = await auth.store.listDocumentTemplates(effectiveTenantId);
+    const dbTemplates = await auth.store.listDocumentTemplates(tenantId);
 
     if (dbTemplates.length > 0) {
       // Return database templates mapped to the email template format

@@ -45,6 +45,12 @@ export async function POST(req: NextRequest) {
   }
   body.tenant_id = auth.tenantId;
   if (!body.uploaded_by) body.uploaded_by = auth.user.id;
+  // Quota gate (monthly_documents) — only on CREATE, never on UPDATE.
+  if (!body.id) {
+    const { enforceQuota } = await import("@/lib/api/plan-limits");
+    const denied = await enforceQuota(auth.tenantId, "monthly_documents", auth.isSuperAdmin);
+    if (denied) return denied;
+  }
   const created = await auth.store.upsertDocument(body);
   await audit(auth.store, auth.user, req, body.id ? "document.update" : "document.upload", "document", created.id, { filename: created.filename });
   return NextResponse.json(created);

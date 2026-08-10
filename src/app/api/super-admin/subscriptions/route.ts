@@ -12,6 +12,7 @@ export const runtime = "nodejs";
  * amount paid, billing cycle, and computed warning level.
  */
 export async function GET(_req: NextRequest) {
+  try {
   const auth = await requireSuperAdmin();
   if (auth instanceof NextResponse) return auth;
 
@@ -69,4 +70,7 @@ export async function GET(_req: NextRequest) {
   };
 
   return NextResponse.json({ items, totals });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

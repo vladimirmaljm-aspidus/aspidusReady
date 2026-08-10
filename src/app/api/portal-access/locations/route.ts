@@ -28,6 +28,7 @@ export const runtime = "nodejs";
  *   }
  */
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
@@ -151,4 +152,7 @@ export async function GET(req: NextRequest) {
     login_history: portalLoginHistory,
     portal_logins: portalLogins || [],
   });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

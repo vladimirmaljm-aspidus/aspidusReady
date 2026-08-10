@@ -21,6 +21,7 @@ export const runtime = "nodejs";
  *   - offset: pagination offset (default 0)
  */
 export async function GET(req: NextRequest) {
+  try {
   const auth = await requireSuperAdmin();
   if (auth instanceof NextResponse) return auth;
 
@@ -52,4 +53,7 @@ export async function GET(req: NextRequest) {
     limit,
     offset,
   });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

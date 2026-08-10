@@ -45,6 +45,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     const body = await req.json();
     const updated = await auth.store.upsertCommissionPayout({ ...body, id, tenant_id: existing.tenant_id });
+    // FIX-P1-LOGIC Fix 3: cascade payout completion → mark all linked
+    // DealCommissions as paid. Only fires on a real transition INTO
+    // "completed" — re-saving an already-completed payout is a no-op so we
+    // don't clobber paid_at on idempotent retries.
+    if (body.status === "completed" && existing.status !== "completed") {
+      if (Array.isArray(updated.commission_ids) && updated.commission_ids.length > 0) {
+        for (const commissionId of updated.commission_ids) {
+          try {
+            await auth.store.markDealCommissionPaid(
+              commissionId,
+              updated.payment_reference || undefined,
+            );
+          } catch (e) {
+            console.warn(`[commission_payout.update] markDealCommissionPaid failed for ${commissionId}:`, e);
+          }
+        }
+      }
+    }
     await audit(auth.store, auth.user, req, "commission_payout.update", "commission_payout", id);
     return NextResponse.json(updated);
   } catch (error: any) {

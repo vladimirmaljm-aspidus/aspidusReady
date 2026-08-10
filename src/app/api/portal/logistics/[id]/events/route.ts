@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 // Portal client: read the timeline for their OWN logistics request.
 // Ownership check: the request must belong to the caller's partner_id.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
   const access = await getPortalSessionAccess();
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
@@ -28,4 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // sent to the client. For now we keep everything — admin should use
   // internal notes elsewhere. Filter here later if needed.
   return NextResponse.json({ items: events });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }

@@ -154,7 +154,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Build the invoice object. Copy partner/items/totals + the trade
-    //    fields that exist on both `proformas` and `invoices` tables.
+    //    fields that exist on both `proformas` and `invoices` tables
+    //    (supabase-schema-live.sql:496-545 + 1107-1150). Previously this
+    //    block copied only the core 8 trade fields and dropped the
+    //    country/delivery/spec/exchange-rate fields (DEEP-AUDIT-LOGIC §2.3).
     //    Skip `bank_details`/`terms` (offers-only columns) and
     //    `proforma_id` (no such column on invoices).
     const invoiceData: Record<string, unknown> = {
@@ -172,14 +175,24 @@ export async function POST(req: NextRequest) {
       status: "draft",
       issue_date: issueDate.toISOString().split("T")[0],
       due_date: dueDate.toISOString().split("T")[0],
-      payment_terms: (proforma as any).payment_terms ?? null,
-      incoterm: (proforma as any).incoterm ?? null,
-      pol: (proforma as any).pol ?? null,
-      pod: (proforma as any).pod ?? null,
-      vessel: (proforma as any).vessel ?? null,
-      container_no: (proforma as any).container_no ?? null,
-      lead_time: (proforma as any).lead_time ?? null,
-      packaging: (proforma as any).packaging ?? null,
+      payment_terms: pAny.payment_terms ?? null,
+      incoterm: pAny.incoterm ?? null,
+      pol: pAny.pol ?? null,
+      pol_country: pAny.pol_country ?? null,
+      pod: pAny.pod ?? null,
+      pod_country: pAny.pod_country ?? null,
+      vessel: pAny.vessel ?? null,
+      container_no: pAny.container_no ?? null,
+      lead_time: pAny.lead_time ?? null,
+      packaging: pAny.packaging ?? null,
+      delivery_address: pAny.delivery_address ?? null,
+      delivery_city: pAny.delivery_city ?? null,
+      delivery_country: pAny.delivery_country ?? null,
+      specification: pAny.specification ?? null,
+      origin_country: pAny.origin_country ?? null,
+      exchange_rate: pAny.exchange_rate ?? null,
+      exchange_rate_date: pAny.exchange_rate_date ?? null,
+      exchange_rate_note: pAny.exchange_rate_note ?? null,
       notes: `Auto-generated from proforma: ${proforma.number}${
         proforma.notes ? `. ${proforma.notes}` : ""
       }`,

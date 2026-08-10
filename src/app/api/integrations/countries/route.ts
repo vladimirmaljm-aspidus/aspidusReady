@@ -23,11 +23,15 @@ export const runtime = "nodejs";
  */
 
 export async function GET() {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-  return NextResponse.json({
-    items: COUNTRIES,
-    total: COUNTRIES.length,
-    source: "embedded",
-  });
+  try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+    return NextResponse.json({
+      items: COUNTRIES,
+      total: COUNTRIES.length,
+      source: "embedded",
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
 }
