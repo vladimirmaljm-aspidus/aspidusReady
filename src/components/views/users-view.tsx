@@ -432,7 +432,10 @@ function UserFormDialog({
         tenant_id: user?.tenant_id || defaultTenantId,
         password: "",
         active: user?.active ?? true,
-        permissions: user?.permissions || null,
+        // New users start with a baseline "dashboard.read" grant so they land
+        // on a working (if mostly empty) dashboard instead of a 403 wall —
+        // everything else still requires the admin to grant it explicitly.
+        permissions: user ? user.permissions || null : ["dashboard.read"],
       });
       setAdvancedOpen(!!(user?.permissions && user.permissions.length > 0));
       setShowPassword(false);

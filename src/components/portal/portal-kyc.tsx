@@ -885,13 +885,13 @@ function KycWizard({
             key={step}
             className="animate-in fade-in-5 slide-in-from-bottom-1 duration-300"
           >
-            {step === 1 && (
+            {currentStepDef.id === 1 && (
               <StepEntity
                 value={form.entity_type}
                 onChange={(v) => update("entity_type", v)}
               />
             )}
-            {step === 2 && (
+            {currentStepDef.id === 2 && (
               <StepBusinessInfo
                 isCompany={!!isCompany}
                 form={form}
@@ -899,31 +899,31 @@ function KycWizard({
                 readOnly={readOnly}
               />
             )}
-            {step === 3 && (
+            {currentStepDef.id === 3 && (
               <StepAddressContact
                 form={form}
                 update={update}
                 readOnly={readOnly}
               />
             )}
-            {step === 4 && isCompany && (
+            {currentStepDef.id === 4 && isCompany && (
               <StepBeneficialOwner
                 form={form}
                 update={update}
                 readOnly={readOnly}
               />
             )}
-            {step === 5 && (
+            {currentStepDef.id === 5 && (
               <StepBankDetails form={form} update={update} readOnly={readOnly} />
             )}
-            {step === 6 && (
+            {currentStepDef.id === 6 && (
               <StepDocuments
                 documents={form.documents || []}
                 onChange={(docs) => update("documents", docs)}
                 isCompany={!!isCompany}
               />
             )}
-            {step === 7 && <StepReview form={form} isCompany={!!isCompany} />}
+            {currentStepDef.id === 7 && <StepReview form={form} isCompany={!!isCompany} />}
           </div>
         </CardContent>
 

@@ -31,12 +31,14 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  // Permission gate (portal-access.read) — admin-only feature.
+  // Permission gate (portal.read) — admin-only feature.
   {
     const { requirePermission } = await import("@/lib/permissions/can");
-    const denied = requirePermission(auth, "portal-access.read");
+    const denied = requirePermission(auth, "portal.read");
     if (denied) return denied;
   }
+  { const { requireFeature } = await import("@/lib/api/feature-guard");
+    const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; }
 
   const tid = resolveTenantId(auth, req);
   if (!tid) {

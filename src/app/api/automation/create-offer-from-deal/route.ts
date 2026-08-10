@@ -55,6 +55,10 @@ export async function POST(req: NextRequest) {
 
     // 2. Fetch partner data for auto-fill
     const partner = deal.partner_id ? await store.getPartner(deal.partner_id) : null;
+    // Enrich the auto-generated line with trade metadata (HS code, brand,
+    // spec, SKU) when the deal is linked to a real product — mirrors the
+    // manual product picker used on the Offers view.
+    const linkedProduct = deal.product_id ? await store.getProduct(deal.product_id).catch(() => null) : null;
 
     // 3. Auto-generate offer number (atomic via Postgres SEQUENCE; falls
     //    back to legacy `listOffers().total + 1` if the RPC is unavailable).
@@ -70,18 +74,27 @@ export async function POST(req: NextRequest) {
       offerNumber = formatDocNumber("offer", year, nextSeq);
     }
 
-    // 4. Build offer items from deal data
+    // 4. Build offer items from deal data. Quantity/unit come from the deal
+    //    itself when set (deal.quantity, deal.unit); unit_price is derived
+    //    from the deal value so the offer total matches the deal value.
+    const qty = deal.quantity && deal.quantity > 0 ? deal.quantity : 1;
+    const unit = deal.unit || linkedProduct?.unit || "pcs";
+    const unitPrice = deal.value / qty;
     const items: OfferLineItem[] = [
       {
-        product_id: "",
-        product_name: deal.title,
-        sku: "",
-        quantity: 1,
-        unit: "pcs",
-        unit_price: deal.value,
+        product_id: linkedProduct?.id || "",
+        product_name: linkedProduct?.name || deal.title,
+        sku: linkedProduct?.sku || "",
+        quantity: qty,
+        unit,
+        unit_price: unitPrice,
         discount: 0,
         tax_rate: 0,
         total: deal.value,
+        hs_code: (linkedProduct as any)?.hs_code ?? null,
+        description: (linkedProduct as any)?.description ?? null,
+        detailed_spec: (linkedProduct as any)?.detailed_spec ?? null,
+        brand: (linkedProduct as any)?.brand ?? null,
       },
     ];
 

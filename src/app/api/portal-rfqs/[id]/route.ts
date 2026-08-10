@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { notify } from "@/lib/notif/helper";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   const updated = await auth.store.upsertPortalRfq({ ...body, id, tenant_id: existing.tenant_id });
   await audit(auth.store, auth.user, req, "portal_rfq.update", "portal_rfq", id, { status: updated.status });
+
+  // Notify the portal client when their RFQ gets a quote — this is the one
+  // status change they're actively waiting on.
+  if (updated.status === "quoted" && existing.status !== "quoted") {
+    await notify({
+      tenantId: updated.tenant_id,
+      partnerId: updated.partner_id,
+      type: "rfq_quoted",
+      title: `Quote ready for ${updated.number}`,
+      message: updated.target_price != null
+        ? `${updated.currency || ""} ${updated.target_price} · ${updated.product_name}`
+        : `Your request for ${updated.product_name} has been quoted.`,
+      entityType: "portal_rfq",
+      entityId: id,
+      actionUrl: "/portal/rfq",
+      actionLabel: "View quote",
+    });
+  }
   return NextResponse.json(updated);
 }
 

@@ -1428,6 +1428,9 @@ function CreatePayoutDialog({
         payment_method: paymentMethod || null,
         payment_reference: paymentReference || null,
         notes: notes || null,
+        // This dialog issues a completed payout — the selected commissions
+        // are marked paid immediately (no separate "pending payout" stage).
+        status: "completed",
       };
       const r = await fetch(api("/api/commission-payouts"), {
         method: "POST",

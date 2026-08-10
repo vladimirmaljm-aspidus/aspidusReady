@@ -39,6 +39,12 @@ export async function POST(req: NextRequest) {
     }
     let body: Record<string, string> = {};
     try { body = await req.json(); } catch {}
+    // Extra bootstrap guard: when SETUP_TOKEN is configured, require it —
+    // closes the window between a fresh deploy and the first admin login
+    // where this endpoint would otherwise mint a super_admin for anyone.
+    if (process.env.SETUP_TOKEN && body.setup_token !== process.env.SETUP_TOKEN) {
+      return NextResponse.json({ error: "Invalid setup token." }, { status: 403 });
+    }
     const username = body.username || process.env.ADMIN_USERNAME;
     const password = body.password || process.env.ADMIN_PASSWORD;
     const email = body.email || process.env.ADMIN_EMAIL;

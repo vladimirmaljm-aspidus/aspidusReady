@@ -125,10 +125,10 @@ export function Topbar() {
 
   // Real-time notifications state
   const [notifications, setNotifications] = React.useState<NotifItem[]>([]);
+  const [unreadTotal, setUnreadTotal] = React.useState(0);
   const [notifOpen, setNotifOpen] = React.useState(false);
 
-  // Real-time notifications — loaded from API
-  React.useEffect(() => {
+  const loadNotifications = React.useCallback(() => {
     if (!user) return;
     fetch("/api/notifications?unreadOnly=true")
       .then((r) => r.json())
@@ -136,17 +136,28 @@ export function Topbar() {
         // API returns { items, unread_count } — handle both shapes defensively
         const items = Array.isArray(data) ? data : (data?.items ?? []);
         setNotifications(items.slice(0, 10));
+        setUnreadTotal(typeof data?.unread_count === "number" ? data.unread_count : items.length);
       })
       .catch(() => {});
   }, [user]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Load on mount/user change, then poll every 30s so new notifications
+  // (KYC submitted, RFQ received, offer accepted, etc.) show up without a
+  // hard refresh.
+  React.useEffect(() => {
+    loadNotifications();
+    const id = setInterval(loadNotifications, 30_000);
+    return () => clearInterval(id);
+  }, [loadNotifications]);
+
+  const unreadCount = unreadTotal;
 
   const markAllRead = async () => {
     try {
       const res = await fetch("/api/notifications?markAllRead=true", { method: "PUT" });
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        setUnreadTotal(0);
         toast.success("All notifications marked as read");
       }
     } catch {
@@ -156,10 +167,18 @@ export function Topbar() {
 
   function handleNotifClick(n: NotifItem) {
     setNotifications((prev) => prev.map((item) => item.id === n.id ? { ...item, read: true } : item));
+    if (!n.read) setUnreadTotal((c) => Math.max(0, c - 1));
+    fetch(`/api/notifications/${n.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ read: true }),
+    }).catch(() => {});
     if (n.entity_type) {
       const viewMap: Record<string, string> = {
-        offers: "offers", invoices: "invoices", kyc: "kyc-review", deals: "deals",
-        tasks: "tasks", portal_rfq: "portal-rfqs", documents: "documents",
+        offer: "offers", invoice: "invoices", proforma: "proformas",
+        kyc_submission: "kyc-review", deal: "deals", task: "tasks",
+        portal_rfq: "portal-rfqs", document: "documents",
+        portal_access: "portal-rfqs", partner: "partners", product: "products",
       };
       const targetView = viewMap[n.entity_type];
       if (targetView) setView(targetView as any);

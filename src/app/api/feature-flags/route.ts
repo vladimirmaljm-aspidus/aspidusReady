@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     module_finance: (flags as any).module_finance ?? true,
     module_inventory: (flags as any).module_inventory ?? false,
     module_portal: (flags as any).module_portal ?? false,
+    module_logistics: (flags as any).module_logistics ?? false,
     module_kyc: (flags as any).module_kyc ?? false,
     module_document_templates: (flags as any).module_document_templates ?? false,
     module_document_verification: (flags as any).module_document_verification ?? false,
@@ -40,9 +41,9 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const auth = await requireSuperAdmin();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (platform.feature_flags.update)
+    // Permission gate (platform.feature_flags.write)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "platform.feature_flags.update"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "platform.feature_flags.write"); if (_d) return _d; } /* requirePermission wired */
 
   let body;
   try {

@@ -22,9 +22,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const gate = requirePlatformPlans(auth);
     if (gate) return gate;
     if (auth instanceof NextResponse) return auth;
-    // Permission gate (platform.plans.update)
+    // Permission gate (platform.plans.write)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "platform.plans.update"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "platform.plans.write"); if (_d) return _d; } /* requirePermission wired */
 
 
     const { id } = await ctx.params;

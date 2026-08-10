@@ -527,17 +527,33 @@ function DemandDetail({
               // Build an offer directly from the demand — same partner,
               // items, subject, and currency. Skips the deal-based
               // automation which doesn't understand demands.
-              const items = (demand.items || []).map((it: any, i: number) => ({
-                product_id: it.product_id || "",
-                product_name: it.product_name || demand.product_name || `Line ${i + 1}`,
-                sku: it.sku || "",
-                unit: it.unit || "pcs",
-                quantity: Number(it.quantity) || 1,
-                unit_price: Number(it.target_price ?? demand.target_price ?? 0) || 0,
-                discount: 0,
-                tax_rate: 20,
-                total: (Number(it.quantity) || 1) * (Number(it.target_price ?? demand.target_price ?? 0) || 0),
-              }));
+              // Enrich each line with trade metadata (HS code, brand, spec)
+              // from the linked product, same as the manual product picker.
+              const productLookups = await Promise.all(
+                (demand.items || []).map((it: any) =>
+                  it.product_id
+                    ? fetch(api(`/api/products/${it.product_id}`)).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+                    : Promise.resolve(null)
+                )
+              );
+              const items = (demand.items || []).map((it: any, i: number) => {
+                const p = productLookups[i];
+                return {
+                  product_id: it.product_id || "",
+                  product_name: it.product_name || demand.product_name || `Line ${i + 1}`,
+                  sku: p?.sku || it.sku || "",
+                  unit: it.unit || p?.unit || "pcs",
+                  quantity: Number(it.quantity) || 1,
+                  unit_price: Number(it.target_price ?? demand.target_price ?? 0) || 0,
+                  discount: 0,
+                  tax_rate: 20,
+                  total: (Number(it.quantity) || 1) * (Number(it.target_price ?? demand.target_price ?? 0) || 0),
+                  hs_code: p?.hs_code ?? null,
+                  description: p?.description ?? null,
+                  detailed_spec: p?.detailed_spec ?? null,
+                  brand: p?.brand ?? null,
+                };
+              });
               const subtotal = items.reduce((s, x) => s + x.total, 0);
               const res = await fetch(api(`/api/offers`), {
                 method: "POST",

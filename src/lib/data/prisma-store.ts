@@ -2319,8 +2319,12 @@ export class PrismaStore implements Store {
 
   async getUnreadCount(tenantId: string, userId: string): Promise<number> {
     return db.notification.count({
-      where: { tenant_id: tenantId, user_id: userId, read: false },
+      where: { tenant_id: tenantId, OR: [{ user_id: userId }, { user_id: null }], read: false },
     });
+  }
+  async getNotificationById(id: string): Promise<Notification | null> {
+    const r = await db.notification.findUnique({ where: { id } });
+    return r as unknown as Notification | null;
   }
 
   // ─── Dashboard ──────────────────────────────────────────────────────────

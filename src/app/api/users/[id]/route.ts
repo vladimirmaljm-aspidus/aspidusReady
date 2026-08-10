@@ -63,9 +63,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (existing.role === "super_admin" || existing.tenant_id !== auth.tenantId) {
         return NextResponse.json({ error: "Not found." }, { status: 404 });
       }
-      if (auth.user.role !== "admin" && auth.user.id !== id) {
-        return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-      }
+      // Note: requirePermission("users.update") above already gates this —
+      // admins pass implicitly, and a non-admin only reaches here with an
+      // explicit users.update grant. No further role check needed; the
+      // self-edit restriction below still blocks privilege self-escalation.
     }
 
     const body = await req.json();
@@ -141,13 +142,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-  // Permission gate (users.delete)
+  // Permission gate (users.delete) — admins pass implicitly; a non-admin
+  // needs an explicit users.delete grant. No further role check needed.
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "users.delete"); if (_d) return _d; } /* requirePermission wired */
 
-    if (auth.user.role !== "admin" && !auth.isSuperAdmin) {
-      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-    }
     const { id } = await params;
     if (id === auth.user.id) {
       return NextResponse.json({ error: "You cannot delete yourself." }, { status: 400 });

@@ -35,9 +35,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
-  // Permission gate (platform.plans.create)
+  // Permission gate (platform.plans.write)
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "platform.plans.create"); if (_d) return _d; } /* requirePermission wired */
+    const _d = requirePermission(auth, "platform.plans.write"); if (_d) return _d; } /* requirePermission wired */
 
     if (!auth.isSuperAdmin) return NextResponse.json({ error: "Super-admin access required." }, { status: 403 });
     const body = await req.json();

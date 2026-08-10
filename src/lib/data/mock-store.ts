@@ -1224,6 +1224,9 @@ export class MockStore implements Store {
   async getUnreadCount(tenantId: string, userId: string): Promise<number> {
     return mock.notifications.filter((n) => n.tenant_id === tenantId && !n.read && (n.user_id === null || n.user_id === userId)).length;
   }
+  async getNotificationById(id: string): Promise<Notification | null> {
+    return mock.notifications.find((n) => n.id === id) || null;
+  }
 
   // ---- commission agents ----
   async listCommissionAgents(tenantId: string, params?: ListParams): Promise<ListResult<CommissionAgent>> {

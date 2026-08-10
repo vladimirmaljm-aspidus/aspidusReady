@@ -1855,24 +1855,20 @@ function PortalMessageThread({
     let mounted = true;
     // Use a microtask to avoid calling setState synchronously in the effect body
     queueMicrotask(() => { if (mounted) setLoading(true); });
-    fetch(api(`/api/audit?limit=100&entity_type=portal_access`))
+    fetch(api(`/api/portal-access/${accessId}/message`))
       .then((r) => r.json())
       .then((data) => {
         if (!mounted) return;
-        const items = (data.items || []).filter(
-          (a: any) =>
-            (a.action === "portal.message" || a.action === "admin.message") &&
-            (a.entity_id === accessId ||
-              a.details?.partner_id === partnerId ||
-              a.details?.access_id === accessId)
-        );
+        const items = (data.items || []) as any[];
         const mapped = items
-          .map((a: any) => ({
-            id: a.id,
-            direction: a.action === "portal.message" ? "incoming" : "outgoing",
-            message: a.details?.message || "",
-            sender: a.username || "System",
-            timestamp: a.created_at,
+          .map((m: any) => ({
+            id: m.id,
+            direction: m.direction === "portal_to_admin" ? "incoming" : "outgoing",
+            message: m.body || "",
+            sender: m.sender_username || "System",
+            timestamp: m.created_at,
+            attachment_url: m.attachment_url || null,
+            attachment_name: m.attachment_name || null,
           }))
           .sort((a: any, b: any) => a.timestamp.localeCompare(b.timestamp));
         setMessages(mapped);
@@ -1911,7 +1907,17 @@ function PortalMessageThread({
               : "mr-auto bg-muted"
           }`}
         >
-          <p className="leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+          {msg.message && <p className="leading-relaxed whitespace-pre-wrap">{msg.message}</p>}
+          {msg.attachment_url && msg.attachment_name && (
+            <a
+              href={msg.attachment_url.replace("/api/portal/upload/", "/api/portal-uploads/")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mt-1 inline-flex items-center gap-1 underline underline-offset-2 ${msg.direction === "outgoing" ? "text-primary-foreground" : "text-primary"}`}
+            >
+              📎 {msg.attachment_name}
+            </a>
+          )}
           <p className={`text-[9px] mt-1 ${msg.direction === "outgoing" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
             {msg.sender} · {fmtRelative(msg.timestamp)}
           </p>

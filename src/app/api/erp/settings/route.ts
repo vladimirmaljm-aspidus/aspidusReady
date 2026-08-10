@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
   // Permission gate (erp.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
-    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "erp.create"); if (_d) return _d; } } /* requirePermission wired */
+    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "erp.manage_settings"); if (_d) return _d; } } /* requirePermission wired */
   // Feature gate (module_finance)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;

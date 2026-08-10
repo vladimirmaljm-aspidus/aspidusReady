@@ -1447,9 +1447,12 @@ export class SupabaseStore implements Store {
   }
 
   // ---- notifications ----
+  // Broadcast notifications (KYC, RFQ, invoice paid, etc.) are written with
+  // user_id=null so every admin on the tenant sees them — the filter must
+  // match "assigned to me" OR "broadcast", never just "assigned to me".
   async listNotifications(tenantId: string, userId?: string, unreadOnly?: boolean): Promise<Notification[]> {
     let q = this.sb().from("notifications").select("*").eq("tenant_id", tenantId);
-    if (userId) q = q.eq("user_id", userId);
+    if (userId) q = q.or(`user_id.eq.${userId},user_id.is.null`);
     if (unreadOnly) q = q.eq("read", false);
     q = q.order("created_at", { ascending: false });
     const { data, error } = await q;
@@ -1491,7 +1494,8 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
   async markAllNotificationsRead(tenantId: string, userId: string): Promise<void> {
-    const { error } = await this.sb().from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("tenant_id", tenantId).eq("user_id", userId).eq("read", false);
+    const { error } = await this.sb().from("notifications").update({ read: true, read_at: new Date().toISOString() })
+      .eq("tenant_id", tenantId).or(`user_id.eq.${userId},user_id.is.null`).eq("read", false);
     if (error) throw error;
   }
   async deleteNotification(id: string): Promise<void> {
@@ -1499,9 +1503,15 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
   async getUnreadCount(tenantId: string, userId: string): Promise<number> {
-    const { count, error } = await this.sb().from("notifications").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("user_id", userId).eq("read", false);
+    const { count, error } = await this.sb().from("notifications").select("*", { count: "exact", head: true })
+      .eq("tenant_id", tenantId).or(`user_id.eq.${userId},user_id.is.null`).eq("read", false);
     if (error) throw error;
     return count ?? 0;
+  }
+  async getNotificationById(id: string): Promise<Notification | null> {
+    const { data, error } = await this.sb().from("notifications").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return (data as Notification) || null;
   }
 
   // ---- commission agents ----

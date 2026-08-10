@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useAppStore, ViewKey, isAdmin, isSuperAdmin, isAccountant, canUser } from "@/lib/store/app-store";
+import { useAppStore, ViewKey, isAdmin, isSuperAdmin, isAccountant, canUser, useEffectiveTenantId } from "@/lib/store/app-store";
+import { useBadgeCounts } from "@/lib/hooks/use-badge-counts";
 import { useI18nStore } from "@/lib/i18n/store";
 import { t, NAV, SECTIONS as I18N_SECTIONS, type Locale } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,8 @@ interface NavItem {
   adminOnly?: boolean;
   superAdminOnly?: boolean;
   featureFlag?: string;
+  /** Key into BadgeCounts (use-badge-counts.ts) — shows a small numeric pill when > 0. */
+  badgeKey?: keyof import("@/lib/hooks/use-badge-counts").BadgeCounts;
 }
 
 interface NavSection {
@@ -58,7 +61,7 @@ const SECTIONS: NavSection[] = [
       { key: "dashboard", i18nKey: "dashboard", i18nSection: "overview", icon: LayoutDashboard, permission: "dashboard.read" },
       { key: "custom-dashboard", i18nKey: "custom-dashboard", i18nSection: "overview", icon: LayoutGrid, permission: "dashboard.read" },
       { key: "calendar", i18nKey: "calendar", i18nSection: "overview", icon: Calendar, permission: "calendar.read" },
-      { key: "tasks", i18nKey: "tasks", i18nSection: "overview", icon: ListChecks, permission: "tasks.read" },
+      { key: "tasks", i18nKey: "tasks", i18nSection: "overview", icon: ListChecks, permission: "tasks.read", badgeKey: "tasks" },
       { key: "quick-notes", i18nKey: "quick-notes", i18nSection: "overview", icon: StickyNote, permission: "notes.read" },
       { key: "workspace", i18nKey: "workspace", i18nSection: "overview", icon: Briefcase },
     ],
@@ -97,15 +100,15 @@ const SECTIONS: NavSection[] = [
   {
     i18nKey: "logistics",
     items: [
-      { key: "logistics-requests", i18nKey: "logistics-requests", i18nSection: "logistics", icon: Truck, permission: "logistics.read", featureFlag: "module_logistics" },
+      { key: "logistics-requests", i18nKey: "logistics-requests", i18nSection: "logistics", icon: Truck, permission: "logistics.read", featureFlag: "module_logistics", badgeKey: "logistics_requests" },
       { key: "trade-globe", i18nKey: "trade-globe", i18nSection: "logistics", icon: Globe, permission: "logistics.read", featureFlag: "module_logistics" },
     ],
   },
   {
     i18nKey: "portal-mgmt",
     items: [
-      { key: "kyc-review", i18nKey: "kyc-review", i18nSection: "portal-mgmt", icon: ShieldCheck, permission: "kyc.read", featureFlag: "module_kyc" },
-      { key: "portal-rfqs", i18nKey: "portal-rfqs", i18nSection: "portal-mgmt", icon: Inbox, permission: "portal.rfq_read", featureFlag: "module_portal" },
+      { key: "kyc-review", i18nKey: "kyc-review", i18nSection: "portal-mgmt", icon: ShieldCheck, permission: "kyc.read", featureFlag: "module_kyc", badgeKey: "kyc_review" },
+      { key: "portal-rfqs", i18nKey: "portal-rfqs", i18nSection: "portal-mgmt", icon: Inbox, permission: "portal.rfq_read", featureFlag: "module_portal", badgeKey: "portal_rfqs" },
       { key: "portal-uploads", i18nKey: "portal-uploads", i18nSection: "portal-mgmt", icon: FolderOpen, permission: "portal-uploads.read", featureFlag: "module_portal" },
     ],
   },
@@ -135,7 +138,7 @@ const SECTIONS: NavSection[] = [
       { key: "vault", i18nKey: "vault", i18nSection: "administration", icon: Lock, permission: "vault.read", featureFlag: "module_vault" },
       { key: "api-keys", i18nKey: "api-keys", i18nSection: "administration", icon: Key, permission: "api-keys.read", featureFlag: "module_api_keys" },
       { key: "audit", i18nKey: "audit", i18nSection: "administration", icon: ScrollText, permission: "audit.read" },
-      { key: "portal-locations", i18nKey: "portal-locations", i18nSection: "administration", icon: MapPin, permission: "portal-access.read" },
+      { key: "portal-locations", i18nKey: "portal-locations", i18nSection: "administration", icon: MapPin, permission: "portal.read", featureFlag: "module_portal" },
       { key: "plans", i18nKey: "plans", i18nSection: "administration", icon: TrendingUp, permission: "platform.plans.read" },
     ],
   },
@@ -195,6 +198,8 @@ export function Sidebar() {
     refetchOnWindowFocus: true,
   });
   const flags: Record<string, boolean> | null = flagsData?.flags || null;
+  const effectiveTenantId = useEffectiveTenantId();
+  const badges = useBadgeCounts(!!user && !!effectiveTenantId);
 
   return (
     <aside
@@ -288,6 +293,7 @@ export function Sidebar() {
                   const Icon = item.icon;
                   const active = view === item.key;
                   const label = NAV[locale]?.[item.i18nKey] || item.i18nKey;
+                  const badgeCount = item.badgeKey ? badges[item.badgeKey] : undefined;
 
                   return (
                     <NavItemButton
@@ -297,6 +303,7 @@ export function Sidebar() {
                       active={active}
                       collapsed={sidebarCollapsed}
                       onClick={() => setView(item.key)}
+                      badgeCount={badgeCount}
                     />
                   );
                 })}
@@ -392,9 +399,10 @@ interface NavItemButtonProps {
   active: boolean;
   collapsed: boolean;
   onClick: () => void;
+  badgeCount?: number;
 }
 
-function NavItemButton({ icon: Icon, label, active, collapsed, onClick }: NavItemButtonProps) {
+function NavItemButton({ icon: Icon, label, active, collapsed, onClick, badgeCount }: NavItemButtonProps) {
   const button = (
     <button
       onClick={onClick}
@@ -428,22 +436,37 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick }: NavIte
       )}
 
       {/* Icon */}
-      <Icon
-        className={cn(
-          "size-[18px] shrink-0 transition-colors duration-200",
-          active
-            ? "text-sidebar-primary"
-            : "text-white/35 group-hover:text-white/60"
+      <div className="relative shrink-0">
+        <Icon
+          className={cn(
+            "size-[18px] transition-colors duration-200",
+            active
+              ? "text-sidebar-primary"
+              : "text-white/35 group-hover:text-white/60"
+          )}
+        />
+        {/* Collapsed-mode badge dot with count */}
+        {collapsed && !!badgeCount && badgeCount > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-primary text-[9px] font-semibold text-primary-foreground flex items-center justify-center leading-none tabular-nums">
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </span>
         )}
-      />
+      </div>
 
       {/* Label */}
       <span className={cn(
-        "truncate transition-all duration-300",
+        "truncate transition-all duration-300 flex-1 text-left",
         collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100 w-auto"
       )}>
         {label}
       </span>
+
+      {/* Expanded-mode badge pill */}
+      {!collapsed && !!badgeCount && badgeCount > 0 && (
+        <span className="shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-primary text-[10px] font-semibold text-primary-foreground flex items-center justify-center leading-none tabular-nums">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      )}
 
       {/* Active dot indicator for collapsed mode */}
       {active && collapsed && (

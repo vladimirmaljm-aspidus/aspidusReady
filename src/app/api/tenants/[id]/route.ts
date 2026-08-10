@@ -25,9 +25,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const auth = await requireSuperAdmin();
     if (auth instanceof NextResponse) return auth;
-  // Permission gate (platform.tenants.update)
+  // Permission gate (platform.tenants.write)
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "platform.tenants.update"); if (_d) return _d; } /* requirePermission wired */
+    const _d = requirePermission(auth, "platform.tenants.write"); if (_d) return _d; } /* requirePermission wired */
 
     const { id } = await params;
     const body = await req.json();

@@ -260,6 +260,7 @@ export interface Store {
   markAllNotificationsRead(tenantId: string, userId: string): Promise<void>;
   deleteNotification(id: string): Promise<void>;
   getUnreadCount(tenantId: string, userId: string): Promise<number>;
+  getNotificationById(id: string): Promise<Notification | null>;
 
   // user preferences
   getUserPreference(userId: string, key: string): Promise<UserPreference | null>;

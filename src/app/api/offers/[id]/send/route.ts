@@ -9,9 +9,9 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (offers.create)
+    // Permission gate (offers.send)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "offers.create"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "offers.send"); if (_d) return _d; } /* requirePermission wired */
 
   if (auth.user.role !== "admin" && auth.user.role !== "super_admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });

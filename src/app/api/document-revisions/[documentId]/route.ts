@@ -24,6 +24,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "document-register.read"); if (_d) return _d; }
 
     const { documentId } = await params;
     if (!documentId) {

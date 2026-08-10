@@ -32,9 +32,9 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireSuperAdmin();
     if (auth instanceof NextResponse) return auth;
-    // Permission gate (platform.tenants.create)
+    // Permission gate (platform.tenants.write)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "platform.tenants.create"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "platform.tenants.write"); if (_d) return _d; } /* requirePermission wired */
 
     const body = await req.json();
     // Auto-compute trial_ends_at when creating a fresh trial tenant so the

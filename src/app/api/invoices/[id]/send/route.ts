@@ -9,9 +9,9 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (invoices.create)
+    // Permission gate (invoices.send)
     { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "invoices.create"); if (_d) return _d; } /* requirePermission wired */
+      const _d = requirePermission(auth, "invoices.send"); if (_d) return _d; } /* requirePermission wired */
   // Feature gate (module_finance)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _f = await requireFeature(auth.tenantId, "module_finance", auth.isSuperAdmin); if (_f) return _f; } /* requireFeature wired */
