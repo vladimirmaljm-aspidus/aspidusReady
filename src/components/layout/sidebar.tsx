@@ -12,7 +12,7 @@ import {
   ChevronLeft, ChevronRight, Building2, Calculator,
   ToggleRight, LayoutGrid, Plug, DollarSign, BookMarked, Calendar,
   StickyNote, Briefcase, Settings2, TrendingUp, Truck, MapPin,
-  Shield,
+  Shield, Globe,
 } from "lucide-react";
 import {
   Tooltip,
@@ -98,6 +98,7 @@ const SECTIONS: NavSection[] = [
     i18nKey: "logistics",
     items: [
       { key: "logistics-requests", i18nKey: "logistics-requests", i18nSection: "logistics", icon: Truck, permission: "logistics.read", featureFlag: "module_logistics" },
+      { key: "trade-globe", i18nKey: "trade-globe", i18nSection: "logistics", icon: Globe, permission: "logistics.read", featureFlag: "module_logistics" },
     ],
   },
   {

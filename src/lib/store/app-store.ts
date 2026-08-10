@@ -58,6 +58,7 @@ export type ViewKey =
   | "plans"
   | "portal-uploads"
   | "logistics-requests"
+  | "trade-globe"
   | "plan-upgrade-queue"
   | "portal-locations"
   // Verification logs (super-admin only — fraud prevention)
