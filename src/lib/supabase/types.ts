@@ -719,8 +719,16 @@ export interface TradeCostLine {
   label: string;
   basis: "unit" | "percent" | "fixed" | "per_container";
   value: number; // amount or percentage
-  currency: string;
-  amount: number; // computed amount in target currency
+  currency: string; // currency of this line's `value` / `amount`
+  amount: number; // computed amount in this line's currency (legacy field — kept for back-compat)
+  // ── Multi-currency conversion (added 2026-08) ──
+  // fx_rate: rate to convert `amount` from `currency` → buy_currency
+  //          (1 when line.currency === calc.buy_currency).
+  //          User-overridable; defaults to live rate on currency change.
+  // converted_amount: amount * fx_rate (cached, in buy_currency).
+  //                    Always set server-side; clients may omit on input.
+  fx_rate?: number;
+  converted_amount?: number;
 }
 
 export interface TradeCalculation {

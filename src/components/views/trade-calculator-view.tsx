@@ -249,21 +249,42 @@ function computeTotals(
   const lines = (form.cost_lines || []).filter(
     (l) => l.type !== "BUY_PRICE" && l.type !== "SELL_PRICE",
   );
+  const buyCurrency = (form.buy_currency || "USD").toUpperCase();
+  // Per-line currency conversion (mirror of server logic):
+  // each line's `amount` is in its own currency; convert to buy_currency via
+  // line.fx_rate before adding to landedCost. Same currency = 1.
   const computedLines = lines.map((line) => {
     let amount = 0;
     if (line.basis === "unit") amount = (line.value || 0) * qty;
     else if (line.basis === "fixed") amount = line.value || 0;
     else if (line.basis === "per_container") amount = (line.value || 0) * numContainers;
     else if (line.basis === "percent") amount = (landedCost * (line.value || 0)) / 100;
-    landedCost += amount;
-    return { ...line, amount: Math.round(amount * 100) / 100 };
+    amount = Math.round(amount * 100) / 100;
+
+    const lineCurrency = (line.currency || buyCurrency).toUpperCase();
+    const fxRate =
+      lineCurrency === buyCurrency
+        ? 1
+        : (typeof line.fx_rate === "number" && line.fx_rate > 0
+            ? line.fx_rate
+            : 1);
+    const convertedAmount = Math.round(amount * fxRate * 100) / 100;
+    landedCost += convertedAmount;
+    return {
+      ...line,
+      amount,
+      currency: lineCurrency,
+      fx_rate: fxRate,
+      converted_amount: convertedAmount,
+    };
   });
 
   const sellTotal = (form.sell_price_per_unit || 0) * qty;
   // Convert landed cost (buy currency) → sell currency for the margin math.
   const buyTotalInSellCurrency = buyTotal * effectiveFx;
   const landedCostInSellCurrency = landedCost * effectiveFx;
-  const totalCosts = computedLines.reduce((s, l) => s + (l.amount || 0), 0);
+  // totalCosts now in BUY currency (sum of converted amounts).
+  const totalCosts = computedLines.reduce((s, l) => s + (l.converted_amount || l.amount || 0), 0);
   const totalCostsInSellCurrency = totalCosts * effectiveFx;
   // Gross margin = sell revenue − landed cost (in sell currency).
   const margin = sellTotal - landedCostInSellCurrency;
@@ -872,9 +893,12 @@ function CalcFormDialog({
       setTransferFeeOverrides({});
       setSelectedDocIds(getDefaultDocumentationIds());
       setDocValueOverrides({});
-      setCommissionAgentId(null);
-      setCommissionType("percent_profit");
-      setCommissionRate(0);
+      // Restore commission UI state from the loaded calculation (previously
+      // these were always reset to defaults, so editing a calc with commission
+      // info silently dropped it on save — audit finding 1a).
+      setCommissionAgentId((calc as any)?.commission_agent_id ?? null);
+      setCommissionType((calc as any)?.commission_type || "percent_profit");
+      setCommissionRate((calc as any)?.commission_rate || 0);
       setSupplierContext(null);
       setProductContext(null);
       setTransportExtras({});
@@ -906,8 +930,48 @@ function CalcFormDialog({
         if (!cancelled) setFetchingRate(false);
       });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, form.buy_currency, form.sell_currency]);
+
+  // ─── Auto-fetch live FX rate per cost line whose currency differs from
+  // buy_currency. Only fetches when fx_rate is undefined (i.e. currency just
+  // changed). Once set (live or user-typed), the rate is preserved. ───
+  useEffect(() => {
+    if (!open) return;
+    const buyCur = (form.buy_currency || "USD").toUpperCase();
+    let cancelled = false;
+    const pending = lines
+      .map((l, idx) => ({ l, idx }))
+      .filter(({ l }) => {
+        const lc = (l.currency || buyCur).toUpperCase();
+        return lc !== buyCur && (l.fx_rate === undefined || l.fx_rate === null);
+      });
+    if (pending.length === 0) return;
+    Promise.all(
+      pending.map(({ l, idx }) =>
+        getExchangeRate((l.currency || buyCur).toUpperCase(), buyCur).then((r) => ({
+          idx, r,
+        })),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      setLines((arr) => {
+        const next = [...arr];
+        for (const { idx, r } of results) {
+          if (r && r > 0) {
+            next[idx] = {
+              ...next[idx],
+              fx_rate: Math.round(r * 10000) / 10000,
+            };
+          } else {
+            // No rate available — fall back to 1 so totals don't blow up.
+            next[idx] = { ...next[idx], fx_rate: 1 };
+          }
+        }
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [open, lines.map((l) => `${l.currency}:${l.fx_rate ?? ""}`).join("|"), form.buy_currency]);
 
   // When commission agent is selected, auto-fill commission type + rate
   // from the agent's defaults.
@@ -1150,7 +1214,24 @@ function CalcFormDialog({
   }
 
   function updateLine(idx: number, patch: Partial<TradeCostLine>) {
-    setLines((arr) => arr.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+    setLines((arr) => arr.map((l, i) => {
+      if (i !== idx) return l;
+      const next = { ...l, ...patch };
+      // When currency changes, reset fx_rate so the live-rate effect can
+      // re-populate it (see fetchLineFxRate below). Same currency = 1.
+      if (patch.currency && patch.currency !== l.currency) {
+        const newCurrency = patch.currency.toUpperCase();
+        const buyCur = (form.buy_currency || "USD").toUpperCase();
+        if (newCurrency === buyCur) {
+          next.fx_rate = 1;
+        } else {
+          // Clear — the useEffect on [lines, form.buy_currency] will fetch live.
+          next.fx_rate = undefined;
+        }
+      }
+      // When user manually edits fx_rate, mark it as user-set (don't clobber).
+      return next;
+    }));
   }
   function addLine() {
     const defaultType = "FREIGHT";
@@ -1164,6 +1245,8 @@ function CalcFormDialog({
         value: 0,
         currency: form.buy_currency || "USD",
         amount: 0,
+        fx_rate: 1,
+        converted_amount: 0,
       },
     ]);
   }
@@ -1178,6 +1261,25 @@ function CalcFormDialog({
         ? { ...l, type: typeCode, label: ref.name, basis: ref.basis }
         : l,
     ));
+  }
+  // Reset a single line's fx_rate to the live rate (used by the refresh icon
+  // when the user has manually overridden the rate).
+  async function resetLineFx(idx: number) {
+    const line = lines[idx];
+    if (!line) return;
+    const buyCur = (form.buy_currency || "USD").toUpperCase();
+    const lineCur = (line.currency || buyCur).toUpperCase();
+    if (lineCur === buyCur) {
+      updateLine(idx, { fx_rate: 1 });
+      return;
+    }
+    const r = await getExchangeRate(lineCur, buyCur);
+    if (r && r > 0) {
+      updateLine(idx, { fx_rate: Math.round(r * 10000) / 10000 });
+      toast.success(`Live rate fetched: 1 ${lineCur} = ${r.toFixed(4)} ${buyCur}`);
+    } else {
+      toast.error(`Could not fetch rate for ${lineCur} → ${buyCur}`);
+    }
   }
 
   // ─── Auto-suggest cost lines based on incoterm ───
@@ -1237,7 +1339,6 @@ function CalcFormDialog({
     const txValue = (form.sell_price_per_unit || 0) * (form.quantity || 0);
     if (txValue === 0) return [];
     return calculateBankCosts(paymentTerms, txValue, bankCostOverrides);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentTerms, form.sell_price_per_unit, form.quantity, bankCostOverrides]);
 
   const totalBankCosts = useMemo(
@@ -1382,7 +1483,17 @@ function CalcFormDialog({
     if (!form.name) { toast.error("Name is required."); return; }
     setSaving(true);
     try {
-      const payload = { ...form, cost_lines: lines };
+      // Include commission tracking state in the payload — previously the UI
+      // had commission UI state but never sent it on save, so the backend's
+      // PUT fell back to existing values and silently dropped the user's
+      // commission edits. (Audit finding 1a.)
+      const payload = {
+        ...form,
+        cost_lines: lines,
+        commission_agent_id: commissionAgentId,
+        commission_type: commissionType || null,
+        commission_rate: commissionRate || 0,
+      };
       const method = calc ? "PUT" : "POST";
       const url = calc ? api(`/api/trade-calculator/${calc.id}`) : api("/api/trade-calculator");
       const r = await fetch(url, {
@@ -1905,60 +2016,103 @@ function CalcFormDialog({
               </p>
             ) : (
               <div className="space-y-2">
-                {lines.map((l, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-12 sm:col-span-3">
-                      <Select value={l.type} onValueChange={(v) => changeLineType(idx, v)}>
-                        <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent className="max-h-72">
-                          {EDITABLE_COST_TYPES.map((t) => (
-                            <SelectItem key={t.code} value={t.code}>
-                              <span className="font-mono mr-2 text-xs">{t.code}</span> <span className="text-xs">{t.name}</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                {lines.map((l, idx) => {
+                  const lineCur = (l.currency || form.buy_currency || "USD").toUpperCase();
+                  const buyCur = (form.buy_currency || "USD").toUpperCase();
+                  const isForeign = lineCur !== buyCur;
+                  const computedAmt = (() => {
+                    const qty = form.quantity || 0;
+                    const numContainers = form.num_containers || 1;
+                    if (l.basis === "unit") return (l.value || 0) * qty;
+                    if (l.basis === "fixed") return l.value || 0;
+                    if (l.basis === "per_container") return (l.value || 0) * numContainers;
+                    if (l.basis === "percent") return 0; // depends on running landedCost
+                    return 0;
+                  })();
+                  const converted = computedAmt * (l.fx_rate || 1);
+                  return (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-12 sm:col-span-2">
+                        <Select value={l.type} onValueChange={(v) => changeLineType(idx, v)}>
+                          <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {EDITABLE_COST_TYPES.map((t) => (
+                              <SelectItem key={t.code} value={t.code}>
+                                <span className="font-mono mr-2 text-xs">{t.code}</span> <span className="text-xs">{t.name}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-12 sm:col-span-3">
+                        <Input
+                          value={l.label}
+                          onChange={(e) => updateLine(idx, { label: e.target.value })}
+                          placeholder="Label"
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                      <div className="col-span-4 sm:col-span-1">
+                        <Badge variant="secondary" className="font-mono w-full justify-center py-1.5 text-[10px]">{l.basis}</Badge>
+                      </div>
+                      <div className="col-span-5 sm:col-span-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={l.value}
+                          onChange={(e) => updateLine(idx, { value: Number(e.target.value) })}
+                          className="h-9 text-xs tabular"
+                          placeholder={l.basis === "percent" ? "%" : "Amount"}
+                        />
+                      </div>
+                      <div className="col-span-3 sm:col-span-1">
+                        <Select value={l.currency} onValueChange={(v) => updateLine(idx, { currency: v })}>
+                          <SelectTrigger className="h-9 text-xs px-2"><SelectValue /></SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {CURRENCIES.map((c) => (
+                              <SelectItem key={c.value} value={c.value} className="text-xs">
+                                <span className="font-mono">{c.value}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-6 sm:col-span-2 flex items-center gap-1">
+                        <Input
+                          type="number"
+                          step="0.0001"
+                          value={l.fx_rate ?? ""}
+                          onChange={(e) => updateLine(idx, { fx_rate: Number(e.target.value) || 0 })}
+                          className="h-9 text-xs tabular"
+                          placeholder="FX"
+                          disabled={!isForeign}
+                          title={isForeign ? `1 ${lineCur} = ${l.fx_rate ?? "—"} ${buyCur}` : "Same currency"}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="size-9 shrink-0"
+                          onClick={() => resetLineFx(idx)}
+                          disabled={!isForeign}
+                          title={isForeign ? "Reset to live rate" : "Same currency"}
+                        >
+                          <RefreshCw className={`size-3.5 ${fetchingRate ? "animate-spin" : ""}`} />
+                        </Button>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 flex justify-end">
+                        <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive" onClick={() => removeLine(idx)} title="Remove" aria-label="Remove">
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                      {isForeign && computedAmt > 0 && (
+                        <div className="col-span-12 -mt-1 mb-1 pl-1 text-[10px] text-blue-600 dark:text-blue-400 italic">
+                          {computedAmt.toLocaleString("en-US", { maximumFractionDigits: 2 })} {lineCur} × {l.fx_rate?.toFixed(4) ?? "—"} → <span className="font-mono font-medium not-italic">{converted.toLocaleString("en-US", { maximumFractionDigits: 2 })} {buyCur}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="col-span-12 sm:col-span-3">
-                      <Input
-                        value={l.label}
-                        onChange={(e) => updateLine(idx, { label: e.target.value })}
-                        placeholder="Label"
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2">
-                      <Badge variant="secondary" className="font-mono w-full justify-center py-1.5">{l.basis}</Badge>
-                    </div>
-                    <div className="col-span-5 sm:col-span-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={l.value}
-                        onChange={(e) => updateLine(idx, { value: Number(e.target.value) })}
-                        className="h-9 text-xs tabular"
-                        placeholder={l.basis === "percent" ? "%" : "Amount"}
-                      />
-                    </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <Select value={l.currency} onValueChange={(v) => updateLine(idx, { currency: v })}>
-                        <SelectTrigger className="h-9 text-xs px-2"><SelectValue /></SelectTrigger>
-                        <SelectContent className="max-h-72">
-                          {CURRENCIES.map((c) => (
-                            <SelectItem key={c.value} value={c.value} className="text-xs">
-                              <span className="font-mono">{c.value}</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive" onClick={() => removeLine(idx)} title="Remove" aria-label="Remove">
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

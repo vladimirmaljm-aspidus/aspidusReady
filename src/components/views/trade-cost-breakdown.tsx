@@ -11,6 +11,7 @@ import {
   Send,
   FileCheck,
   Gauge,
+  Globe2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +22,20 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const DISPLAY_CURRENCIES = [
+  "USD", "EUR", "GBP", "CHF", "AED", "SAR", "CNY", "INR", "RUB",
+  "JPY", "TRY", "BRL", "ZAR", "SGD", "HKD", "AUD", "CAD", "RSD",
+  "EGP", "KRW", "MXN", "MYR", "THB", "IDR", "PHP", "NZD", "SEK",
+  "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "ILS",
+];
 
 export interface CostLine {
   type: string;
@@ -28,6 +43,9 @@ export interface CostLine {
   basis: string;
   value: number;
   amount: number;
+  currency?: string; // currency of `amount` (defaults to buyCurrency when missing)
+  fx_rate?: number; // rate to convert amount → buy_currency
+  converted_amount?: number; // amount * fx_rate (cached, in buy_currency)
 }
 
 export interface BankCost {
@@ -213,13 +231,97 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
   const varianceSpread = Math.abs(worstCaseProfit - bestCaseProfit);
   const halfSpread = varianceSpread / 2;
 
+  // ─── "View totals in <currency>" ───
+  // Lets the user preview every total in a chosen display currency. Defaults
+  // to the sell currency. When changed, fetches a fresh rate map keyed by
+  // sellCurrency (cached 1h server-side) so the conversion is live.
+  const [displayCurrency, setDisplayCurrency] = React.useState<string>(
+    (sellCurrency || "USD").toUpperCase(),
+  );
+  const [rateMap, setRateMap] = React.useState<Record<string, number>>({});
+  const [rateMapAt, setRateMapAt] = React.useState<string>("");
+  const [rateMapLoading, setRateMapLoading] = React.useState(false);
+
+  // Re-sync displayCurrency when sellCurrency changes (e.g. new calc loaded).
+  React.useEffect(() => {
+    setDisplayCurrency((sellCurrency || "USD").toUpperCase());
+  }, [sellCurrency]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const base = (sellCurrency || "USD").toUpperCase();
+    setRateMapLoading(true);
+    fetch(`/api/exchange-rates?base=${encodeURIComponent(base)}`)
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((data) => {
+        if (cancelled) return;
+        setRateMap(data.rates || {});
+        setRateMapAt(data.fetchedAt || new Date().toISOString());
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRateMap({});
+      })
+      .finally(() => !cancelled && setRateMapLoading(false));
+    return () => { cancelled = true; };
+  }, [sellCurrency]);
+
+  // Rate to convert from sellCurrency → displayCurrency.
+  const displayRate = React.useMemo(() => {
+    const s = (sellCurrency || "USD").toUpperCase();
+    const d = displayCurrency.toUpperCase();
+    if (s === d) return 1;
+    // rateMap[d] means "1 sellCurrency = rateMap[d] d"
+    const r = rateMap[d];
+    return r && r > 0 ? r : 1;
+  }, [rateMap, displayCurrency, sellCurrency]);
+
+  // Helper: convert a value in sellCurrency to displayCurrency.
+  const toDisplay = (n: number) => {
+    if (!isFinite(n)) return 0;
+    return n * displayRate;
+  };
+  // Helper: convert a value in buyCurrency to displayCurrency (cross via sell).
+  const buyToDisplay = (n: number) => {
+    if (!isFinite(n)) return 0;
+    // n is in buyCurrency. We have rateMap keyed by sellCurrency. To convert
+    // buy → display, we need: n * (1 / exchangeRate) to get to sellCurrency,
+    // then multiply by displayRate.
+    if (!currenciesDiffer) return toDisplay(n);
+    const fx = exchangeRate && exchangeRate > 0 ? exchangeRate : 1;
+    const inSell = n * fx;
+    return toDisplay(inSell);
+  };
+
   return (
     <Card className="sticky top-4">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Calculator className="size-4" />
           Live Cost Breakdown
+          <span className="ml-auto flex items-center gap-1.5">
+            <Globe2 className="size-3.5 text-muted-foreground" />
+            <Select value={displayCurrency} onValueChange={setDisplayCurrency}>
+              <SelectTrigger className="h-7 w-[88px] text-xs px-2 py-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {DISPLAY_CURRENCIES.map((c) => (
+                  <SelectItem key={c} value={c} className="text-xs">
+                    <span className="font-mono">{c}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </span>
         </CardTitle>
+        {displayCurrency !== (sellCurrency || "USD").toUpperCase() && (
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-1">
+            <span className="font-medium">1 {sellCurrency} = {displayRate.toFixed(4)} {displayCurrency}</span>
+            <span className="opacity-50">·</span>
+            <span>{rateMapLoading ? "fetching live…" : (rateMapAt ? `updated ${new Date(rateMapAt).toLocaleTimeString()}` : "no rate available")}</span>
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         {/* BUY SIDE */}
@@ -237,6 +339,12 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <span>Buy Total:</span>
             <span className="font-mono">{fmtMoney(buyTotal, buyCurrency)}</span>
           </div>
+          {displayCurrency !== (buyCurrency || "USD").toUpperCase() && (
+            <div className="flex justify-between text-xs text-muted-foreground italic">
+              <span>In {displayCurrency}:</span>
+              <span className="font-mono">{fmtMoney(buyToDisplay(buyTotal), displayCurrency)}</span>
+            </div>
+          )}
           {currenciesDiffer && (
             <div className="flex justify-between text-xs text-blue-600">
               <span>FX Rate:</span>
@@ -268,14 +376,33 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             </p>
           ) : (
             <div className="space-y-1">
-              {costLines.map((line, i) => (
-                <div key={i} className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">{line.label}:</span>
-                  <span className="font-mono">
-                    {fmtMoney(line.amount, buyCurrency)}
-                  </span>
-                </div>
-              ))}
+              {costLines.map((line, i) => {
+                const lineCurrency = (line.currency || buyCurrency).toUpperCase();
+                const isForeign = lineCurrency !== buyCurrency.toUpperCase();
+                const converted = typeof line.converted_amount === "number"
+                  ? line.converted_amount
+                  : (line.amount || 0) * (line.fx_rate || 1);
+                return (
+                  <div key={i} className="flex flex-col gap-0.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground truncate pr-2">{line.label}:</span>
+                      <span className="font-mono whitespace-nowrap">
+                        {fmtMoney(line.amount, lineCurrency)}
+                      </span>
+                    </div>
+                    {isForeign && (
+                      <div className="flex justify-between text-[10px] text-blue-600 dark:text-blue-400">
+                        <span className="italic">
+                          FX {line.fx_rate?.toFixed(4) || "—"} →
+                        </span>
+                        <span className="font-mono">
+                          {fmtMoney(converted, buyCurrency)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <div className="flex justify-between font-medium pt-1 border-t">
                 <span>Total Costs:</span>
                 <span className="font-mono">{fmtMoney(totalCosts, buyCurrency)}</span>
@@ -300,6 +427,12 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
               {fmtMoney(landedCostInSellCurrency, sellCurrency)}
             </span>
           </div>
+          {displayCurrency !== (sellCurrency || "USD").toUpperCase() && (
+            <div className="flex justify-between text-xs text-muted-foreground italic">
+              <span>In {displayCurrency}:</span>
+              <span className="font-mono">{fmtMoney(toDisplay(landedCostInSellCurrency), displayCurrency)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Per {unit}:</span>
             <span className="font-mono">
@@ -323,6 +456,12 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <span>Sell Total:</span>
             <span className="font-mono">{fmtMoney(sellTotal, sellCurrency)}</span>
           </div>
+          {displayCurrency !== (sellCurrency || "USD").toUpperCase() && (
+            <div className="flex justify-between text-xs text-muted-foreground italic">
+              <span>In {displayCurrency}:</span>
+              <span className="font-mono">{fmtMoney(toDisplay(sellTotal), displayCurrency)}</span>
+            </div>
+          )}
         </div>
 
         {/* BANK COSTS */}
@@ -525,6 +664,12 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                 {fmtMoney(netProfit, sellCurrency)}
               </span>
             </div>
+            {displayCurrency !== (sellCurrency || "USD").toUpperCase() && (
+              <div className="flex justify-between text-xs text-muted-foreground italic">
+                <span>In {displayCurrency}:</span>
+                <span className="font-mono">{fmtMoney(toDisplay(netProfit), displayCurrency)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Net Margin:</span>
               <span className={cn("font-mono font-semibold", marginColor)}>
