@@ -53,8 +53,8 @@ import { CURRENCIES, ENTITY_TYPES, PAYMENT_TERMS_LOCAL } from "@/lib/data/refere
 import { getCountriesForSelect, getCitiesForSelect, getCountry } from "@/lib/data/geo/countries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
-
-const PAGE_SIZE = 20;
+import { usePageSize } from "@/lib/hooks/use-page-size";
+import { PageSizeSelector } from "@/components/common/page-size-selector";
 
 const TYPE_LABELS: Record<PartnerType, string> = {
   buyer: "Buyer",
@@ -192,6 +192,8 @@ export function PartnersView() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const { pageSize: PAGE_SIZE, setPageSize, options: pageSizeOptions } = usePageSize("partners", 20);
+  useEffect(() => { setPage(1); }, [PAGE_SIZE]);
   const [editing, setEditing] = useState<Partner | null>(null);
   const [showForm, setShowForm] = useState(false);
   useNewShortcut(() => { setEditing(null); setShowForm(true); });
@@ -204,7 +206,7 @@ export function PartnersView() {
   const handleTypeFilterChange = useCallback((v: string) => { setTypeFilter(v); setPage(1); }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["partners", tenantKey, search, statusFilter, typeFilter, page],
+    queryKey: ["partners", tenantKey, search, statusFilter, typeFilter, page, PAGE_SIZE],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -419,11 +421,15 @@ export function PartnersView() {
               </div>
 
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between border-t px-4 py-3">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
-                  </p>
+              <div className="flex items-center justify-between border-t px-4 py-3 gap-3 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  {total > 0
+                    ? <>Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}</>
+                    : <>No results</>}
+                </p>
+                <div className="flex items-center gap-3">
+                  <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
+                  {totalPages > 1 && (
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
@@ -457,8 +463,9 @@ export function PartnersView() {
                       </PaginationItem>
                     </PaginationContent>
                   </Pagination>
+                  )}
                 </div>
-              )}
+              </div>
             </>
           )}
         </CardContent>

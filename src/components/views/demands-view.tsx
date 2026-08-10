@@ -44,8 +44,8 @@ import { Demand, DemandItem, DemandStatus, Partner, Product, PortalRfq } from "@
 import { CURRENCIES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
-
-const PAGE_SIZE = 20;
+import { usePageSize } from "@/lib/hooks/use-page-size";
+import { PageSizeSelector } from "@/components/common/page-size-selector";
 
 const STATUS_LABELS: Record<DemandStatus, string> = {
   open: "Open",
@@ -117,15 +117,19 @@ export function DemandsView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showRfqPicker, setShowRfqPicker] = useState(false);
   const [page, setPage] = useState(0);
+  const { pageSize, setPageSize, options: pageSizeOptions } = usePageSize("demands", 20);
+
+  // Reset to page 0 when pageSize changes to avoid landing past the last page.
+  useEffect(() => { setPage(0); }, [pageSize]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["demands", tenantKey, debouncedSearch, statusFilter, page],
+    queryKey: ["demands", tenantKey, debouncedSearch, statusFilter, page, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
-      params.set("limit", String(PAGE_SIZE));
-      params.set("offset", String(page * PAGE_SIZE));
+      params.set("limit", String(pageSize));
+      params.set("offset", String(page * pageSize));
       const r = await fetch(api(`/api/demands?${params}`));
       if (!r.ok) throw new Error("Failed to load demands");
       return r.json() as Promise<{ items: Demand[]; total: number }>;
@@ -167,7 +171,7 @@ export function DemandsView() {
 
   const items = data?.items || [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const partnerList = partners.data?.items || [];
   const partnerName = (id: string) => partnerList.find((p) => p.id === id)?.name || "—";
 
@@ -275,23 +279,28 @@ export function DemandsView() {
                 </Table>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                      Previous
-                    </Button>
-                    <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
-                    <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                      Next
-                    </Button>
-                  </div>
+              {/* Pagination + Page size */}
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 gap-3 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  {total > 0
+                    ? <>Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total}</>
+                    : <>No results</>}
+                </p>
+                <div className="flex items-center gap-3">
+                  <PageSizeSelector value={pageSize} onChange={setPageSize} options={pageSizeOptions} />
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                        Previous
+                      </Button>
+                      <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
+                      <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+                        Next
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </>
           )}
         </CardContent>

@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis,
@@ -44,8 +45,10 @@ import { fmtMoney, fmtNumber, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { Product } from "@/lib/supabase/types";
 import { CURRENCIES, PRODUCT_CATEGORIES_LOCAL, PRODUCT_UNITS } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
-
-const PAGE_SIZE = 20;
+import { usePageSize } from "@/lib/hooks/use-page-size";
+import { PageSizeSelector } from "@/components/common/page-size-selector";
+import { BulkActionBar, useRowSelection } from "@/components/common/bulk-action-bar";
+import { EyeOff, Trash } from "lucide-react";
 
 type StockStatus = "ok" | "low" | "out";
 
@@ -76,6 +79,8 @@ export function ProductsView() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const { pageSize: PAGE_SIZE, setPageSize, options: pageSizeOptions } = usePageSize("products", 20);
+  useEffect(() => { setPage(1); }, [PAGE_SIZE]);
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
   useNewShortcut(() => { setEditing(null); setShowForm(true); });
@@ -86,7 +91,7 @@ export function ProductsView() {
   const handleCategoryChange = useCallback((v: string) => { setCategoryFilter(v); setPage(1); }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["products", tenantKey, search, categoryFilter, page],
+    queryKey: ["products", tenantKey, search, categoryFilter, page, PAGE_SIZE],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
@@ -102,6 +107,55 @@ export function ProductsView() {
   const items = data?.items || [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const rowSel = useRowSelection(items);
+
+  // Bulk mutations
+  const bulkCatalogMut = useMutation({
+    mutationFn: async ({ ids, show }: { ids: string[]; show: boolean }) => {
+      let ok = 0, fail = 0;
+      for (const id of ids) {
+        const p = items.find((x) => x.id === id);
+        if (!p) { fail++; continue; }
+        try {
+          const r = await fetch(api("/api/products"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...p, show_in_catalog: show, force: true }),
+          });
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      }
+      return { ok, fail };
+    },
+    onSuccess: ({ ok, fail }) => {
+      if (fail === 0) toast.success(`${ok} products updated.`);
+      else toast.warning(`${ok} updated · ${fail} failed.`);
+      qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+      rowSel.clear();
+    },
+    onError: () => toast.error("Bulk update failed."),
+  });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let ok = 0, fail = 0;
+      for (const id of ids) {
+        try {
+          const r = await fetch(api(`/api/products/${id}`), { method: "DELETE" });
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      }
+      return { ok, fail };
+    },
+    onSuccess: ({ ok, fail }) => {
+      if (fail === 0) toast.success(`${ok} products deleted.`);
+      else toast.warning(`${ok} deleted · ${fail} failed.`);
+      qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+      rowSel.clear();
+    },
+    onError: () => toast.error("Bulk delete failed."),
+  });
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -232,6 +286,13 @@ export function ProductsView() {
                 <Table>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
+                      <TableHead className="w-8">
+                        <Checkbox
+                          checked={rowSel.allOnPageSelected}
+                          onCheckedChange={rowSel.toggleAllOnPage}
+                          aria-label="Select all on page"
+                        />
+                      </TableHead>
                       <TableHead className="w-28">SKU</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead className="hidden md:table-cell">Category</TableHead>
@@ -252,7 +313,15 @@ export function ProductsView() {
                           key={p.id}
                           className="cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => setDetailId(p.id)}
+                          data-state={rowSel.isSelected(p.id) ? "selected" : undefined}
                         >
+                          <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={rowSel.isSelected(p.id)}
+                              onCheckedChange={() => rowSel.toggle(p.id)}
+                              aria-label={`Select ${p.sku}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-mono text-xs tabular">{p.sku}</TableCell>
                           <TableCell>
                             <div className="font-medium">{p.name}</div>
@@ -311,12 +380,16 @@ export function ProductsView() {
                 </Table>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between border-t px-4 py-3">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
-                  </p>
+              {/* Pagination + Page size */}
+              <div className="flex items-center justify-between border-t px-4 py-3 gap-3 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  {total > 0
+                    ? <>Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}</>
+                    : <>No results</>}
+                </p>
+                <div className="flex items-center gap-3">
+                  <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
+                  {totalPages > 1 && (
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
@@ -350,8 +423,9 @@ export function ProductsView() {
                       </PaginationItem>
                     </PaginationContent>
                   </Pagination>
+                  )}
                 </div>
-              )}
+              </div>
             </>
           )}
         </CardContent>
@@ -410,6 +484,39 @@ export function ProductsView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BulkActionBar
+        count={rowSel.count}
+        onClear={rowSel.clear}
+        label={rowSel.count === 1 ? "product selected" : "products selected"}
+        actions={[
+          {
+            key: "show-in-portal",
+            label: "Show in portal",
+            icon: <Eye className="size-4" />,
+            variant: "default",
+            disabled: bulkCatalogMut.isPending,
+            onClick: () => bulkCatalogMut.mutate({ ids: rowSel.ids, show: true }),
+          },
+          {
+            key: "hide-from-portal",
+            label: "Hide from portal",
+            icon: <EyeOff className="size-4" />,
+            variant: "outline",
+            disabled: bulkCatalogMut.isPending,
+            onClick: () => bulkCatalogMut.mutate({ ids: rowSel.ids, show: false }),
+          },
+          {
+            key: "delete",
+            label: "Delete",
+            icon: <Trash className="size-4" />,
+            variant: "destructive",
+            disabled: bulkDeleteMut.isPending,
+            confirm: `Delete ${rowSel.count} product(s)? This cannot be undone.`,
+            onClick: () => bulkDeleteMut.mutate(rowSel.ids),
+          },
+        ]}
+      />
     </div>
   );
 }

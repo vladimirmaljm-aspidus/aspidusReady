@@ -52,6 +52,8 @@ import { Deal, DealStage, Partner, Offer, CommissionAgent } from "@/lib/supabase
 import { useAppStore } from "@/lib/store/app-store";
 import { CURRENCIES, DEAL_STAGES, COUNTRIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { usePageSize } from "@/lib/hooks/use-page-size";
+import { PageSizeSelector } from "@/components/common/page-size-selector";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
@@ -178,8 +180,6 @@ function computeDealProfit(deal: Deal, commissionAmount: number = 0) {
   };
 }
 
-const PAGE_SIZE = 20;
-
 export function DealsView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
@@ -196,6 +196,8 @@ export function DealsView() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const { pageSize: PAGE_SIZE, setPageSize, options: pageSizeOptions } = usePageSize("deals", 20);
+  useEffect(() => { setPage(1); }, [PAGE_SIZE]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["deals", tenantKey, debouncedSearch, stageFilter, partnerId],
@@ -421,37 +423,40 @@ export function DealsView() {
         </Card>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && layout === "table" && (
-        <div className="mt-4 flex justify-center">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <PaginationItem key={p}>
-                  <Button
-                    variant={p === page ? "default" : "outline"}
-                    size="icon"
-                    className="size-8"
-                    onClick={() => setPage(p)}
-                  >
-                    {p}
-                  </Button>
+      {/* Pagination + Page size (table layout only) */}
+      {layout === "table" && (
+        <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
+          <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
                 </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <PaginationItem key={p}>
+                    <Button
+                      variant={p === page ? "default" : "outline"}
+                      size="icon"
+                      className="size-8"
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </Button>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
 

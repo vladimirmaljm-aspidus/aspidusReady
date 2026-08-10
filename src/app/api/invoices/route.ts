@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get("search") || undefined;
     const partner_id = url.searchParams.get("partner_id") || undefined;
     const status = url.searchParams.get("status") || undefined;
-    const result = await auth.store.listInvoices(tid!, { search, filters: { partner_id, status } });
+    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
+    const result = await auth.store.listInvoices(tid!, { search, filters: { partner_id, status }, limit, offset });
     // Defense-in-depth: even though SupabaseStore filters by tenant_id,
     // this post-filter provides an extra safety layer. Do NOT remove.
     const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;

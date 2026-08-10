@@ -60,8 +60,10 @@ import { useEffectiveTenantId, useAppStore } from "@/lib/store/app-store";
 import { checkOfferCompleteness } from "@/lib/utils/completeness-checker";
 import { CompletenessChecker } from "@/components/common/completeness-checker";
 import { downloadPdf } from "@/lib/utils/download";
-
-const PAGE_SIZE = 20;
+import { usePageSize } from "@/lib/hooks/use-page-size";
+import { PageSizeSelector } from "@/components/common/page-size-selector";
+import { BulkActionBar, useRowSelection } from "@/components/common/bulk-action-bar";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const STATUS_LABELS: Record<OfferStatus, string> = {
   draft: "Draft",
@@ -484,6 +486,8 @@ export function OffersView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDealPicker, setShowDealPicker] = useState(false);
   const [page, setPage] = useState(0);
+  const { pageSize: PAGE_SIZE, setPageSize, options: pageSizeOptions } = usePageSize("offers", 20);
+  useEffect(() => { setPage(0); }, [PAGE_SIZE]);
   // Pre-filled offer payload handed off from the Trade Calculator view's
   // "Create Offer from Calculation" button (Fix 1). Set on mount when the
   // app store carries pending data; cleared immediately so a refresh on
@@ -506,7 +510,7 @@ export function OffersView() {
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["offers", tenantKey, debouncedSearch, statusFilter, partnerFilter, page],
+    queryKey: ["offers", tenantKey, debouncedSearch, statusFilter, partnerFilter, page, PAGE_SIZE],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
@@ -667,6 +671,68 @@ export function OffersView() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const partnerList = partners.data?.items || [];
   const partnerName = (id: string) => partnerList.find((p) => p.id === id)?.name || "—";
+  const rowSel = useRowSelection(items);
+
+  // Bulk send — POST /api/offers/{id}/send for each selected offer.
+  const bulkSendMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let ok = 0, fail = 0;
+      for (const id of ids) {
+        try {
+          const r = await fetch(api(`/api/offers/${id}/send`), { method: "POST" });
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      }
+      return { ok, fail };
+    },
+    onSuccess: ({ ok, fail }) => {
+      if (fail === 0) toast.success(`${ok} offers sent.`);
+      else toast.warning(`${ok} sent · ${fail} failed.`);
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      rowSel.clear();
+    },
+    onError: () => toast.error("Bulk send failed."),
+  });
+
+  // Bulk download — trigger PDF download for each selected offer.
+  const bulkDownloadMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let ok = 0;
+      for (const id of ids) {
+        try {
+          const off = items.find((o) => o.id === id);
+          await downloadPdf(api(`/api/offers/${id}/pdf`), `${off?.number || id}.pdf`);
+          ok++;
+        } catch { /* keep going */ }
+      }
+      return { ok };
+    },
+    onSuccess: ({ ok }) => {
+      toast.success(`${ok} PDFs queued for download.`);
+      rowSel.clear();
+    },
+    onError: () => toast.error("Bulk download failed."),
+  });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let ok = 0, fail = 0;
+      for (const id of ids) {
+        try {
+          const r = await fetch(api(`/api/offers/${id}`), { method: "DELETE" });
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      }
+      return { ok, fail };
+    },
+    onSuccess: ({ ok, fail }) => {
+      if (fail === 0) toast.success(`${ok} offers deleted.`);
+      else toast.warning(`${ok} deleted · ${fail} failed.`);
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      rowSel.clear();
+    },
+    onError: () => toast.error("Bulk delete failed."),
+  });
 
   return (
     <div>
@@ -741,6 +807,13 @@ export function OffersView() {
                 <Table>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
+                      <TableHead className="w-8">
+                        <Checkbox
+                          checked={rowSel.allOnPageSelected}
+                          onCheckedChange={rowSel.toggleAllOnPage}
+                          aria-label="Select all on page"
+                        />
+                      </TableHead>
                       <TableHead>Number</TableHead>
                       <TableHead className="hidden md:table-cell">Subject</TableHead>
                       <TableHead className="hidden lg:table-cell">Partner</TableHead>
@@ -756,7 +829,15 @@ export function OffersView() {
                         key={o.id}
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => setDetailId(o.id)}
+                        data-state={rowSel.isSelected(o.id) ? "selected" : undefined}
                       >
+                        <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={rowSel.isSelected(o.id)}
+                            onCheckedChange={() => rowSel.toggle(o.id)}
+                            aria-label={`Select ${o.number}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono text-xs tabular">{o.number}</TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="font-medium truncate max-w-[200px]">{o.subject || "—"}</div>
@@ -784,23 +865,28 @@ export function OffersView() {
                 </Table>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                      Previous
-                    </Button>
-                    <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
-                    <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                      Next
-                    </Button>
-                  </div>
+              {/* Pagination + Page size */}
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 gap-3 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  {total > 0
+                    ? <>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</>
+                    : <>No results</>}
+                </p>
+                <div className="flex items-center gap-3">
+                  <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                        Previous
+                      </Button>
+                      <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
+                      <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+                        Next
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </>
           )}
         </CardContent>
@@ -889,6 +975,40 @@ export function OffersView() {
         onOpenChange={setShowDealPicker}
         onSelect={(dealId) => createFromDealMut.mutate(dealId)}
         isCreating={createFromDealMut.isPending}
+      />
+
+      <BulkActionBar
+        count={rowSel.count}
+        onClear={rowSel.clear}
+        label={rowSel.count === 1 ? "offer selected" : "offers selected"}
+        actions={[
+          {
+            key: "send",
+            label: "Send all",
+            icon: <Send className="size-4" />,
+            variant: "default",
+            disabled: bulkSendMut.isPending,
+            confirm: `Send ${rowSel.count} offer(s) to their partners?`,
+            onClick: () => bulkSendMut.mutate(rowSel.ids),
+          },
+          {
+            key: "download",
+            label: "Download PDFs",
+            icon: <Download className="size-4" />,
+            variant: "outline",
+            disabled: bulkDownloadMut.isPending,
+            onClick: () => bulkDownloadMut.mutate(rowSel.ids),
+          },
+          {
+            key: "delete",
+            label: "Delete",
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            disabled: bulkDeleteMut.isPending,
+            confirm: `Delete ${rowSel.count} offer(s)? This cannot be undone.`,
+            onClick: () => bulkDeleteMut.mutate(rowSel.ids),
+          },
+        ]}
       />
     </div>
   );

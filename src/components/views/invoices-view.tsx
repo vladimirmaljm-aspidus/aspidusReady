@@ -49,6 +49,8 @@ import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversio
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { downloadPdf } from "@/lib/utils/download";
+import { usePageSize } from "@/lib/hooks/use-page-size";
+import { PageSizeSelector } from "@/components/common/page-size-selector";
 
 const STATUS_LABELS: Record<InvoiceStatus, string> = {
   draft: "Draft",
@@ -168,19 +170,26 @@ export function InvoicesView() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showOfferPicker, setShowOfferPicker] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const { pageSize: PAGE_SIZE, setPageSize, options: pageSizeOptions } = usePageSize("invoices", 20);
+  useEffect(() => { setPage(0); }, [PAGE_SIZE, debouncedSearch, statusFilter, partnerFilter]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["invoices", tenantKey, debouncedSearch, statusFilter, partnerFilter],
+    queryKey: ["invoices", tenantKey, debouncedSearch, statusFilter, partnerFilter, page, PAGE_SIZE],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (partnerFilter !== "all") params.set("partner_id", partnerFilter);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(page * PAGE_SIZE));
       const r = await fetch(api(`/api/invoices?${params}`));
       if (!r.ok) throw new Error("Failed to load invoices");
       return r.json() as Promise<{ items: Invoice[]; total: number }>;
     },
   });
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Unfiltered list for KPI rollups
   const kpiQuery = useQuery({
@@ -544,6 +553,28 @@ export function InvoicesView() {
               </Table>
             </div>
           )}
+          {/* Pagination + Page size */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 gap-3 flex-wrap">
+            <p className="text-sm text-muted-foreground">
+              {total > 0
+                ? <>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</>
+                : <>No results</>}
+            </p>
+            <div className="flex items-center gap-3">
+              <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                    Previous
+                  </Button>
+                  <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
+                  <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+                    Next
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -8,6 +8,7 @@
 export function fmtMoney(n: number | null | undefined, currency = "USD"): string {
   if (n === null || n === undefined || isNaN(n)) return "—";
   try {
+    // Thousands separators kept — readability at large amounts (1,000,000).
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
@@ -15,7 +16,6 @@ export function fmtMoney(n: number | null | undefined, currency = "USD"): string
       maximumFractionDigits: 2,
     }).format(n);
   } catch {
-    // Fallback if currency code is invalid
     return `${Number(n).toFixed(2)} ${currency}`;
   }
 }

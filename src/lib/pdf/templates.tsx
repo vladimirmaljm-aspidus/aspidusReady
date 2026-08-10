@@ -761,8 +761,8 @@ export function buildPdfDocument({
         <View style={styles.footerColRight}>
           <Text
             style={styles.footerPage}
-            render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-              `Page ${pageNumber} of ${totalPages}`
+            render={(props: { pageNumber: number; totalPages: number }) =>
+              `Page ${props.pageNumber} of ${props.totalPages}`
             }
           />
           <Text style={styles.footerSys}>
