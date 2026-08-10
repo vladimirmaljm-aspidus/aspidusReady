@@ -11,6 +11,8 @@ export const NAV: Record<Locale, Record<string, string>> = {
   en: {
     dashboard: "Dashboard",
     tasks: "Tasks",
+    "quick-notes": "Quick Notes",
+    workspace: "Workspace",
     "product-catalog": "Product Catalog",
     "supplier-offers": "Supplier Offers",
     "trade-calculator": "Trade Calculator",
@@ -59,6 +61,8 @@ export const NAV: Record<Locale, Record<string, string>> = {
   sr: {
     dashboard: "Kontrolna tabla",
     tasks: "Zadaci",
+    "quick-notes": "Beleške",
+    workspace: "Radni prostor",
     "product-catalog": "Katalog proizvoda",
     "supplier-offers": "Ponude dobavljača",
     "trade-calculator": "Kalkulator trgovine",

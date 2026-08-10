@@ -675,7 +675,7 @@ function ReviewDialog({
         ) : (
           <div className="px-6 py-5">
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 mb-4">
+              <TabsList className="flex w-full overflow-x-auto justify-start mb-4 sm:grid sm:grid-cols-5">
                 <TabsTrigger value="business">Business</TabsTrigger>
                 <TabsTrigger value="owner">Beneficial Owner</TabsTrigger>
                 <TabsTrigger value="bank">Bank</TabsTrigger>

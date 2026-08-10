@@ -202,22 +202,26 @@ export function Topbar() {
   return (
     <>
       {/* ── Left: Breadcrumb-style view title ── */}
-      <div className="min-w-0 flex items-center gap-2.5">
-        <div className="flex items-center gap-1.5 text-muted-foreground/60 text-xs font-medium tracking-wide uppercase">
+      <div className="min-w-0 flex-1 flex items-center gap-2.5">
+        {/* Breadcrumb prefix — desktop only; on mobile the view title alone
+            is enough context and every pixel of width matters. */}
+        <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground/60 text-xs font-medium tracking-wide uppercase shrink-0">
           <PanelRight className="size-3.5" />
-          <span className="hidden sm:inline">Aspidus</span>
+          <span>Aspidus</span>
           <span className="text-muted-foreground/30">/</span>
         </div>
-        <h2 className="text-[15px] font-semibold tracking-tight text-foreground truncate smooth">
+        <h2 className="text-[15px] font-semibold tracking-tight text-foreground truncate smooth min-w-0 shrink">
           {viewTitle}
         </h2>
 
-        {/* Tenant Context Switcher */}
-        <TenantContextSwitcher />
+        {/* Tenant Context Switcher — shrinks to icon-only on mobile */}
+        <div className="min-w-0 shrink-0">
+          <TenantContextSwitcher />
+        </div>
       </div>
 
       {/* ── Right: Action cluster ── */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
         {/* Search — opens command palette */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -254,10 +258,10 @@ export function Topbar() {
           <PopoverContent
             align="end"
             sideOffset={8}
-            className="w-[min(92vw,380px)] p-0 rounded-xl border border-border/60 shadow-soft-lg"
+            className="w-[min(92vw,380px)] max-h-[min(80vh,var(--radix-popover-content-available-height))] p-0 rounded-xl border border-border/60 shadow-soft-lg flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/60">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/60 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <h3 className="text-sm font-semibold truncate">{t(locale, "notifications")}</h3>
                 {unreadCount > 0 && (
@@ -278,8 +282,10 @@ export function Topbar() {
               </Button>
             </div>
 
-            {/* Body */}
-            <ScrollArea className="max-h-[60vh] custom-scroll">
+            {/* Body — flexes to fill whatever space remains between the
+                header and footer, so the footer ("View all") always stays
+                visible and clickable instead of being pushed off-screen. */}
+            <ScrollArea className="flex-1 min-h-0 custom-scroll">
               {notifications.length === 0 ? (
                 <div className="py-12 px-4 flex flex-col items-center text-center">
                   <div className="size-10 rounded-full bg-muted/60 flex items-center justify-center mb-2">
@@ -338,8 +344,8 @@ export function Topbar() {
               )}
             </ScrollArea>
 
-            <Separator />
-            <div className="p-2">
+            <Separator className="shrink-0" />
+            <div className="p-2 shrink-0">
               <Button
                 variant="ghost"
                 size="sm"

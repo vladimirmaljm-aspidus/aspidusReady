@@ -143,7 +143,7 @@ export function SettingsView() {
     <div>
       <PageHeader title="Settings" description="Configure company, security, and communications." />
       <Tabs defaultValue="company">
-        <TabsList className="grid w-full max-w-2xl grid-cols-6">
+        <TabsList className="flex w-full max-w-2xl overflow-x-auto justify-start sm:grid sm:grid-cols-6">
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="comms">Communications</TabsTrigger>

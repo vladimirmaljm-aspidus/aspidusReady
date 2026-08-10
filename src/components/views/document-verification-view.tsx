@@ -59,7 +59,7 @@ export function DocumentVerificationView() {
       />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid grid-cols-3 w-full max-w-md">
+        <TabsList className="flex w-full max-w-md overflow-x-auto justify-start sm:grid sm:grid-cols-3">
           <TabsTrigger value="by-code" className="text-xs sm:text-sm">
             <ScanLine className="size-3.5 mr-1.5" /> Verify by Code
           </TabsTrigger>

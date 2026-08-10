@@ -70,16 +70,19 @@ export function TenantContextSwitcher() {
   });
 
   // ── Regular user: show read-only tenant badge ──
+  // Purely informational (not interactive) — hidden on phones where every
+  // pixel of topbar width is needed for the view title and action icons;
+  // visible from sm (tablet) up.
   if (!isSuperAdmin(user)) {
     const t = myTenantQ.data;
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/60">
-        <Building2 className="size-3.5 text-muted-foreground" />
+      <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/60">
+        <Building2 className="size-3.5 text-muted-foreground shrink-0" />
         <span className="text-sm font-medium truncate max-w-[140px]">
           {t?.name || "My Company"}
         </span>
         {t?.plan && (
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 capitalize">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 capitalize shrink-0">
             {t.plan}
           </Badge>
         )}
@@ -115,7 +118,8 @@ export function TenantContextSwitcher() {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-9 gap-2 px-3 bg-card border-border/60 hover:bg-accent/50 max-w-[260px]"
+          className="h-9 gap-0 sm:gap-2 px-2 sm:px-3 bg-card border-border/60 hover:bg-accent/50 max-w-[44px] sm:max-w-[260px]"
+          title={activeTenant ? activeTenant.name : "All tenants"}
         >
           <div className="flex items-center gap-2 min-w-0">
             {activeTenant ? (
@@ -123,7 +127,8 @@ export function TenantContextSwitcher() {
                 <div className="size-6 rounded-md bg-gradient-to-br from-primary/80 to-accent/80 flex items-center justify-center text-white shrink-0">
                   <Building2 className="size-3.5" />
                 </div>
-                <div className="min-w-0 text-left">
+                {/* Two-line label — desktop/tablet only; mobile shows just the icon + chevron above */}
+                <div className="hidden sm:block min-w-0 text-left">
                   <div className="text-xs text-muted-foreground leading-tight">Tenant context</div>
                   <div className="text-sm font-semibold truncate leading-tight">
                     {activeTenant.name}
@@ -135,13 +140,13 @@ export function TenantContextSwitcher() {
                 <div className="size-6 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white shrink-0">
                   <Globe className="size-3.5" />
                 </div>
-                <div className="min-w-0 text-left">
+                <div className="hidden sm:block min-w-0 text-left">
                   <div className="text-xs text-muted-foreground leading-tight">Viewing</div>
                   <div className="text-sm font-semibold truncate leading-tight">All tenants</div>
                 </div>
               </>
             )}
-            <ChevronsUpDown className="size-3.5 text-muted-foreground shrink-0 ml-1" />
+            <ChevronsUpDown className="hidden sm:block size-3.5 text-muted-foreground shrink-0 ml-1" />
           </div>
         </Button>
       </PopoverTrigger>

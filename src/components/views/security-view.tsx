@@ -164,7 +164,7 @@ export function SecurityView() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
+        <TabsList className="flex w-full overflow-x-auto justify-start h-auto sm:grid sm:grid-cols-2 md:grid-cols-4">
           <TabsTrigger value="sessions" className="gap-1.5"><Shield className="size-3.5" /> Sessions</TabsTrigger>
           <TabsTrigger value="logins" className="gap-1.5"><History className="size-3.5" /> Login History</TabsTrigger>
           <TabsTrigger value="ips" className="gap-1.5"><Network className="size-3.5" /> Known IPs</TabsTrigger>

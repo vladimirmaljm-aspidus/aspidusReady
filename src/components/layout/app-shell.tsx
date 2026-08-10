@@ -142,7 +142,7 @@ function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenChange: (v
         {/* Visually-hidden title for accessibility */}
         <SheetTitle className="sr-only">Navigation</SheetTitle>
         <div className="h-full overflow-hidden">
-          <Sidebar />
+          <Sidebar hideCollapseToggle forceExpanded />
         </div>
       </SheetContent>
     </Sheet>

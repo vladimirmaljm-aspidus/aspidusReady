@@ -82,12 +82,14 @@ export function LoginView() {
     <div className="min-h-screen flex flex-col lg:flex-row">
       {/* ═══════════════════════════════════════════════════════════════════════
           LEFT — BRANDING PANEL (gradient)
-          On mobile: compact horizontal strip at top
-          On desktop: full-height left panel
+          On mobile: compact header strip (logo only) so the login form is
+          reachable without scrolling — the full marketing copy only makes
+          sense once there's room for a two-column layout.
+          On desktop (lg+): full-height left panel with headline/pills.
           ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="relative flex flex-col justify-center overflow-hidden bg-gradient-to-br from-[#0f766e] via-[#0d6b64] to-[#064e3b] px-8 py-12 lg:w-[52%] lg:min-h-screen lg:px-16 lg:py-20 xl:px-24">
-        {/* Decorative background elements */}
-        <div className="pointer-events-none absolute inset-0">
+      <div className="relative flex flex-col justify-center overflow-hidden bg-gradient-to-br from-[#0f766e] via-[#0d6b64] to-[#064e3b] px-6 py-6 lg:w-[52%] lg:min-h-screen lg:px-16 lg:py-20 lg:justify-center xl:px-24">
+        {/* Decorative background elements — desktop only, mobile strip is too short for these to read */}
+        <div className="pointer-events-none absolute inset-0 hidden lg:block">
           {/* Large soft glow */}
           <div className="absolute -top-32 -left-32 h-[500px] w-[500px] rounded-full bg-[#14b8a6]/20 blur-[120px]" />
           <div className="absolute -bottom-24 -right-24 h-[400px] w-[400px] rounded-full bg-[#0d9488]/15 blur-[100px]" />
@@ -107,67 +109,68 @@ export function LoginView() {
 
         {/* Content */}
         <div className="relative z-10 mx-auto w-full max-w-lg animate-fade-in">
-          {/* Logo */}
-          <div className="mb-8 animate-slide-up lg:mb-12">
+          {/* Logo — always visible, compact on mobile */}
+          <div className="animate-slide-up lg:mb-12">
             <div className="inline-flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20 lg:size-12">
-                <span className="text-xl font-bold text-white lg:text-2xl">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20 lg:size-12">
+                <span className="text-base font-bold text-white lg:text-2xl">
                   A
                 </span>
               </div>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-white lg:text-3xl">
+                <h1 className="text-lg font-semibold tracking-tight text-white lg:text-3xl">
                   Aspidus Trade
                 </h1>
-                <p className="text-sm text-teal-200/70 lg:text-base">
+                <p className="hidden text-sm text-teal-200/70 lg:block lg:text-base">
                   Trade Management Platform
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Headline */}
-          <h2 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-white animate-slide-up lg:text-5xl lg:leading-[1.1]" style={{ animationDelay: "80ms" }}>
-            International trade,
-            <br />
-            <span className="text-teal-200">managed end to end.</span>
-          </h2>
+          {/* Headline, tagline, highlight pills, footer — desktop only.
+              On mobile these push the login form off-screen, so they're
+              hidden below lg and the form takes over as the primary content. */}
+          <div className="hidden lg:block">
+            <h2 className="mb-4 mt-12 text-3xl font-bold leading-tight tracking-tight text-white animate-slide-up lg:text-5xl lg:leading-[1.1]" style={{ animationDelay: "80ms" }}>
+              International trade,
+              <br />
+              <span className="text-teal-200">managed end to end.</span>
+            </h2>
 
-          {/* Tagline */}
-          <p className="mb-10 max-w-md text-base leading-relaxed text-teal-100/60 animate-slide-up lg:mb-14 lg:text-lg" style={{ animationDelay: "160ms" }}>
-            Streamline your global trade operations with powerful CRM, landed
-            cost calculations, and compliance workflows.
-          </p>
+            <p className="mb-10 max-w-md text-base leading-relaxed text-teal-100/60 animate-slide-up lg:mb-14 lg:text-lg" style={{ animationDelay: "160ms" }}>
+              Streamline your global trade operations with powerful CRM, landed
+              cost calculations, and compliance workflows.
+            </p>
 
-          {/* Highlight pills */}
-          <div className="space-y-3 animate-slide-up" style={{ animationDelay: "240ms" }}>
-            {highlights.map((h, i) => {
-              const Icon = h.icon;
-              return (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg bg-white/[0.06] px-4 py-3 ring-1 ring-white/[0.08] backdrop-blur-sm transition-colors duration-200 hover:bg-white/[0.1]"
-                >
-                  <Icon className="size-5 shrink-0 text-teal-300" />
-                  <span className="text-sm font-medium text-teal-50/90">
-                    {h.text}
-                  </span>
-                </div>
-              );
-            })}
+            <div className="space-y-3 animate-slide-up" style={{ animationDelay: "240ms" }}>
+              {highlights.map((h, i) => {
+                const Icon = h.icon;
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 rounded-lg bg-white/[0.06] px-4 py-3 ring-1 ring-white/[0.08] backdrop-blur-sm transition-colors duration-200 hover:bg-white/[0.1]"
+                  >
+                    <Icon className="size-5 shrink-0 text-teal-300" />
+                    <span className="text-sm font-medium text-teal-50/90">
+                      {h.text}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="mt-12 text-xs text-teal-200/30 animate-slide-up lg:mt-16" style={{ animationDelay: "320ms" }}>
+              © {new Date().getFullYear()} Aspidus. All rights reserved.
+            </p>
           </div>
-
-          {/* Footer */}
-          <p className="mt-12 text-xs text-teal-200/30 animate-slide-up lg:mt-16" style={{ animationDelay: "320ms" }}>
-            © {new Date().getFullYear()} Aspidus. All rights reserved.
-          </p>
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           RIGHT — LOGIN FORM
           ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="flex flex-1 items-center justify-center bg-background px-6 py-12 lg:min-h-screen lg:px-12">
+      <div className="flex flex-1 items-center justify-center bg-background px-6 py-8 lg:min-h-screen lg:px-12 lg:py-12">
         <div className="w-full max-w-[420px] animate-fade-in">
           <Card className="border-0 bg-transparent shadow-none">
             <CardHeader className="mb-2 space-y-2 px-0 text-left">
@@ -276,6 +279,11 @@ export function LoginView() {
               {/* Bottom note */}
               <p className="mt-8 text-center text-xs text-muted-foreground/50">
                 Secure login · Your data is encrypted end-to-end
+              </p>
+              {/* Copyright — shown here on mobile only; the desktop branding
+                  panel already has its own copyright line. */}
+              <p className="mt-4 text-center text-[11px] text-muted-foreground/40 lg:hidden">
+                © {new Date().getFullYear()} Aspidus. All rights reserved.
               </p>
             </CardContent>
           </Card>

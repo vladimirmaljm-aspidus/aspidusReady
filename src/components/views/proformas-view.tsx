@@ -314,7 +314,7 @@ export function ProformasView() {
         title="Proformas"
         description={`${data?.total ?? 0} total`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setShowFromOffer(true)}>
               <ArrowRight className="size-4 mr-1" /> From Offer
             </Button>

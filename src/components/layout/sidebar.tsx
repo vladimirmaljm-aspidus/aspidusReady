@@ -177,8 +177,12 @@ function formatRole(role: string): string {
    SIDEBAR COMPONENT
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export function Sidebar() {
-  const { view, setView, sidebarCollapsed, toggleSidebar, user } = useAppStore();
+export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: { hideCollapseToggle?: boolean; forceExpanded?: boolean } = {}) {
+  const { view, setView, sidebarCollapsed: storeSidebarCollapsed, toggleSidebar, user } = useAppStore();
+  // The mobile Sheet always renders full-width with labels — the icon-only
+  // "collapsed" rail is a desktop concept and would just waste half the
+  // Sheet's width if the user had left the desktop sidebar collapsed.
+  const sidebarCollapsed = forceExpanded ? false : storeSidebarCollapsed;
   const activeTenantId = useAppStore((s) => s.activeTenantId);
   const locale = useI18nStore((s) => s.locale);
   const admin = isAdmin(user);
@@ -343,7 +347,10 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* Collapse Toggle */}
+        {/* Collapse Toggle — desktop only; the mobile Sheet has no
+            collapsed-icon-rail mode, so the toggle would do nothing visible
+            there while still mutating the shared desktop layout state. */}
+        {!hideCollapseToggle && (
         <div className="px-3 pb-3 pt-1">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -384,6 +391,7 @@ export function Sidebar() {
             )}
           </Tooltip>
         </div>
+        )}
       </div>
     </aside>
   );

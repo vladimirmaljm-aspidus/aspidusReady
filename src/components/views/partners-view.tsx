@@ -264,7 +264,7 @@ export function PartnersView() {
         title="Partners"
         description={`${total} total`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => window.open("/api/partners/export?format=csv", "_blank")}>
               <Download className="size-4 mr-1" /> Export CSV
             </Button>
@@ -761,7 +761,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       </div>
 
       <Tabs defaultValue="info">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="flex w-full overflow-x-auto justify-start sm:grid sm:grid-cols-5">
           <TabsTrigger value="info">Info</TabsTrigger>
           <TabsTrigger value="contact">Contact</TabsTrigger>
           <TabsTrigger value="bank">Bank</TabsTrigger>
@@ -1559,7 +1559,7 @@ function PartnerFormDialog({
                   {/* Type - Visual Buttons for full form too */}
                   <div className="md:col-span-2 space-y-2">
                     <Label>Type</Label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {TYPE_BUTTONS.map((t) => {
                         const isSelected = form.type === t.value && !showOtherTypes;
                         return (

@@ -516,7 +516,7 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
         title="System Overview"
         description="Monitor all tenants and platform activity."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="size-4 mr-1" /> Create Company
             </Button>

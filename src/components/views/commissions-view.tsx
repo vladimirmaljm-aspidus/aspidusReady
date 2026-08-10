@@ -215,7 +215,7 @@ export function CommissionsView() {
 
       {/* ── Tabs ──────────────────────────────────────────────────────── */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="flex w-full overflow-x-auto justify-start mb-4 sm:grid sm:grid-cols-3">
           <TabsTrigger value="agents" className="gap-1.5">
             <Users className="size-4" />
             {"Agents"}
