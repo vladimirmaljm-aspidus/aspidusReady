@@ -1,61 +1,85 @@
 "use client";
 import * as React from "react";
-import dynamic from "next/dynamic";
-import { useQuery } from "@tanstack/react-query";
+import * as maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
-import {
-  findMaritimeRoute,
-  geocodePort,
-  haversineNm,
-  type RouteResult,
-  type Waypoint,
-} from "@/lib/logistics/maritime-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   Ship,
-  Navigation,
+  Truck,
   Loader2,
   Globe as GlobeIcon,
   MapPin,
   Anchor,
   Info,
+  Clock,
+  Route as RouteIcon,
+  Flag,
+  DollarSign,
+  AlertCircle,
+  Search,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 /* -------------------------------------------------------------------------- */
-/*  Dynamic globe import (WebGL — needs window, SSR off)                      */
+/*  Types (mirror src/lib/logistics/route-plan.ts)                            */
 /* -------------------------------------------------------------------------- */
 
-const Globe = dynamic(() => import("react-globe.gl"), {
-  ssr: false,
-  loading: () => (
-    <div className="absolute inset-0 flex items-center justify-center">
-      <Loader2 className="size-8 animate-spin text-slate-400" />
-    </div>
-  ),
-}) as React.ComponentType<any>;
-
-/* -------------------------------------------------------------------------- */
-/*  Types                                                                      */
-/* -------------------------------------------------------------------------- */
-
-interface RouteArc {
-  startLat: number;
-  startLng: number;
-  endLat: number;
-  endLng: number;
-  color: string;
-  label: string;
-  data: any;
+interface RouteLeg {
+  kind: "road" | "sea";
+  fromLabel: string;
+  toLabel: string;
+  fromCoords: [number, number];
+  toCoords: [number, number];
+  geometry: [number, number][];
+  distanceKm: number;
+  durationHours: number;
+  approximate: boolean;
 }
 
-interface PortPoint {
+interface BorderCrossing {
+  fromCountry: string;
+  toCountry: string;
+  at: [number, number];
+  distanceKm: number;
+}
+
+interface Waypoint {
+  id: string;
+  name: string;
   lat: number;
   lng: number;
-  label: string;
-  color: string;
-  size: number;
-  data: any;
+  type: string;
+}
+
+interface RoutePlan {
+  origin: { label: string; coords: [number, number] };
+  destination: { label: string; coords: [number, number] };
+  originPort: { label: string; coords: [number, number] };
+  destinationPort: { label: string; coords: [number, number] };
+  legs: RouteLeg[];
+  intermediateWaypoints: Waypoint[];
+  borderCrossings: BorderCrossing[];
+  totals: {
+    distanceKm: number;
+    transitHours: number;
+    dwellHours: number;
+    totalHours: number;
+    totalDays: number;
+  };
+  estimatedCost: {
+    roadUsd: number;
+    seaUsd: number;
+    customsUsd: number;
+    totalUsd: number;
+    disclaimer: string;
+  };
 }
 
 interface LogisticsRequest {
@@ -65,25 +89,194 @@ interface LogisticsRequest {
   mode?: string;
   origin_port?: string | null;
   origin_city?: string | null;
+  origin_country?: string | null;
   destination_port?: string | null;
   destination_city?: string | null;
+  destination_country?: string | null;
   cargo_description?: string | null;
   [key: string]: any;
 }
 
-/** Pick a route arc color based on the logistics request status. */
-function arcColorFor(status: string): string {
+const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
+const ROAD_COLOR = "#f59e0b";
+const SEA_COLOR = "#3b82f6";
+
+function statusVariant(status: string): "default" | "secondary" | "outline" {
   const s = (status || "").toLowerCase();
-  if (s === "delivered" || s === "completed") return "#10b981";
-  if (
-    s === "in_transit" ||
-    s === "in_progress" ||
-    s === "accepted" ||
-    s === "shipped"
-  )
-    return "#3b82f6";
-  if (s === "pending" || s === "quoted") return "#f59e0b";
-  return "#64748b";
+  if (s === "delivered" || s === "completed") return "default";
+  if (s === "pending" || s === "quoted") return "outline";
+  return "secondary";
+}
+
+function fmtHours(h: number): string {
+  if (h < 24) return `${Math.round(h)}h`;
+  const days = Math.floor(h / 24);
+  const rem = Math.round(h % 24);
+  return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Map component                                                             */
+/* -------------------------------------------------------------------------- */
+
+function RouteMap({ plan, loading }: { plan: RoutePlan | null; loading: boolean }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const mapRef = React.useRef<maplibregl.Map | null>(null);
+  const markersRef = React.useRef<maplibregl.Marker[]>([]);
+  const [ready, setReady] = React.useState(false);
+  const readyRef = React.useRef(false);
+  const [mapError, setMapError] = React.useState(false);
+  const [retryKey, setRetryKey] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    setMapError(false);
+    readyRef.current = false;
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: MAP_STYLE,
+      center: [15, 30],
+      zoom: 1.4,
+      attributionControl: { compact: true },
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.on("load", () => {
+      readyRef.current = true;
+      setReady(true);
+    });
+    map.on("error", (e: any) => {
+      // A failed basemap/tile fetch (offline, blocked domain, outage) — don't
+      // leave the user staring at a blank canvas, surface it with a retry.
+      if (!readyRef.current) setMapError(true);
+      // eslint-disable-next-line no-console
+      console.error("MapLibre error:", e?.error?.message || e);
+    });
+    mapRef.current = map;
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [retryKey]);
+
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+
+    // Clear old markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    // Clear old layers/sources
+    for (const id of ["route-road", "route-sea", "route-sea-outline"]) {
+      if (map.getLayer(id)) map.removeLayer(id);
+    }
+    if (map.getSource("route")) map.removeSource("route");
+
+    if (!plan) return;
+
+    const roadFeatures = plan.legs
+      .filter((l) => l.kind === "road")
+      .map((l) => ({
+        type: "Feature" as const,
+        properties: { kind: l.kind },
+        geometry: { type: "LineString" as const, coordinates: l.geometry },
+      }));
+    const seaFeatures = plan.legs
+      .filter((l) => l.kind === "sea")
+      .map((l) => ({
+        type: "Feature" as const,
+        properties: { kind: l.kind },
+        geometry: { type: "LineString" as const, coordinates: l.geometry },
+      }));
+
+    map.addSource("route", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [...roadFeatures, ...seaFeatures] },
+    });
+    map.addLayer({
+      id: "route-sea",
+      type: "line",
+      source: "route",
+      filter: ["==", ["get", "kind"], "sea"],
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": SEA_COLOR, "line-width": 2.5, "line-dasharray": [0.2, 1.6] },
+    });
+    map.addLayer({
+      id: "route-road",
+      type: "line",
+      source: "route",
+      filter: ["==", ["get", "kind"], "road"],
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": ROAD_COLOR, "line-width": 3 },
+    });
+
+    // Markers
+    const addMarker = (
+      lngLat: [number, number],
+      color: string,
+      label: string,
+      size = 10,
+    ) => {
+      const el = document.createElement("div");
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.style.borderRadius = "50%";
+      el.style.background = color;
+      el.style.border = "2px solid white";
+      el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.4)";
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat(lngLat)
+        .setPopup(new maplibregl.Popup({ offset: 8 }).setText(label))
+        .addTo(map);
+      markersRef.current.push(marker);
+    };
+
+    addMarker(plan.origin.coords, "#10b981", `Origin: ${plan.origin.label}`, 12);
+    addMarker(plan.originPort.coords, "#0ea5e9", `Port: ${plan.originPort.label}`, 9);
+    for (const wp of plan.intermediateWaypoints) {
+      addMarker([wp.lng, wp.lat], "#8b5cf6", wp.name, 7);
+    }
+    addMarker(plan.destinationPort.coords, "#0ea5e9", `Port: ${plan.destinationPort.label}`, 9);
+    addMarker(plan.destination.coords, "#ef4444", `Destination: ${plan.destination.label}`, 12);
+    for (const b of plan.borderCrossings) {
+      addMarker(b.at, "#f59e0b", `Border: ${b.fromCountry} → ${b.toCountry}`, 6);
+    }
+
+    // Fit bounds to the whole route
+    const bounds = new maplibregl.LngLatBounds();
+    for (const l of plan.legs) {
+      for (const c of l.geometry) bounds.extend(c as [number, number]);
+    }
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, { padding: 48, maxZoom: 8, duration: 600 });
+    }
+  }, [plan, ready]);
+
+  return (
+    <div className="absolute inset-0 rounded-2xl overflow-hidden">
+      {/* Separate div for MapLibre to mount into — its stylesheet sets
+          `.maplibregl-map { position: relative }` on whatever element it's
+          given, and a stylesheet rule always wins over a Tailwind utility
+          class of equal specificity regardless of nesting. Using an inline
+          style here (not a class) is immune to that cascade fight and keeps
+          the element correctly absolutely positioned + full-height. */}
+      <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+      {mapError ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-slate-950 gap-2 px-6 text-center">
+          <AlertCircle className="size-6 text-amber-400" />
+          <p className="text-sm text-slate-200">Couldn't load the basemap.</p>
+          <p className="text-xs text-slate-400">Check your connection and try again.</p>
+          <Button size="sm" variant="secondary" className="mt-1" onClick={() => setRetryKey((k) => k + 1)}>
+            Retry
+          </Button>
+        </div>
+      ) : (!ready || loading) ? (
+        <div className="absolute inset-0 flex items-center justify-center z-10 bg-slate-950/40 pointer-events-none">
+          <Loader2 className="size-8 animate-spin text-white" />
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -93,40 +286,9 @@ function arcColorFor(status: string): string {
 export function TradeGlobeView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
-  const [selectedArc, setSelectedArc] = React.useState<RouteArc | null>(null);
-  const [globeReady, setGlobeReady] = React.useState(false);
-  const globeRef = React.useRef<any>(null);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [size, setSize] = React.useState({ width: 800, height: 600 });
+  const [selectedRequest, setSelectedRequest] = React.useState<LogisticsRequest | null>(null);
 
-  // Auto-rotate once the globe is ready
-  React.useEffect(() => {
-    if (!globeReady) return;
-    const controls = globeRef.current?.controls?.();
-    if (controls) {
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.35;
-      controls.enableDamping = true;
-    }
-  }, [globeReady]);
-
-  // Responsive sizing
-  React.useEffect(() => {
-    if (!containerRef.current) return;
-    const el = containerRef.current;
-    const update = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      if (w > 0 && h > 0) setSize({ width: w, height: h });
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Fetch logistics requests
-  const { data, isLoading } = useQuery({
+  const { data, isLoading: listLoading } = useQuery({
     queryKey: ["logistics-globe", tenantKey],
     queryFn: async () => {
       const r = await fetch(api("/api/logistics-requests", { limit: 100 }));
@@ -134,355 +296,309 @@ export function TradeGlobeView() {
       return r.json();
     },
   });
+  const requests: LogisticsRequest[] = data?.items || data || [];
 
-  // Build arcs + points from logistics requests
-  const { arcs, points } = React.useMemo(() => {
-    const arcList: RouteArc[] = [];
-    const pointList: PortPoint[] = [];
-    const seenWaypointIds = new Set<string>();
-
-    const requests: LogisticsRequest[] = data?.items || data || [];
-
-    for (const req of requests) {
-      const origin = req.origin_port || req.origin_city || "";
-      const dest = req.destination_port || req.destination_city || "";
-
-      const originCoords = geocodePort(origin);
-      const destCoords = geocodePort(dest);
-
-      if (!originCoords || !destCoords) continue;
-
-      // Find maritime route (avoids land by routing through waypoints)
-      const route: RouteResult = findMaritimeRoute(
-        originCoords.lat,
-        originCoords.lng,
-        destCoords.lat,
-        destCoords.lng,
-      );
-
-      const color = arcColorFor(req.status);
-
-      // One arc per route segment so routes bend through canals/straits
-      // (a single great-circle arc would cut straight across land).
-      for (const segment of route.segments) {
-        arcList.push({
-          startLat: segment.from.lat,
-          startLng: segment.from.lng,
-          endLat: segment.to.lat,
-          endLng: segment.to.lng,
-          color,
-          label: `${req.number}: ${segment.from.name} → ${segment.to.name}`,
-          data: { ...req, route, segment },
-        });
-      }
-
-      // Origin / destination markers
-      pointList.push({
-        lat: originCoords.lat,
-        lng: originCoords.lng,
-        label: `${origin} (Origin)`,
-        color: "#10b981",
-        size: 0.7,
-        data: req,
+  const routePlanMutation = useMutation({
+    mutationFn: async (body: { requestId: string } | { origin: { addressLine: string }; destination: { addressLine: string } }) => {
+      const r = await fetch(api("/api/logistics/route-plan"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-      pointList.push({
-        lat: destCoords.lat,
-        lng: destCoords.lng,
-        label: `${dest} (Destination)`,
-        color: "#ef4444",
-        size: 0.7,
-        data: req,
-      });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || "Failed to build route plan");
+      return json.plan as RoutePlan;
+    },
+  });
 
-      // Waypoint markers (canals / straits / capes) — dedupe per render
-      for (const wp of route.waypoints) {
-        if (
-          (wp.type === "canal" || wp.type === "strait" || wp.type === "cape") &&
-          !seenWaypointIds.has(wp.id)
-        ) {
-          seenWaypointIds.add(wp.id);
-          pointList.push({
-            lat: wp.lat,
-            lng: wp.lng,
-            label: wp.name,
-            color: "#8b5cf6",
-            size: 0.35,
-            data: wp,
-          });
-        }
-      }
-    }
+  function selectRequest(req: LogisticsRequest) {
+    setSelectedRequest(req);
+    routePlanMutation.mutate({ requestId: req.id });
+  }
 
-    return { arcs: arcList, points: pointList };
-  }, [data]);
+  const [manualOrigin, setManualOrigin] = React.useState("");
+  const [manualDest, setManualDest] = React.useState("");
+  function plotManualRoute() {
+    if (!manualOrigin.trim() || !manualDest.trim()) return;
+    setSelectedRequest({ id: "__manual__", number: "Manual test", status: "pending" });
+    routePlanMutation.mutate({
+      origin: { addressLine: manualOrigin.trim() },
+      destination: { addressLine: manualDest.trim() },
+    });
+  }
 
-  // ── Selected route summary (computed from the selected arc's route) ──────
-  const routeSummary = React.useMemo(() => {
-    if (!selectedArc) return null;
-    const r: RouteResult = selectedArc.data.route;
-    const waypoints: Waypoint[] = r.waypoints;
-    const intermediate = waypoints.filter(
-      (w) => w.type === "canal" || w.type === "strait" || w.type === "cape",
-    );
-    return {
-      totalDistance: r.totalDistance,
-      transitDays: r.transitDays,
-      segmentCount: r.segments.length,
-      intermediate,
-    };
-  }, [selectedArc]);
+  const plan = routePlanMutation.data || null;
 
   return (
     <div className="space-y-4">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <GlobeIcon className="size-5" /> Trade Globe
           </h2>
           <p className="text-sm text-muted-foreground">
-            Interactive 3D map of your global trade routes. Routes follow real
-            maritime paths through canals and straits — no land crossings.
+            Real door-to-door route: road to the nearest port, real maritime
+            path through canals/straits, road to the final address —
+            geocoded from the actual request, not straight lines.
           </p>
         </div>
-        <Badge variant="outline">{arcs.length} routes</Badge>
+        <Badge variant="outline">{requests.length} requests</Badge>
       </div>
 
-      {/* ── Main grid ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Globe */}
-        <div
-          ref={containerRef}
-          className="lg:col-span-2 relative rounded-2xl overflow-hidden bg-slate-950 border border-white/5"
-          style={{ height: 600 }}
-        >
-          {!globeReady && (
-            <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-              <Loader2 className="size-8 animate-spin text-slate-400" />
+        {/* Request list */}
+        <Card className="lg:col-span-1 lg:order-1 order-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <RouteIcon className="size-4" /> Logistics requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="px-4 pb-3 space-y-2 border-b border-border/60">
+              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Or test any address pair</p>
+              <Input
+                placeholder="Origin address"
+                value={manualOrigin}
+                onChange={(e) => setManualOrigin(e.target.value)}
+                className="h-8 text-xs"
+              />
+              <Input
+                placeholder="Destination address"
+                value={manualDest}
+                onChange={(e) => setManualDest(e.target.value)}
+                className="h-8 text-xs"
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                className="w-full h-7 text-xs"
+                disabled={!manualOrigin.trim() || !manualDest.trim() || routePlanMutation.isPending}
+                onClick={plotManualRoute}
+              >
+                <Search className="size-3 mr-1" /> Plot route
+              </Button>
             </div>
-          )}
-          {isLoading && (
-            <div className="absolute top-3 left-3 z-10">
-              <Badge variant="secondary" className="bg-slate-900/80 text-slate-300 border-white/5">
-                <Loader2 className="size-3 mr-1 animate-spin" /> Loading routes…
-              </Badge>
-            </div>
-          )}
-          <Globe
-            ref={globeRef}
-            globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-            bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
-            backgroundColor="#0a0e1a"
-            width={size.width}
-            height={size.height}
-            arcsData={arcs}
-            arcColor={(d: any) => d.color}
-            arcDashLength={0.4}
-            arcDashGap={0.2}
-            arcDashAnimateTime={2000}
-            arcDashInitialGap={() => Math.random()}
-            arcStroke={0.5}
-            arcAltitudeAutoScale={0.4}
-            arcLabel={(d: any) => d.label}
-            onArcClick={(d: any) => setSelectedArc(d)}
-            pointsData={points}
-            pointColor={(d: any) => d.color}
-            pointAltitude={0.01}
-            pointRadius={(d: any) => d.size}
-            pointLabel={(d: any) => d.label}
-            onGlobeReady={() => setGlobeReady(true)}
-            atmosphereColor="#1e293b"
-            atmosphereAltitude={0.15}
-          />
-        </div>
+            <ScrollArea className="h-[280px] lg:h-[490px]">
+              {listLoading ? (
+                <div className="p-6 flex justify-center">
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : requests.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground text-sm">
+                  No logistics requests yet.
+                </div>
+              ) : (
+                <ul className="divide-y divide-border/50">
+                  {requests.map((req) => (
+                    <li key={req.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectRequest(req)}
+                        className={cn(
+                          "w-full text-left px-4 py-3 hover:bg-accent/50 smooth",
+                          selectedRequest?.id === req.id && "bg-accent/60",
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold">{req.number}</span>
+                          <Badge variant={statusVariant(req.status)} className="text-[10px]">
+                            {req.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                          {(req.origin_city || req.origin_port || "—")} → {(req.destination_city || req.destination_port || "—")}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </ScrollArea>
+          </CardContent>
+        </Card>
 
-        {/* Side panel */}
-        <div className="space-y-4">
-          {selectedArc && routeSummary ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Ship className="size-4" /> Route Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Request:</span>
-                  <span className="font-mono">
-                    {selectedArc.data.number}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status:</span>
-                  <Badge
-                    variant={
-                      selectedArc.data.status === "delivered" ||
-                      selectedArc.data.status === "completed"
-                        ? "default"
-                        : "secondary"
-                    }
-                  >
-                    {selectedArc.data.status}
-                  </Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Origin:</span>
-                  <span className="text-right truncate ml-2">
-                    {selectedArc.data.origin_port ||
-                      selectedArc.data.origin_city}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Destination:</span>
-                  <span className="text-right truncate ml-2">
-                    {selectedArc.data.destination_port ||
-                      selectedArc.data.destination_city}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Total Distance:
-                  </span>
-                  <span className="font-mono">
-                    {routeSummary.totalDistance.toLocaleString()} nm
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Transit Time:</span>
-                  <span className="font-mono">
-                    {routeSummary.transitDays} days
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Mode:</span>
-                  <span className="capitalize">
-                    {selectedArc.data.mode || "sea"}
-                  </span>
-                </div>
-                {selectedArc.data.cargo_description && (
-                  <div className="pt-2 border-t">
-                    <span className="text-muted-foreground">Cargo:</span>
-                    <p className="text-sm mt-1">
-                      {selectedArc.data.cargo_description}
-                    </p>
-                  </div>
-                )}
-                {routeSummary.intermediate.length > 0 && (
-                  <div className="pt-2 border-t">
-                    <span className="text-muted-foreground">
-                      Via waypoints:
-                    </span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {routeSummary.intermediate.map((w, i) => (
-                        <Badge
-                          key={i}
-                          variant="outline"
-                          className="text-xs"
-                        >
-                          {w.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        {/* Map */}
+        <div className="lg:col-span-2 lg:order-2 order-1 relative rounded-2xl overflow-hidden bg-slate-950 border border-white/5" style={{ height: 600 }}>
+          {!selectedRequest ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2 px-6 text-center">
+              <RouteIcon className="size-8 opacity-50" />
+              <p className="text-sm">Select a logistics request to plot its real route</p>
+            </div>
           ) : (
-            <Card>
-              <CardContent className="p-6 text-center text-muted-foreground">
-                <Navigation className="size-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Click on a route arc to see details</p>
-                <p className="text-xs mt-1">
-                  Routes follow real maritime paths through canals and straits
-                </p>
-              </CardContent>
-            </Card>
+            <RouteMap plan={plan} loading={routePlanMutation.isPending} />
           )}
+          {routePlanMutation.isError && (
+            <div className="absolute inset-x-3 top-3 z-10">
+              <div className="flex items-center gap-2 rounded-lg bg-destructive/90 text-destructive-foreground text-xs px-3 py-2">
+                <AlertCircle className="size-3.5 shrink-0" />
+                {(routePlanMutation.error as Error)?.message || "Could not compute route"}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
-          {/* Legend */}
+      {/* Route details panel — only once a plan is loaded */}
+      {plan && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card>
-            <CardContent className="p-4 space-y-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1">
-                <Info className="size-3" /> Legend
-              </p>
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-3 h-0.5 bg-green-500" /> Delivered
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Ship className="size-4" /> Route summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Origin</span>
+                <span className="text-right truncate ml-2 max-w-[60%]">{plan.origin.label}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-3 h-0.5 bg-blue-500" /> In Transit
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Origin port</span>
+                <span>{plan.originPort.label}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-3 h-0.5 bg-amber-500" /> Pending
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Destination port</span>
+                <span>{plan.destinationPort.label}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-2 h-2 rounded-full bg-green-500" /> Origin Port
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Destination</span>
+                <span className="text-right truncate ml-2 max-w-[60%]">{plan.destination.label}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-2 h-2 rounded-full bg-red-500" /> Destination Port
+              <Separator />
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total distance</span>
+                <span className="font-mono">{plan.totals.distanceKm.toLocaleString()} km</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <div className="w-2 h-2 rounded-full bg-purple-500" /> Canal / Strait / Cape
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> Transit</span>
+                <span className="font-mono">{fmtHours(plan.totals.transitHours)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Dwell (ports + borders)</span>
+                <span className="font-mono">{fmtHours(plan.totals.dwellHours)}</span>
+              </div>
+              <div className="flex justify-between font-medium">
+                <span>Total time</span>
+                <span className="font-mono">{plan.totals.totalDays}d</span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Empty state */}
-          {arcs.length === 0 && !isLoading && (
-            <Card>
-              <CardContent className="p-6 text-center text-muted-foreground space-y-2">
-                <Anchor className="size-8 mx-auto opacity-50" />
-                <p className="text-sm font-medium text-foreground">
-                  No routes yet
-                </p>
-                <p className="text-xs">
-                  Create logistics requests with origin and destination ports
-                  to see them visualised on the globe.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Truck className="size-4" /> Legs
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm max-h-56 overflow-y-auto custom-scroll">
+              {plan.legs.map((leg, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  {leg.kind === "road" ? (
+                    <Truck className="size-3.5 mt-0.5 shrink-0" style={{ color: ROAD_COLOR }} />
+                  ) : (
+                    <Ship className="size-3.5 mt-0.5 shrink-0" style={{ color: SEA_COLOR }} />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate">{leg.fromLabel} → {leg.toLabel}</p>
+                    <p className="text-muted-foreground">
+                      {Math.round(leg.distanceKm).toLocaleString()} km · {fmtHours(leg.durationHours)}
+                      {leg.approximate && " · est."}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {plan.intermediateWaypoints.length > 0 && (
+                <>
+                  <Separator className="my-2" />
+                  <p className="text-muted-foreground text-[11px] uppercase font-semibold">Via</p>
+                  <div className="flex flex-wrap gap-1">
+                    {plan.intermediateWaypoints.map((w) => (
+                      <Badge key={w.id} variant="outline" className="text-[10px]">{w.name}</Badge>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Stats */}
-          {arcs.length > 0 && (
-            <Card>
-              <CardContent className="p-4 space-y-2">
-                <p className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1">
-                  <MapPin className="size-3" /> Network
-                </p>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Total routes</span>
-                  <span className="font-mono">{arcs.length}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Ports shown</span>
-                  <span className="font-mono">{points.length}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Avg. distance</span>
-                  <span className="font-mono">
-                    {arcs.length > 0
-                      ? Math.round(
-                          arcs.reduce(
-                            (acc, a) =>
-                              acc +
-                              haversineNm(
-                                a.startLat,
-                                a.startLng,
-                                a.endLat,
-                                a.endLng,
-                              ),
-                            0,
-                          ) / arcs.length,
-                        ).toLocaleString()
-                      : 0}{" "}
-                    nm
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <DollarSign className="size-4" /> Estimated cost
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Road</span>
+                <span className="font-mono">${plan.estimatedCost.roadUsd.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Sea freight</span>
+                <span className="font-mono">${plan.estimatedCost.seaUsd.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Customs / borders</span>
+                <span className="font-mono">${plan.estimatedCost.customsUsd.toLocaleString()}</span>
+              </div>
+              <Separator />
+              <div className="flex justify-between font-medium">
+                <span>Total (indicative)</span>
+                <span className="font-mono">${plan.estimatedCost.totalUsd.toLocaleString()}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground pt-1 flex items-start gap-1">
+                <Info className="size-3 shrink-0 mt-0.5" /> {plan.estimatedCost.disclaimer}
+              </p>
+
+              {plan.borderCrossings.length > 0 && (
+                <>
+                  <Separator />
+                  <p className="text-muted-foreground text-[11px] uppercase font-semibold flex items-center gap-1">
+                    <Flag className="size-3" /> Border crossings
+                  </p>
+                  <div className="space-y-1">
+                    {plan.borderCrossings.map((b, i) => (
+                      <div key={i} className="flex justify-between text-xs">
+                        <span>{b.fromCountry} → {b.toCountry}</span>
+                        <span className="text-muted-foreground font-mono">{b.distanceKm} km</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      )}
+
+      {/* Legend */}
+      <Card>
+        <CardContent className="p-4 flex flex-wrap gap-x-6 gap-y-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1 w-full sm:w-auto">
+            <Info className="size-3" /> Legend
+          </p>
+          <div className="flex items-center gap-2 text-xs"><div className="w-3 h-0.5" style={{ background: ROAD_COLOR }} /> Road</div>
+          <div className="flex items-center gap-2 text-xs"><div className="w-3 h-0.5" style={{ background: SEA_COLOR }} /> Sea</div>
+          <div className="flex items-center gap-2 text-xs"><div className="size-2 rounded-full bg-emerald-500" /> Origin</div>
+          <div className="flex items-center gap-2 text-xs"><div className="size-2 rounded-full bg-red-500" /> Destination</div>
+          <div className="flex items-center gap-2 text-xs"><div className="size-2 rounded-full bg-sky-500" /> Port</div>
+          <div className="flex items-center gap-2 text-xs"><div className="size-2 rounded-full bg-violet-500" /> Canal / strait / cape</div>
+          <div className="flex items-center gap-2 text-xs"><div className="size-2 rounded-full bg-amber-500" /> Border crossing</div>
+        </CardContent>
+      </Card>
+
+      {requests.length === 0 && !listLoading && (
+        <Card>
+          <CardContent className="p-6 text-center text-muted-foreground space-y-2">
+            <Anchor className="size-8 mx-auto opacity-50" />
+            <p className="text-sm font-medium text-foreground">No routes yet</p>
+            <p className="text-xs">
+              Create logistics requests with origin and destination addresses
+              to see their real routes plotted here.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

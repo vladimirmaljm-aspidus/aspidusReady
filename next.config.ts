@@ -28,7 +28,8 @@ const nextConfig: NextConfig = {
             "style-src 'self' 'unsafe-inline'",                   // Tailwind needs inline styles
             "img-src 'self' data: https: blob:",                   // Images from any HTTPS + data URLs
             "font-src 'self' data:",                               // Fonts
-            "connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org https://maps.googleapis.com",  // API connections
+            "connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org https://maps.googleapis.com https://demotiles.maplibre.org https://router.project-osrm.org",  // API connections
+            "worker-src 'self' blob:",                             // MapLibre GL tile-parsing worker
             "frame-ancestors 'none'",                              // No iframe embedding
             "form-action 'self'",                                  // Forms only to same origin
             "base-uri 'self'",                                     // Base tag only same origin
