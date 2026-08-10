@@ -3,6 +3,7 @@ import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
 import { sendEmail, documentEmail } from "@/lib/email/service";
 import { generatePdf } from "@/lib/pdf/generator";
 import { notify } from "@/lib/notif/helper";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -81,7 +82,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Promote status draft→sent and stamp sent_at (only on first successful send).
     if (emailResult.success) {
       try {
-        await auth.store.upsertOffer({ id, status: offer.status === "draft" || !offer.status ? "sent" : offer.status, sent_at: new Date().toISOString() } as any);
+        // Validate the status transition (Re-Audit-2 N4) — only allow
+        // draft→sent. Other states (e.g. accepted) are not allowed via this
+        // send endpoint — the user must use the PUT /api/offers/[id] route
+        // to move to other states. Super-admins bypass.
+        const newStatus = offer.status === "draft" || !offer.status ? "sent" : offer.status;
+        if (newStatus !== offer.status && !auth.isSuperAdmin) {
+          const t = validateStatusTransition("offer", offer.status || "draft", newStatus);
+          if (!t.valid) {
+            return NextResponse.json({ error: t.error }, { status: 400 });
+          }
+        }
+        await auth.store.upsertOffer({ id, status: newStatus, sent_at: new Date().toISOString() } as any);
       } catch (e) { console.warn("[offer.send] status bump failed:", e); }
     }
 

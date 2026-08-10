@@ -51,6 +51,35 @@ export async function POST(req: NextRequest) {
   body.tenant_id = tenantId;
   if (!body.created_by && "user" in auth) body.created_by = auth.user.id;
 
+  // Validate exchange_rate (Fix 8): must be positive when provided. A negative
+  // rate flows through to `landedCostInSellCurrency` as a negative multiplier
+  // → margin wildly inflates. Zero is silently coerced to 1 below (matches
+  // existing behaviour for the same-currency edge case).
+  if (body.exchange_rate !== undefined && body.exchange_rate !== null) {
+    const rate = Number(body.exchange_rate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      return NextResponse.json({ error: "Exchange rate must be a positive number." }, { status: 400 });
+    }
+  }
+
+  // Validate commission_rate (Fix 8 — assertNonNegative): percent or fixed
+  // amount cannot be negative. We allow 0 (no commission).
+  if (body.commission_rate !== undefined && body.commission_rate !== null) {
+    const cr = Number(body.commission_rate);
+    if (!Number.isFinite(cr) || cr < 0) {
+      return NextResponse.json({ error: "Commission rate must be a non-negative number." }, { status: 400 });
+    }
+    body.commission_rate = cr;
+  }
+
+  // Persist commission tracking fields (Fix 1) — they were previously dropped
+  // because the columns didn't exist on the live schema. After migration 007
+  // is applied, these flow through `upsertTradeCalculation` → smartUpsert
+  // and are saved on the trade_calculations row. They're later read by the
+  // offer-preview endpoint to auto-track commission obligations on accept.
+  body.commission_agent_id = body.commission_agent_id ?? null;
+  body.commission_type = body.commission_type ?? null;
+
   // Compute totals from cost lines
   const qty = body.quantity || 0;
   const numContainers = body.num_containers || 1;

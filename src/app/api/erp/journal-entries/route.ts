@@ -68,6 +68,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Journal entry must be balanced (debits must equal credits)." }, { status: 400 });
     }
 
+    // Fix 11 (Re-Audit-2 P0/journal): validate that every `account_id` on the
+    // lines actually exists in `erp_accounts` for this tenant BEFORE inserting
+    // the journal entry. A non-existent FK would otherwise trigger a 500 mid-
+    // insert (after we've already validated + started persisting the header)
+    // and produce an opaque error message. We resolve the set of unique
+    // account_ids, fetch them in a single query, and 400 with the offending id
+    // if any are missing.
+    const accountIds = Array.from(
+      new Set(
+        body.lines
+          .map((l: any) => l.account_id)
+          .filter((id: any) => typeof id === "string" && id.length > 0),
+      ),
+    ) as string[];
+    if (accountIds.length > 0) {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const sb = getSupabase();
+      const { data: validAccounts, error: accErr } = await sb
+        .from("erp_accounts")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .in("id", accountIds);
+      if (accErr) {
+        return NextResponse.json(
+          { error: `Failed to validate account_ids: ${accErr.message}` },
+          { status: 500 },
+        );
+      }
+      const validSet = new Set((validAccounts || []).map((a: any) => a.id));
+      const missing = accountIds.filter((id) => !validSet.has(id));
+      if (missing.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Invalid account_id(s): ${missing.join(", ")}. Each line's account_id must reference an existing erp_accounts row in this tenant.`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const created = await auth.store.upsertErpJournalEntry({
       ...body,
       tenant_id: tenantId,

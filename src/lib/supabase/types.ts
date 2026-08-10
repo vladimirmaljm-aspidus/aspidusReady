@@ -759,6 +759,13 @@ export interface TradeCalculation {
   total_sell_revenue: number;
   gross_margin: number;
   margin_percent: number;
+  // Commission tracking (optional — when set, offers created from this
+  // calculation auto-track a commission obligation on accept; see Fix 2 chain
+  // in POST /api/offers and offer-preview route).
+  commission_agent_id?: string | null;
+  commission_type?: string | null;
+  commission_rate?: number | null;
+
   // Meta
   created_by: string | null;
   created_at: string;
@@ -1295,7 +1302,8 @@ export type NotificationType =
   | "task_due_soon"
   | "low_stock_alert"
   | "system_message"
-  | "portal_message";
+  | "portal_message"
+  | "email_failed";
 
 export interface Notification {
   id: string;

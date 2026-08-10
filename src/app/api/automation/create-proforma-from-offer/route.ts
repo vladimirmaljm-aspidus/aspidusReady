@@ -49,9 +49,16 @@ export async function POST(req: NextRequest) {
     // 1b. FIX-P1-LOGIC Fix 2: prevent duplicate proformas for the same offer.
     //     Two clicks on the "create proforma" button must not produce two
     //     proformas — return 409 with the existing proforma's id/number.
+    //
+    //     Re-Audit-2 N5: exclude cancelled proformas from the duplicate check.
+    //     Previously, if you cancelled a proforma and tried to create a new
+    //     one from the same offer, you'd get a 409 pointing at the cancelled
+    //     record — blocking the workflow.
     {
       const existingProformas = await store.listProformas(tid, { limit: 1000 });
-      const existing = existingProformas.items.find((p: any) => p.offer_id === offer_id);
+      const existing = existingProformas.items.find(
+        (p: any) => p.offer_id === offer_id && p.status !== "cancelled",
+      );
       if (existing) {
         return NextResponse.json(
           {

@@ -11,55 +11,64 @@ function getAuthUser(auth: AuthContext | ApiKeyAuthContext) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuthOrApiKey(req);
-  if (auth instanceof NextResponse) return auth;
+  try {
+    const auth = await requireAuthOrApiKey(req);
+    if (auth instanceof NextResponse) return auth;
     // Permission gate (offers.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "offers.read"); if (_d) return _d; } } /* requirePermission wired */
 
-  const tid = resolveTenantId(auth, req);
+    const tid = resolveTenantId(auth, req);
 
-  if ("apiKeyId" in auth && !hasPermission(auth.permissions, "offers:read")) {
-    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-  }
+    if ("apiKeyId" in auth && !hasPermission(auth.permissions, "offers:read")) {
+      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+    }
 
-  const url = new URL(req.url);
-  const search = url.searchParams.get("search") || undefined;
-  const partner_id = url.searchParams.get("partner_id") || undefined;
-  const status = url.searchParams.get("status") || undefined;
-  const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
-  const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
-  const result = await auth.store.listOffers(tid!, { search, limit, offset, filters: { partner_id, status } });
-  // Defense-in-depth: even though SupabaseStore filters by tenant_id,
-  // this post-filter provides an extra safety layer. Do NOT remove.
-  const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
-  if (shouldFilter && auth.tenantId) {
-    const before = result.items.length;
-    result.items = result.items.filter((o) => o.tenant_id === auth.tenantId);
-    result.total = result.total - (before - result.items.length);
+    const url = new URL(req.url);
+    const search = url.searchParams.get("search") || undefined;
+    const partner_id = url.searchParams.get("partner_id") || undefined;
+    const status = url.searchParams.get("status") || undefined;
+    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
+    const result = await auth.store.listOffers(tid!, { search, limit, offset, filters: { partner_id, status } });
+    // Defense-in-depth: even though SupabaseStore filters by tenant_id,
+    // this post-filter provides an extra safety layer. Do NOT remove.
+    const shouldFilter = "apiKeyId" in auth || !auth.isSuperAdmin;
+    if (shouldFilter && auth.tenantId) {
+      const before = result.items.length;
+      result.items = result.items.filter((o) => o.tenant_id === auth.tenantId);
+      result.total = result.total - (before - result.items.length);
+    }
+    return NextResponse.json(result);
+  } catch (e: any) {
+    console.error("[offers GET]", e);
+    return NextResponse.json(
+      { error: e.message || "Internal server error" },
+      { status: 500 },
+    );
   }
-  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuthOrApiKey(req);
-  if (auth instanceof NextResponse) return auth;
-  // Permission gate (offers.create)
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "offers.create"); if (_d) return _d; } } /* requirePermission wired */
-
-  const tid = resolveTenantId(auth, req);
-
-  if ("apiKeyId" in auth && !hasPermission(auth.permissions, "offers:write")) {
-    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-  }
-
-  let body;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+    const auth = await requireAuthOrApiKey(req);
+    if (auth instanceof NextResponse) return auth;
+    // Permission gate (offers.create)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "offers.create"); if (_d) return _d; } } /* requirePermission wired */
+
+    const tid = resolveTenantId(auth, req);
+
+    if ("apiKeyId" in auth && !hasPermission(auth.permissions, "offers:write")) {
+      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+    }
+
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
   body.tenant_id = tid!;
   if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
   // ── Strip `_` prefixed metadata fields BEFORE upserting ──────────────
@@ -302,4 +311,11 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json(created);
+  } catch (e: any) {
+    console.error("[offers POST]", e);
+    return NextResponse.json(
+      { error: e.message || "Internal server error" },
+      { status: 500 },
+    );
+  }
 }

@@ -58,9 +58,15 @@ export async function POST(req: NextRequest) {
     // 2b. FIX-P1-LOGIC Fix 2: prevent duplicate invoices for the same offer.
     //     Two clicks on the "create invoice" button must not produce two
     //     invoices — return 409 with the existing invoice's id/number.
+    //
+    //     Re-Audit-2 N5: exclude cancelled invoices from the duplicate check.
+    //     Previously, cancelling an invoice and then re-creating from the same
+    //     offer would 409 pointing at the cancelled record.
     {
       const existingInvoices = await store.listInvoices(tid, { limit: 1000 });
-      const existing = existingInvoices.items.find((inv: any) => inv.offer_id === offer_id);
+      const existing = existingInvoices.items.find(
+        (inv: any) => inv.offer_id === offer_id && inv.status !== "cancelled",
+      );
       if (existing) {
         return NextResponse.json(
           {

@@ -149,17 +149,70 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Generate offer number (atomic via Postgres SEQUENCE; falls back to
   // legacy `listOffers().total + 1` if the RPC is unavailable).
   // Format: OF-<year>-<NNNN>  (4-digit sequence)
+  //
+  // Re-Audit-2 P0-2 / N10: the fallback filter previously used `/${year}`
+  // (slash) but `formatDocNumber("offer", year, nextSeq)` produces
+  // `OF-${year}-${seq}` (dashes) → the filter never matched → every fallback
+  // call minted `OF-2025-0001` → unique-constraint 500 on the second call.
+  // Fixed to filter on the actual `OF-${year}-` prefix.
   const year = new Date().getFullYear();
   const seqNum = await nextDocNumber("offer");
   let offerNumber: string;
   if (seqNum) {
     offerNumber = seqNum;
   } else {
-    const existingOffers = await auth.store.listOffers(tenantId, { limit: 1000 });
-    const yearOffers = existingOffers.items.filter((o: any) => o.number?.includes(`/${year}`));
-    const nextSeq = yearOffers.length + 1;
-    offerNumber = formatDocNumber("offer", year, nextSeq);
+    // Loop with retry-on-collision: try to find the next available sequence
+    // by inspecting existing offers for this year + tenant. We attempt up to
+    // 10 inserts before bailing (defense in depth against persistent
+    // collisions under heavy concurrent load).
+    const offerYearPrefix = `OF-${year}-`;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const existingOffers = await auth.store.listOffers(tenantId, { limit: 1000 });
+      const yearOffers = existingOffers.items.filter((o: any) =>
+        typeof o.number === "string" && o.number.startsWith(offerYearPrefix),
+      );
+      const nextSeq = yearOffers.length + 1 + attempt;
+      const candidate = formatDocNumber("offer", year, nextSeq);
+      // Quick uniqueness check: if no existing offer has this exact number,
+      // we can use it.
+      const collision = yearOffers.some((o: any) => o.number === candidate);
+      if (!collision) {
+        offerNumber = candidate;
+        break;
+      }
+    }
+    if (!offerNumber!) {
+      // All 10 attempts collided — fall back to a UUID-suffixed number to
+      // guarantee uniqueness. (This branch is essentially unreachable in
+      // practice but keeps the route safe against pathological collisions.)
+      const { randomUUID } = await import("node:crypto");
+      offerNumber = `OF-${year}-${randomUUID().slice(0, 8)}`;
+    }
   }
+
+  // Re-Audit-2 N11 / Fix 1: persist trade calc commission metadata on the
+  // offer so the downstream "auto-track commission on accept" block in
+  // POST /api/offers fires when BOTH `_trade_calc_id` AND
+  // `_commission_agent_id` are present. The offer-preview route already
+  // emits these fields; the create-offer route was bypassing them.
+  //
+  // Note: the `_` prefixed fields are NOT real columns on the `offers` table
+  // — they're stripped from the offerData below before calling upsertOffer
+  // (otherwise PostgREST rejects the insert with a "column does not exist"
+  // error). They're kept here so we can run the same commission cascade
+  // logic that POST /api/offers runs after upserting the offer.
+  const c = calc as any;
+  const tradeCalcMeta = {
+    _trade_calc_id: id,
+    _commission_agent_id: c.commission_agent_id || null,
+    _commission_type: c.commission_type || null,
+    _commission_rate: Number(c.commission_rate) || 0,
+    _commission_amount: Number(c.commission_amount) || 0,
+    _buy_price_per_unit: Number(c.buy_price_per_unit) || 0,
+    _buy_currency: c.buy_currency || currency,
+    _landed_cost: Number(c.total_landed_cost) || 0,
+    _margin: ((Number(c.sell_price_per_unit) || 0) - (Number(c.buy_price_per_unit) || 0)) * qty,
+  };
 
   // Subject uses the actual product name (NOT calc.name)
   const subject = `Offer: ${productName} — ${qty} ${unit}`;
@@ -186,6 +239,135 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   };
 
   const created = await auth.store.upsertOffer(offerData);
+
+  // Re-Audit-2 N11: when the trade calc has BOTH a `_trade_calc_id` AND a
+  // `_commission_agent_id`, mirror the cascade that POST /api/offers runs —
+  // find-or-create a Deal linked to this offer, then insert a pending
+  // `deal_commissions` row. Fire-and-forget: failures are logged + audited
+  // but don't fail the offer creation (the user can still create the
+  // commission manually from the deals view).
+  if (tradeCalcMeta._trade_calc_id && tradeCalcMeta._commission_agent_id) {
+    try {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const sb = getSupabase();
+
+      // 1. Find or create a deal for this offer.
+      let dealId: string | null = (created as any).deal_id || null;
+      if (!dealId) {
+        const dealRow = {
+          tenant_id: tenantId,
+          title: (created as any).subject || `Deal for ${(created as any).number}`,
+          partner_id: (created as any).partner_id,
+          owner_id: "user" in auth ? auth.user.id : null,
+          stage: "qualified",
+          value: (created as any).total,
+          currency: (created as any).currency,
+          buy_cost: tradeCalcMeta._landed_cost || 0,
+          quantity: ((created as any).items?.[0]?.quantity) || 0,
+          unit: ((created as any).items?.[0]?.unit) || "MT",
+          commission_agent_id: tradeCalcMeta._commission_agent_id,
+        };
+        const { data: deal, error: dealErr } = await sb
+          .from("deals")
+          .insert(dealRow)
+          .select()
+          .maybeSingle();
+        if (dealErr) throw dealErr;
+        dealId = deal?.id || null;
+
+        if (dealId) {
+          await sb.from("offers").update({ deal_id: dealId }).eq("id", (created as any).id);
+          (created as any).deal_id = dealId;
+        }
+      }
+
+      // 2. Create pending commission record (mirror POST /api/offers logic).
+      if (dealId) {
+        let commissionType = tradeCalcMeta._commission_type;
+        let commissionRate = tradeCalcMeta._commission_rate;
+        let commissionCurrency = (created as any).currency || "USD";
+        let commissionPerUnit = 0;
+        let agentPartnerId: string | null = null;
+        try {
+          const { data: agent } = await sb
+            .from("commission_agents")
+            .select("*")
+            .eq("id", tradeCalcMeta._commission_agent_id!)
+            .maybeSingle();
+          if (agent) {
+            commissionType = commissionType || (agent as any).commission_type;
+            commissionRate = commissionRate || Number((agent as any).commission_rate) || 0;
+            commissionPerUnit = Number((agent as any).commission_per_unit) || 0;
+            commissionCurrency = (agent as any).commission_currency || commissionCurrency;
+            agentPartnerId = (agent as any).partner_id || null;
+          }
+        } catch { /* keep defaults */ }
+
+        const dealValue = Number((created as any).total) || 0;
+        const dealProfit = Number(tradeCalcMeta._margin) || 0;
+        let calculatedCommission = tradeCalcMeta._commission_amount;
+        if (!calculatedCommission) {
+          switch (commissionType) {
+            case "profit_percent":
+              calculatedCommission = (dealProfit * commissionRate) / 100;
+              break;
+            case "revenue_percent":
+              calculatedCommission = (dealValue * commissionRate) / 100;
+              break;
+            case "per_unit":
+              calculatedCommission =
+                commissionPerUnit * (Number((created as any).items?.[0]?.quantity) || 0);
+              break;
+            case "fixed":
+              calculatedCommission = commissionRate;
+              break;
+            default:
+              calculatedCommission = 0;
+          }
+        }
+
+        const commissionRow = {
+          tenant_id: tenantId,
+          deal_id: dealId,
+          agent_id: tradeCalcMeta._commission_agent_id,
+          partner_id: agentPartnerId,
+          commission_type: commissionType || "profit_percent",
+          commission_rate: commissionRate,
+          commission_per_unit: commissionPerUnit,
+          commission_custom_formula: null,
+          commission_currency: commissionCurrency,
+          deal_value: dealValue,
+          deal_profit: dealProfit,
+          deal_quantity: Number((created as any).items?.[0]?.quantity) || 0,
+          deal_unit: ((created as any).items?.[0]?.unit) || "MT",
+          calculated_commission: Number(calculatedCommission) || 0,
+          status: "pending",
+          notes: `Auto-created from trade calculation ${tradeCalcMeta._trade_calc_id}`,
+        };
+        const { error: commErr } = await sb
+          .from("deal_commissions")
+          .insert(commissionRow);
+        if (commErr) throw commErr;
+
+        try {
+          const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
+          await audit(auth.store, auditUser as any, req, "commission.obligation_created", "deal_commission", dealId, {
+            agent_id: tradeCalcMeta._commission_agent_id,
+            amount: calculatedCommission,
+            trade_calc_id: tradeCalcMeta._trade_calc_id,
+            offer_id: (created as any).id,
+            offer_number: (created as any).number,
+            source: "trade-calculator/create-offer",
+          });
+        } catch (auditErr) {
+          console.warn("[create-offer] commission audit failed:", auditErr);
+        }
+      }
+    } catch (e) {
+      // Don't fail the offer creation — log + audit.
+      console.error("[create-offer] commission cascade failed:", e);
+    }
+  }
   const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
   await audit(auth.store, auditUser, req, "offer.create_from_calc", "offer", created.id, {
     trade_calc_id: id,

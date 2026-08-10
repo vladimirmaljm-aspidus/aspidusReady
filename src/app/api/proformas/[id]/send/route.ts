@@ -3,6 +3,7 @@ import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
 import { sendEmail, documentEmail } from "@/lib/email/service";
 import { generatePdf } from "@/lib/pdf/generator";
 import { notify } from "@/lib/notif/helper";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -84,7 +85,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Promote status draft→sent and stamp sent_at (only on first successful send).
     if (emailResult.success) {
       try {
-        await auth.store.upsertProforma({ id, status: proforma.status === "draft" || !proforma.status ? "sent" : proforma.status, sent_at: new Date().toISOString() } as any);
+        // Validate the status transition (Re-Audit-2 N4) — only allow
+        // draft→sent via this send endpoint. Super-admins bypass.
+        const newStatus = proforma.status === "draft" || !proforma.status ? "sent" : proforma.status;
+        if (newStatus !== proforma.status && !auth.isSuperAdmin) {
+          const t = validateStatusTransition("proforma", proforma.status || "draft", newStatus);
+          if (!t.valid) {
+            return NextResponse.json({ error: t.error }, { status: 400 });
+          }
+        }
+        await auth.store.upsertProforma({ id, status: newStatus, sent_at: new Date().toISOString() } as any);
       } catch (e) { console.warn("[proforma.send] status bump failed:", e); }
     }
 

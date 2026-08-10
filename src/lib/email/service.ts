@@ -162,16 +162,55 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ success: bool
     return { success: true, messageId: result.messageId, provider: config.provider };
   } catch (e: any) {
     console.error("[email:error]", e.message);
-    // Queue for retry
+    // Queue for manual retry (Re-Audit-2 N9: previously the queue entry was
+    // terminal — no worker ever picked it up, no notification fired, no
+    // retry endpoint existed). We now keep the queue entry AND emit an
+    // in-app notification so the admin can see the failure and hit the
+    // Retry button in the Mail Queue view. NO auto-retry (per audit rule).
     const store = await getStore();
-    await store.upsertMailQueueEntry({
-      to_email: opts.to,
-      subject: opts.subject,
-      body: opts.html,
-      status: "failed",
-      attempts: 1,
-      error: e.message,
-    });
+    let queueEntryId: string | undefined;
+    try {
+      const entry = await store.upsertMailQueueEntry({
+        to_email: opts.to,
+        subject: opts.subject,
+        body: opts.html,
+        status: "failed",
+        attempts: 1,
+        error: e.message,
+        tenant_id: opts.tenantId,
+      } as any);
+      queueEntryId = (entry as any)?.id;
+    } catch (queueErr) {
+      console.error("[email] failed to persist mail_queue entry:", queueErr);
+    }
+
+    // Broadcast an in-app notification to all tenant admins (user_id = null)
+    // so the failure is visible in the notification dropdown — they can then
+    // click through to the Mail Queue and hit Retry. The `notifications` table
+    // has `tenant_id NOT NULL`, so we only fire when we have a tenantId.
+    if (opts.tenantId) {
+      try {
+        const { notify } = await import("@/lib/notif/helper");
+        await notify({
+          tenantId: opts.tenantId,
+          userId: null, // broadcast to all admins
+          type: "email_failed",
+          title: `Email failed: ${opts.subject}`.slice(0, 200),
+          message:
+            `Recipient: ${opts.to}\n` +
+            `Subject: ${opts.subject}\n` +
+            `Error: ${e.message}\n\n` +
+            `Open the Mail Queue to retry sending.`,
+          entityType: "mail_queue",
+          entityId: queueEntryId,
+          actionUrl: "/mail-queue",
+          actionLabel: "Open Mail Queue",
+        });
+      } catch (notifErr) {
+        console.error("[email] notification creation failed:", notifErr);
+      }
+    }
+
     return { success: false, error: e.message, provider: config.provider };
   }
 }

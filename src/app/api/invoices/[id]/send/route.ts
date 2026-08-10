@@ -3,6 +3,7 @@ import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
 import { sendEmail, documentEmail } from "@/lib/email/service";
 import { generatePdf } from "@/lib/pdf/generator";
 import { notify } from "@/lib/notif/helper";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -84,7 +85,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Promote status draft→sent and stamp sent_at (only on first successful send).
     if (emailResult.success) {
       try {
-        await auth.store.upsertInvoice({ id, status: invoice.status === "draft" || !invoice.status ? "sent" : invoice.status, sent_at: new Date().toISOString() } as any);
+        // Validate the status transition (Re-Audit-2 N4) — only allow
+        // draft→sent via this send endpoint. Other transitions (e.g.
+        // partial→paid) require the record-payment / PUT routes. Super-admins
+        // bypass.
+        const newStatus = invoice.status === "draft" || !invoice.status ? "sent" : invoice.status;
+        if (newStatus !== invoice.status && !auth.isSuperAdmin) {
+          const t = validateStatusTransition("invoice", invoice.status || "draft", newStatus);
+          if (!t.valid) {
+            return NextResponse.json({ error: t.error }, { status: 400 });
+          }
+        }
+        await auth.store.upsertInvoice({ id, status: newStatus, sent_at: new Date().toISOString() } as any);
       } catch (e) { console.warn("[invoice.send] status bump failed:", e); }
     }
 

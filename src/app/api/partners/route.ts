@@ -9,20 +9,20 @@ function getAuthUser(auth: AuthContext | ApiKeyAuthContext) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuthOrApiKey(req);
-  if (auth instanceof NextResponse) return auth;
+  try {
+    const auth = await requireAuthOrApiKey(req);
+    if (auth instanceof NextResponse) return auth;
     // Permission gate (partners.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
       if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "partners.read"); if (_d) return _d; } } /* requirePermission wired */
 
-  const tid = resolveTenantId(auth, req);
+    const tid = resolveTenantId(auth, req);
 
-  // Permission check for API keys
-  if ("apiKeyId" in auth && !hasPermission(auth.permissions, "partners:read")) {
-    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-  }
+    // Permission check for API keys
+    if ("apiKeyId" in auth && !hasPermission(auth.permissions, "partners:read")) {
+      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+    }
 
-  try {
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || undefined;
     const status = url.searchParams.get("status") || undefined;
@@ -43,27 +43,30 @@ export async function GET(req: NextRequest) {
       result.total = result.total - (before - result.items.length);
     }
     return NextResponse.json(result);
-  } catch (e) {
+  } catch (e: any) {
     console.error("[partners.list]", e);
-    return NextResponse.json({ error: "Error." }, { status: 500 });
+    return NextResponse.json(
+      { error: e.message || "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuthOrApiKey(req);
-  if (auth instanceof NextResponse) return auth;
-  // Permission gate (partners.create)
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "partners.create"); if (_d) return _d; } } /* requirePermission wired */
-
-  const tid = resolveTenantId(auth, req);
-
-  // Permission check for API keys
-  if ("apiKeyId" in auth && !hasPermission(auth.permissions, "partners:write")) {
-    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-  }
-
   try {
+    const auth = await requireAuthOrApiKey(req);
+    if (auth instanceof NextResponse) return auth;
+    // Permission gate (partners.create)
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "partners.create"); if (_d) return _d; } } /* requirePermission wired */
+
+    const tid = resolveTenantId(auth, req);
+
+    // Permission check for API keys
+    if ("apiKeyId" in auth && !hasPermission(auth.permissions, "partners:write")) {
+      return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+    }
+
     const body = await req.json();
     body.tenant_id = tid!;
     if (!body.id) {
@@ -97,8 +100,11 @@ export async function POST(req: NextRequest) {
     const created = await auth.store.upsertPartner(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "partner.update" : "partner.create", "partner", created.id, { name: created.name });
     return NextResponse.json(created);
-  } catch (e) {
+  } catch (e: any) {
     console.error("[partners.upsert]", e);
-    return NextResponse.json({ error: "Error saving." }, { status: 500 });
+    return NextResponse.json(
+      { error: e.message || "Internal server error" },
+      { status: 500 },
+    );
   }
 }

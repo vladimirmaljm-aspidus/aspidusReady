@@ -157,11 +157,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     payment_terms: paymentTerms,
     valid_until: new Date(Date.now() + 30 * 86400000).toISOString(),
     notes: "",
-    // Trade calc metadata for commission tracking (stripped before persist)
+    // Trade calc metadata for commission tracking (stripped before persist).
+    // These now read from the live `trade_calculations.commission_*` columns
+    // added in migration 007 — they were previously always null/0 because the
+    // columns didn't exist on the live schema (Re-Audit-2 N11). When the calc
+    // has `commission_agent_id` set, the auto-track commission block in POST
+    // /api/offers fires → commission obligation created on accept.
     _trade_calc_id: id,
-    _commission_agent_id: (c as any).commission_agent_id || null,
-    _commission_type: (c as any).commission_type || null,
-    _commission_rate: Number((c as any).commission_rate) || 0,
+    _commission_agent_id: c.commission_agent_id || null,
+    _commission_type: c.commission_type || null,
+    _commission_rate: Number(c.commission_rate) || 0,
     _commission_amount: Number((c as any).commission_amount) || 0,
     _buy_price_per_unit: buyPrice,
     _buy_currency: c.buy_currency || currency,
