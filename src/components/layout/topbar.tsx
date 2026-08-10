@@ -31,7 +31,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   LogOut,
@@ -258,7 +257,8 @@ export function Topbar() {
           <PopoverContent
             align="end"
             sideOffset={8}
-            className="w-[min(92vw,380px)] max-h-[min(80vh,var(--radix-popover-content-available-height))] p-0 rounded-xl border border-border/60 shadow-soft-lg flex flex-col overflow-hidden"
+            style={{ maxHeight: "min(80vh, var(--radix-popover-content-available-height, 80vh))" }}
+            className="w-[min(92vw,380px)] p-0 rounded-xl border border-border/60 shadow-soft-lg flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/60 shrink-0">
@@ -284,8 +284,12 @@ export function Topbar() {
 
             {/* Body — flexes to fill whatever space remains between the
                 header and footer, so the footer ("View all") always stays
-                visible and clickable instead of being pushed off-screen. */}
-            <ScrollArea className="flex-1 min-h-0 custom-scroll">
+                visible and clickable instead of being pushed off-screen.
+                Plain overflow-y-auto instead of the Radix ScrollArea — its
+                Viewport doesn't reliably inherit a flex-computed height
+                (measured: Viewport grew to full list content height and
+                spilled past the popover boundary instead of scrolling). */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scroll">
               {notifications.length === 0 ? (
                 <div className="py-12 px-4 flex flex-col items-center text-center">
                   <div className="size-10 rounded-full bg-muted/60 flex items-center justify-center mb-2">
@@ -342,7 +346,7 @@ export function Topbar() {
                   ))}
                 </ul>
               )}
-            </ScrollArea>
+            </div>
 
             <Separator className="shrink-0" />
             <div className="p-2 shrink-0">
