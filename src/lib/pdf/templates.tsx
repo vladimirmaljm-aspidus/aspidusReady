@@ -381,16 +381,14 @@ export function buildPdfDocument({
     // ── FOOTER (memorandum — repeats on every page) ────────────────────
     // 3 columns: [QR]  [Address / Website / Email]  [Page X of Y]
     footer: {
-      position: "absolute",
-      bottom: 0,
-      left: marginLeft,
-      right: marginRight,
+      width: "100%",
       height: footerHeightPts,
       paddingTop: 6,
       borderTopWidth: 1,
       borderTopColor: accentColor,
       flexDirection: "row",
       alignItems: "flex-start",
+      marginTop: "auto",
     },
     footerColLeft: {
       flexDirection: "column",
@@ -675,9 +673,10 @@ export function buildPdfDocument({
   })();
 
   // ── Bank accounts list ────────────────────────────────────────────
-  // memorandum_settings doesn't carry a per-document bank-account filter
-  // (that's now done at the document level). All tenant accounts are shown.
-  const bankAccountsList: any[] = parsedBankAccounts;
+  // If the document has a specific bank_details override (user selected
+  // a specific bank account in the offer/invoice form), show ONLY that.
+  // Otherwise show all tenant bank accounts.
+  const bankAccountsList: any[] = bankDetails ? [] : parsedBankAccounts;
 
   // ── HEADER (memorandum — repeats on every page) ────────────────────
   // 2 columns: company name (left) + logo (right). The logo uses
@@ -1107,15 +1106,21 @@ export function buildPdfDocument({
             Legacy: if no bank_accounts array, fall back to tenant's
               single-bank fields.
             Per-doc bank_details override always appended at the bottom. */}
-        {(tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift ||
-          bankAccountsList.length > 0 || bankDetails) && (
+        {(bankAccountsList.length > 0 || bankDetails ||
+          (!bankDetails && (tenant?.bank_name || tenant?.bank_iban || tenant?.bank_swift))) && (
           <View style={styles.termsBox}>
             <Text style={styles.sectionHeader} wrap={false}>Bank Details</Text>
 
-            {bankAccountsList.length > 0 ? (
-              /* Modern: render every (optionally filtered) account as its own
-                 row. Each row shows the bank name + currency on line 1, and
-                 the account number + SWIFT on line 2. */
+            {/* If document has a specific bank_details override (user selected
+                one account in the form), show ONLY that — not all accounts. */}
+            {bankDetails ? (
+              <View style={styles.bankList}>
+                <View style={styles.bankAccountRow} wrap={false}>
+                  <Text style={styles.bankAccountDetails}>{bankDetails}</Text>
+                </View>
+              </View>
+            ) : bankAccountsList.length > 0 ? (
+              /* Modern: render every tenant account as its own row. */
               <View style={styles.bankList}>
                 {bankAccountsList.map((acct: any, i: number) => (
                   <View key={i} style={styles.bankAccountRow} wrap={false}>
@@ -1132,8 +1137,7 @@ export function buildPdfDocument({
                 ))}
               </View>
             ) : (
-              /* Legacy: tenant has only single-bank fields (bank_name / bank_iban /
-                 bank_swift). Render them as a vertical list of rows. */
+              /* Legacy: tenant has only single-bank fields. */
               <View style={styles.bankList}>
                 {tenant?.bank_name && (
                   <View style={styles.bankAccountRow} wrap={false}>
@@ -1150,13 +1154,6 @@ export function buildPdfDocument({
                     <Text style={styles.bankAccountDetails}>SWIFT/BIC: {tenant.bank_swift}</Text>
                   </View>
                 )}
-              </View>
-            )}
-
-            {/* Per-document bank_details override (if set on this offer/invoice/proforma) */}
-            {bankDetails && (
-              <View style={styles.bankAccountRow} wrap={false}>
-                <Text style={styles.bankAccountDetails}>{bankDetails}</Text>
               </View>
             )}
           </View>
