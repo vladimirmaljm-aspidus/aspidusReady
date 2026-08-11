@@ -22,10 +22,11 @@ import {
   Globe,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useI18nStore, useT } from "@/lib/i18n/store";
 
 export function LoginView() {
   const setUser = useAppStore((s) => s.setUser);
+  const t = useT();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,7 +54,7 @@ export function LoginView() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Sign in failed. Please try again.");
+        setError(data.error || t("login-signin-failed"));
         return;
       }
       setUser(data.user);
@@ -106,14 +107,13 @@ export function LoginView() {
           {/* Headline, tagline, highlights, footer — desktop only. */}
           <div className="hidden lg:block">
             <h2 className="mb-4 mt-10 text-3xl font-semibold leading-tight tracking-tight text-white lg:leading-[1.15]">
-              International trade,
+              {t("login-headline")}
               <br />
-              managed end to end.
+              {t("login-headline-2")}
             </h2>
 
             <p className="mb-10 max-w-md text-base leading-relaxed text-white/55">
-              Streamline your global trade operations with powerful CRM, landed
-              cost calculations, and compliance workflows.
+              {t("login-tagline")}
             </p>
 
             <div className="space-y-0.5 border-t border-white/10">
@@ -146,10 +146,10 @@ export function LoginView() {
           <Card className="border-0 bg-transparent shadow-none">
             <CardHeader className="mb-2 space-y-2 px-0 text-left">
               <CardTitle className="text-2xl font-semibold tracking-tight text-foreground">
-                Welcome back
+                {t("login-welcome")}
               </CardTitle>
               <CardDescription className="text-base text-muted-foreground">
-                Sign in to access your workspace
+                {t("login-signin-desc")}
               </CardDescription>
             </CardHeader>
 
@@ -170,13 +170,13 @@ export function LoginView() {
 
               {/* Form */}
               <form onSubmit={submit} className="space-y-5" noValidate>
-                {/* Username */}
+                {/* {t("login-username")} */}
                 <div className="space-y-2">
                   <Label
                     htmlFor="login-username"
                     className="text-sm font-medium text-foreground/80"
                   >
-                    Username
+                    {t("login-username")}
                   </Label>
                   <div className="relative group">
                     <User className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50 transition-colors duration-200 group-focus-within:text-primary" />
@@ -189,22 +189,22 @@ export function LoginView() {
                         setUsername(e.target.value);
                         if (error) setError("");
                       }}
-                      placeholder="Enter your username"
+                      placeholder={t("login-username-placeholder")}
                       disabled={loading}
                       aria-required="true"
-                      aria-label="Username"
+                      aria-label={t("login-username")}
                       className="h-11 pl-10 pr-4"
                     />
                   </div>
                 </div>
 
-                {/* Password */}
+                {/* {t("login-password")} */}
                 <div className="space-y-2">
                   <Label
                     htmlFor="login-password"
                     className="text-sm font-medium text-foreground/80"
                   >
-                    Password
+                    {t("login-password")}
                   </Label>
                   <div className="relative group">
                     <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50 transition-colors duration-200 group-focus-within:text-primary" />
@@ -217,10 +217,10 @@ export function LoginView() {
                         setPassword(e.target.value);
                         if (error) setError("");
                       }}
-                      placeholder="Enter your password"
+                      placeholder={t("login-password-placeholder")}
                       disabled={loading}
                       aria-required="true"
-                      aria-label="Password"
+                      aria-label={t("login-password")}
                       className="h-11 pl-10 pr-4"
                     />
                   </div>
@@ -231,16 +231,16 @@ export function LoginView() {
                   type="submit"
                   className="h-11 w-full text-sm font-medium"
                   disabled={loading}
-                  aria-label="Sign in to your account"
+                  aria-label={t("login-signin-aria")}
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="size-4 animate-spin" />
-                      Signing in…
+                      {t("login-signing-in")}
                     </span>
                   ) : (
                     <span className="flex items-center gap-2">
-                      Sign in
+                      {t("login-signin")}
                       <ArrowRight className="size-4" />
                     </span>
                   )}
@@ -249,12 +249,12 @@ export function LoginView() {
 
               {/* Bottom note */}
               <p className="mt-8 text-center text-xs text-muted-foreground/50">
-                Secure login · Your data is encrypted end-to-end
+                {t("login-secure-note")}
               </p>
               {/* Copyright — shown here on mobile only; the desktop branding
                   panel already has its own copyright line. */}
               <p className="mt-4 text-center text-[11px] text-muted-foreground/40 lg:hidden">
-                © {new Date().getFullYear()} Aspidus. All rights reserved.
+                © {new Date().getFullYear()} Aspidus. {t("login-rights")}
               </p>
             </CardContent>
           </Card>

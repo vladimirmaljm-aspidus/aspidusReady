@@ -883,6 +883,23 @@ export const MISC: Record<Locale, Record<string, string>> = {
 
     // ── Searchable select ───────────────────────────────────────────────
     "misc-ss-options-count": "{n} option(s)",
+    // ── Login page ────────────────────────────────────────────────────────
+    "login-headline": "International trade,",
+    "login-headline-2": "managed end to end.",
+    "login-tagline": "Streamline your global trade operations with powerful CRM, landed cost calculations, and compliance workflows.",
+    "login-welcome": "Welcome back",
+    "login-signin-desc": "Sign in to access your workspace",
+    "login-username": "Username",
+    "login-password": "Password",
+    "login-username-placeholder": "Enter your username",
+    "login-password-placeholder": "Enter your password",
+    "login-signin": "Sign in",
+    "login-signing-in": "Signing in…",
+    "login-signin-aria": "Sign in to your account",
+    "login-signin-failed": "Sign in failed. Please try again.",
+    "login-secure-note": "Secure login · Your data is encrypted end-to-end",
+    "login-rights": "All rights reserved.",
+
   },
   sr: {
     "misc-calendar-desc": "Zadaci, fakture, poslovi i ponude — sve na jednom kalendaru.",
@@ -1762,6 +1779,23 @@ export const MISC: Record<Locale, Record<string, string>> = {
 
     // ── Searchable select ───────────────────────────────────────────────
     "misc-ss-options-count": "{n} opcija(a)",
+    // ── Login page ────────────────────────────────────────────────────────
+    "login-headline": "Medunarodna trgovina,",
+    "login-headline-2": "upravljano od kraja do kraja.",
+    "login-tagline": "Optimizujte svoje globalne trgovinske operacije sa mocnim CRM-om, kalkulacijama troskova isporuke i procesima uskladenosti.",
+    "login-welcome": "Dobrodosli nazad",
+    "login-signin-desc": "Prijavite se da pristupite svom radnom prostoru",
+    "login-username": "Korisnicko ime",
+    "login-password": "Lozinka",
+    "login-username-placeholder": "Unesite korisnicko ime",
+    "login-password-placeholder": "Unesite lozinku",
+    "login-signin": "Prijava",
+    "login-signing-in": "Prijavljivanje…",
+    "login-signin-aria": "Prijavite se na svoj nalog",
+    "login-signin-failed": "Prijava nije uspela. Pokusajte ponovo.",
+    "login-secure-note": "Bezbedna prijava · Vasi podaci su sifrovani end-to-end",
+    "login-rights": "Sva prava zadrzana.",
+
   },
   tr: {
     "misc-calendar-desc": "Görevler, faturalar, anlaşmalar ve teklifler — hepsi tek bir takvimde.",
@@ -2641,6 +2675,23 @@ export const MISC: Record<Locale, Record<string, string>> = {
 
     // ── Searchable select ───────────────────────────────────────────────
     "misc-ss-options-count": "{n} seçenek",
+    // ── Login page ────────────────────────────────────────────────────────
+    "login-headline": "Uluslararasi ticaret,",
+    "login-headline-2": "uctan uca yonetilen.",
+    "login-tagline": "Güclü CRM, maliyet hesaplamalari ve uyumluluk is akislariyla küresel ticaret operasyonlarinizi kolaylastirin.",
+    "login-welcome": "Tekrar hos geldiniz",
+    "login-signin-desc": "Calisma alaniniza erismek için giris yapin",
+    "login-username": "Kullanici adi",
+    "login-password": "Sifre",
+    "login-username-placeholder": "Kullanici adinizi girin",
+    "login-password-placeholder": "Sifrenizi girin",
+    "login-signin": "Giris yap",
+    "login-signing-in": "Giris yapiliyor…",
+    "login-signin-aria": "Hesabiniza giris yapin",
+    "login-signin-failed": "Giris basarisiz. Lütfen tekrar deneyin.",
+    "login-secure-note": "Güvenli giris · Verileriniz uctan uca sifrelidir",
+    "login-rights": "Tüm haklari saklidir.",
+
   },
   de: {
     "misc-calendar-desc": "Aufgaben, Rechnungen, Geschäfte und Angebote — alles in einem Kalender.",
@@ -3520,6 +3571,23 @@ export const MISC: Record<Locale, Record<string, string>> = {
 
     // ── Searchable select ───────────────────────────────────────────────
     "misc-ss-options-count": "{n} Option(en)",
+    // ── Login page ────────────────────────────────────────────────────────
+    "login-headline": "Internationaler Handel,",
+    "login-headline-2": "durchgängig verwaltet.",
+    "login-tagline": "Optimieren Sie Ihre globalen Handelsoperationen mit leistungsstarkem CRM, Landekostberechnungen und Compliance-Workflows.",
+    "login-welcome": "Willkommen zurück",
+    "login-signin-desc": "Melden Sie sich an, um auf Ihren Arbeitsbereich zuzugreifen",
+    "login-username": "Benutzername",
+    "login-password": "Passwort",
+    "login-username-placeholder": "Benutzername eingeben",
+    "login-password-placeholder": "Passwort eingeben",
+    "login-signin": "Anmelden",
+    "login-signing-in": "Anmeldung läuft…",
+    "login-signin-aria": "Bei Ihrem Konto anmelden",
+    "login-signin-failed": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+    "login-secure-note": "Sichere Anmeldung · Ihre Daten sind Ende-zu-Ende verschlüsselt",
+    "login-rights": "Alle Rechte vorbehalten.",
+
   },
   ru: {
     "misc-calendar-desc": "Задачи, счета, сделки и предложения — всё в одном календаре.",
@@ -4399,5 +4467,22 @@ export const MISC: Record<Locale, Record<string, string>> = {
 
     // ── Searchable select ───────────────────────────────────────────────
     "misc-ss-options-count": "{n} вариант(ов)",
+
+    // ── Login page ────────────────────────────────────────────────────────
+    "login-headline": "Международная торговля,",
+    "login-headline-2": "под контролем от начала до конца.",
+    "login-tagline": "Оптимизируйте свои глобальные торговые операции с помощью мощного CRM, расчётов стоимости и процессов комплаенса.",
+    "login-welcome": "С возвращением",
+    "login-signin-desc": "Войдите, чтобы получить доступ к рабочему пространству",
+    "login-username": "Имя пользователя",
+    "login-password": "Пароль",
+    "login-username-placeholder": "Введите имя пользователя",
+    "login-password-placeholder": "Введите пароль",
+    "login-signin": "Войти",
+    "login-signing-in": "Вход…",
+    "login-signin-aria": "Войти в свой аккаунт",
+    "login-signin-failed": "Вход не удался. Попробуйте снова.",
+    "login-secure-note": "Безопасный вход · Ваши данные зашифрованы end-to-end",
+    "login-rights": "Все права защищены.",
   },
 };
