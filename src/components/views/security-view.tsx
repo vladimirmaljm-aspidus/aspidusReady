@@ -28,16 +28,18 @@ import type {
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
 } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 function AdminRequired() {
+  const t = useT();
   return (
     <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10">
       <CardContent className="p-6 flex items-start gap-3">
         <Lock className="size-5 text-amber-600 mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Admin access required</p>
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-access-required")}</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            The Security Center is only available to administrators. Contact your administrator if you need access.
+            {t("admin-security-admin-only-desc")}
           </p>
         </div>
       </CardContent>
@@ -60,6 +62,7 @@ function parseUa(ua: string | null): { icon: typeof Monitor; label: string } {
 export function SecurityView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
@@ -106,8 +109,8 @@ export function SecurityView() {
     return (
       <div>
         <PageHeader
-          title="Security Center"
-          description="Manage sessions, login history, and trusted devices."
+          title={t("admin-security-title")}
+          description={t("admin-security-desc")}
         />
         <AdminRequired />
       </div>
@@ -131,44 +134,44 @@ export function SecurityView() {
   return (
     <div>
       <PageHeader
-        title="Security Center"
-        description="Manage sessions, login history, and trusted devices."
+        title={t("admin-security-title")}
+        description={t("admin-security-desc")}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <KpiCard
-          label="Active sessions"
+          label={t("admin-security-active-sessions")}
           value={activeSessions}
           icon={ShieldCheck}
-          sub="Not revoked"
+          sub={t("admin-security-not-revoked")}
         />
         <KpiCard
-          label="Failed logins (24h)"
+          label={t("admin-security-failed-24h")}
           value={failed24h}
           icon={ShieldAlert}
           iconClassName={failed24h > 0 ? "text-destructive" : undefined}
-          sub="Last 24 hours"
+          sub={t("admin-security-last-24h")}
         />
         <KpiCard
-          label="Trusted IPs"
+          label={t("admin-security-trusted-ips")}
           value={trustedIps}
           icon={Network}
-          sub={`${ips.length} known`}
+          sub={`${ips.length} ${t("admin-security-known")}`}
         />
         <KpiCard
-          label="Trusted devices"
+          label={t("admin-security-trusted-devices")}
           value={trustedDevices}
           icon={Laptop}
-          sub={`${devices.length} total`}
+          sub={`${devices.length} ${t("admin-security-total")}`}
         />
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex w-full overflow-x-auto justify-start h-auto sm:grid sm:grid-cols-2 md:grid-cols-4">
-          <TabsTrigger value="sessions" className="gap-1.5"><Shield className="size-3.5" /> Sessions</TabsTrigger>
-          <TabsTrigger value="logins" className="gap-1.5"><History className="size-3.5" /> Login History</TabsTrigger>
-          <TabsTrigger value="ips" className="gap-1.5"><Network className="size-3.5" /> Known IPs</TabsTrigger>
-          <TabsTrigger value="devices" className="gap-1.5"><Laptop className="size-3.5" /> Trusted Devices</TabsTrigger>
+          <TabsTrigger value="sessions" className="gap-1.5"><Shield className="size-3.5" /> {t("admin-security-tab-sessions")}</TabsTrigger>
+          <TabsTrigger value="logins" className="gap-1.5"><History className="size-3.5" /> {t("admin-security-tab-logins")}</TabsTrigger>
+          <TabsTrigger value="ips" className="gap-1.5"><Network className="size-3.5" /> {t("admin-security-tab-ips")}</TabsTrigger>
+          <TabsTrigger value="devices" className="gap-1.5"><Laptop className="size-3.5" /> {t("admin-security-tab-devices")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sessions" className="mt-4">
@@ -192,6 +195,7 @@ export function SecurityView() {
 function SessionsTab({ items, loading }: { items: SecuritySession[]; loading: boolean }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const revokeMut = useMutation({
@@ -216,22 +220,22 @@ function SessionsTab({ items, loading }: { items: SecuritySession[]; loading: bo
         ) : items.length === 0 ? (
           <EmptyState
             icon={<Shield className="size-6" />}
-            title="No sessions"
-            description="There are no recorded sessions yet."
+            title={t("admin-security-no-sessions-title")}
+            description={t("admin-security-no-sessions-desc")}
           />
         ) : (
           <div className="max-h-[calc(100vh-380px)] overflow-y-auto custom-scroll">
             <Table>
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow>
-                  <TableHead>Device / UA</TableHead>
-                  <TableHead className="hidden md:table-cell">IP</TableHead>
-                  <TableHead className="hidden lg:table-cell">Country</TableHead>
-                  <TableHead className="hidden xl:table-cell">Created</TableHead>
-                  <TableHead className="hidden md:table-cell">Last used</TableHead>
-                  <TableHead className="hidden lg:table-cell">Expires</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("admin-col-device-ua")}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t("admin-col-ip")}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t("admin-col-country")}</TableHead>
+                  <TableHead className="hidden xl:table-cell">{t("admin-col-created")}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t("admin-col-last-used")}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t("admin-col-expires")}</TableHead>
+                  <TableHead>{t("admin-col-status")}</TableHead>
+                  <TableHead className="text-right">{t("admin-col-actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -260,11 +264,11 @@ function SessionsTab({ items, loading }: { items: SecuritySession[]; loading: bo
                       <TableCell className="hidden lg:table-cell text-xs">{fmtDateTime(s.expires_at)}</TableCell>
                       <TableCell>
                         {s.current ? (
-                          <Badge className="bg-emerald-600 text-white">Current</Badge>
+                          <Badge className="bg-emerald-600 text-white">{t("admin-current")}</Badge>
                         ) : s.revoked ? (
-                          <Badge variant="destructive">Revoked</Badge>
+                          <Badge variant="destructive">{t("admin-revoked")}</Badge>
                         ) : (
-                          <Badge variant="secondary">Active</Badge>
+                          <Badge variant="secondary">{t("admin-active-badge")}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -276,7 +280,7 @@ function SessionsTab({ items, loading }: { items: SecuritySession[]; loading: bo
                             onClick={() => revokeMut.mutate(s.id)}
                             disabled={revokeMut.isPending}
                           >
-                            <Ban className="size-4 mr-1" /> Revoke
+                            <Ban className="size-4 mr-1" /> {t("admin-revoke")}
                           </Button>
                         )}
                       </TableCell>
@@ -294,6 +298,7 @@ function SessionsTab({ items, loading }: { items: SecuritySession[]; loading: bo
 
 // ---------- Login History tab ----------
 function LoginHistoryTab({ items, loading }: { items: LoginHistoryEntry[]; loading: boolean }) {
+  const t = useT();
   if (loading) {
     return (
       <Card className="border-border/60 shadow-soft">
@@ -308,8 +313,8 @@ function LoginHistoryTab({ items, loading }: { items: LoginHistoryEntry[]; loadi
       <Card className="border-border/60 shadow-soft">
         <EmptyState
           icon={<History className="size-6" />}
-          title="No login history"
-          description="Login attempts will appear here."
+          title={t("admin-security-no-logins-title")}
+          description={t("admin-security-no-logins-desc")}
         />
       </Card>
     );
@@ -321,13 +326,13 @@ function LoginHistoryTab({ items, loading }: { items: LoginHistoryEntry[]; loadi
           <Table>
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead className="hidden md:table-cell">IP</TableHead>
-                <TableHead className="hidden lg:table-cell">Country</TableHead>
-                <TableHead className="hidden xl:table-cell">User agent</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell">Reason</TableHead>
+                <TableHead>{t("admin-col-time")}</TableHead>
+                <TableHead>{t("admin-col-user")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("admin-col-ip")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("admin-col-country")}</TableHead>
+                <TableHead className="hidden xl:table-cell">{t("admin-col-user-agent")}</TableHead>
+                <TableHead>{t("admin-col-status")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("admin-col-reason")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -350,11 +355,11 @@ function LoginHistoryTab({ items, loading }: { items: LoginHistoryEntry[]; loadi
                   <TableCell>
                     {l.success ? (
                       <Badge className="bg-emerald-600 text-white gap-1">
-                        <CheckCircle2 className="size-3" /> Success
+                        <CheckCircle2 className="size-3" /> {t("admin-success")}
                       </Badge>
                     ) : (
                       <Badge variant="destructive" className="gap-1">
-                        <XCircle className="size-3" /> Failed
+                        <XCircle className="size-3" /> {t("admin-failed")}
                       </Badge>
                     )}
                   </TableCell>
@@ -375,6 +380,7 @@ function LoginHistoryTab({ items, loading }: { items: LoginHistoryEntry[]; loadi
 function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const trustMut = useMutation({
@@ -418,8 +424,8 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
       <Card className="border-border/60 shadow-soft">
         <EmptyState
           icon={<Network className="size-6" />}
-          title="No known IPs"
-          description="IPs that have logged in will appear here."
+          title={t("admin-security-no-ips-title")}
+          description={t("admin-security-no-ips-desc")}
         />
       </Card>
     );
@@ -431,12 +437,12 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
           <Table>
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
-                <TableHead>IP</TableHead>
-                <TableHead className="hidden md:table-cell">Country</TableHead>
-                <TableHead className="hidden lg:table-cell">First seen</TableHead>
-                <TableHead className="hidden lg:table-cell">Last seen</TableHead>
-                <TableHead>Trusted</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("admin-col-ip")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("admin-col-country")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("admin-col-first-seen")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("admin-col-last-seen")}</TableHead>
+                <TableHead>{t("admin-col-trusted")}</TableHead>
+                <TableHead className="text-right">{t("admin-col-actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -463,7 +469,7 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
                       onClick={() => forgetMut.mutate(ip.id)}
                       disabled={forgetMut.isPending}
                     >
-                      <Trash2 className="size-4 mr-1" /> Forget
+                      <Trash2 className="size-4 mr-1" /> {t("admin-forget")}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -480,6 +486,7 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
 function TrustedDevicesTab({ items, loading }: { items: TrustedDevice[]; loading: boolean }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const revokeMut = useMutation({
@@ -508,8 +515,8 @@ function TrustedDevicesTab({ items, loading }: { items: TrustedDevice[]; loading
       <Card className="border-border/60 shadow-soft">
         <EmptyState
           icon={<Laptop className="size-6" />}
-          title="No trusted devices"
-          description="Trusted devices will appear here once registered."
+          title={t("admin-security-no-devices-title")}
+          description={t("admin-security-no-devices-desc")}
         />
       </Card>
     );
@@ -521,12 +528,12 @@ function TrustedDevicesTab({ items, loading }: { items: TrustedDevice[]; loading
           <Table>
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
-                <TableHead>Device</TableHead>
-                <TableHead className="hidden md:table-cell">Fingerprint</TableHead>
-                <TableHead className="hidden lg:table-cell">IP</TableHead>
-                <TableHead className="hidden md:table-cell">Last used</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("admin-col-device")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("admin-col-fingerprint")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("admin-col-ip")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("admin-col-last-used")}</TableHead>
+                <TableHead>{t("admin-col-status")}</TableHead>
+                <TableHead className="text-right">{t("admin-col-actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -542,10 +549,10 @@ function TrustedDevicesTab({ items, loading }: { items: TrustedDevice[]; loading
                   <TableCell className="hidden md:table-cell text-xs">{fmtRelative(d.last_used)}</TableCell>
                   <TableCell>
                     {d.revoked ? (
-                      <Badge variant="destructive">Revoked</Badge>
+                      <Badge variant="destructive">{t("admin-revoked")}</Badge>
                     ) : (
                       <Badge className="bg-emerald-600 text-white gap-1">
-                        <ShieldCheck className="size-3" /> Trusted
+                        <ShieldCheck className="size-3" /> {t("admin-trusted")}
                       </Badge>
                     )}
                   </TableCell>
@@ -558,7 +565,7 @@ function TrustedDevicesTab({ items, loading }: { items: TrustedDevice[]; loading
                         onClick={() => revokeMut.mutate(d.id)}
                         disabled={revokeMut.isPending}
                       >
-                        <Ban className="size-4 mr-1" /> Revoke
+                        <Ban className="size-4 mr-1" /> {t("admin-revoke")}
                       </Button>
                     )}
                   </TableCell>

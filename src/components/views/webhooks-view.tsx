@@ -29,6 +29,7 @@ import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { Webhook as WebhookType } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 const EVENT_COLORS = [
   "bg-[var(--chart-1)] text-white",
@@ -59,14 +60,15 @@ function truncateUrl(url: string, max = 60): string {
 }
 
 function AdminRequired() {
+  const t = useT();
   return (
     <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10">
       <CardContent className="p-6 flex items-start gap-3">
         <Lock className="size-5 text-amber-600 mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Admin access required</p>
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-access-required")}</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            Webhook configuration is only available to administrators.
+            {t("admin-webhooks-admin-only-desc")}
           </p>
         </div>
       </CardContent>
@@ -77,6 +79,7 @@ function AdminRequired() {
 export function WebhooksView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
@@ -127,7 +130,7 @@ export function WebhooksView() {
   if (!admin) {
     return (
       <div>
-        <PageHeader title="Webhooks" description="Outbound webhook configuration." />
+        <PageHeader title={t("admin-webhooks-title")} description={t("admin-webhooks-desc")} />
         <AdminRequired />
       </div>
     );
@@ -138,11 +141,11 @@ export function WebhooksView() {
   return (
     <div>
       <PageHeader
-        title="Webhooks"
-        description={`${items.length} configured webhook${items.length === 1 ? "" : "s"}`}
+        title={t("admin-webhooks-title")}
+        description={`${items.length} ${t("admin-webhooks-count")}`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New webhook
+            <Plus className="size-4 mr-1" /> {t("admin-webhooks-new")}
           </Button>
         }
       />
@@ -151,9 +154,9 @@ export function WebhooksView() {
         <CardContent className="p-4 flex items-start gap-3">
           <ShieldCheck className="size-5 text-amber-600 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Signed payloads</p>
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-webhooks-signed-payloads")}</p>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-              Webhooks fire on CRM events. Payloads are signed with the webhook secret.
+              {t("admin-webhooks-signed-payloads-desc")}
             </p>
           </div>
         </CardContent>
@@ -167,11 +170,11 @@ export function WebhooksView() {
         <Card className="border-border/60 shadow-soft">
           <EmptyState
             icon={<Webhook className="size-6" />}
-            title="No webhooks"
-            description="Create a webhook to receive real-time notifications about CRM events."
+            title={t("admin-webhooks-empty-title")}
+            description={t("admin-webhooks-empty-desc")}
             action={
               <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-                <Plus className="size-4 mr-1" /> New webhook
+                <Plus className="size-4 mr-1" /> {t("admin-webhooks-new")}
               </Button>
             }
           />
@@ -201,7 +204,7 @@ export function WebhooksView() {
                           <Badge key={e} className={eventColor(e) + " text-[10px]"}>{e}</Badge>
                         ))
                       ) : (
-                        <span className="text-xs text-muted-foreground">No events</span>
+                        <span className="text-xs text-muted-foreground">{t("admin-webhooks-no-events")}</span>
                       )}
                     </div>
                   </div>
@@ -210,17 +213,17 @@ export function WebhooksView() {
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3 pt-3 border-t border-border/60 text-xs">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Clock className="size-3" />
-                    <span>Last triggered:</span>
+                    <span>{t("admin-col-last-triggered")}:</span>
                     <span className="text-foreground">{fmtRelative(wh.last_triggered_at)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Activity className="size-3" />
-                    <span>Last status:</span>
+                    <span>{t("admin-col-last-status")}:</span>
                     {statusBadge(wh.last_status)}
                   </div>
                   <div className="flex items-center gap-2 ml-auto">
                     <Label htmlFor={`wh-active-${wh.id}`} className="text-xs text-muted-foreground cursor-pointer">
-                      Active
+                      {t("admin-webhooks-form-active")}
                     </Label>
                     <Switch
                       id={`wh-active-${wh.id}`}
@@ -234,7 +237,7 @@ export function WebhooksView() {
                       className="h-7 px-2"
                       onClick={() => { setEditing(wh); setShowForm(true); }}
                     >
-                      <Pencil className="size-3.5 mr-1" /> Edit
+                      <Pencil className="size-3.5 mr-1" /> {t("edit")}
                     </Button>
                     <Button
                       size="sm"
@@ -242,7 +245,7 @@ export function WebhooksView() {
                       className="h-7 px-2 text-destructive hover:text-destructive"
                       onClick={() => setDeleteId(wh.id)}
                     >
-                      <Trash2 className="size-3.5 mr-1" /> Delete
+                      <Trash2 className="size-3.5 mr-1" /> {t("delete")}
                     </Button>
                   </div>
                 </div>
@@ -265,18 +268,18 @@ export function WebhooksView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this webhook?</AlertDialogTitle>
+            <AlertDialogTitle>{t("admin-webhooks-delete-confirm")}</AlertDialogTitle>
             <AlertDialogDescription>
-              The destination will stop receiving event notifications immediately.
+              {t("admin-webhooks-delete-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -296,6 +299,7 @@ function WebhookFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -355,26 +359,26 @@ function WebhookFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>{webhook ? "Edit webhook" : "New webhook"}</DialogTitle>
+          <DialogTitle>{webhook ? t("admin-webhooks-form-title-edit") : t("admin-webhooks-form-title-new")}</DialogTitle>
           <DialogDescription>
-            Configure an outbound webhook to receive CRM event notifications.
+            {t("admin-webhooks-form-desc")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
         <div className="grid gap-3 py-2">
           <div className="space-y-1.5">
-            <Label>Name *</Label>
+            <Label>{t("admin-webhooks-form-name")}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Slack notifications" />
           </div>
 
           <div className="space-y-1.5">
-            <Label>URL *</Label>
+            <Label>{t("admin-webhooks-form-url")}</Label>
             <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/webhooks/crm" />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Events</Label>
+            <Label>{t("admin-webhooks-form-events")}</Label>
             <Textarea
               value={events}
               onChange={(e) => setEvents(e.target.value)}
@@ -383,7 +387,7 @@ function WebhookFormDialog({
               className="font-mono text-xs"
             />
             <p className="text-xs text-muted-foreground">
-              Comma-separated event names. Suggestions: <code className="font-mono">offer.sent</code>,{" "}
+              {t("admin-webhooks-form-events-help")} Suggestions: <code className="font-mono">offer.sent</code>,{" "}
               <code className="font-mono">deal.won</code>, <code className="font-mono">deal.lost</code>,{" "}
               <code className="font-mono">invoice.overdue</code>, <code className="font-mono">partner.create</code>.
             </p>
@@ -391,8 +395,8 @@ function WebhookFormDialog({
 
           <div className="flex items-center justify-between p-3 rounded-md bg-muted/30">
             <div>
-              <p className="text-sm font-medium">Active</p>
-              <p className="text-xs text-muted-foreground">Inactive webhooks do not receive events.</p>
+              <p className="text-sm font-medium">{t("admin-webhooks-form-active")}</p>
+              <p className="text-xs text-muted-foreground">{t("admin-webhooks-form-active-desc")}</p>
             </div>
             <Switch checked={active} onCheckedChange={setActive} />
           </div>
@@ -400,9 +404,9 @@ function WebhookFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("admin-saving") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -41,15 +41,17 @@ import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin, isSuperAdmin, SafeUser } from "@/lib/store/app-store";
 import { UserRole, Tenant } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
+// i18n keys for role labels & descriptions — resolved via t() at render time.
 const ROLE_LABEL: Record<UserRole, string> = {
-  super_admin: "Super Admin", admin: "Admin", user: "User",
+  super_admin: "admin-users-role-super-admin", admin: "admin-users-role-admin", user: "admin-users-role-user",
 };
 
 const ROLE_DESCRIPTION: Record<UserRole, string> = {
-  super_admin: "Platform administrator — cross-tenant, cannot be created via this form",
-  admin: "Full access within this tenant (all non-platform actions)",
-  user: "Access limited to permissions assigned by the admin",
+  super_admin: "admin-users-role-super-admin-desc",
+  admin: "admin-users-role-admin-desc",
+  user: "admin-users-role-user-desc",
 };
 
 const ROLE_BADGE: Record<UserRole, string> = {
@@ -85,6 +87,7 @@ const PAGE_SIZE = 20;
 export function UsersView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const currentUser = useAppStore((s) => s.user);
@@ -161,11 +164,11 @@ export function UsersView() {
   return (
     <div>
       <PageHeader
-        title="Users"
-        description={`${allItems.length} total`}
+        title={t("users")}
+        description={`${allItems.length} ${t("admin-users-total")}`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }} disabled={!admin}>
-            <Plus className="size-4 mr-1" /> New user
+            <Plus className="size-4 mr-1" /> {t("admin-users-new")}
           </Button>
         }
       />
@@ -175,7 +178,7 @@ export function UsersView() {
           <CardContent className="p-4 flex items-center gap-3">
             <ShieldAlert className="size-5 text-amber-600 shrink-0" />
             <p className="text-sm text-amber-800 dark:text-amber-300">
-              Admin access required
+              {t("admin-users-admin-required")}
             </p>
           </CardContent>
         </Card>
@@ -190,28 +193,28 @@ export function UsersView() {
           ) : !admin ? (
             <EmptyState
               icon={<UsersIcon className="size-6" />}
-              title="No access"
-              description="An admin role is required to manage users."
+              title={t("admin-users-no-access-title")}
+              description={t("admin-users-no-access-desc")}
             />
           ) : allItems.length === 0 ? (
             <EmptyState
               icon={<UsersIcon className="size-6" />}
-              title="No users"
-              description="Add your first user to get started."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New user</Button>}
+              title={t("admin-users-empty-title")}
+              description={t("admin-users-empty-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("admin-users-new")}</Button>}
             />
           ) : (
             <div className="overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead className="hidden md:table-cell">Email</TableHead>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead className="hidden lg:table-cell">Last login</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("admin-col-user")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("admin-col-email")}</TableHead>
+                    <TableHead>{t("admin-col-tenant")}</TableHead>
+                    <TableHead>{t("admin-col-role")}</TableHead>
+                    <TableHead>{t("admin-col-status")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-col-last-login")}</TableHead>
+                    <TableHead className="text-right">{t("admin-col-actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -239,7 +242,7 @@ export function UsersView() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={u.role === "viewer" ? "outline" : "default"} className={ROLE_BADGE[u.role as UserRole] || ""}>
-                            {ROLE_LABEL[u.role as UserRole] || u.role}
+                            {t(ROLE_LABEL[u.role as UserRole] || u.role)}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -255,9 +258,9 @@ export function UsersView() {
                                 size="icon"
                                 variant="ghost"
                                 className="size-8 text-amber-600 hover:text-amber-700"
-                                title={`Impersonate ${u.username}`}
+                                title={`${t("admin-users-impersonate-title")} ${u.username}`}
                                 onClick={async () => {
-                                  if (!confirm(`Start impersonating ${u.username}? This will be logged in the audit trail.`)) return;
+                                  if (!confirm(`${t("admin-users-impersonate-confirm")} ${u.username}? ${t("admin-users-impersonate-audit")}`)) return;
                                   try {
                                     const r = await fetch("/api/super-admin/impersonate", {
                                       method: "POST",
@@ -269,7 +272,7 @@ export function UsersView() {
                                       toast.error(e.error || "Failed to start impersonation.");
                                       return;
                                     }
-                                    toast.success(`Now impersonating ${u.username}.`);
+                                    toast.success(`${t("admin-users-impersonate-confirm")} ${u.username}.`);
                                     setTimeout(() => window.location.reload(), 400);
                                   } catch {
                                     toast.error("Failed to start impersonation.");
@@ -279,7 +282,7 @@ export function UsersView() {
                                 <UserCheck className="size-4" />
                               </Button>
                             )}
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(u); setShowForm(true); }} title="Edit" aria-label="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(u); setShowForm(true); }} title={t("edit")} aria-label={t("edit")}>
                               <Pencil className="size-4" />
                             </Button>
                             <Button
@@ -289,12 +292,12 @@ export function UsersView() {
                               disabled={isSelf}
                               onClick={() => {
                                 if (isSelf) {
-                                  toast.error("You cannot delete yourself.");
+                                  toast.error(t("admin-users-cannot-delete-self"));
                                   return;
                                 }
                                 setDeleteId(u.id);
                               }}
-                              title={isSelf ? "You cannot delete yourself" : "Delete"}
+                              title={isSelf ? t("admin-users-cannot-delete-self") : t("delete")}
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -358,18 +361,18 @@ export function UsersView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete user?</AlertDialogTitle>
+            <AlertDialogTitle>{t("admin-users-delete-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone.
+              {t("admin-users-delete-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -400,6 +403,7 @@ function UserFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const currentUser = useAppStore((s) => s.user);
   const isSA = isSuperAdmin(currentUser);
@@ -531,23 +535,23 @@ function UserFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>{user ? "Edit user" : "New user"}</DialogTitle>
+          <DialogTitle>{user ? t("admin-users-form-title-edit") : t("admin-users-form-title-new")}</DialogTitle>
           <DialogDescription>
-            {user ? "Update the user details below." : "Fill in the details to create a new user account."}
+            {user ? t("admin-users-form-desc-edit") : t("admin-users-form-desc-new")}
           </DialogDescription>
         </DialogHeader>
 
         {/* Show created password info after successful creation */}
         {createdPassword && (
           <div className="p-3 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 space-y-2">
-            <p className="text-sm font-medium text-green-800 dark:text-green-300">User created! Login credentials:</p>
+            <p className="text-sm font-medium text-green-800 dark:text-green-300">{t("admin-users-created-title")}</p>
             <div className="space-y-1 text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Username:</span>
+                <span className="text-muted-foreground">{t("admin-users-username-label")}</span>
                 <code className="font-mono">{form.username.trim()}</code>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Password:</span>
+                <span className="text-muted-foreground">{t("admin-users-password-label")}</span>
                 <code className="font-mono flex-1 break-all">{createdPassword}</code>
                 <Button
                   type="button"
@@ -555,13 +559,13 @@ function UserFormDialog({
                   size="icon"
                   className="size-7 shrink-0"
                   onClick={() => copyToClipboard(createdPassword)}
-                  title="Copy password" aria-label="Copy password"
+                  title={t("admin-users-form-copy-password")} aria-label={t("admin-users-form-copy-password")}
                 >
                   {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5 text-muted-foreground" />}
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">Make sure to copy the password — it won&apos;t be shown again.</p>
+            <p className="text-xs text-muted-foreground">{t("admin-users-created-help")}</p>
           </div>
         )}
 
@@ -570,7 +574,7 @@ function UserFormDialog({
 
             {/* Full Name — first field */}
             <div className="space-y-1.5">
-              <Label htmlFor="full_name">Full name</Label>
+              <Label htmlFor="full_name">{t("admin-users-form-full-name")}</Label>
               <Input
                 id="full_name"
                 value={form.full_name}
@@ -581,7 +585,7 @@ function UserFormDialog({
 
             {/* Email — auto-generates username */}
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("admin-users-form-email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -593,29 +597,29 @@ function UserFormDialog({
 
             {/* Role — with descriptions */}
             <div className="space-y-1.5">
-              <Label htmlFor="role">Role</Label>
+              <Label htmlFor="role">{t("admin-users-form-role")}</Label>
               <Select value={form.role} onValueChange={(v) => set("role", v as UserRole)}>
                 <SelectTrigger id="role"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(["super_admin", "admin", "user"] as UserRole[]).filter((r) => isSA || r !== "super_admin").map((role) => (
                     <SelectItem key={role} value={role}>
                       <div className="flex flex-col">
-                        <span className="font-medium">{ROLE_LABEL[role]}</span>
-                        <span className="text-xs text-muted-foreground">{ROLE_DESCRIPTION[role]}</span>
+                        <span className="font-medium">{t(ROLE_LABEL[role])}</span>
+                        <span className="text-xs text-muted-foreground">{t(ROLE_DESCRIPTION[role])}</span>
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTION[form.role as UserRole] || ""}</p>
+              <p className="text-xs text-muted-foreground">{t(ROLE_DESCRIPTION[form.role as UserRole] || "")}</p>
             </div>
 
             {/* Tenant — dropdown */}
             <div className="space-y-1.5">
-              <Label htmlFor="tenant_id">Tenant</Label>
+              <Label htmlFor="tenant_id">{t("admin-users-form-tenant")}</Label>
               {isSA ? (
                 <Select value={form.tenant_id} onValueChange={(v) => set("tenant_id", v)}>
-                  <SelectTrigger id="tenant_id"><SelectValue placeholder="Select a tenant" /></SelectTrigger>
+                  <SelectTrigger id="tenant_id"><SelectValue placeholder={t("admin-users-form-select-tenant")} /></SelectTrigger>
                   <SelectContent>
                     {tenants.map((t) => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
@@ -630,14 +634,14 @@ function UserFormDialog({
                 />
               )}
               <p className="text-xs text-muted-foreground">
-                {isSA ? "Select which tenant this user belongs to." : "Users are automatically assigned to your tenant."}
+                {isSA ? t("admin-users-form-tenant-super-help") : t("admin-users-form-tenant-help")}
               </p>
             </div>
 
             {/* Password — auto-generated with copy button */}
             {!user && (
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t("admin-users-form-password")}</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -654,7 +658,7 @@ function UserFormDialog({
                       size="icon"
                       className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
                       onClick={() => setShowPassword(!showPassword)}
-                      title={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? t("admin-users-form-hide-password") : t("admin-users-form-show-password")}
                     >
                       {showPassword ? <EyeOff className="size-4 text-muted-foreground" /> : <Eye className="size-4 text-muted-foreground" />}
                     </Button>
@@ -663,10 +667,10 @@ function UserFormDialog({
                     type="button"
                     variant="outline"
                     onClick={handleGeneratePassword}
-                    title="Auto-generate a secure password"
+                    title={t("admin-users-form-generate-help")}
                   >
                     <Wand2 className="size-4 mr-1" />
-                    Generate
+                    {t("admin-users-form-generate")}
                   </Button>
                 </div>
                 {form.password && showPassword && (
@@ -678,7 +682,7 @@ function UserFormDialog({
                       size="icon"
                       className="size-7 shrink-0"
                       onClick={() => copyToClipboard(form.password)}
-                      title="Copy password" aria-label="Copy password"
+                      title={t("admin-users-form-copy-password")} aria-label={t("admin-users-form-copy-password")}
                     >
                       {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5 text-muted-foreground" />}
                     </Button>
@@ -690,7 +694,7 @@ function UserFormDialog({
             {/* Password for editing — only shown if user wants to change it */}
             {user && (
               <div className="space-y-1.5">
-                <Label htmlFor="password">New password <span className="text-muted-foreground font-normal">(leave blank to keep current)</span></Label>
+                <Label htmlFor="password">{t("admin-users-form-new-password")} <span className="text-muted-foreground font-normal">{t("admin-users-form-new-password-hint")}</span></Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -707,7 +711,7 @@ function UserFormDialog({
                       size="icon"
                       className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
                       onClick={() => setShowPassword(!showPassword)}
-                      title={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? t("admin-users-form-hide-password") : t("admin-users-form-show-password")}
                     >
                       {showPassword ? <EyeOff className="size-4 text-muted-foreground" /> : <Eye className="size-4 text-muted-foreground" />}
                     </Button>
@@ -716,10 +720,10 @@ function UserFormDialog({
                     type="button"
                     variant="outline"
                     onClick={handleGeneratePassword}
-                    title="Auto-generate a secure password"
+                    title={t("admin-users-form-generate-help")}
                   >
                     <Wand2 className="size-4 mr-1" />
-                    Generate
+                    {t("admin-users-form-generate")}
                   </Button>
                 </div>
                 {form.password && showPassword && (
@@ -731,7 +735,7 @@ function UserFormDialog({
                       size="icon"
                       className="size-7 shrink-0"
                       onClick={() => copyToClipboard(form.password)}
-                      title="Copy password" aria-label="Copy password"
+                      title={t("admin-users-form-copy-password")} aria-label={t("admin-users-form-copy-password")}
                     >
                       {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5 text-muted-foreground" />}
                     </Button>
@@ -744,7 +748,7 @@ function UserFormDialog({
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" className="w-full flex items-center justify-between px-0 hover:bg-transparent">
-                  <span className="text-sm font-medium text-muted-foreground">Advanced settings</span>
+                  <span className="text-sm font-medium text-muted-foreground">{t("admin-users-form-advanced")}</span>
                   <ChevronDown className={`size-4 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
                 </Button>
               </CollapsibleTrigger>
@@ -753,21 +757,21 @@ function UserFormDialog({
 
                   {/* Username — auto-filled from email */}
                   <div className="space-y-1.5">
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="username">{t("admin-users-form-username")}</Label>
                     <Input
                       id="username"
                       value={form.username}
                       onChange={(e) => handleUsernameChange(e.target.value)}
                       placeholder="jdoe"
                     />
-                    <p className="text-xs text-muted-foreground">Auto-filled from email. You can change it if needed.</p>
+                    <p className="text-xs text-muted-foreground">{t("admin-users-form-username-help")}</p>
                   </div>
 
                   {/* Active toggle */}
                   <div className="flex items-center justify-between p-3 rounded-md bg-muted/30">
                     <div>
-                      <p className="text-sm font-medium">Active</p>
-                      <p className="text-xs text-muted-foreground">Inactive users cannot sign in.</p>
+                      <p className="text-sm font-medium">{t("admin-users-form-active")}</p>
+                      <p className="text-xs text-muted-foreground">{t("admin-users-form-active-desc")}</p>
                     </div>
                     <Switch checked={form.active} onCheckedChange={(v) => set("active", v)} />
                   </div>
@@ -775,9 +779,9 @@ function UserFormDialog({
                   {/* Permissions — granular checkbox tree */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label>Custom permissions</Label>
+                      <Label>{t("admin-users-form-custom-permissions")}</Label>
                       <span className="text-[11px] text-muted-foreground">
-                        Leave empty to use role defaults
+                        {t("admin-users-form-permissions-hint")}
                       </span>
                     </div>
                     <PermissionTree
@@ -794,9 +798,9 @@ function UserFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : user ? "Save changes" : "Create user"}
+            {saving ? t("admin-saving") : user ? t("admin-users-form-save-changes") : t("admin-users-form-create")}
           </Button>
         </DialogFooter>
       </DialogContent>

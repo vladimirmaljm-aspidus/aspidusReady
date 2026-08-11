@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Send, Building2, User, MapPin, DollarSign, Truck, Info } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/store";
 import type { ProductCatalogEntry } from "@/lib/supabase/types";
 
 /**
@@ -30,6 +31,7 @@ export function RfqFormDialog({
   product: ProductCatalogEntry | null;
   onCreated?: () => void;
 }) {
+  const t = useT();
   const [form, setForm] = React.useState({
     // Basics (prefilled from product)
     product_name: "",
@@ -100,10 +102,10 @@ export function RfqFormDialog({
   const isThirdParty = form.buyer_type === "third_party";
 
   async function submit() {
-    if (!form.product_name.trim()) return toast.error("Product name is required.");
-    if (Number(form.quantity) <= 0) return toast.error("Quantity must be greater than zero.");
-    if (isRecurring && Number(form.per_shipment_qty) <= 0) return toast.error("Per-shipment quantity is required for recurring deliveries.");
-    if (isThirdParty && !form.third_party_company_name.trim()) return toast.error("Third-party company name is required.");
+    if (!form.product_name.trim()) return toast.error(t("portal-rfq-dialog-toast-product-required"));
+    if (Number(form.quantity) <= 0) return toast.error(t("portal-rfq-dialog-toast-quantity-required"));
+    if (isRecurring && Number(form.per_shipment_qty) <= 0) return toast.error(t("portal-rfq-dialog-toast-per-shipment"));
+    if (isThirdParty && !form.third_party_company_name.trim()) return toast.error(t("portal-rfq-dialog-toast-tp-name"));
 
     setSubmitting(true);
     try {
@@ -153,11 +155,11 @@ export function RfqFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Failed to submit RFQ");
       }
-      toast.success("RFQ submitted. Our team will get back to you with an offer.");
+      toast.success(t("portal-rfq-dialog-toast-submitted"));
       onClose();
       onCreated?.();
     } catch (e: any) {
-      toast.error(e.message || "Failed to submit RFQ.");
+      toast.error(e.message || t("portal-rfq-dialog-toast-submit-failed"));
     } finally {
       setSubmitting(false);
     }
@@ -167,145 +169,145 @@ export function RfqFormDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto custom-scroll">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Send className="size-5 text-primary" /> Request a Quotation</DialogTitle>
-          <DialogDescription>Fill in the details below so our team can prepare the best offer for you.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><Send className="size-5 text-primary" /> {t("portal-rfq-dialog-title")}</DialogTitle>
+          <DialogDescription>{t("portal-rfq-dialog-intro")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
           {/* PRODUCT */}
           <section>
-            <SectionTitle icon={Info} label="Product" />
+            <SectionTitle icon={Info} label={t("portal-rfq-section-product")} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Product / Service *"><Input value={form.product_name} onChange={(e) => set("product_name", e.target.value)} /></Field>
-              <Field label="Category"><Input value={form.category} onChange={(e) => set("category", e.target.value)} /></Field>
-              <Field label="Quantity *"><Input type="number" min={0} step="any" value={form.quantity} onChange={(e) => set("quantity", Number(e.target.value))} className="tabular" /></Field>
-              <Field label="Unit"><Input value={form.unit} onChange={(e) => set("unit", e.target.value)} placeholder="MT, PCS, KG, L…" /></Field>
-              <Field label="Target price (per unit)"><Input type="number" min={0} step="any" value={form.target_price} onChange={(e) => set("target_price", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" /></Field>
-              <Field label="Currency">
+              <Field label={t("portal-rfq-dialog-product-service")}><Input value={form.product_name} onChange={(e) => set("product_name", e.target.value)} /></Field>
+              <Field label={t("portal-rfq-category")}><Input value={form.category} onChange={(e) => set("category", e.target.value)} /></Field>
+              <Field label={t("portal-rfq-dialog-quantity-required")}><Input type="number" min={0} step="any" value={form.quantity} onChange={(e) => set("quantity", Number(e.target.value))} className="tabular" /></Field>
+              <Field label={t("portal-rfq-unit")}><Input value={form.unit} onChange={(e) => set("unit", e.target.value)} placeholder="MT, PCS, KG, L…" /></Field>
+              <Field label={t("portal-rfq-dialog-target-price-unit")}><Input type="number" min={0} step="any" value={form.target_price} onChange={(e) => set("target_price", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" /></Field>
+              <Field label={t("portal-rfq-currency")}>
                 <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{["USD","EUR","AED","GBP","CHF"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <div className="md:col-span-2"><Field label="Detailed specifications"><Textarea rows={2} value={form.specifications} onChange={(e) => set("specifications", e.target.value)} placeholder="Grade, purity, tolerances, packaging size…" /></Field></div>
+              <div className="md:col-span-2"><Field label={t("portal-rfq-dialog-detailed-specs")}><Textarea rows={2} value={form.specifications} onChange={(e) => set("specifications", e.target.value)} placeholder="Grade, purity, tolerances, packaging size…" /></Field></div>
             </div>
           </section>
 
           {/* DELIVERY */}
           <section>
-            <SectionTitle icon={Truck} label="Delivery" />
+            <SectionTitle icon={Truck} label={t("portal-rfq-section-delivery")} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Delivery country *"><Input value={form.delivery_country} onChange={(e) => set("delivery_country", e.target.value)} placeholder="e.g. Serbia" /></Field>
-              <Field label="Delivery port / city"><Input value={form.delivery_port} onChange={(e) => set("delivery_port", e.target.value)} placeholder="Port Klaipeda / Belgrade warehouse…" /></Field>
-              <Field label="Preferred delivery date"><Input type="date" value={form.delivery_date} onChange={(e) => set("delivery_date", e.target.value)} /></Field>
-              <Field label="Incoterm">
+              <Field label={t("portal-rfq-dialog-delivery-country-required")}><Input value={form.delivery_country} onChange={(e) => set("delivery_country", e.target.value)} placeholder="e.g. Serbia" /></Field>
+              <Field label={t("portal-rfq-dialog-delivery-port-city")}><Input value={form.delivery_port} onChange={(e) => set("delivery_port", e.target.value)} placeholder="Port Klaipeda / Belgrade warehouse…" /></Field>
+              <Field label={t("portal-rfq-dialog-preferred-date")}><Input type="date" value={form.delivery_date} onChange={(e) => set("delivery_date", e.target.value)} /></Field>
+              <Field label={t("portal-rfq-incoterm")}>
                 <Select value={form.incoterm} onValueChange={(v) => set("incoterm", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{["EXW","FCA","FAS","FOB","CFR","CIF","CPT","CIP","DAP","DPU","DDP"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label="Delivery schedule">
+              <Field label={t("portal-rfq-dialog-delivery-schedule")}>
                 <Select value={form.delivery_schedule} onValueChange={(v) => set("delivery_schedule", v as any)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="one_time">One-time purchase</SelectItem>
-                    <SelectItem value="monthly">Monthly shipments</SelectItem>
-                    <SelectItem value="quarterly">Quarterly shipments</SelectItem>
-                    <SelectItem value="annually">Annual shipments</SelectItem>
+                    <SelectItem value="one_time">{t("portal-rfq-dialog-schedule-one-time")}</SelectItem>
+                    <SelectItem value="monthly">{t("portal-rfq-dialog-schedule-monthly")}</SelectItem>
+                    <SelectItem value="quarterly">{t("portal-rfq-dialog-schedule-quarterly")}</SelectItem>
+                    <SelectItem value="annually">{t("portal-rfq-dialog-schedule-annually")}</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Urgency">
+              <Field label={t("portal-rfq-dialog-urgency")}>
                 <Select value={form.urgency} onValueChange={(v) => set("urgency", v as any)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="flexible">Flexible</SelectItem>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="flexible">{t("portal-rfq-dialog-flexible")}</SelectItem>
+                    <SelectItem value="normal">{t("portal-rfq-dialog-normal")}</SelectItem>
+                    <SelectItem value="urgent">{t("portal-rfq-dialog-urgent")}</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
               {isRecurring && (
                 <>
-                  <Field label="Quantity per shipment *"><Input type="number" min={0} step="any" value={form.per_shipment_qty} onChange={(e) => set("per_shipment_qty", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" /></Field>
-                  <Field label="Shipments per period"><Input type="number" min={1} step="1" value={form.shipments_per_period} onChange={(e) => set("shipments_per_period", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" placeholder="e.g. 2" /></Field>
-                  <Field label="Contract duration (months)"><Input type="number" min={1} step="1" value={form.contract_duration_months} onChange={(e) => set("contract_duration_months", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" placeholder="12" /></Field>
+                  <Field label={t("portal-rfq-dialog-per-shipment-qty")}><Input type="number" min={0} step="any" value={form.per_shipment_qty} onChange={(e) => set("per_shipment_qty", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" /></Field>
+                  <Field label={t("portal-rfq-dialog-shipments-per-period")}><Input type="number" min={1} step="1" value={form.shipments_per_period} onChange={(e) => set("shipments_per_period", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" placeholder="e.g. 2" /></Field>
+                  <Field label={t("portal-rfq-dialog-contract-duration")}><Input type="number" min={1} step="1" value={form.contract_duration_months} onChange={(e) => set("contract_duration_months", e.target.value === "" ? "" : Number(e.target.value))} className="tabular" placeholder="12" /></Field>
                 </>
               )}
-              <div className="md:col-span-2"><Field label="Packaging requirements"><Input value={form.packaging_requirements} onChange={(e) => set("packaging_requirements", e.target.value)} placeholder="Bulk, big-bags 1 MT, palletized 25kg…" /></Field></div>
+              <div className="md:col-span-2"><Field label={t("portal-rfq-dialog-packaging")}><Input value={form.packaging_requirements} onChange={(e) => set("packaging_requirements", e.target.value)} placeholder="Bulk, big-bags 1 MT, palletized 25kg…" /></Field></div>
             </div>
           </section>
 
           {/* COMMERCIAL */}
           <section>
-            <SectionTitle icon={DollarSign} label="Commercial terms" />
+            <SectionTitle icon={DollarSign} label={t("portal-rfq-dialog-commercial-terms")} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Payment method">
+              <Field label={t("portal-rfq-dialog-payment-method")}>
                 <Select value={form.payment_method} onValueChange={(v) => set("payment_method", v as any)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="wire">Bank wire (T/T)</SelectItem>
-                    <SelectItem value="lc">Letter of Credit (LC)</SelectItem>
-                    <SelectItem value="escrow">Escrow</SelectItem>
-                    <SelectItem value="cash">Cash / cash advance</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="wire">{t("portal-rfq-dialog-payment-wire")}</SelectItem>
+                    <SelectItem value="lc">{t("portal-rfq-dialog-payment-lc")}</SelectItem>
+                    <SelectItem value="escrow">{t("portal-rfq-dialog-payment-escrow")}</SelectItem>
+                    <SelectItem value="cash">{t("portal-rfq-dialog-payment-cash")}</SelectItem>
+                    <SelectItem value="other">{t("portal-rfq-dialog-payment-other")}</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Payment terms"><Input value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="30% advance, 70% against BL copy" /></Field>
+              <Field label={t("portal-rfq-dialog-payment-terms")}><Input value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="30% advance, 70% against BL copy" /></Field>
             </div>
           </section>
 
           {/* USE CASE */}
           <section>
-            <SectionTitle icon={MapPin} label="Use case" />
+            <SectionTitle icon={MapPin} label={t("portal-rfq-dialog-use-case")} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Target market / industry"><Input value={form.target_market} onChange={(e) => set("target_market", e.target.value)} placeholder="Construction, food, automotive…" /></Field>
-              <Field label="Quality standard"><Input value={form.quality_standard} onChange={(e) => set("quality_standard", e.target.value)} placeholder="ISO 9001, ASTM, EN…" /></Field>
-              <div className="md:col-span-2"><Field label="End use (how it will be used)"><Textarea rows={2} value={form.end_use} onChange={(e) => set("end_use", e.target.value)} /></Field></div>
-              <div className="md:col-span-2"><Field label="Certifications required"><Input value={form.certifications_required} onChange={(e) => set("certifications_required", e.target.value)} placeholder="Halal, FDA, RoHS, non-GMO…" /></Field></div>
+              <Field label={t("portal-rfq-dialog-target-market")}><Input value={form.target_market} onChange={(e) => set("target_market", e.target.value)} placeholder="Construction, food, automotive…" /></Field>
+              <Field label={t("portal-rfq-dialog-quality-standard")}><Input value={form.quality_standard} onChange={(e) => set("quality_standard", e.target.value)} placeholder="ISO 9001, ASTM, EN…" /></Field>
+              <div className="md:col-span-2"><Field label={t("portal-rfq-dialog-end-use")}><Textarea rows={2} value={form.end_use} onChange={(e) => set("end_use", e.target.value)} /></Field></div>
+              <div className="md:col-span-2"><Field label={t("portal-rfq-dialog-certifications")}><Input value={form.certifications_required} onChange={(e) => set("certifications_required", e.target.value)} placeholder="Halal, FDA, RoHS, non-GMO…" /></Field></div>
             </div>
           </section>
 
           {/* BUYER IDENTITY */}
           <section>
-            <SectionTitle icon={Building2} label="Buyer" />
+            <SectionTitle icon={Building2} label={t("portal-rfq-dialog-buyer")} />
             <RadioGroup value={form.buyer_type} onValueChange={(v) => set("buyer_type", v as any)} className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <label className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer ${form.buyer_type === "self" ? "border-primary/60 bg-primary/5" : "border-border/60"}`}>
                 <RadioGroupItem value="self" className="mt-0.5" />
-                <div><p className="text-sm font-medium flex items-center gap-1.5"><User className="size-3.5" /> My company is the buyer</p><p className="text-xs text-muted-foreground">The goods are purchased under our own name and paid by us.</p></div>
+                <div><p className="text-sm font-medium flex items-center gap-1.5"><User className="size-3.5" /> {t("portal-rfq-dialog-buyer-self-title")}</p><p className="text-xs text-muted-foreground">{t("portal-rfq-dialog-buyer-self-desc")}</p></div>
               </label>
               <label className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer ${form.buyer_type === "third_party" ? "border-primary/60 bg-primary/5" : "border-border/60"}`}>
                 <RadioGroupItem value="third_party" className="mt-0.5" />
-                <div><p className="text-sm font-medium flex items-center gap-1.5"><Building2 className="size-3.5" /> Buying for another company</p><p className="text-xs text-muted-foreground">We're brokering or sourcing on behalf of a third party.</p></div>
+                <div><p className="text-sm font-medium flex items-center gap-1.5"><Building2 className="size-3.5" /> {t("portal-rfq-dialog-buyer-third-title")}</p><p className="text-xs text-muted-foreground">{t("portal-rfq-dialog-buyer-third-desc")}</p></div>
               </label>
             </RadioGroup>
 
             {isThirdParty && (
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 rounded-lg border border-border/60 p-3">
-                <Field label="Third-party company name *"><Input value={form.third_party_company_name} onChange={(e) => set("third_party_company_name", e.target.value)} /></Field>
-                <Field label="Business type / industry"><Input value={form.third_party_business_type} onChange={(e) => set("third_party_business_type", e.target.value)} placeholder="Manufacturer, distributor…" /></Field>
-                <Field label="Country"><Input value={form.third_party_country} onChange={(e) => set("third_party_country", e.target.value)} /></Field>
-                <Field label="Tax ID / VAT"><Input value={form.third_party_tax_id} onChange={(e) => set("third_party_tax_id", e.target.value)} /></Field>
-                <Field label="Contact email"><Input type="email" value={form.third_party_contact_email} onChange={(e) => set("third_party_contact_email", e.target.value)} /></Field>
-                <Field label="Contact phone"><Input value={form.third_party_contact_phone} onChange={(e) => set("third_party_contact_phone", e.target.value)} /></Field>
-                <div className="md:col-span-2"><Field label="Website"><Input value={form.third_party_website} onChange={(e) => set("third_party_website", e.target.value)} placeholder="https://…" /></Field></div>
+                <Field label={t("portal-rfq-dialog-tp-company-name")}><Input value={form.third_party_company_name} onChange={(e) => set("third_party_company_name", e.target.value)} /></Field>
+                <Field label={t("portal-rfq-dialog-tp-business-type")}><Input value={form.third_party_business_type} onChange={(e) => set("third_party_business_type", e.target.value)} placeholder="Manufacturer, distributor…" /></Field>
+                <Field label={t("portal-rfq-dialog-tp-country")}><Input value={form.third_party_country} onChange={(e) => set("third_party_country", e.target.value)} /></Field>
+                <Field label={t("portal-rfq-dialog-tp-tax-id")}><Input value={form.third_party_tax_id} onChange={(e) => set("third_party_tax_id", e.target.value)} /></Field>
+                <Field label={t("portal-rfq-dialog-tp-contact-email")}><Input type="email" value={form.third_party_contact_email} onChange={(e) => set("third_party_contact_email", e.target.value)} /></Field>
+                <Field label={t("portal-rfq-dialog-tp-contact-phone")}><Input value={form.third_party_contact_phone} onChange={(e) => set("third_party_contact_phone", e.target.value)} /></Field>
+                <div className="md:col-span-2"><Field label={t("portal-rfq-dialog-tp-website")}><Input value={form.third_party_website} onChange={(e) => set("third_party_website", e.target.value)} placeholder="https://…" /></Field></div>
               </div>
             )}
           </section>
 
           {/* NOTES */}
           <section>
-            <SectionTitle icon={Info} label="Anything else?" />
-            <Textarea rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Additional context for our sales team…" />
+            <SectionTitle icon={Info} label={t("portal-rfq-dialog-anything-else")} />
+            <Textarea rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder={t("portal-rfq-dialog-notes-placeholder")} />
           </section>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>{t("portal-action-cancel")}</Button>
           <Button onClick={submit} disabled={submitting}>
             {submitting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Send className="size-4 mr-2" />}
-            Submit RFQ
+            {t("portal-rfq-dialog-submit")}
           </Button>
         </DialogFooter>
       </DialogContent>

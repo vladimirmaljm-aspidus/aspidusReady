@@ -35,6 +35,7 @@ import { useAppStore } from "@/lib/store/app-store";
 import { fmtDate, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/store";
 import type {
   PortalAccess,
   PortalTier,
@@ -44,36 +45,37 @@ import type {
 
 const TIER_META: Record<
   PortalTier,
-  { label: string; className: string; icon: React.ComponentType<{ className?: string }> }
+  { labelKey: string; className: string; icon: React.ComponentType<{ className?: string }> }
 > = {
   premium: {
-    label: "Premium",
+    labelKey: "portal-tier-premium",
     className: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
     icon: Crown,
   },
   business: {
-    label: "Business",
+    labelKey: "portal-tier-business",
     className: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
     icon: Briefcase,
   },
   standard: {
-    label: "Standard",
+    labelKey: "portal-tier-standard",
     className: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-400",
     icon: Shield,
   },
   basic: {
-    label: "Basic",
+    labelKey: "portal-tier-basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },
   limited: {
-    label: "Basic",
+    labelKey: "portal-tier-basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },
 };
 
 export function PortalProfile() {
+  const t = useT();
   const portalAccess = useAppStore((s) => s.portalAccess) as PortalAccess | null;
   const setView = useAppStore((s) => s.setView);
 
@@ -86,27 +88,27 @@ export function PortalProfile() {
   if (!canViewProfile && !canViewCompany) {
     return (
       <div className="max-w-4xl mx-auto space-y-5">
-        <PageHeader />
-        <LockedCard label="My Account" />
+        <PageHeader t={t} />
+        <LockedCard label={t("portal-profile-title")} t={t} />
       </div>
     );
   }
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
-      <PageHeader />
+      <PageHeader t={t} />
 
       {/* Two-column layout on desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {canViewProfile ? (
           <ProfileColumn portalAccess={portalAccess} />
         ) : (
-          <LockedCard label="My Profile" />
+          <LockedCard label={t("portal-nav-my-profile")} t={t} />
         )}
         {canViewCompany ? (
           <CompanyColumn portalAccess={portalAccess} onGoProfile={() => setView("portal-messages")} />
         ) : (
-          <LockedCard label="Company Info" />
+          <LockedCard label={t("portal-nav-company-info")} t={t} />
         )}
       </div>
 
@@ -116,14 +118,18 @@ export function PortalProfile() {
   );
 }
 
-function PageHeader() {
+function PageHeader({ t }: { t: (key: string) => string }) {
+  const title = t("portal-profile-title");
+  const firstSpace = title.indexOf(" ");
+  const head = firstSpace === -1 ? title : title.slice(0, firstSpace);
+  const tail = firstSpace === -1 ? "" : title.slice(firstSpace + 1);
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">
-        My <span className="text-gradient-emerald">Account</span>
+        {head}{tail && <span className="text-gradient-emerald"> {tail}</span>}
       </h1>
       <p className="text-sm text-muted-foreground mt-1">
-        Manage your profile and view our firm details.
+        {t("portal-profile-intro")}
       </p>
     </div>
   );
@@ -131,6 +137,7 @@ function PageHeader() {
 
 // ---------------- My Profile column ----------------
 function ProfileColumn({ portalAccess }: { portalAccess: PortalAccess }) {
+  const t = useT();
   const profileQ = useQuery<{ partner: Partner; access: PortalAccess }>({
     queryKey: ["portal-profile"],
     queryFn: async () => {
@@ -152,7 +159,7 @@ function ProfileColumn({ portalAccess }: { portalAccess: PortalAccess }) {
   if (!partner) {
     return (
       <div className="card-premium p-12 text-center text-sm text-muted-foreground">
-        Unable to load your profile.
+        {t("portal-profile-unable-load")}
       </div>
     );
   }
@@ -162,9 +169,11 @@ function ProfileColumn({ portalAccess }: { portalAccess: PortalAccess }) {
 }
 
 function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess: PortalAccess }) {
+  const t = useT();
   const qc = useQueryClient();
   const tier = portalAccess.tier;
   const TierIcon = TIER_META[tier].icon;
+  const tierLabel = t(TIER_META[tier].labelKey);
 
   const [form, setForm] = useState({
     contact_name: partner.contact_name || "",
@@ -187,7 +196,7 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Profile updated.");
+      toast.success(t("portal-profile-toast-saved"));
       qc.invalidateQueries({ queryKey: ["portal-profile"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -212,7 +221,7 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
         <div className="absolute top-0 right-0 h-24 w-24 bg-primary/[0.06] blur-3xl rounded-full" />
         <div className="relative">
           <h3 className="text-base font-semibold flex items-center gap-2 mb-4">
-            <User className="size-4 text-primary" /> Account overview
+            <User className="size-4 text-primary" /> {t("portal-profile-account-overview")}
           </h3>
           <div className="flex flex-wrap items-center gap-4">
             <div className="size-16 rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary flex items-center justify-center font-semibold text-2xl shadow-soft shrink-0">
@@ -221,28 +230,31 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
             <div className="min-w-0 flex-1">
               <p className="font-semibold truncate text-base">{partner.name}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {partner.entity_type === "individual" ? "Individual account" : "Company account"}
+                {partner.entity_type === "individual" ? t("portal-profile-individual-account") : t("portal-profile-company-account")}
                 {partner.country ? ` · ${partner.country}` : ""}
               </p>
               <Badge className={cn("mt-2 gap-1", TIER_META[tier].className)}>
                 <TierIcon className="size-3" />
-                {TIER_META[tier].label} tier
+                {t("portal-tier-label").replace("{tier}", tierLabel)}
               </Badge>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
-            <ReadTile label="Tier" value={TIER_META[tier].label} icon={TierIcon} accent={TIER_META[tier].className} />
+            <ReadTile label={t("portal-profile-tier")} value={tierLabel} icon={TierIcon} accent={TIER_META[tier].className} />
             <ReadTile
-              label="Entity type"
-              value={partner.entity_type === "individual" ? "Individual" : "Company"}
+              label={t("portal-profile-entity-type")}
+              value={partner.entity_type === "individual" ? t("portal-individual") : t("portal-company")}
               icon={Building2}
             />
           </div>
           {portalAccess.last_login_at && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-4">
               <Clock className="size-3.5" />
-              Last login {fmtRelative(portalAccess.last_login_at)}
-              {portalAccess.last_login_ip ? ` from ${portalAccess.last_login_ip}` : ""}
+              {portalAccess.last_login_ip
+                ? t("portal-last-login-from")
+                    .replace("{relative}", fmtRelative(portalAccess.last_login_at))
+                    .replace("{ip}", portalAccess.last_login_ip)
+                : `${t("portal-last-login")} ${fmtRelative(portalAccess.last_login_at)}`}
             </div>
           )}
         </div>
@@ -252,22 +264,22 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
       <form onSubmit={submit} className="card-premium p-6 space-y-5">
         <div>
           <h3 className="text-base font-semibold flex items-center gap-2">
-            <Mail className="size-4 text-primary" /> Contact information
+            <Mail className="size-4 text-primary" /> {t("portal-profile-contact-info")}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Update the details your account manager uses to reach you.
+            {t("portal-profile-contact-info-desc")}
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Contact name" icon={User}>
+          <Field label={t("portal-profile-contact-name")} icon={User}>
             <Input
               value={form.contact_name}
               onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
-              placeholder="Your name"
+              placeholder={t("portal-profile-your-name-placeholder")}
               className="h-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
             />
           </Field>
-          <Field label="Contact email" icon={Mail}>
+          <Field label={t("portal-profile-contact-email")} icon={Mail}>
             <Input
               type="email"
               value={form.contact_email}
@@ -276,7 +288,7 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
               className="h-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
             />
           </Field>
-          <Field label="Contact phone" icon={Phone}>
+          <Field label={t("portal-profile-contact-phone")} icon={Phone}>
             <Input
               value={form.contact_phone}
               onChange={(e) => setForm({ ...form, contact_phone: e.target.value })}
@@ -284,7 +296,7 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
               className="h-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
             />
           </Field>
-          <Field label="Company phone" icon={Phone}>
+          <Field label={t("portal-profile-company-phone")} icon={Phone}>
             <Input
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -304,7 +316,7 @@ function ProfileForm({ partner, portalAccess }: { partner: Partner; portalAccess
             ) : (
               <Save className="size-4 mr-1.5" />
             )}
-            Save changes
+            {t("portal-action-save-changes")}
           </Button>
         </div>
       </form>
@@ -320,6 +332,7 @@ function CompanyColumn({
   portalAccess: PortalAccess;
   onGoProfile: () => void;
 }) {
+  const t = useT();
   const companyQ = useQuery<{ tenant: Tenant }>({
     queryKey: ["portal-company"],
     queryFn: async () => {
@@ -341,7 +354,7 @@ function CompanyColumn({
   if (!tenant) {
     return (
       <div className="card-premium p-12 text-center text-sm text-muted-foreground">
-        Unable to load company information.
+        {t("portal-profile-unable-load-company")}
       </div>
     );
   }
@@ -349,7 +362,7 @@ function CompanyColumn({
   const tier = portalAccess.tier;
   const showBasic = tier === "premium" || tier === "standard";
   const showFull = tier === "premium";
-  const tierLabel = TIER_META[tier].label;
+  const tierLabel = t(TIER_META[tier].labelKey);
 
   return (
     <div className="card-premium p-6 relative overflow-hidden">
@@ -360,7 +373,7 @@ function CompanyColumn({
       {tier === "premium" && (
         <div className="absolute top-0 right-0">
           <div className="bg-gradient-emerald text-primary-foreground text-[10px] font-semibold uppercase tracking-wider px-3 py-1 rounded-bl-lg flex items-center gap-1 shadow-soft">
-            <Crown className="size-3" /> Premium
+            <Crown className="size-3" /> {t("portal-profile-premium")}
           </div>
         </div>
       )}
@@ -375,28 +388,28 @@ function CompanyColumn({
               {tenant.legal_name || tenant.name}
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              The firm serving your account.
+              {t("portal-profile-firm-serving")}
             </p>
             <Badge className={cn("mt-2 gap-1", TIER_META[tier].className)}>
-              {tierLabel} access
+              {t("portal-tier-access").replace("{tier}", tierLabel)}
             </Badge>
           </div>
         </div>
 
         {/* Basic identity */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <InfoRow icon={Building2} label="Legal name" value={tenant.legal_name || tenant.name} />
-          <InfoRow icon={MapPin} label="Country" value={tenant.country || "—"} />
+          <InfoRow icon={Building2} label={t("portal-profile-legal-name")} value={tenant.legal_name || tenant.name} />
+          <InfoRow icon={MapPin} label={t("portal-kyc-country")} value={tenant.country || "—"} />
           {showBasic && (
             <>
-              <InfoRow icon={Hash} label="Tax ID" value={tenant.tax_id || "—"} mono />
+              <InfoRow icon={Hash} label={t("portal-kyc-tax-id")} value={tenant.tax_id || "—"} mono />
               {tenant.vat_number && (
-                <InfoRow icon={FileText} label="VAT number" value={tenant.vat_number} mono />
+                <InfoRow icon={FileText} label={t("portal-profile-vat-number")} value={tenant.vat_number} mono />
               )}
               {tenant.registration_number && (
                 <InfoRow
                   icon={FileText}
-                  label="Registration no."
+                  label={t("portal-profile-registration-no")}
                   value={tenant.registration_number}
                   mono
                 />
@@ -408,8 +421,8 @@ function CompanyColumn({
         {/* Limited tier notice */}
         {!showBasic && (
           <UpgradeNotice
-            title="Limited company details"
-            description={`Your ${tierLabel} tier shows only the firm name and country. Upgrade to Standard or Premium to see tax IDs, address, and bank details.`}
+            title={t("portal-profile-limited-title")}
+            description={t("portal-profile-limited-desc").replace("{tier}", tierLabel)}
           />
         )}
 
@@ -419,13 +432,13 @@ function CompanyColumn({
             <Separator />
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                Address
+                {t("portal-profile-address")}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <InfoRow icon={MapPin} label="Street" value={tenant.address_line || "—"} />
+                <InfoRow icon={MapPin} label={t("portal-profile-street")} value={tenant.address_line || "—"} />
                 <InfoRow
                   icon={MapPin}
-                  label="City"
+                  label={t("portal-profile-city")}
                   value={[tenant.postal_code, tenant.city].filter(Boolean).join(" ") || "—"}
                 />
               </div>
@@ -440,17 +453,17 @@ function CompanyColumn({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Bank details
+                  {t("portal-profile-bank-details")}
                 </p>
                 <Badge className="gap-1 border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400">
-                  <Crown className="size-3" /> Premium
+                  <Crown className="size-3" /> {t("portal-profile-premium")}
                 </Badge>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <InfoRow icon={Landmark} label="Bank" value={tenant.bank_name || "—"} />
-                <InfoRow icon={Landmark} label="IBAN" value={tenant.bank_iban || "—"} mono />
-                <InfoRow icon={Hash} label="SWIFT / BIC" value={tenant.bank_swift || "—"} mono />
-                <InfoRow icon={Building2} label="Currency" value={tenant.currency || "—"} />
+                <InfoRow icon={Landmark} label={t("portal-profile-bank")} value={tenant.bank_name || "—"} />
+                <InfoRow icon={Landmark} label={t("portal-profile-iban")} value={tenant.bank_iban || "—"} mono />
+                <InfoRow icon={Hash} label={t("portal-profile-swift-bic")} value={tenant.bank_swift || "—"} mono />
+                <InfoRow icon={Building2} label={t("portal-profile-bank-currency")} value={tenant.currency || "—"} />
               </div>
             </div>
           </>
@@ -459,8 +472,8 @@ function CompanyColumn({
         {/* Standard tier upgrade hint */}
         {tier === "standard" && (
           <UpgradeNotice
-            title="Bank details are premium-only"
-            description="Upgrade to Premium to view bank account details for payments."
+            title={t("portal-profile-upgrade-bank-title")}
+            description={t("portal-profile-upgrade-bank-desc")}
             action={
               <Button
                 variant="outline"
@@ -468,7 +481,7 @@ function CompanyColumn({
                 onClick={onGoProfile}
                 className="mt-2 smooth hover:shadow-soft"
               >
-                Contact us <ArrowRight className="size-3.5 ml-1" />
+                {t("portal-profile-contact-us")} <ArrowRight className="size-3.5 ml-1" />
               </Button>
             }
           />
@@ -476,8 +489,8 @@ function CompanyColumn({
 
         <Separator />
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>Member since {fmtDate(tenant.created_at)}</span>
-          <span className="capitalize">Plan: {tenant.plan}</span>
+          <span>{t("portal-member-since").replace("{date}", fmtDate(tenant.created_at))}</span>
+          <span className="capitalize">{t("portal-plan-label").replace("{plan}", tenant.plan || "")}</span>
         </div>
       </div>
     </div>
@@ -582,15 +595,15 @@ function UpgradeNotice({
   );
 }
 
-function LockedCard({ label }: { label: string }) {
+function LockedCard({ label, t }: { label: string; t: (key: string) => string }) {
   return (
     <div className="card-premium p-12 flex flex-col items-center justify-center text-center">
       <div className="size-14 rounded-full bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center mb-3">
         <Lock className="size-6 text-muted-foreground" />
       </div>
-      <p className="text-sm font-medium">{label} is locked</p>
+      <p className="text-sm font-medium">{t("portal-locked-card-label").replace("{label}", label)}</p>
       <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-        Upgrade your access tier to unlock this section.
+        {t("portal-locked-card-desc")}
       </p>
     </div>
   );
@@ -598,6 +611,7 @@ function LockedCard({ label }: { label: string }) {
 
 // ---------------- Security / Change Password section ----------------
 function SecuritySection() {
+  const t = useT();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -623,10 +637,10 @@ function SecuritySection() {
     rulesPassed === 3 ? "bg-yellow-500" :
     "bg-emerald-500";
   const strengthLabel =
-    rulesPassed <= 1 ? "Weak" :
-    rulesPassed === 2 ? "Fair" :
-    rulesPassed === 3 ? "Good" :
-    "Strong";
+    rulesPassed <= 1 ? t("portal-profile-strength-weak") :
+    rulesPassed === 2 ? t("portal-profile-strength-fair") :
+    rulesPassed === 3 ? t("portal-profile-strength-good") :
+    t("portal-profile-strength-strong");
 
   const changePwMut = useMutation({
     mutationFn: async () => {
@@ -641,12 +655,12 @@ function SecuritySection() {
       });
       const data = await r.json();
       if (!r.ok) {
-        throw new Error(data.error || "Failed to change password");
+        throw new Error(data.error || t("portal-profile-toast-password-failed"));
       }
       return data;
     },
     onSuccess: () => {
-      toast.success("Password changed successfully.");
+      toast.success(t("portal-profile-toast-password-changed"));
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -666,22 +680,22 @@ function SecuritySection() {
         <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
           <ShieldCheck className="size-4 text-primary" />
         </div>
-        <h3 className="text-base font-semibold">Security</h3>
+        <h3 className="text-base font-semibold">{t("portal-profile-security")}</h3>
       </div>
       <p className="text-xs text-muted-foreground mb-5 ml-10">
-        Change your account password. Your password must meet the requirements below.
+        {t("portal-profile-security-desc")}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Current Password */}
-          <Field label="Current password" icon={Lock}>
+          <Field label={t("portal-profile-current-password")} icon={Lock}>
             <div className="relative">
               <Input
                 type={showCurrent ? "text" : "password"}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
+                placeholder={t("portal-profile-enter-current")}
                 className="h-10 pr-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
                 autoComplete="current-password"
               />
@@ -697,13 +711,13 @@ function SecuritySection() {
           </Field>
 
           {/* New Password */}
-          <Field label="New password" icon={Lock}>
+          <Field label={t("portal-profile-new-password")} icon={Lock}>
             <div className="relative">
               <Input
                 type={showNew ? "text" : "password"}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
+                placeholder={t("portal-profile-enter-new")}
                 className="h-10 pr-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
                 autoComplete="new-password"
               />
@@ -719,13 +733,13 @@ function SecuritySection() {
           </Field>
 
           {/* Confirm Password */}
-          <Field label="Confirm new password" icon={Lock}>
+          <Field label={t("portal-profile-confirm-password")} icon={Lock}>
             <div className="relative">
               <Input
                 type={showConfirm ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password"
+                placeholder={t("portal-profile-reenter-new")}
                 className="h-10 pr-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
                 autoComplete="new-password"
               />
@@ -739,7 +753,7 @@ function SecuritySection() {
               </button>
             </div>
             {confirmPassword.length > 0 && !passwordsMatch && (
-              <p className="text-xs text-destructive mt-1">Passwords do not match.</p>
+              <p className="text-xs text-destructive mt-1">{t("portal-profile-passwords-no-match")}</p>
             )}
           </Field>
         </div>
@@ -761,10 +775,10 @@ function SecuritySection() {
 
             {/* Password requirements */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
-              <RequirementMet label="8+ characters" met={hasMinLength} />
-              <RequirementMet label="Uppercase letter" met={hasUppercase} />
-              <RequirementMet label="Lowercase letter" met={hasLowercase} />
-              <RequirementMet label="Number" met={hasNumber} />
+              <RequirementMet label={t("portal-profile-req-8-chars")} met={hasMinLength} />
+              <RequirementMet label={t("portal-profile-req-uppercase")} met={hasUppercase} />
+              <RequirementMet label={t("portal-profile-req-lowercase")} met={hasLowercase} />
+              <RequirementMet label={t("portal-profile-req-number")} met={hasNumber} />
             </div>
           </div>
         )}
@@ -780,7 +794,7 @@ function SecuritySection() {
             ) : (
               <ShieldCheck className="size-4 mr-1.5" />
             )}
-            Change password
+            {t("portal-profile-change-password")}
           </Button>
         </div>
       </form>

@@ -43,6 +43,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
+import { useT } from "@/lib/i18n/store";
 import { fmtMoney, fmtDate, fmtMoneyDetailed } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { Invoice, InvoiceStatus, OfferLineItem, PortalTier } from "@/lib/supabase/types";
@@ -56,12 +57,12 @@ const STATUS_STYLES: Record<InvoiceStatus, string> = {
   cancelled: "bg-muted text-muted-foreground",
 };
 
-const STATUS_LABELS: Record<InvoiceStatus, string> = {
-  draft: "Draft",
-  sent: "Sent",
-  paid: "Paid",
-  overdue: "Overdue",
-  cancelled: "Cancelled",
+const STATUS_LABEL_KEYS: Record<InvoiceStatus, string> = {
+  draft: "portal-status-draft",
+  sent: "portal-status-sent",
+  paid: "portal-status-paid",
+  overdue: "portal-status-overdue",
+  cancelled: "portal-status-cancelled",
 };
 
 const STATUS_ICONS: Record<InvoiceStatus, React.ComponentType<{ className?: string }>> = {
@@ -73,6 +74,7 @@ const STATUS_ICONS: Record<InvoiceStatus, React.ComponentType<{ className?: stri
 };
 
 export function PortalInvoices() {
+  const t = useT();
   const portalAccess = useAppStore((s) => s.portalAccess) as any;
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
@@ -122,12 +124,15 @@ export function PortalInvoices() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            My <span className="text-gradient-emerald">Invoices</span>
+            {t("portal-invoices-title").split(" ")[0]}{" "}
+            <span className="text-gradient-emerald">
+              {t("portal-invoices-title").split(" ").slice(1).join(" ")}
+            </span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {invoicesQ.data
-              ? `${filtered.length} invoice${filtered.length === 1 ? "" : "s"}`
-              : "Loading your invoices…"}
+              ? t("portal-invoices-count").replace("{n}", String(filtered.length))
+              : t("portal-invoices-loading")}
           </p>
         </div>
         <div className="relative w-full sm:w-72">
@@ -135,7 +140,7 @@ export function PortalInvoices() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by number or subject…"
+            placeholder={t("portal-search-number-subject")}
             className="pl-10 h-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
           />
         </div>
@@ -148,20 +153,20 @@ export function PortalInvoices() {
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
-          <EmptyInvoices />
+          <EmptyInvoices t={t} />
         ) : (
           <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
             <Table>
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[130px]">Number</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead className="w-[120px]">Status</TableHead>
-                  <TableHead className="text-right w-[120px]">Total</TableHead>
-                  <TableHead className="w-[80px] text-center hidden md:table-cell">Currency</TableHead>
-                  <TableHead className="w-[110px] hidden lg:table-cell">Issue Date</TableHead>
-                  <TableHead className="w-[110px] hidden lg:table-cell">Due Date</TableHead>
-                  <TableHead className="w-[110px] text-right">Actions</TableHead>
+                  <TableHead className="w-[130px]">{t("portal-col-number")}</TableHead>
+                  <TableHead>{t("portal-col-subject")}</TableHead>
+                  <TableHead className="w-[120px]">{t("portal-col-status")}</TableHead>
+                  <TableHead className="text-right w-[120px]">{t("portal-col-total")}</TableHead>
+                  <TableHead className="w-[80px] text-center hidden md:table-cell">{t("portal-col-currency")}</TableHead>
+                  <TableHead className="w-[110px] hidden lg:table-cell">{t("portal-col-issue-date")}</TableHead>
+                  <TableHead className="w-[110px] hidden lg:table-cell">{t("portal-col-due-date")}</TableHead>
+                  <TableHead className="w-[110px] text-right">{t("portal-col-actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -185,7 +190,7 @@ export function PortalInvoices() {
                           )}
                         >
                           <StatusIcon className="size-3" />
-                          {STATUS_LABELS[inv.status]}
+                          {t(STATUS_LABEL_KEYS[inv.status])}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular">
@@ -210,7 +215,7 @@ export function PortalInvoices() {
                               e.stopPropagation();
                               setDetailId(inv.id);
                             }}
-                            aria-label="View invoice"
+                            aria-label={t("portal-aria-view-invoice")}
                           >
                             <Eye className="size-4" />
                           </Button>
@@ -223,7 +228,7 @@ export function PortalInvoices() {
                                 e.stopPropagation();
                                 handleDownloadPdf(inv.id);
                               }}
-                              aria-label="Download PDF"
+                              aria-label={t("portal-aria-download-pdf")}
                             >
                               <Download className="size-4" />
                             </Button>
@@ -237,14 +242,14 @@ export function PortalInvoices() {
                                       size="icon"
                                       className="size-8 text-muted-foreground cursor-not-allowed"
                                       disabled
-                                      aria-label="PDF download locked"
+                                      aria-label={t("portal-aria-pdf-locked")}
                                     >
                                       <Lock className="size-4" />
                                     </Button>
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
-                                  <p>Upgrade to {tier === "limited" ? "Standard or Premium" : "Premium"} to download PDFs</p>
+                                  <p>{t("portal-pdf-upgrade-tooltip").replace("{tier}", t(tier === "limited" ? "portal-pdf-upgrade-standard-premium" : "portal-pdf-upgrade-premium"))}</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -273,6 +278,7 @@ export function PortalInvoices() {
               canDownloadPdf={canDownloadPdf}
               tier={tier}
               onDownload={() => handleDownloadPdf(detailQ.data.id)}
+              t={t}
             />
           ) : null}
         </SheetContent>
@@ -281,16 +287,15 @@ export function PortalInvoices() {
   );
 }
 
-function EmptyInvoices() {
+function EmptyInvoices({ t }: { t: (k: string) => string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-6">
       <div className="size-16 rounded-full bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center mb-4">
         <Inbox className="size-7 text-primary" />
       </div>
-      <p className="text-base font-semibold">No invoices yet</p>
+      <p className="text-base font-semibold">{t("portal-invoices-empty-title")}</p>
       <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-        Your account manager will send your invoices here. Reach out if you have
-        any questions.
+        {t("portal-invoices-empty-desc")}
       </p>
     </div>
   );
@@ -301,11 +306,13 @@ function InvoiceDetail({
   canDownloadPdf,
   tier,
   onDownload,
+  t,
 }: {
   invoice: Invoice;
   canDownloadPdf: boolean;
   tier?: PortalTier;
   onDownload: () => void;
+  t: (k: string) => string;
 }) {
   const StatusIcon = STATUS_ICONS[invoice.status];
   return (
@@ -316,7 +323,7 @@ function InvoiceDetail({
           <span className="font-mono text-base tabular">{invoice.number}</span>
           <Badge className={cn("gap-1", STATUS_STYLES[invoice.status])}>
             <StatusIcon className="size-3" />
-            {STATUS_LABELS[invoice.status]}
+            {t(STATUS_LABEL_KEYS[invoice.status])}
           </Badge>
         </SheetTitle>
         <SheetDescription className="text-sm font-medium text-foreground">
@@ -327,11 +334,11 @@ function InvoiceDetail({
       <div className="px-4 pb-4 space-y-5">
         {/* Summary tiles */}
         <div className="grid grid-cols-2 gap-3">
-          <SummaryTile icon={Calendar} label="Issue date" value={fmtDate(invoice.issue_date)} />
-          <SummaryTile icon={Clock} label="Due date" value={fmtDate(invoice.due_date)} />
-          <SummaryTile icon={DollarSign} label="Currency" value={invoice.currency} />
+          <SummaryTile icon={Calendar} label={t("portal-detail-issue-date")} value={fmtDate(invoice.issue_date)} />
+          <SummaryTile icon={Clock} label={t("portal-detail-due-date")} value={fmtDate(invoice.due_date)} />
+          <SummaryTile icon={DollarSign} label={t("portal-detail-currency")} value={invoice.currency} />
           {invoice.paid_at && (
-            <SummaryTile icon={CheckCircle2} label="Paid on" value={fmtDate(invoice.paid_at)} />
+            <SummaryTile icon={CheckCircle2} label={t("portal-detail-paid-on")} value={fmtDate(invoice.paid_at)} />
           )}
         </div>
 
@@ -339,7 +346,7 @@ function InvoiceDetail({
         <div>
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
             <FileText className="size-4 text-primary" />
-            Line items
+            {t("portal-detail-line-items")}
             <span className="text-xs text-muted-foreground font-normal">
               ({invoice.items.length})
             </span>
@@ -348,15 +355,15 @@ function InvoiceDetail({
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs">Product</TableHead>
-                  <TableHead className="text-xs text-right w-[70px]">Qty</TableHead>
+                  <TableHead className="text-xs">{t("portal-col-product")}</TableHead>
+                  <TableHead className="text-xs text-right w-[70px]">{t("portal-col-qty")}</TableHead>
                   <TableHead className="text-xs text-right w-[100px] hidden sm:table-cell">
-                    Unit price
+                    {t("portal-col-unit-price")}
                   </TableHead>
                   <TableHead className="text-xs text-right w-[60px] hidden sm:table-cell">
-                    Disc.
+                    {t("portal-col-disc")}
                   </TableHead>
-                  <TableHead className="text-xs text-right w-[110px]">Total</TableHead>
+                  <TableHead className="text-xs text-right w-[110px]">{t("portal-col-total")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -387,17 +394,17 @@ function InvoiceDetail({
 
         {/* Totals */}
         <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-2 shadow-soft">
-          <TotalRow label="Subtotal" value={fmtMoneyDetailed(invoice.subtotal, invoice.currency)} />
+          <TotalRow label={t("portal-detail-subtotal")} value={fmtMoneyDetailed(invoice.subtotal, invoice.currency)} />
           {invoice.discount_total > 0 && (
             <TotalRow
-              label="Discount"
+              label={t("portal-detail-discount")}
               value={`− ${fmtMoneyDetailed(invoice.discount_total, invoice.currency)}`}
               muted
             />
           )}
-          <TotalRow label="Tax" value={fmtMoneyDetailed(invoice.tax_total, invoice.currency)} muted />
+          <TotalRow label={t("portal-detail-tax")} value={fmtMoneyDetailed(invoice.tax_total, invoice.currency)} muted />
           <div className="border-t border-border/60 pt-2 flex items-center justify-between">
-            <span className="text-sm font-semibold">Total</span>
+            <span className="text-sm font-semibold">{t("portal-detail-total")}</span>
             <span className="text-xl font-bold tabular text-gradient-emerald">
               {fmtMoneyDetailed(invoice.total, invoice.currency)}
             </span>
@@ -408,7 +415,7 @@ function InvoiceDetail({
         {invoice.notes && (
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Notes
+              {t("portal-detail-notes")}
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">{invoice.notes}</p>
           </div>
@@ -421,7 +428,7 @@ function InvoiceDetail({
               onClick={onDownload}
               className="w-full shadow-soft hover:shadow-soft-md smooth"
             >
-              <Download className="size-4 mr-2" /> Download PDF
+              <Download className="size-4 mr-2" /> {t("portal-download-pdf")}
             </Button>
           ) : (
             <div className="rounded-xl border border-dashed border-border/60 bg-muted/30 p-5 text-center">
@@ -429,15 +436,15 @@ function InvoiceDetail({
                 <Lock className="size-4 text-muted-foreground" />
               </div>
               <p className="text-sm font-medium flex items-center justify-center gap-1.5">
-                PDF download is locked
+                {t("portal-pdf-locked")}
                 {tier === "premium" && (
                   <Crown className="size-3.5 text-amber-600" />
                 )}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 max-w-xs mx-auto">
                 {tier === "premium"
-                  ? "PDF download appears to be disabled for your account. Contact your account manager."
-                  : "Upgrade to Standard or Premium tier to download invoice PDFs."}
+                  ? t("portal-pdf-locked-premium")
+                  : t("portal-pdf-locked-invoice")}
               </p>
             </div>
           )}

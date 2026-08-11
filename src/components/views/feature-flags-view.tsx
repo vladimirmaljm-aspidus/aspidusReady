@@ -48,6 +48,7 @@ import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 import type { Tenant, TenantFeatureFlags } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 // ---------------------------------------------------------------
 // Module catalog — the 13 togglable modules
@@ -179,6 +180,7 @@ type EditableFlags = Omit<TenantFeatureFlags, "id" | "updated_by" | "updated_at"
 export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const qc = useQueryClient();
@@ -353,19 +355,17 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
     return (
       <div className="max-w-3xl mx-auto">
         <PageHeader
-          title="Feature Flags"
-          description="Control which modules each tenant can access."
+          title={t("admin-flags-title")}
+          description={t("admin-flags-desc")}
         />
         <Card className="card-premium">
           <CardContent className="p-8 flex flex-col items-center text-center">
             <div className="size-14 rounded-2xl bg-destructive/10 flex items-center justify-center mb-4">
               <Lock className="size-6 text-destructive" />
             </div>
-            <h2 className="text-lg font-semibold">Super-admin access required.</h2>
+            <h2 className="text-lg font-semibold">{t("admin-flags-super-admin-title")}</h2>
             <p className="text-sm text-muted-foreground mt-1 max-w-md">
-              Feature flags control tenant-wide module availability and can only be
-              managed by platform super-administrators. Contact your platform
-              administrator if you need access.
+              {t("admin-flags-super-admin-desc")}
             </p>
           </CardContent>
         </Card>
@@ -376,8 +376,8 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Feature Flags"
-        description="Control which modules each tenant can access."
+        title={t("admin-flags-title")}
+        description={t("admin-flags-desc")}
       />
 
       {/* Tenant selector */}
@@ -385,11 +385,10 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-base">
             <Building2 className="size-4 text-primary" />
-            Select tenant
+            {t("admin-flags-select-tenant")}
           </CardTitle>
           <CardDescription>
-            Pick a tenant to view and modify its module availability, usage limits
-            and beta features.
+            {t("admin-flags-select-tenant-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -397,11 +396,11 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
             <Skeleton className="h-10 w-full sm:w-80" />
           ) : tenantsQ.error ? (
             <p className="text-sm text-destructive">
-              Failed to load tenants. Please reload the page.
+              {t("admin-flags-failed-tenants")}
             </p>
           ) : tenants.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No tenants found. Create a tenant first.
+              {t("admin-flags-no-tenants")}
             </p>
           ) : (
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -410,7 +409,7 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
                 onValueChange={(v) => setSelectedTenantId(v)}
               >
                 <SelectTrigger className="w-full sm:w-80 h-10">
-                  <SelectValue placeholder="Choose a tenant…" />
+                  <SelectValue placeholder={t("admin-flags-choose-tenant")} />
                 </SelectTrigger>
                 <SelectContent>
                   {tenants.map((t) => (
@@ -443,7 +442,7 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
       {!selectedTenantId ? (
         <Card className="card-premium">
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            Select a tenant above to manage its feature flags.
+            {t("admin-flags-select-prompt")}
           </CardContent>
         </Card>
       ) : flagsQ.isLoading ? (
@@ -452,14 +451,14 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
         <Card className="card-premium">
           <CardContent className="p-8 text-center">
             <p className="text-sm text-destructive mb-2">
-              Failed to load feature flags.
+              {t("admin-flags-failed-flags")}
             </p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => flagsQ.refetch()}
             >
-              Retry
+              {t("admin-retry")}
             </Button>
           </CardContent>
         </Card>
@@ -469,15 +468,14 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
           <section className="space-y-3">
             <div className="flex items-baseline justify-between">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">Modules</h2>
+                <h2 className="text-lg font-semibold tracking-tight">{t("admin-flags-modules-title")}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Toggle each module on or off for this tenant. Changes apply
-                  immediately.
+                  {t("admin-flags-modules-desc")}
                 </p>
               </div>
               <Badge variant="outline" className="tabular">
                 {MODULES.filter((m) => Boolean((merged as any)[m.key])).length}/
-                {MODULES.length} active
+                {MODULES.length} {t("admin-flags-modules-active")}
               </Badge>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -513,7 +511,7 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
                           checked={enabled}
                           disabled={saveMut.isPending}
                           onCheckedChange={(v) => toggleModule(mod, v)}
-                          aria-label={`Toggle ${mod.name}`}
+                          aria-label={`${t("admin-flags-toggle")} ${mod.name}`}
                         />
                       </div>
                       <div className="mt-3">
@@ -539,30 +537,30 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
           {/* ----------------- Limits ----------------- */}
           <section className="space-y-3">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">Usage limits</h2>
+              <h2 className="text-lg font-semibold tracking-tight">{t("admin-flags-limits-title")}</h2>
               <p className="text-sm text-muted-foreground">
-                Set hard caps for this tenant. Use <code className="text-xs tabular bg-muted px-1 py-0.5 rounded">0</code> for unlimited.
+                {t("admin-flags-limits-desc")}
               </p>
             </div>
             <Card className="card-premium">
               <CardContent className="p-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <LimitField
-                    label="Max partners"
+                    label={t("admin-flags-max-partners")}
                     value={limitsDraft.max_partners}
                     onChange={(v) =>
                       setLimitsDraft((s) => ({ ...s, max_partners: v }))
                     }
                   />
                   <LimitField
-                    label="Max users"
+                    label={t("admin-flags-max-users")}
                     value={limitsDraft.max_users}
                     onChange={(v) =>
                       setLimitsDraft((s) => ({ ...s, max_users: v }))
                     }
                   />
                   <LimitField
-                    label="Max monthly documents"
+                    label={t("admin-flags-max-monthly-documents")}
                     value={limitsDraft.max_monthly_documents}
                     onChange={(v) =>
                       setLimitsDraft((s) => ({ ...s, max_monthly_documents: v }))
@@ -580,7 +578,7 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
                     ) : (
                       <Save className="size-4 mr-2" />
                     )}
-                    Save Limits
+                    {t("admin-flags-save-limits")}
                   </Button>
                 </div>
               </CardContent>
@@ -590,9 +588,9 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
           {/* ----------------- Beta features ----------------- */}
           <section className="space-y-3">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">Beta features</h2>
+              <h2 className="text-lg font-semibold tracking-tight">{t("admin-flags-beta-title")}</h2>
               <p className="text-sm text-muted-foreground">
-                Early-access capabilities. Use with caution in production tenants.
+                {t("admin-flags-beta-desc")}
               </p>
             </div>
             <Card className="card-premium border-amber-500/30">
@@ -603,25 +601,24 @@ export function FeatureFlagsView({ embedded = false }: { embedded?: boolean } = 
                   </div>
                   <div>
                     <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                      Beta features may be unstable.
+                      {t("admin-flags-beta-warning")}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      These features are still in development and may change or break
-                      without notice.
+                      {t("admin-flags-beta-warning-desc")}
                     </p>
                   </div>
                 </div>
                 <div className="divide-y divide-border/60">
                   <BetaRow
-                    title="AI Assistant"
-                    description="Conversational help with deals, offers and partners."
+                    title={t("admin-flags-beta-ai-title")}
+                    description={t("admin-flags-beta-ai-desc")}
                     enabled={merged.beta_ai_assistant}
                     disabled={saveMut.isPending}
                     onToggle={(v) => toggleBeta("beta_ai_assistant", v)}
                   />
                   <BetaRow
-                    title="Advanced Analytics"
-                    description="Predictive insights and custom report builder."
+                    title={t("admin-flags-beta-analytics-title")}
+                    description={t("admin-flags-beta-analytics-desc")}
                     enabled={merged.beta_advanced_analytics}
                     disabled={saveMut.isPending}
                     onToggle={(v) => toggleBeta("beta_advanced_analytics", v)}
@@ -648,6 +645,7 @@ function LimitField({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
@@ -659,7 +657,7 @@ function LimitField({
         className="tabular h-10"
       />
       <p className="text-[11px] text-muted-foreground">
-        {value === 0 ? "Unlimited" : value.toLocaleString()}
+        {value === 0 ? t("admin-flags-unlimited") : value.toLocaleString()}
       </p>
     </div>
   );
@@ -678,6 +676,7 @@ function BetaRow({
   disabled: boolean;
   onToggle: (v: boolean) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center justify-between gap-3 px-5 py-4">
       <div className="min-w-0">
@@ -692,7 +691,7 @@ function BetaRow({
                 : "text-muted-foreground"
             )}
           >
-            {enabled ? "Enabled" : "Disabled"}
+            {enabled ? t("admin-enabled") : t("admin-disabled")}
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">{description}</p>

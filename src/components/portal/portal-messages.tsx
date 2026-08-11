@@ -11,6 +11,7 @@ import { fmtDateTime, fmtRelative, initials } from "@/lib/utils/format";
 import { useAppStore } from "@/lib/store/app-store";
 import { toast } from "sonner";
 import type { PortalAccess, Partner } from "@/lib/supabase/types";
+import { useT } from "@/lib/i18n/store";
 
 interface PortalMessage {
   id: string;
@@ -33,16 +34,17 @@ function groupByDay(items: PortalMessage[]) {
   return [...groups.entries()].map(([day, msgs]) => ({ day, msgs }));
 }
 
-function dayLabel(iso: string): string {
+function dayLabel(iso: string, t: (key: string) => string): string {
   const d = new Date(iso);
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
-  if (iso === today) return "Today";
-  if (iso === yesterday) return "Yesterday";
+  if (iso === today) return t("portal-messages-today");
+  if (iso === yesterday) return t("portal-messages-yesterday");
   return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
 export function PortalMessages() {
+  const t = useT();
   const qc = useQueryClient();
   const [input, setInput] = useState("");
   const access = useAppStore((s) => s.portalAccess) as PortalAccess | null;
@@ -95,7 +97,7 @@ export function PortalMessages() {
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to send");
+        throw new Error(e.error || t("portal-messages-toast-send-failed"));
       }
       return r.json();
     },
@@ -104,7 +106,7 @@ export function PortalMessages() {
       setAttachment(null);
       qc.invalidateQueries({ queryKey: ["portal-messages"] });
     },
-    onError: (e: Error) => toast.error(e.message || "Failed to send"),
+    onError: (e: Error) => toast.error(e.message || t("portal-messages-toast-send-failed")),
   });
 
   const canSend = (input.trim().length > 0 || !!attachment) && !sendMut.isPending && !uploading;
@@ -115,7 +117,7 @@ export function PortalMessages() {
 
   async function handleAttach(file: File) {
     if (file.size > 25 * 1024 * 1024) {
-      toast.error("File too large. Max 25 MB.");
+      toast.error(t("portal-messages-toast-file-too-large"));
       return;
     }
     setUploading(true);
@@ -126,12 +128,12 @@ export function PortalMessages() {
       const r = await fetch("/api/portal/upload", { method: "POST", body: fd });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Upload failed");
+        throw new Error(e.error || t("portal-messages-toast-upload-failed"));
       }
       const row = await r.json();
       setAttachment({ id: row.id, filename: row.filename, mime_type: row.mime_type });
     } catch (e: any) {
-      toast.error(e.message || "Upload failed");
+      toast.error(e.message || t("portal-messages-toast-upload-failed"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -153,9 +155,9 @@ export function PortalMessages() {
           <MessageSquare className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Aspidus Support</p>
+          <p className="text-sm font-semibold">{t("portal-messages-support")}</p>
           <p className="text-xs text-muted-foreground">
-            {messagesQ.isFetching ? "Refreshing…" : "Usually replies within 1 business day"}
+            {messagesQ.isFetching ? t("portal-messages-refreshing") : t("portal-messages-replies")}
           </p>
         </div>
       </div>
@@ -167,22 +169,22 @@ export function PortalMessages() {
       >
         {messagesQ.isLoading ? (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin mr-2" /> Loading conversation…
+            <Loader2 className="size-4 animate-spin mr-2" /> {t("portal-messages-loading")}
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-sm text-muted-foreground">
             <div className="size-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
               <MessageSquare className="size-6 text-primary" />
             </div>
-            <p className="text-base font-medium text-foreground">Start the conversation</p>
-            <p className="max-w-xs mt-1">Send a message to your account manager — they'll receive an email notification.</p>
+            <p className="text-base font-medium text-foreground">{t("portal-messages-start")}</p>
+            <p className="max-w-xs mt-1">{t("portal-messages-start-desc")}</p>
           </div>
         ) : (
           grouped.map(({ day, msgs }) => (
             <div key={day} className="space-y-3">
               <div className="flex items-center gap-2 my-2">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{dayLabel(day)}</span>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{dayLabel(day, t)}</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
               {msgs.map((m) => <Bubble key={m.id} m={m} partnerName={partnerName} />)}
@@ -215,8 +217,8 @@ export function PortalMessages() {
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading || sendMut.isPending || !!attachment}
             className="h-[52px] px-3"
-            title="Attach file"
-            aria-label="Attach file"
+            title={t("portal-messages-attach-file")}
+            aria-label={t("portal-messages-aria-attach")}
           >
             {uploading ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
           </Button>
@@ -224,7 +226,7 @@ export function PortalMessages() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Type a message…  (Enter to send, Shift+Enter for new line)"
+            placeholder={t("portal-messages-placeholder")}
             rows={2}
             maxLength={8000}
             className="resize-none flex-1 min-h-[52px]"
@@ -235,7 +237,7 @@ export function PortalMessages() {
           </Button>
         </div>
         <p className="text-[11px] text-muted-foreground mt-2 px-1">
-          Messages are private and only visible to your account manager. Attachments up to 25 MB.
+          {t("portal-messages-privacy")}
         </p>
       </div>
     </div>

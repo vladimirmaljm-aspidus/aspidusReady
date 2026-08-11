@@ -24,6 +24,7 @@ import { CURRENCIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import type { MemorandumSettings, Tenant } from "@/lib/supabase/types";
 import { LOCALE_LABELS, LOCALE_FLAGS, type Locale } from "@/lib/i18n/dictionaries";
+import { useT } from "@/lib/i18n/store";
 
 type CompanyForm = {
   name: string;
@@ -123,16 +124,17 @@ async function fetchSetting<T>(key: string, fallback: T, api: (path: string) => 
 export function SettingsView() {
   const currentUser = useAppStore((s) => s.user);
   const admin = isAdmin(currentUser);
+  const t = useT();
 
   if (!admin) {
     return (
       <div>
-        <PageHeader title="Settings" />
+        <PageHeader title={t("admin-settings-title")} />
         <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl">
           <CardContent className="p-6 flex items-center gap-3">
             <ShieldAlert className="size-5 text-amber-600 shrink-0" />
             <p className="text-sm text-amber-800 dark:text-amber-300">
-              Admin access required
+              {t("admin-settings-admin-required")}
             </p>
           </CardContent>
         </Card>
@@ -142,15 +144,15 @@ export function SettingsView() {
 
   return (
     <div>
-      <PageHeader title="Settings" description="Configure company, security, and communications." />
+      <PageHeader title={t("admin-settings-title")} description={t("admin-settings-desc")} />
       <Tabs defaultValue="company">
         <TabsList className="flex w-full max-w-2xl overflow-x-auto justify-start sm:grid sm:grid-cols-6">
-          <TabsTrigger value="company">Company</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="comms">Communications</TabsTrigger>
-          <TabsTrigger value="integrations">API Keys</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
-          <TabsTrigger value="memorandum">Memorandum</TabsTrigger>
+          <TabsTrigger value="company">{t("admin-settings-tab-company")}</TabsTrigger>
+          <TabsTrigger value="security">{t("admin-settings-tab-security")}</TabsTrigger>
+          <TabsTrigger value="comms">{t("admin-settings-tab-comms")}</TabsTrigger>
+          <TabsTrigger value="integrations">{t("admin-settings-tab-integrations")}</TabsTrigger>
+          <TabsTrigger value="preferences">{t("admin-settings-tab-preferences")}</TabsTrigger>
+          <TabsTrigger value="memorandum">{t("admin-settings-tab-memorandum")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="mt-4 space-y-4">
@@ -221,6 +223,7 @@ function useSettingLoader<T>(key: string, fallback: T) {
 
 function CompanyTab() {
   const { value, setValue, loading, saving, save } = useSettingLoader<CompanyForm>("company", DEFAULT_COMPANY);
+  const t = useT();
 
   function set<K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) {
     setValue((prev) => ({ ...prev, [k]: v }));
@@ -239,8 +242,8 @@ function CompanyTab() {
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Building2 className="size-5" /> Company</CardTitle>
-        <CardDescription>Company details used on offers and invoices.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><Building2 className="size-5" /> {t("admin-settings-company-title")}</CardTitle>
+        <CardDescription>{t("admin-settings-company-desc")}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -308,7 +311,7 @@ function CompanyTab() {
 
         <div className="mt-4 flex justify-end">
           <Button onClick={() => save(value)} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("admin-saving") : t("save")}
           </Button>
         </div>
       </CardContent>
@@ -318,6 +321,7 @@ function CompanyTab() {
 
 function DefaultLanguageCard() {
   const { value, setValue, loading, saving, save } = useSettingLoader<Locale>("default_locale", "en");
+  const t = useT();
 
   if (loading) {
     return (
@@ -332,14 +336,14 @@ function DefaultLanguageCard() {
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Globe className="size-5" /> Default Language</CardTitle>
+        <CardTitle className="flex items-center gap-2"><Globe className="size-5" /> {t("admin-settings-default-language")}</CardTitle>
         <CardDescription>
-          Applies to users in this tenant who haven&apos;t chosen their own language yet. Document generation always stays in English.
+          {t("admin-settings-default-language-desc")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="max-w-xs space-y-1.5">
-          <Label>Language</Label>
+          <Label>{t("admin-settings-language")}</Label>
           <Select value={value} onValueChange={(v) => setValue(v as Locale)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -353,7 +357,7 @@ function DefaultLanguageCard() {
         </div>
         <div className="mt-4 flex justify-end">
           <Button onClick={() => save(value)} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("admin-saving") : t("save")}
           </Button>
         </div>
       </CardContent>
@@ -364,6 +368,7 @@ function DefaultLanguageCard() {
 function LogoUpload() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -438,10 +443,10 @@ function LogoUpload() {
     <div className="mt-6 pt-6 border-t">
       <Label className="text-sm font-medium flex items-center gap-2">
         <ImageIcon className="size-4" />
-        Company Logo
+        {t("admin-settings-company-logo")}
       </Label>
       <p className="text-xs text-muted-foreground mt-1 mb-4">
-        Upload your company logo. It will appear in the top-right corner of all PDF documents (offers, invoices, proformas).
+        {t("admin-settings-company-desc")}
       </p>
       <div className="flex items-start gap-4">
         <div className="size-24 rounded-lg border-2 border-dashed border-border/60 flex items-center justify-center bg-muted/30 overflow-hidden relative group">
@@ -460,7 +465,7 @@ function LogoUpload() {
           ) : (
             <div className="flex flex-col items-center gap-1 text-muted-foreground/40">
               <Building2 className="size-8" />
-              <span className="text-[10px]">No logo</span>
+              <span className="text-[10px]">{t("admin-settings-no-logo")}</span>
             </div>
           )}
         </div>
@@ -474,12 +479,12 @@ function LogoUpload() {
           />
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
             {uploading ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Upload className="size-4 mr-1.5" />}
-            {uploading ? "Uploading…" : "Upload Logo"}
+            {uploading ? t("admin-settings-uploading") : t("admin-settings-upload-logo")}
           </Button>
           <p className="text-xs text-muted-foreground">PNG, JPEG, WebP or SVG · Max 2MB</p>
           {displayUrl && (
             <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <ImageIcon className="size-3" /> Logo set — visible on PDFs
+              <ImageIcon className="size-3" /> {t("admin-settings-logo-set")}
             </p>
           )}
         </div>
@@ -490,6 +495,7 @@ function LogoUpload() {
 
 function SecurityTab() {
   const { value, setValue, loading, saving, save } = useSettingLoader<SecurityForm>("security_policy", DEFAULT_SECURITY);
+  const t = useT();
 
   function set<K extends keyof SecurityForm>(k: K, v: SecurityForm[K]) {
     setValue((prev) => ({ ...prev, [k]: v }));
@@ -508,8 +514,8 @@ function SecurityTab() {
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><ShieldCheck className="size-5" /> Security</CardTitle>
-        <CardDescription>Password policy and system access rules.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><ShieldCheck className="size-5" /> {t("admin-settings-security-title")}</CardTitle>
+        <CardDescription>{t("admin-settings-security-desc")}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -554,7 +560,7 @@ function SecurityTab() {
         </div>
         <div className="mt-4 flex justify-end">
           <Button onClick={() => save(value)} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("admin-saving") : t("save")}
           </Button>
         </div>
       </CardContent>
@@ -565,6 +571,7 @@ function SecurityTab() {
 function CommsTab() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const { value, setValue, loading, saving, save } = useSettingLoader<CommsForm>("comms", DEFAULT_COMMS);
 
@@ -585,8 +592,8 @@ function CommsTab() {
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Mail className="size-5" /> Communications</CardTitle>
-        <CardDescription>Configure how the system sends emails — portal invitations, KYC notifications, offers, invoices.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><Mail className="size-5" /> {t("admin-settings-comms-title")}</CardTitle>
+        <CardDescription>{t("admin-settings-comms-desc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Provider picker */}
@@ -793,7 +800,7 @@ function CommsTab() {
 
         <div className="flex justify-end">
           <Button onClick={() => save(value)} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("admin-saving") : t("save")}
           </Button>
         </div>
 
@@ -1025,6 +1032,7 @@ const DEFAULT_INTEGRATIONS: IntegrationsForm = {
 
 function IntegrationsTab() {
   const { value, setValue, loading, saving, save } = useSettingLoader<IntegrationsForm>("integrations", DEFAULT_INTEGRATIONS);
+  const t = useT();
 
   function set<K extends keyof IntegrationsForm>(k: K, v: IntegrationsForm[K]) {
     setValue((prev) => ({ ...prev, [k]: v }));
@@ -1212,7 +1220,7 @@ function IntegrationsTab() {
 
       <div className="flex justify-end">
         <Button onClick={() => save(value)} disabled={saving}>
-          {saving ? "Saving…" : "Save API Keys"}
+          {saving ? t("admin-saving") : t("save")}
         </Button>
       </div>
     </div>
@@ -1397,6 +1405,7 @@ const PREF_DEFAULTS: Record<string, string> = {
 function PreferencesTab() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [prefs, setPrefs] = useState<Record<string, string>>(PREF_DEFAULTS);
   const [loading, setLoading] = useState(true);
@@ -1478,8 +1487,8 @@ function PreferencesTab() {
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><UserCog className="size-5" /> My Preferences</CardTitle>
-        <CardDescription>Personalize your experience — language, display, and notifications.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><UserCog className="size-5" /> {t("admin-settings-preferences-title")}</CardTitle>
+        <CardDescription>{t("admin-settings-preferences-desc")}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1597,7 +1606,7 @@ function PreferencesTab() {
 
         <div className="mt-4 flex justify-end">
           <Button onClick={saveAll} disabled={saving}>
-            {saving ? "Saving…" : "Save All"}
+            {saving ? t("admin-saving") : t("save")}
           </Button>
         </div>
       </CardContent>
@@ -1655,6 +1664,7 @@ const pt = (n: number): string => mm(n * 0.353);
 function MemorandumTab() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [settings, setSettings] = useState<MemorandumSettings | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
@@ -1746,11 +1756,10 @@ function MemorandumTab() {
     <Card className="border-border/60 shadow-soft rounded-xl">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileText className="size-5" /> Memorandum
+          <FileText className="size-5" /> {t("admin-settings-memorandum-title")}
         </CardTitle>
         <CardDescription>
-          Configure the header & footer of all PDF documents (offers, invoices, proformas).
-          The company name &amp; logo come from your Company tab.
+          {t("admin-settings-memorandum-desc")}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -2048,7 +2057,7 @@ function MemorandumTab() {
                 ) : (
                   <Save className="size-4 mr-1.5" />
                 )}
-                {saving ? "Saving…" : "Save"}
+                {saving ? t("admin-saving") : t("save")}
               </Button>
             </div>
           </div>

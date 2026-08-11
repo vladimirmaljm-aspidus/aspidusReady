@@ -20,6 +20,7 @@ import { fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { Notification, NotificationType } from "@/lib/supabase/types";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
+import { useT } from "@/lib/i18n/store";
 
 /** Map a server-issued action_url (often an admin path) to a portal ViewKey. */
 function portalViewForUrl(url: string, type: NotificationType): ViewKey | null {
@@ -62,6 +63,7 @@ const CATEGORY_CONFIG: Record<
 };
 
 export function PortalNotifications() {
+  const t = useT();
   const queryClient = useQueryClient();
   const setView = useAppStore((s) => s.setView);
   const [markingRead, setMarkingRead] = useState<string | null>(null);
@@ -107,12 +109,14 @@ export function PortalNotifications() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            <span className="text-gradient-emerald">Notifications</span>
+            <span className="text-gradient-emerald">{t("portal-notif-title")}</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {notifsQ.data
-              ? `${items.length} notification${items.length === 1 ? "" : "s"}${unreadCount > 0 ? ` · ${unreadCount} unread` : ""}`
-              : "Loading your notifications…"}
+              ? t("portal-notif-count")
+                  .replace("{n}", String(items.length))
+                  .replace("{unread}", unreadCount > 0 ? t("portal-notif-unread").replace("{n}", String(unreadCount)) : "")
+              : t("portal-notif-loading")}
           </p>
         </div>
         {unreadCount > 0 && (
@@ -123,7 +127,7 @@ export function PortalNotifications() {
             className="smooth"
           >
             <MailOpen className="size-4 mr-1.5" />
-            Mark all as read
+            {t("portal-notif-mark-all")}
           </Button>
         )}
       </div>
@@ -197,7 +201,7 @@ export function PortalNotifications() {
                             }}
                             className="text-xs text-primary hover:underline inline-flex items-center gap-0.5"
                           >
-                            {notif.action_label || "View"}
+                            {notif.action_label || t("portal-notif-action-view")}
                             <ExternalLink className="size-3" />
                           </button>
                         );
@@ -213,7 +217,7 @@ export function PortalNotifications() {
                       className="size-8 shrink-0 smooth hover:bg-accent hover:text-primary"
                       onClick={() => markAsRead(notif.id)}
                       disabled={isMarking}
-                      aria-label="Mark as read"
+                      aria-label={t("portal-notif-mark-as-read")}
                     >
                       {isMarking ? (
                         <Loader2 className="size-4 animate-spin" />
@@ -233,14 +237,15 @@ export function PortalNotifications() {
 }
 
 function EmptyNotifications() {
+  const t = useT();
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-6">
       <div className="size-16 rounded-full bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center mb-4">
         <Inbox className="size-7 text-primary" />
       </div>
-      <p className="text-base font-semibold">No notifications yet</p>
+      <p className="text-base font-semibold">{t("portal-notif-empty-title")}</p>
       <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-        You&apos;ll see important updates here — invoices, offers, KYC status, and more.
+        {t("portal-notif-empty-desc")}
       </p>
     </div>
   );

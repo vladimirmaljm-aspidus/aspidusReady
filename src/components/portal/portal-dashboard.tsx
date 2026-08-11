@@ -34,6 +34,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
+import { useT } from "@/lib/i18n/store";
 import { fmtMoney, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type {
@@ -53,30 +54,30 @@ import type {
 
 const TIER_META: Record<
   PortalTier,
-  { label: string; className: string; icon: React.ComponentType<{ className?: string }> }
+  { labelKey: string; className: string; icon: React.ComponentType<{ className?: string }> }
 > = {
   premium: {
-    label: "Premium",
+    labelKey: "portal-tier-premium",
     className: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
     icon: Crown,
   },
   business: {
-    label: "Business",
+    labelKey: "portal-tier-business",
     className: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
     icon: Briefcase,
   },
   standard: {
-    label: "Standard",
+    labelKey: "portal-tier-standard",
     className: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-400",
     icon: Shield,
   },
   basic: {
-    label: "Basic",
+    labelKey: "portal-tier-basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },
   limited: {
-    label: "Basic",
+    labelKey: "portal-tier-basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },
@@ -139,6 +140,7 @@ const NOTIF_CATEGORY_CONFIG: Record<
 };
 
 export function PortalDashboard() {
+  const t = useT();
   const portalAccess = useAppStore((s) => s.portalAccess) as PortalAccess | null;
   const setView = useAppStore((s) => s.setView);
 
@@ -217,8 +219,8 @@ export function PortalDashboard() {
   const tier = portalAccess.tier;
   const TierIcon = TIER_META[tier].icon;
   const partner = profileQ.data?.partner;
-  const partnerName = partner?.name || "Client";
-  const entityType = partner?.entity_type === "individual" ? "Individual" : "Company";
+  const partnerName = partner?.name || t("portal-default-client");
+  const entityType = partner?.entity_type === "individual" ? t("portal-individual") : t("portal-company");
 
   const recentOffers = (offersQ.data?.items || []).slice(0, 5);
   const recentDocs = (docsQ.data?.items || []).slice(0, 5);
@@ -268,7 +270,7 @@ export function PortalDashboard() {
                   })}
                 </p>
                 <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-                  Welcome back,{" "}
+                  {t("portal-welcome-back")}{" "}
                   <span className="text-gradient-emerald">
                     {partnerName.split(" ")[0]}
                   </span>
@@ -276,7 +278,7 @@ export function PortalDashboard() {
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <Badge className={cn("gap-1", TIER_META[tier].className)}>
                     <TierIcon className="size-3" />
-                    {TIER_META[tier].label}
+                    {t(TIER_META[tier].labelKey)}
                   </Badge>
                   <Badge variant="outline" className="gap-1 bg-card/60">
                     {partner?.entity_type === "individual" ? (
@@ -289,7 +291,7 @@ export function PortalDashboard() {
                   {portalAccess.last_login_at && (
                     <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
                       <Clock className="size-3" />
-                      Last login {fmtRelative(portalAccess.last_login_at)}
+                      {t("portal-last-login")} {fmtRelative(portalAccess.last_login_at)}
                     </span>
                   )}
                   {unreadNotifCount > 0 && (
@@ -298,7 +300,7 @@ export function PortalDashboard() {
                       onClick={() => setView("portal-notifications")}
                     >
                       <Bell className="size-3" />
-                      {unreadNotifCount} unread
+                      {t("portal-unread").replace("{n}", String(unreadNotifCount))}
                     </Badge>
                   )}
                 </div>
@@ -311,7 +313,7 @@ export function PortalDashboard() {
                     onClick={() => setView("portal-offers")}
                     className="bg-card/60 backdrop-blur-sm smooth hover:shadow-soft-md"
                   >
-                    <FileText className="size-4 mr-1" /> View offers
+                    <FileText className="size-4 mr-1" /> {t("portal-action-view-offers")}
                   </Button>
                 )}
                 {portalAccess.can_view_catalog && (
@@ -320,7 +322,7 @@ export function PortalDashboard() {
                     onClick={() => setView("portal-catalog")}
                     className="smooth hover:shadow-soft-md"
                   >
-                    <Package className="size-4 mr-1" /> Browse catalog
+                    <Package className="size-4 mr-1" /> {t("portal-action-browse-catalog")}
                   </Button>
                 )}
               </div>
@@ -339,12 +341,12 @@ export function PortalDashboard() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold">
-                  Complete your KYC verification to unlock all features
+                  {t("portal-kyc-alert-title")}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {partner?.kyc_status === "not_submitted"
-                    ? "We need a few documents to verify your account. Takes ~5 minutes."
-                    : "Your KYC submission is under review. We'll notify you once approved."}
+                    ? t("portal-kyc-alert-not-submitted")
+                    : t("portal-kyc-alert-pending")}
                 </p>
               </div>
             </div>
@@ -354,7 +356,7 @@ export function PortalDashboard() {
                 onClick={() => setView("portal-kyc")}
                 className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 smooth hover:shadow-soft-md"
               >
-                <ShieldCheck className="size-4 mr-1" /> Start KYC
+                <ShieldCheck className="size-4 mr-1" /> {t("portal-kyc-alert-start")}
               </Button>
             )}
           </div>
@@ -371,10 +373,10 @@ export function PortalDashboard() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold">
-                  You have {overdueInvoicesCount} overdue invoice{overdueInvoicesCount > 1 ? "s" : ""}
+                  {t("portal-overdue-alert-title").replace("{n}", String(overdueInvoicesCount))}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Please review and settle any outstanding invoices to avoid service disruption.
+                  {t("portal-overdue-alert-desc")}
                 </p>
               </div>
             </div>
@@ -384,7 +386,7 @@ export function PortalDashboard() {
               onClick={() => setView("portal-invoices")}
               className="border-destructive/30 text-destructive hover:bg-destructive/10 shrink-0 smooth"
             >
-              <Receipt className="size-4 mr-1" /> View invoices
+              <Receipt className="size-4 mr-1" /> {t("portal-action-view-invoices")}
             </Button>
           </div>
         </div>
@@ -394,42 +396,42 @@ export function PortalDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {portalAccess.can_view_offers ? (
           <KpiPremium
-            label="Active Offers"
+            label={t("portal-kpi-active-offers")}
             value={offersQ.isLoading ? "—" : activeOffersCount}
-            sub={`${offersQ.data?.total ?? 0} total`}
+            sub={t("portal-kpi-total").replace("{n}", String(offersQ.data?.total ?? 0))}
             icon={FileText}
           />
         ) : (
-          <LockedKpi label="Active Offers" icon={FileText} />
+          <LockedKpi label={t("portal-kpi-active-offers")} icon={FileText} t={t} />
         )}
 
         {portalAccess.can_view_invoices ? (
           <KpiPremium
-            label="Invoices"
+            label={t("portal-kpi-invoices")}
             value={invoicesQ.isLoading ? "—" : invoicesQ.data?.total ?? 0}
-            sub={unpaidInvoicesCount > 0 ? `${unpaidInvoicesCount} unpaid` : "All settled"}
+            sub={unpaidInvoicesCount > 0 ? t("portal-kpi-unpaid").replace("{n}", String(unpaidInvoicesCount)) : t("portal-kpi-all-settled")}
             icon={Receipt}
             accent={unpaidInvoicesCount > 0 ? "text-destructive" : undefined}
           />
         ) : (
-          <LockedKpi label="Invoices" icon={Receipt} />
+          <LockedKpi label={t("portal-kpi-invoices")} icon={Receipt} t={t} />
         )}
 
         {portalAccess.can_view_invoices ? (
           <KpiPremium
-            label="Proformas"
+            label={t("portal-kpi-proformas")}
             value={proformasQ.isLoading ? "—" : proformasQ.data?.total ?? 0}
-            sub="Estimates & quotes"
+            sub={t("portal-kpi-proformas-sub")}
             icon={FileCheck}
           />
         ) : (
-          <LockedKpi label="Proformas" icon={FileCheck} />
+          <LockedKpi label={t("portal-kpi-proformas")} icon={FileCheck} t={t} />
         )}
 
         <KpiPremium
-          label="Notifications"
+          label={t("portal-kpi-notifications")}
           value={notifsQ.isLoading ? "—" : unreadNotifCount}
-          sub={`${notifsQ.data?.total ?? 0} total`}
+          sub={t("portal-kpi-total").replace("{n}", String(notifsQ.data?.total ?? 0))}
           icon={Bell}
           accent={unreadNotifCount > 0 ? "text-primary" : undefined}
           onClick={() => setView("portal-notifications")}
@@ -437,17 +439,17 @@ export function PortalDashboard() {
 
         {portalAccess.can_view_documents ? (
           <KpiPremium
-            label="Documents"
+            label={t("portal-kpi-documents")}
             value={docsQ.isLoading ? "—" : docsQ.data?.total ?? 0}
-            sub="Shared with you"
+            sub={t("portal-kpi-documents-sub")}
             icon={FolderOpen}
           />
         ) : (
-          <LockedKpi label="Documents" icon={FolderOpen} />
+          <LockedKpi label={t("portal-kpi-documents")} icon={FolderOpen} t={t} />
         )}
 
         <KpiPremium
-          label="Last Login"
+          label={t("portal-kpi-last-login")}
           value={fmtRelative(portalAccess.last_login_at)}
           sub={portalAccess.last_login_ip || undefined}
           icon={Clock}
@@ -461,9 +463,9 @@ export function PortalDashboard() {
         <div className="card-premium">
           <div className="flex flex-row items-center justify-between p-5 pb-3">
             <div>
-              <h3 className="text-base font-semibold tracking-tight">Recent Offers</h3>
+              <h3 className="text-base font-semibold tracking-tight">{t("portal-recent-offers")}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Your latest proposals
+                {t("portal-recent-offers-sub")}
               </p>
             </div>
             {portalAccess.can_view_offers && (
@@ -473,20 +475,20 @@ export function PortalDashboard() {
                 onClick={() => setView("portal-offers")}
                 className="text-primary"
               >
-                View all <ArrowRight className="size-3.5 ml-1" />
+                {t("portal-action-view-all")} <ArrowRight className="size-3.5 ml-1" />
               </Button>
             )}
           </div>
           <div className="px-2 pb-2">
             {!portalAccess.can_view_offers ? (
-              <LockedNotice />
+              <LockedNotice t={t} />
             ) : offersQ.isLoading ? (
               <LoadingRow />
             ) : recentOffers.length === 0 ? (
               <EmptyRow
                 icon={Inbox}
-                title="No offers yet"
-                desc="Your account manager will send offers here."
+                title={t("portal-empty-offers")}
+                desc={t("portal-empty-offers-desc")}
               />
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto custom-scroll">
@@ -528,9 +530,9 @@ export function PortalDashboard() {
         <div className="card-premium">
           <div className="flex flex-row items-center justify-between p-5 pb-3">
             <div>
-              <h3 className="text-base font-semibold tracking-tight">Recent Documents</h3>
+              <h3 className="text-base font-semibold tracking-tight">{t("portal-recent-documents")}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Files shared with you
+                {t("portal-recent-documents-sub")}
               </p>
             </div>
             {portalAccess.can_view_documents && (
@@ -540,20 +542,20 @@ export function PortalDashboard() {
                 onClick={() => setView("portal-documents")}
                 className="text-primary"
               >
-                View all <ArrowRight className="size-3.5 ml-1" />
+                {t("portal-action-view-all")} <ArrowRight className="size-3.5 ml-1" />
               </Button>
             )}
           </div>
           <div className="px-2 pb-2">
             {!portalAccess.can_view_documents ? (
-              <LockedNotice />
+              <LockedNotice t={t} />
             ) : docsQ.isLoading ? (
               <LoadingRow />
             ) : recentDocs.length === 0 ? (
               <EmptyRow
                 icon={FolderOpen}
-                title="No documents available"
-                desc="Shared documents will appear here."
+                title={t("portal-empty-docs")}
+                desc={t("portal-empty-docs-desc")}
               />
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto custom-scroll">
@@ -595,9 +597,9 @@ export function PortalDashboard() {
         <div className="card-premium">
           <div className="flex flex-row items-center justify-between p-5 pb-3">
             <div>
-              <h3 className="text-base font-semibold tracking-tight">Recent Invoices</h3>
+              <h3 className="text-base font-semibold tracking-tight">{t("portal-recent-invoices")}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Your billing summary
+                {t("portal-recent-invoices-sub")}
               </p>
             </div>
             {portalAccess.can_view_invoices && (
@@ -607,20 +609,20 @@ export function PortalDashboard() {
                 onClick={() => setView("portal-invoices")}
                 className="text-primary"
               >
-                View all <ArrowRight className="size-3.5 ml-1" />
+                {t("portal-action-view-all")} <ArrowRight className="size-3.5 ml-1" />
               </Button>
             )}
           </div>
           <div className="px-2 pb-2">
             {!portalAccess.can_view_invoices ? (
-              <LockedNotice />
+              <LockedNotice t={t} />
             ) : invoicesQ.isLoading ? (
               <LoadingRow />
             ) : recentInvoices.length === 0 ? (
               <EmptyRow
                 icon={Receipt}
-                title="No invoices yet"
-                desc="Your account manager will send invoices here."
+                title={t("portal-empty-invoices")}
+                desc={t("portal-empty-invoices-desc")}
               />
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto custom-scroll">
@@ -651,7 +653,7 @@ export function PortalDashboard() {
                         {fmtMoney(inv.total, inv.currency)}
                       </p>
                       <p className="text-[11px] text-muted-foreground tabular">
-                        Due {fmtDate(inv.due_date)}
+                        {t("portal-due-label").replace("{date}", fmtDate(inv.due_date))}
                       </p>
                     </div>
                   </button>
@@ -665,9 +667,9 @@ export function PortalDashboard() {
         <div className="card-premium">
           <div className="flex flex-row items-center justify-between p-5 pb-3">
             <div>
-              <h3 className="text-base font-semibold tracking-tight">Recent Proformas</h3>
+              <h3 className="text-base font-semibold tracking-tight">{t("portal-recent-proformas")}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Estimates & advance invoices
+                {t("portal-recent-proformas-sub")}
               </p>
             </div>
             {portalAccess.can_view_invoices && (
@@ -677,20 +679,20 @@ export function PortalDashboard() {
                 onClick={() => setView("portal-proformas")}
                 className="text-primary"
               >
-                View all <ArrowRight className="size-3.5 ml-1" />
+                {t("portal-action-view-all")} <ArrowRight className="size-3.5 ml-1" />
               </Button>
             )}
           </div>
           <div className="px-2 pb-2">
             {!portalAccess.can_view_invoices ? (
-              <LockedNotice />
+              <LockedNotice t={t} />
             ) : proformasQ.isLoading ? (
               <LoadingRow />
             ) : recentProformas.length === 0 ? (
               <EmptyRow
                 icon={FileCheck}
-                title="No proformas yet"
-                desc="Proforma invoices will appear here."
+                title={t("portal-empty-proformas")}
+                desc={t("portal-empty-proformas-desc")}
               />
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto custom-scroll">
@@ -738,9 +740,9 @@ export function PortalDashboard() {
         <div className="card-premium">
           <div className="flex flex-row items-center justify-between p-5 pb-3">
             <div>
-              <h3 className="text-base font-semibold tracking-tight">Recent Activity</h3>
+              <h3 className="text-base font-semibold tracking-tight">{t("portal-recent-activity")}</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Your latest account events
+                {t("portal-recent-activity-sub")}
               </p>
             </div>
             <Button
@@ -749,15 +751,15 @@ export function PortalDashboard() {
               onClick={() => setView("portal-notifications")}
               className="text-primary"
             >
-              View all <ArrowRight className="size-3.5 ml-1" />
+              {t("portal-action-view-all")} <ArrowRight className="size-3.5 ml-1" />
             </Button>
           </div>
           <div className="px-2 pb-2">
             {activityItems.length === 0 ? (
               <EmptyRow
                 icon={Activity}
-                title="No recent activity"
-                desc="Account events will appear here as you interact with the portal."
+                title={t("portal-empty-activity")}
+                desc={t("portal-empty-activity-desc")}
               />
             ) : (
               <div className="space-y-0 max-h-80 overflow-y-auto custom-scroll">
@@ -784,7 +786,7 @@ export function PortalDashboard() {
                           className="text-xs text-primary shrink-0 h-7 px-2"
                           onClick={() => setView(item.action!)}
                         >
-                          View
+                          {t("portal-action-view")}
                         </Button>
                       )}
                     </div>
@@ -798,78 +800,78 @@ export function PortalDashboard() {
         {/* Quick links */}
         <div className="card-premium">
           <div className="p-5 pb-3">
-            <h3 className="text-base font-semibold tracking-tight">Quick Links</h3>
+            <h3 className="text-base font-semibold tracking-tight">{t("portal-quick-links")}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Jump to key actions
+              {t("portal-quick-links-sub")}
             </p>
           </div>
           <div className="px-2 pb-2">
             <div className="grid grid-cols-2 gap-2">
               <QuickLink
-                title="View Offers"
-                desc="Browse proposals"
+                title={t("portal-ql-view-offers")}
+                desc={t("portal-ql-view-offers-desc")}
                 icon={FileText}
                 onClick={() => setView("portal-offers")}
                 locked={!portalAccess.can_view_offers}
               />
               <QuickLink
-                title="Submit RFQ"
-                desc="Request a quote"
+                title={t("portal-ql-submit-rfq")}
+                desc={t("portal-ql-submit-rfq-desc")}
                 icon={ShoppingCart}
                 onClick={() => setView("portal-rfq")}
                 locked={!portalAccess.can_submit_rfq}
               />
               <QuickLink
-                title="View Documents"
-                desc="Contracts & files"
+                title={t("portal-ql-view-docs")}
+                desc={t("portal-ql-view-docs-desc")}
                 icon={FolderOpen}
                 onClick={() => setView("portal-documents")}
                 locked={!portalAccess.can_view_documents}
               />
               <QuickLink
-                title="Browse Catalog"
-                desc="Products & pricing"
+                title={t("portal-ql-browse-catalog")}
+                desc={t("portal-ql-browse-catalog-desc")}
                 icon={Package}
                 onClick={() => setView("portal-catalog")}
                 locked={!portalAccess.can_view_catalog}
               />
               <QuickLink
-                title="Invoices"
-                desc="Billing & payments"
+                title={t("portal-ql-invoices")}
+                desc={t("portal-ql-invoices-desc")}
                 icon={CreditCard}
                 onClick={() => setView("portal-invoices")}
                 locked={!portalAccess.can_view_invoices}
               />
               <QuickLink
-                title="Proformas"
-                desc="Estimates & quotes"
+                title={t("portal-ql-proformas")}
+                desc={t("portal-ql-proformas-desc")}
                 icon={FileCheck}
                 onClick={() => setView("portal-proformas")}
                 locked={!portalAccess.can_view_invoices}
               />
               <QuickLink
-                title="Notifications"
-                desc={`${unreadNotifCount} unread`}
+                title={t("portal-ql-notifications")}
+                desc={t("portal-unread").replace("{n}", String(unreadNotifCount))}
                 icon={Bell}
                 onClick={() => setView("portal-notifications")}
                 highlight={unreadNotifCount > 0}
               />
               <QuickLink
-                title="Messages"
-                desc="Contact your manager"
+                title={t("portal-ql-messages")}
+                desc={t("portal-ql-messages-desc")}
                 icon={MessageSquare}
                 onClick={() => setView("portal-messages")}
               />
               <QuickLink
-                title="My Profile"
-                desc="Account settings"
+                title={t("portal-ql-my-profile")}
+                desc={t("portal-ql-my-profile-desc")}
                 icon={User}
                 onClick={() => setView("portal-profile")}
               />
               {!portalAccess.exempt_kyc && (
                 <QuickLink
-                  title="Complete KYC"
-                  desc="Verify your account"
+                  title={t("portal-ql-complete-kyc")}
+                  desc={t("portal-ql-complete-kyc-desc")}
                   icon={ShieldCheck}
                   onClick={() => setView("portal-kyc")}
                   highlight={kycPending}
@@ -1051,9 +1053,11 @@ function KpiPremium({
 function LockedKpi({
   label,
   icon: Icon,
+  t,
 }: {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  t: (k: string) => string;
 }) {
   return (
     <div className="rounded-xl border border-dashed border-border/60 bg-muted/30 p-5 opacity-80">
@@ -1062,7 +1066,7 @@ function LockedKpi({
           <p className="text-xs font-medium text-muted-foreground truncate">{label}</p>
           <div className="flex items-center gap-1.5 mt-2.5">
             <Lock className="size-3.5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Locked</span>
+            <span className="text-sm text-muted-foreground">{t("portal-locked")}</span>
           </div>
         </div>
         <div className="size-10 rounded-xl bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
@@ -1073,15 +1077,15 @@ function LockedKpi({
   );
 }
 
-function LockedNotice() {
+function LockedNotice({ t }: { t: (k: string) => string }) {
   return (
     <div className="rounded-lg border border-dashed border-border/60 bg-muted/30 p-6 text-center m-2">
       <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
         <Lock className="size-5 text-muted-foreground" />
       </div>
-      <p className="text-sm font-medium">This section is locked</p>
+      <p className="text-sm font-medium">{t("portal-section-locked")}</p>
       <p className="text-xs text-muted-foreground mt-1">
-        Upgrade your access tier to unlock this feature.
+        {t("portal-section-locked-desc")}
       </p>
     </div>
   );

@@ -26,6 +26,7 @@ import {
   Truck,
 } from "lucide-react";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
+import { useT } from "@/lib/i18n/store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -87,77 +88,79 @@ const PortalLogistics = dynamic(
 
 interface NavItem {
   key: ViewKey;
-  label: string;
+  labelKey: string;
   icon: React.ComponentType<{ className?: string }>;
   gate?: keyof PortalAccess;
   badgeKey?: "messages_unread";
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "portal-dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "portal-offers", label: "My Offers", icon: FileText, gate: "can_view_offers" },
-  { key: "portal-invoices", label: "My Invoices", icon: FileText, gate: "can_view_invoices" },
-  { key: "portal-proformas", label: "My Proformas", icon: FileText, gate: "can_view_invoices" },
-  { key: "portal-messages", label: "Messages", icon: MessageSquare, badgeKey: "messages_unread" },
-  { key: "portal-notifications", label: "Notifications", icon: Bell },
-  { key: "portal-documents", label: "My Documents", icon: FolderOpen, gate: "can_view_documents" },
-  { key: "portal-catalog", label: "Product Catalog", icon: Package, gate: "can_view_catalog" },
-  { key: "portal-rfq", label: "Request a Quote", icon: ShoppingCart, gate: "can_submit_rfq" },
-  { key: "portal-logistics", label: "Logistics", icon: Truck },
-  { key: "portal-kyc", label: "KYC Verification", icon: ShieldCheck },
-  { key: "portal-profile", label: "My Profile", icon: User, gate: "can_view_profile" },
+  { key: "portal-dashboard", labelKey: "portal-nav-dashboard", icon: LayoutDashboard },
+  { key: "portal-offers", labelKey: "portal-nav-my-offers", icon: FileText, gate: "can_view_offers" },
+  { key: "portal-invoices", labelKey: "portal-nav-my-invoices", icon: FileText, gate: "can_view_invoices" },
+  { key: "portal-proformas", labelKey: "portal-nav-my-proformas", icon: FileText, gate: "can_view_invoices" },
+  { key: "portal-messages", labelKey: "portal-nav-messages", icon: MessageSquare, badgeKey: "messages_unread" },
+  { key: "portal-notifications", labelKey: "portal-nav-notifications", icon: Bell },
+  { key: "portal-documents", labelKey: "portal-nav-my-documents", icon: FolderOpen, gate: "can_view_documents" },
+  { key: "portal-catalog", labelKey: "portal-nav-product-catalog", icon: Package, gate: "can_view_catalog" },
+  { key: "portal-rfq", labelKey: "portal-nav-request-quote", icon: ShoppingCart, gate: "can_submit_rfq" },
+  { key: "portal-logistics", labelKey: "portal-nav-logistics", icon: Truck },
+  { key: "portal-kyc", labelKey: "portal-nav-kyc", icon: ShieldCheck },
+  { key: "portal-profile", labelKey: "portal-nav-my-profile", icon: User, gate: "can_view_profile" },
   // NOTE: "Company Info" removed — no `portal-company` view exists yet, and the
   // duplicate `key: "portal-profile"` opened the same view as "My Profile" (P1-5).
-  // Re-add as `{ key: "portal-company", label: "Company Info", ... }` once a
+  // Re-add as `{ key: "portal-company", labelKey: "portal-nav-company-info", ... }` once a
   // dedicated company-info view (or a tab inside PortalProfile) is implemented.
 ];
 
 const TIER_META: Record<
   PortalTier,
-  { label: string; className: string; icon: React.ComponentType<{ className?: string }> }
+  { labelKey: string; className: string; icon: React.ComponentType<{ className?: string }> }
 > = {
   premium: {
-    label: "Premium",
+    labelKey: "portal-tier-premium",
     className: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
     icon: Crown,
   },
   business: {
-    label: "Business",
+    labelKey: "portal-tier-business",
     className: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
     icon: Briefcase,
   },
   standard: {
-    label: "Standard",
+    labelKey: "portal-tier-standard",
     className: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-400",
     icon: Shield,
   },
   basic: {
-    label: "Basic",
+    labelKey: "portal-tier-basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },
   limited: {
-    label: "Basic",
+    labelKey: "portal-tier-basic",
     className: "border-transparent bg-muted text-muted-foreground",
     icon: Boxes,
   },
 };
 
-const VIEW_TITLES: Record<string, string> = {
-  "portal-dashboard": "Dashboard",
-  "portal-offers": "My Offers",
-  "portal-invoices": "My Invoices",
-  "portal-proformas": "My Proformas",
-  "portal-notifications": "Notifications",
-  "portal-documents": "My Documents",
-  "portal-catalog": "Product Catalog",
-  "portal-rfq": "Request a Quote",
-  "portal-logistics": "Logistics",
-  "portal-kyc": "KYC Verification",
-  "portal-profile": "My Profile",
+// View title keys — looked up at render-time so they translate when the locale changes.
+const VIEW_TITLE_KEYS: Record<string, string> = {
+  "portal-dashboard": "portal-nav-dashboard",
+  "portal-offers": "portal-nav-my-offers",
+  "portal-invoices": "portal-nav-my-invoices",
+  "portal-proformas": "portal-nav-my-proformas",
+  "portal-notifications": "portal-nav-notifications",
+  "portal-documents": "portal-nav-my-documents",
+  "portal-catalog": "portal-nav-product-catalog",
+  "portal-rfq": "portal-nav-request-quote",
+  "portal-logistics": "portal-nav-logistics",
+  "portal-kyc": "portal-nav-kyc",
+  "portal-profile": "portal-nav-my-profile",
 };
 
 export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
+  const t = useT();
   const portalAccess = useAppStore((s) => s.portalAccess) as PortalAccess | null;
   const setPortalAccess = useAppStore((s) => s.setPortalAccess);
   const setAppMode = useAppStore((s) => s.setAppMode);
@@ -259,7 +262,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
     }
     setPortalAccess(null);
     setAppMode("crm");
-    toast.success("Signed out of the client portal.");
+    toast.success(t("portal-toast-signed-out"));
   }
 
   if (!portalAccess) {
@@ -267,7 +270,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
       <div className="min-h-screen flex items-center justify-center bg-mesh-portal">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">{hydrating ? "Loading your portal…" : "Redirecting to sign in…"}</p>
+          <p className="text-sm text-muted-foreground">{hydrating ? t("portal-loading-portal") : t("portal-redirecting-signin")}</p>
         </div>
       </div>
     );
@@ -284,16 +287,13 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
             <MapPin className="size-8 text-primary animate-pulse" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Sharing your location…</h2>
+            <h2 className="text-lg font-semibold">{t("portal-geo-sharing-title")}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Your browser should be asking for permission to share your
-              location. This is required for your tier
-              (<strong>{getTierMeta(portalAccess.tier).label}</strong>) and is
-              logged securely for compliance.
+              {t("portal-geo-sharing-desc").replace("{tier}", t(TIER_META[portalAccess.tier].labelKey))}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={signOut}>
-            Cancel & sign out
+            {t("portal-geo-cancel-signout")}
           </Button>
         </div>
       </div>
@@ -308,22 +308,20 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
             <ShieldAlert className="size-8 text-destructive" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Location sharing required</h2>
+            <h2 className="text-lg font-semibold">{t("portal-geo-required-title")}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Your portal tier (<strong>{getTierMeta(portalAccess.tier).label}</strong>)
-              requires geolocation to be shared. Please enable location
-              permissions in your browser and reload this page.
+              {t("portal-geo-required-desc").replace("{tier}", t(TIER_META[portalAccess.tier].labelKey))}
             </p>
             <p className="text-xs text-muted-foreground mt-2 font-mono">
-              Error: {geo.error}
+              {t("portal-geo-error-label").replace("{error}", geo.error)}
             </p>
           </div>
           <div className="flex gap-2 justify-center">
             <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
-              Reload
+              {t("portal-geo-reload")}
             </Button>
             <Button variant="ghost" size="sm" onClick={signOut}>
-              Sign out
+              {t("portal-sign-out")}
             </Button>
           </div>
         </div>
@@ -333,10 +331,10 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
 
   const tier = portalAccess.tier;
   const TierIcon = TIER_META[tier].icon;
-  const partnerName = partner?.name || "Client";
+  const partnerName = partner?.name || t("portal-default-client");
 
   const activeTitle =
-    view === "portal-profile" ? "My Profile" : VIEW_TITLES[view] || "Client Portal";
+    view === "portal-profile" ? t("portal-nav-my-profile") : t(VIEW_TITLE_KEYS[view] || "portal-client-portal");
 
   return (
     <div className="min-h-screen flex bg-background bg-mesh-portal">
@@ -399,7 +397,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
                 size="icon"
                 className="md:hidden -ml-2 size-9"
                 onClick={() => setMobileNavOpen(true)}
-                aria-label="Open navigation"
+                aria-label={t("portal-open-navigation")}
               >
                 <Menu className="size-5" />
               </Button>
@@ -413,12 +411,12 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
                   {partnerName}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
-                  Last login {fmtRelative(portalAccess.last_login_at)}
+                  {t("portal-last-login")} {fmtRelative(portalAccess.last_login_at)}
                 </span>
               </div>
               <Badge className={cn("gap-1 capitalize", TIER_META[tier].className)}>
                 <TierIcon className="size-3" />
-                {TIER_META[tier].label}
+                {t(TIER_META[tier].labelKey)}
               </Badge>
               <Avatar className="size-9 ring-1 ring-border shadow-soft">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
@@ -437,13 +435,12 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
               <div className="size-12 mx-auto rounded-full bg-amber-500/15 flex items-center justify-center mb-3">
                 <ShieldAlert className="size-6 text-amber-600" />
               </div>
-              <h3 className="text-lg font-semibold">Complete your KYC verification first</h3>
+              <h3 className="text-lg font-semibold">{t("portal-kyc-block-title")}</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Your account tier (<strong>{getTierMeta(tier).label}</strong>) requires KYC approval
-                before you can view offers, invoices, documents or submit requests.
+                {t("portal-kyc-block-desc").replace("{tier}", t(TIER_META[tier].labelKey))}
               </p>
               <Button className="mt-4" onClick={() => setView("portal-kyc")}>
-                Go to KYC Verification
+                {t("portal-kyc-block-cta")}
               </Button>
             </div>
           ) : (
@@ -497,21 +494,19 @@ function SidebarContent({
   // While KYC is blocking, only the KYC + Profile items are usable. Everything
   // else is hidden so the sidebar can't tease functionality the user hasn't
   // unlocked yet.
+  const t = useT();
   const visibleItems = NAV_ITEMS.filter((n) => {
     if (kycBlocking && n.key !== "portal-kyc" && n.key !== "portal-profile") return false;
     return !n.gate || (portalAccess[n.gate] as boolean);
   });
 
-  // Group items: main workspace vs account
-  const isAccountItem = (label: string) =>
-    label === "My Profile" || label === "Company Info" || label === "KYC Verification";
-
-  const workspaceItems = visibleItems.filter((n) => !isAccountItem(n.label));
-  const accountItems = visibleItems.filter((n) => isAccountItem(n.label));
+  // Group items: main workspace vs account (matched by nav key, not label text,
+  // so the grouping is locale-independent).
+  const ACCOUNT_KEYS = new Set(["portal-profile", "portal-company", "portal-kyc"]);
+  const workspaceItems = visibleItems.filter((n) => !ACCOUNT_KEYS.has(n.key));
+  const accountItems = visibleItems.filter((n) => ACCOUNT_KEYS.has(n.key));
 
   function isActive(item: NavItem): boolean {
-    // Company Info maps to portal-profile; only mark active when no other profile item is the visual anchor
-    if (item.label === "Company Info" && view === "portal-profile") return false;
     return view === item.key;
   }
 
@@ -523,8 +518,8 @@ function SidebarContent({
           A
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-sm tracking-tight truncate">Client Portal</p>
-          <p className="text-[10px] text-muted-foreground truncate">Aspidus Trading</p>
+          <p className="font-semibold text-sm tracking-tight truncate">{t("portal-brand-title")}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{t("portal-brand-subtitle")}</p>
         </div>
       </div>
 
@@ -538,7 +533,7 @@ function SidebarContent({
           {profileLoading ? (
             <div className="flex items-center gap-2">
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Loading…</span>
+              <span className="text-xs text-muted-foreground">{t("portal-loading-dots")}</span>
             </div>
           ) : (
             <div className="relative">
@@ -553,7 +548,7 @@ function SidebarContent({
                     {partnerName}
                   </p>
                   <p className="text-[11px] text-muted-foreground truncate">
-                    {partner?.entity_type === "individual" ? "Individual" : "Company"}
+                    {partner?.entity_type === "individual" ? t("portal-individual") : t("portal-company")}
                     {partner?.country ? ` · ${partner.country}` : ""}
                   </p>
                 </div>
@@ -563,7 +558,7 @@ function SidebarContent({
                 variant="outline"
               >
                 <TierIcon className="size-3" />
-                {TIER_META[tier].label} tier
+                {t("portal-tier-label").replace("{tier}", t(TIER_META[tier].labelKey))}
               </Badge>
             </div>
           )}
@@ -574,7 +569,7 @@ function SidebarContent({
       <nav className="flex-1 overflow-y-auto custom-scroll px-3 py-4 space-y-5">
         <div className="space-y-1">
           <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            Workspace
+            {t("portal-section-workspace")}
           </p>
           {workspaceItems.map((item, idx) => {
             const Icon = item.icon;
@@ -599,7 +594,7 @@ function SidebarContent({
                       : "text-muted-foreground group-hover:text-foreground"
                   )}
                 />
-                <span className="truncate flex-1 text-left">{item.label}</span>
+                <span className="truncate flex-1 text-left">{t(item.labelKey)}</span>
                 {badgeCount > 0 && (
                   <Badge className="bg-destructive text-destructive-foreground text-[10px] px-1.5 py-0 h-5 min-w-[20px] justify-center rounded-full tabular">
                     {badgeCount > 99 ? "99+" : badgeCount}
@@ -613,7 +608,7 @@ function SidebarContent({
         {/* Account section */}
         <div className="space-y-1">
           <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            Account
+            {t("portal-section-account")}
           </p>
           {accountItems.map((item, idx) => {
             const Icon = item.icon;
@@ -637,7 +632,7 @@ function SidebarContent({
                       : "text-muted-foreground group-hover:text-foreground"
                   )}
                 />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate">{t(item.labelKey)}</span>
               </button>
             );
           })}
@@ -652,7 +647,7 @@ function SidebarContent({
           onClick={signOut}
           className="w-full justify-start text-muted-foreground hover:text-foreground smooth"
         >
-          <LogOut className="size-4 mr-2" /> Sign out
+          <LogOut className="size-4 mr-2" /> {t("portal-sign-out")}
         </Button>
       </div>
     </>

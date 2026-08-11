@@ -31,10 +31,12 @@ import {
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/store";
 
 const FIRM_NAME = "Aspidus";
 
 export function PortalLogin() {
+  const t = useT();
   const setPortalAccess = useAppStore((s) => s.setPortalAccess);
   const setAppMode = useAppStore((s) => s.setAppMode);
   const searchParams = useSearchParams();
@@ -91,9 +93,9 @@ export function PortalLogin() {
         body: JSON.stringify({ email: forgotEmail }),
       });
       const data = await res.json();
-      setForgotResult({ ok: true, message: data.message || "Reset link sent." });
+      setForgotResult({ ok: true, message: data.message || t("portal-login-toast-reset-link") });
     } catch {
-      setForgotResult({ ok: false, message: "Network error. Please try again." });
+      setForgotResult({ ok: false, message: t("portal-login-toast-network") });
     } finally {
       setForgotLoading(false);
     }
@@ -103,7 +105,7 @@ export function PortalLogin() {
     e.preventDefault();
     if (!resetToken || !newPassword) return;
     if (newPassword.length < 8) {
-      setResetResult({ ok: false, message: "Password must be at least 8 characters." });
+      setResetResult({ ok: false, message: t("portal-login-toast-pw-too-short") });
       return;
     }
     setResetLoading(true);
@@ -116,16 +118,16 @@ export function PortalLogin() {
       });
       const data = await res.json();
       if (res.ok) {
-        setResetResult({ ok: true, message: data.message || "Password reset successfully!" });
+        setResetResult({ ok: true, message: data.message || t("portal-login-toast-reset-success") });
         setTimeout(() => {
           setResetToken("");
           window.history.replaceState({}, "", "/portal/login");
         }, 2000);
       } else {
-        setResetResult({ ok: false, message: data.error || "Reset failed." });
+        setResetResult({ ok: false, message: data.error || t("portal-login-toast-reset-failed") });
       }
     } catch {
-      setResetResult({ ok: false, message: "Network error. Please try again." });
+      setResetResult({ ok: false, message: t("portal-login-toast-network") });
     } finally {
       setResetLoading(false);
     }
@@ -143,19 +145,19 @@ export function PortalLogin() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "Sign in failed.");
+        toast.error(data.error || t("portal-login-toast-signin-failed"));
         return;
       }
       setPortalAccess(data.access);
       setAppMode("portal");
-      toast.success("Welcome to your client portal.");
+      toast.success(t("portal-login-toast-welcome"));
       // Portal login lives at /portal/login — that route always renders
       // <PortalLogin/> regardless of store state, so we have to navigate
       // ourselves. Without this the user stays on the login page after
       // a successful sign-in ('welcome toast but nothing happens').
       router.push("/portal/dashboard");
     } catch {
-      toast.error("Network error. Please try again.");
+      toast.error(t("portal-login-toast-network"));
     } finally {
       setLoading(false);
     }
@@ -165,15 +167,15 @@ export function PortalLogin() {
     e.preventDefault();
     setSetupError(null);
     if (!accessId) {
-      setSetupError("Missing access ID from the invitation link. Please open the link from your invitation email again.");
+      setSetupError(t("portal-login-toast-missing-access-id"));
       return;
     }
     if (!newPassword) {
-      setSetupError("Please enter a password.");
+      setSetupError(t("portal-login-toast-enter-password"));
       return;
     }
     if (newPassword.length < 8) {
-      setSetupError("Password must be at least 8 characters.");
+      setSetupError(t("portal-login-toast-pw-too-short"));
       return;
     }
     setSetupLoading(true);
@@ -188,7 +190,7 @@ export function PortalLogin() {
       if (!res.ok) {
         // Show the error INLINE in the dialog — a toast that vanishes after
         // 3 seconds is why users kept saying "nothing happened".
-        setSetupError(data.error || `Password setup failed (HTTP ${res.status}). Please try again or contact your account manager.`);
+        setSetupError(data.error || t("portal-login-toast-setup-failed").replace("{status}", String(res.status)));
         return;
       }
       // Success — the server auto-signed us in (data.auto_signed_in). Just
@@ -199,17 +201,17 @@ export function PortalLogin() {
       if (data.access) {
         setPortalAccess(data.access);
         setAppMode("portal");
-        toast.success("Password set. Welcome!");
+        toast.success(t("portal-login-toast-password-set-welcome"));
         router.push("/portal/dashboard");
       } else {
         // Rare fallback (server didn't return access): treat as normal login.
-        toast.success("Password set. Please sign in.");
+        toast.success(t("portal-login-toast-password-set-signin"));
         setEmail(searchParams.get("email") || "");
         // Remove the ?access_id= from the URL so a refresh doesn't re-open the dialog.
         window.history.replaceState({}, "", "/portal/login");
       }
     } catch (err: any) {
-      setSetupError("Network error — could not reach the server. Please check your connection and try again.");
+      setSetupError(t("portal-login-toast-network-setup"));
     } finally {
       setSetupLoading(false);
     }
@@ -226,7 +228,7 @@ export function PortalLogin() {
               A
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">Client Portal</h1>
+              <h1 className="text-xl font-semibold tracking-tight">{t("portal-brand-title")}</h1>
               <p className="text-sm text-muted-foreground">{FIRM_NAME}</p>
             </div>
           </div>
@@ -236,17 +238,17 @@ export function PortalLogin() {
             <div className="bg-card rounded-[calc(var(--radius-xl)-1px)] p-7 sm:p-8">
               <div className="space-y-1.5 mb-6">
                 <h2 className="text-2xl font-semibold tracking-tight">
-                  Welcome back
+                  {t("portal-login-welcome")}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Sign in to access your offers, documents, and catalog.
+                  {t("portal-login-signin-desc")}
                 </p>
               </div>
 
               <form onSubmit={submit} className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium">
-                    Email
+                    {t("portal-login-email")}
                   </Label>
                   <div className="relative group">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
@@ -265,7 +267,7 @@ export function PortalLogin() {
 
                 <div className="space-y-2">
                   <Label htmlFor="password" className="text-sm font-medium">
-                    Password
+                    {t("portal-login-password")}
                   </Label>
                   <div className="relative group">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
@@ -284,7 +286,7 @@ export function PortalLogin() {
                       onClick={() => setShowPassword((v) => !v)}
                       tabIndex={-1}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground smooth"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? t("portal-login-hide-password") : t("portal-login-show-password")}
                     >
                       {showPassword ? (
                         <EyeOff className="size-4" />
@@ -304,7 +306,7 @@ export function PortalLogin() {
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <>
-                      Sign in
+                      {t("portal-login-signin")}
                       <ArrowRight className="size-4 ml-1" />
                     </>
                   )}
@@ -316,23 +318,22 @@ export function PortalLogin() {
                       type="button"
                       className="block mx-auto text-xs text-muted-foreground hover:text-primary underline underline-offset-4 smooth"
                     >
-                      First time? Set up your password
+                      {t("portal-login-setup-link")}
                     </button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
                         <KeyRound className="size-4 text-primary" />
-                        Set up your password
+                        {t("portal-login-setup-title")}
                       </DialogTitle>
                       <DialogDescription>
-                        Enter the access ID from your invitation email and choose a
-                        password (at least 8 characters).
+                        {t("portal-login-setup-desc")}
                       </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={setupPassword} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="access_id">Access ID</Label>
+                        <Label htmlFor="access_id">{t("portal-login-access-id")}</Label>
                         <Input
                           id="access_id"
                           value={accessId}
@@ -342,19 +343,19 @@ export function PortalLogin() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="new_password">New password</Label>
+                        <Label htmlFor="new_password">{t("portal-login-new-password")}</Label>
                         <Input
                           id="new_password"
                           type="password"
                           value={newPassword}
                           onChange={(e) => { setNewPassword(e.target.value); setSetupError(null); }}
-                          placeholder="At least 8 characters"
+                          placeholder={t("portal-login-at-least-8")}
                           minLength={8}
                           autoComplete="new-password"
                           disabled={setupLoading}
                         />
                         <p className="text-[11px] text-muted-foreground">
-                          Minimum 8 characters. Anything you can remember — no uppercase / number requirement.
+                          {t("portal-login-new-password-hint")}
                         </p>
                       </div>
                       {setupError && (
@@ -369,13 +370,13 @@ export function PortalLogin() {
                           onClick={() => setSetupOpen(false)}
                           disabled={setupLoading}
                         >
-                          Cancel
+                          {t("portal-action-cancel")}
                         </Button>
                         <Button type="submit" disabled={setupLoading}>
                           {setupLoading ? (
                             <Loader2 className="size-4 animate-spin mr-1" />
                           ) : null}
-                          Set password
+                          {t("portal-login-set-password")}
                         </Button>
                       </DialogFooter>
                     </form>
@@ -390,7 +391,7 @@ export function PortalLogin() {
                   onClick={() => setForgotOpen(true)}
                   className="text-xs text-muted-foreground hover:text-primary underline underline-offset-4 smooth"
                 >
-                  Forgot your password?
+                  {t("portal-login-forgot-link")}
                 </button>
               </div>
 
@@ -400,15 +401,15 @@ export function PortalLogin() {
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <KeyRound className="size-4 text-primary" />
-                      Reset Your Password
+                      {t("portal-login-forgot-title")}
                     </DialogTitle>
                     <DialogDescription>
-                      Enter your email address and we'll send you a link to reset your password.
+                      {t("portal-login-forgot-desc")}
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleForgotPassword} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="forgot-email">Email address</Label>
+                      <Label htmlFor="forgot-email">{t("portal-login-email-address")}</Label>
                       <Input
                         id="forgot-email"
                         type="email"
@@ -425,9 +426,9 @@ export function PortalLogin() {
                       </div>
                     )}
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Close</Button>
+                      <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>{t("portal-action-close")}</Button>
                       <Button type="submit" disabled={forgotLoading || !forgotEmail}>
-                        {forgotLoading ? <Loader2 className="size-4 animate-spin" /> : "Send Reset Link"}
+                        {forgotLoading ? <Loader2 className="size-4 animate-spin" /> : t("portal-login-send-reset-link")}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -440,15 +441,15 @@ export function PortalLogin() {
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <KeyRound className="size-4 text-primary" />
-                      Set New Password
+                      {t("portal-login-reset-title")}
                     </DialogTitle>
                     <DialogDescription>
-                      Enter your new password (minimum 8 characters).
+                      {t("portal-login-reset-desc")}
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleResetPassword} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="new-password-reset">New password</Label>
+                      <Label htmlFor="new-password-reset">{t("portal-login-new-password")}</Label>
                       <Input
                         id="new-password-reset"
                         type="password"
@@ -467,7 +468,7 @@ export function PortalLogin() {
                     )}
                     <DialogFooter>
                       <Button type="submit" disabled={resetLoading || !newPassword}>
-                        {resetLoading ? <Loader2 className="size-4 animate-spin" /> : "Set New Password"}
+                        {resetLoading ? <Loader2 className="size-4 animate-spin" /> : t("portal-login-set-new-password")}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -478,7 +479,7 @@ export function PortalLogin() {
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-8">
-            © {new Date().getFullYear()} {FIRM_NAME} · Secure client workspace
+            © {new Date().getFullYear()} {FIRM_NAME} · {t("portal-login-secure-workspace")}
           </p>
         </div>
       </div>
@@ -501,41 +502,39 @@ export function PortalLogin() {
         <div className="relative z-10 flex flex-col justify-center p-12 xl:p-16 max-w-2xl text-primary-foreground">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 text-xs font-medium w-fit mb-8 backdrop-blur-sm">
             <ShieldCheck className="size-3.5" />
-            Encrypted client workspace
+            {t("portal-login-encrypted")}
           </div>
 
           <h2 className="text-4xl xl:text-5xl font-semibold tracking-tight mb-5 leading-[1.1]">
-            Welcome to your
+            {t("portal-login-hero-title")}
             <br />
-            <span className="text-white/90">client portal.</span>
+            <span className="text-white/90">{t("portal-login-hero-title-2")}</span>
           </h2>
           <p className="text-white/80 text-lg leading-relaxed mb-12 max-w-md">
-            Everything you need to collaborate with {FIRM_NAME} — your offers,
-            documents, and product catalog, all in one beautifully organized
-            place.
+            {t("portal-login-hero-desc").replace("{firm}", FIRM_NAME)}
           </p>
 
           <div className="space-y-5">
             {[
               {
                 icon: FileText,
-                title: "View your offers",
-                desc: "Track every proposal, its status, and line items in real time.",
+                title: t("portal-login-feature-offers-title"),
+                desc: t("portal-login-feature-offers-desc"),
               },
               {
                 icon: Download,
-                title: "Download documents",
-                desc: "Contracts, specifications, and invoices — always at hand.",
+                title: t("portal-login-feature-docs-title"),
+                desc: t("portal-login-feature-docs-desc"),
               },
               {
                 icon: BookOpen,
-                title: "Browse product catalog",
-                desc: "Explore our products with full specifications and origins.",
+                title: t("portal-login-feature-catalog-title"),
+                desc: t("portal-login-feature-catalog-desc"),
               },
               {
                 icon: Receipt,
-                title: "Track invoices",
-                desc: "Stay on top of billing with transparent, itemized records.",
+                title: t("portal-login-feature-invoices-title"),
+                desc: t("portal-login-feature-invoices-desc"),
               },
             ].map((f) => {
               const Icon = f.icon;
@@ -557,7 +556,7 @@ export function PortalLogin() {
 
           <div className="mt-12 pt-8 border-t border-white/15 flex items-center gap-2 text-xs text-white/60">
             <ShieldCheck className="size-3.5" />
-            <span>Bank-grade security · SOC 2 compliant · GDPR ready</span>
+            <span>{t("portal-login-security-badges")}</span>
           </div>
         </div>
       </div>

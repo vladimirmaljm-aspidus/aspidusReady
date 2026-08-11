@@ -19,6 +19,7 @@ import { fmtDateTime } from "@/lib/utils/format";
 import { AuditLog } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 function initials(name?: string | null): string {
   if (!name) return "?";
@@ -52,6 +53,7 @@ function actionColor(action: string): string {
 export function AuditView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
@@ -72,8 +74,8 @@ export function AuditView() {
   return (
     <div>
       <PageHeader
-        title="Audit Log"
-        description={`${data?.total ?? 0} events`}
+        title={t("audit")}
+        description={`${data?.total ?? 0} ${t("admin-audit-events")}`}
       />
 
       <Card className="mb-4 border-border/60 shadow-soft rounded-xl">
@@ -81,7 +83,7 @@ export function AuditView() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by action, user, entity…"
+              placeholder={t("admin-audit-search-placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -99,20 +101,20 @@ export function AuditView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<ScrollText className="size-6" />}
-              title="No audit entries"
-              description="The audit log is empty for the current filters."
+              title={t("admin-audit-empty-title")}
+              description={t("admin-audit-empty-desc")}
             />
           ) : (
             <div className="max-h-[calc(100vh-240px)] overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead className="whitespace-nowrap">Time</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Entity</TableHead>
-                    <TableHead className="hidden md:table-cell">IP</TableHead>
-                    <TableHead className="hidden lg:table-cell">Details</TableHead>
+                    <TableHead className="whitespace-nowrap">{t("admin-col-time")}</TableHead>
+                    <TableHead>{t("admin-col-user")}</TableHead>
+                    <TableHead>{t("admin-col-action")}</TableHead>
+                    <TableHead>{t("admin-col-entity")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("admin-col-ip")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-col-details")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

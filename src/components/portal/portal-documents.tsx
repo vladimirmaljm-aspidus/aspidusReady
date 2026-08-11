@@ -35,6 +35,7 @@ import {
 import { fmtDate, fmtBytes } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/store";
 import type { SharedDocument } from "@/lib/supabase/types";
 
 type DocCategory = SharedDocument["category"];
@@ -42,7 +43,7 @@ type DocCategory = SharedDocument["category"];
 const CATEGORY_META: Record<
   DocCategory,
   {
-    label: string;
+    labelKey: string;
     badgeClass: string;
     iconBg: string;
     iconColor: string;
@@ -50,28 +51,28 @@ const CATEGORY_META: Record<
   }
 > = {
   contract: {
-    label: "Contract",
+    labelKey: "portal-doc-cat-contract",
     badgeClass: "border-transparent bg-chart-1 text-white",
     iconBg: "bg-gradient-to-br from-primary/15 to-primary/5",
     iconColor: "text-primary",
     icon: FileSignature,
   },
   invoice: {
-    label: "Invoice",
+    labelKey: "portal-doc-cat-invoice",
     badgeClass: "border-transparent bg-chart-4 text-white",
     iconBg: "bg-gradient-to-br from-rose-500/15 to-rose-500/5",
     iconColor: "text-rose-600 dark:text-rose-400",
     icon: Receipt,
   },
   spec: {
-    label: "Specification",
+    labelKey: "portal-doc-cat-spec",
     badgeClass: "border-transparent bg-chart-2 text-white",
     iconBg: "bg-gradient-to-br from-teal-500/15 to-teal-500/5",
     iconColor: "text-teal-600 dark:text-teal-400",
     icon: FileCheck,
   },
   other: {
-    label: "Other",
+    labelKey: "portal-doc-cat-other",
     badgeClass: "bg-secondary text-secondary-foreground",
     iconBg: "bg-gradient-to-br from-muted to-muted/50",
     iconColor: "text-muted-foreground",
@@ -94,6 +95,7 @@ function isPreviewable(mimeType: string): boolean {
 }
 
 export function PortalDocuments() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [previewDoc, setPreviewDoc] = useState<SharedDocument | null>(null);
@@ -139,12 +141,12 @@ export function PortalDocuments() {
 
   const handlePreview = useCallback((doc: SharedDocument) => {
     if (!isPreviewable(doc.mime_type)) {
-      toast.info("Preview is not available for this file type. Downloading instead.");
+      toast.info(t("portal-doc-preview-na"));
       handleDownload(doc);
       return;
     }
     setPreviewDoc(doc);
-  }, [handleDownload]);
+  }, [handleDownload, t]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -152,12 +154,15 @@ export function PortalDocuments() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            My <span className="text-gradient-emerald">Documents</span>
+            {t("portal-documents-title").split(" ")[0]}{" "}
+            <span className="text-gradient-emerald">
+              {t("portal-documents-title").split(" ").slice(1).join(" ")}
+            </span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {docsQ.data
-              ? `${filtered.length} document${filtered.length === 1 ? "" : "s"} shared with you`
-              : "Loading documents…"}
+              ? t("portal-documents-count").replace("{n}", String(filtered.length))
+              : t("portal-documents-loading")}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -166,19 +171,19 @@ export function PortalDocuments() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search files…"
+              placeholder={t("portal-search-files")}
               className="pl-10 h-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
             />
           </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="h-10 w-full sm:w-44">
-              <SelectValue placeholder="All categories" />
+              <SelectValue placeholder={t("portal-all-categories")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="all">{t("portal-all-categories")}</SelectItem>
               {categories.map((c) => (
                 <SelectItem key={c} value={c}>
-                  {CATEGORY_META[c].label}
+                  {t(CATEGORY_META[c].labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -191,7 +196,7 @@ export function PortalDocuments() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyDocuments />
+        <EmptyDocuments t={t} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll pr-1">
           {filtered.map((doc) => {
@@ -223,7 +228,7 @@ export function PortalDocuments() {
                       <Badge
                         className={cn("text-[10px] px-1.5 py-0", meta.badgeClass)}
                       >
-                        {meta.label}
+                        {t(meta.labelKey)}
                       </Badge>
                       <span className="text-[11px] text-muted-foreground tabular">
                         {fmtBytes(doc.size)}
@@ -233,7 +238,7 @@ export function PortalDocuments() {
                 </div>
                 <div className="mt-4 flex items-center justify-between">
                   <span className="text-[11px] text-muted-foreground tabular">
-                    Uploaded {fmtDate(doc.created_at)}
+                    {t("portal-doc-uploaded").replace("{date}", fmtDate(doc.created_at))}
                   </span>
                   <div className="flex items-center gap-1.5">
                     {canPreview && (
@@ -246,7 +251,7 @@ export function PortalDocuments() {
                         }}
                         className="h-8 smooth opacity-80 group-hover:opacity-100 hover:shadow-soft"
                       >
-                        <Eye className="size-3.5 mr-1" /> View
+                        <Eye className="size-3.5 mr-1" /> {t("portal-action-view")}
                       </Button>
                     )}
                     <Button
@@ -258,7 +263,7 @@ export function PortalDocuments() {
                       }}
                       className="h-8 smooth opacity-80 group-hover:opacity-100 hover:shadow-soft"
                     >
-                      <Download className="size-3.5 mr-1" /> Download
+                      <Download className="size-3.5 mr-1" /> {t("portal-action-download")}
                     </Button>
                   </div>
                 </div>
@@ -275,6 +280,7 @@ export function PortalDocuments() {
           if (!open) setPreviewDoc(null);
         }}
         document={previewDoc}
+        t={t}
       />
     </div>
   );
@@ -286,10 +292,12 @@ function DocumentPreviewDialog({
   open,
   onOpenChange,
   document: doc,
+  t,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   document: SharedDocument | null;
+  t: (k: string) => string;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -339,12 +347,12 @@ function DocumentPreviewDialog({
                 document.body.removeChild(link);
               }}
             >
-              <Download className="size-3.5 mr-1" /> Download
+              <Download className="size-3.5 mr-1" /> {t("portal-action-download")}
             </Button>
           </div>
         </DialogHeader>
         <DialogDescription className="sr-only">
-          Preview of {doc.filename}
+          {t("portal-doc-preview-of").replace("{filename}", doc.filename)}
         </DialogDescription>
 
         {/* Body */}
@@ -357,7 +365,7 @@ function DocumentPreviewDialog({
           {error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
               <AlertCircle className="size-10 text-destructive" />
-              <p className="text-sm text-muted-foreground">Failed to load preview</p>
+              <p className="text-sm text-muted-foreground">{t("portal-doc-preview-failed")}</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -366,7 +374,7 @@ function DocumentPreviewDialog({
                   setLoading(true);
                 }}
               >
-                Try again
+                {t("portal-action-try-again")}
               </Button>
             </div>
           )}
@@ -375,7 +383,7 @@ function DocumentPreviewDialog({
             <iframe
               src={previewUrl}
               className="w-full h-[75vh] border-0"
-              title={`Preview of ${doc.filename}`}
+              title={t("portal-doc-preview-of").replace("{filename}", doc.filename)}
               onLoad={() => setLoading(false)}
               onError={() => {
                 setLoading(false);
@@ -406,15 +414,15 @@ function DocumentPreviewDialog({
 
 // ─── Empty State ────────────────────────────────────────────────────────────
 
-function EmptyDocuments() {
+function EmptyDocuments({ t }: { t: (k: string) => string }) {
   return (
     <div className="card-premium p-12 flex flex-col items-center justify-center text-center">
       <div className="size-16 rounded-full bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center mb-4">
         <FolderOpen className="size-7 text-primary" />
       </div>
-      <p className="text-base font-semibold">No documents available</p>
+      <p className="text-base font-semibold">{t("portal-doc-empty-title")}</p>
       <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-        Documents shared with you by your account manager will appear here.
+        {t("portal-doc-empty-desc")}
       </p>
     </div>
   );

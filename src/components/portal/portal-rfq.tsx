@@ -46,6 +46,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/store";
 import { toast } from "sonner";
 import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import {
@@ -64,35 +65,35 @@ import type { PortalRfq, PortalRfqStatus } from "@/lib/supabase/types";
 const STATUS_META: Record<
   PortalRfqStatus,
   {
-    label: string;
+    labelKey: string;
     className: string;
     icon: React.ComponentType<{ className?: string }>;
   }
 > = {
   pending: {
-    label: "Pending",
+    labelKey: "portal-rfq-status-pending",
     className:
       "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
     icon: Clock,
   },
   quoted: {
-    label: "Quoted",
+    labelKey: "portal-rfq-status-quoted",
     className: "border-transparent bg-primary/15 text-primary",
     icon: MessageSquare,
   },
   accepted: {
-    label: "Accepted",
+    labelKey: "portal-rfq-status-accepted",
     className: "border-transparent bg-emerald-600 text-white",
     icon: CheckCircle2,
   },
   declined: {
-    label: "Declined",
+    labelKey: "portal-rfq-status-declined",
     className:
       "border-transparent bg-destructive text-destructive-foreground",
     icon: XCircle,
   },
   expired: {
-    label: "Expired",
+    labelKey: "portal-rfq-status-expired",
     className: "bg-muted text-muted-foreground",
     icon: AlertCircle,
   },
@@ -152,6 +153,7 @@ const EMPTY_FORM: RfqFormState = {
 // ============================================================
 
 export function PortalRfq() {
+  const t = useT();
   const qc = useQueryClient();
   const [form, setForm] = useState<RfqFormState>(EMPTY_FORM);
 
@@ -179,7 +181,7 @@ export function PortalRfq() {
     },
     onSuccess: () => {
       toast.success(
-        "Request submitted. Our team will review and respond within 24 hours."
+        t("portal-rfq-toast-submitted")
       );
       qc.invalidateQueries({ queryKey: ["portal-rfqs"] });
       setForm(EMPTY_FORM);
@@ -194,29 +196,29 @@ export function PortalRfq() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.product_name.trim()) {
-      toast.error("Please enter a product name.");
+      toast.error(t("portal-rfq-toast-product-name"));
       return;
     }
     if (!form.quantity || Number(form.quantity) <= 0) {
-      toast.error("Please enter a valid quantity.");
+      toast.error(t("portal-rfq-toast-quantity"));
       return;
     }
     if (!form.unit) {
-      toast.error("Please select a unit of measure.");
+      toast.error(t("portal-rfq-toast-unit"));
       return;
     }
     // Validate third-party company info if enabled
     if (form.is_third_party) {
       if (!form.third_party_company_name.trim()) {
-        toast.error("Please enter the third-party company name.");
+        toast.error(t("portal-rfq-toast-tp-name"));
         return;
       }
       if (!form.third_party_country) {
-        toast.error("Please select the third-party company country.");
+        toast.error(t("portal-rfq-toast-tp-country"));
         return;
       }
       if (!form.third_party_contact_email.trim()) {
-        toast.error("Please enter a contact email for the third-party company.");
+        toast.error(t("portal-rfq-toast-tp-email"));
         return;
       }
     }
@@ -254,11 +256,10 @@ export function PortalRfq() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Request a <span className="text-gradient-emerald">Quote</span>
+          {t("portal-rfq-title").split(" ")[0]} <span className="text-gradient-emerald">{t("portal-rfq-title").split(" ").slice(1).join(" ")}</span>
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Looking for something specific? Tell us what you need and we&apos;ll
-          source it for you.
+          {t("portal-rfq-intro")}
         </p>
       </div>
 
@@ -272,9 +273,9 @@ export function PortalRfq() {
                   <ShoppingCart className="size-5" />
                 </div>
                 <div className="min-w-0">
-                  <CardTitle className="text-base">New Request</CardTitle>
+                  <CardTitle className="text-base">{t("portal-rfq-new-request")}</CardTitle>
                   <CardDescription className="text-xs mt-0.5">
-                    Provide as much detail as you can for an accurate quote.
+                    {t("portal-rfq-new-request-desc")}
                   </CardDescription>
                 </div>
               </div>
@@ -284,13 +285,13 @@ export function PortalRfq() {
                 {/* Product section */}
                 <FormSection
                   icon={Package}
-                  title="Product"
-                  description="What are you looking to source?"
+                  title={t("portal-rfq-section-product")}
+                  description={t("portal-rfq-section-product-desc")}
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
                       <FieldText
-                        label="Product name"
+                        label={t("portal-rfq-product-name")}
                         required
                         icon={Package}
                         value={form.product_name}
@@ -300,7 +301,7 @@ export function PortalRfq() {
                     </div>
                     <div className="sm:col-span-2">
                       <FieldTextarea
-                        label="Description"
+                        label={t("portal-rfq-description")}
                         icon={FileText}
                         value={form.product_description}
                         onChange={(v) => update("product_description", v)}
@@ -308,7 +309,7 @@ export function PortalRfq() {
                       />
                     </div>
                     <FieldSelect
-                      label="Category"
+                      label={t("portal-rfq-category")}
                       icon={Layers}
                       value={form.category}
                       onChange={(v) => update("category", v)}
@@ -316,7 +317,7 @@ export function PortalRfq() {
                         value: c.code,
                         label: c.name,
                       }))}
-                      placeholder="Select category"
+                      placeholder={t("portal-rfq-select-category")}
                     />
                   </div>
                 </FormSection>
@@ -326,12 +327,12 @@ export function PortalRfq() {
                 {/* Quantity & Price */}
                 <FormSection
                   icon={Coins}
-                  title="Quantity & Target Price"
-                  description="How much do you need, and what's your target?"
+                  title={t("portal-rfq-section-quantity-price")}
+                  description={t("portal-rfq-section-quantity-price-desc")}
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <FieldText
-                      label="Quantity"
+                      label={t("portal-rfq-quantity")}
                       required
                       type="number"
                       icon={Ruler}
@@ -340,7 +341,7 @@ export function PortalRfq() {
                       placeholder="e.g. 500"
                     />
                     <FieldSelect
-                      label="Unit"
+                      label={t("portal-rfq-unit")}
                       required
                       icon={Ruler}
                       value={form.unit}
@@ -349,18 +350,18 @@ export function PortalRfq() {
                         value: u.code,
                         label: `${u.code} — ${u.name}`,
                       }))}
-                      placeholder="Select unit"
+                      placeholder={t("portal-rfq-select-unit")}
                     />
                     <FieldText
-                      label="Target price"
+                      label={t("portal-rfq-target-price")}
                       type="number"
                       icon={Coins}
                       value={form.target_price}
                       onChange={(v) => update("target_price", v)}
-                      placeholder="Optional"
+                      placeholder={t("portal-rfq-optional")}
                     />
                     <FieldSelect
-                      label="Currency"
+                      label={t("portal-rfq-currency")}
                       icon={Coins}
                       value={form.currency}
                       onChange={(v) => update("currency", v)}
@@ -377,12 +378,12 @@ export function PortalRfq() {
                 {/* Delivery */}
                 <FormSection
                   icon={Truck}
-                  title="Delivery"
-                  description="Where and when do you need it?"
+                  title={t("portal-rfq-section-delivery")}
+                  description={t("portal-rfq-section-delivery-desc")}
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FieldSelect
-                      label="Delivery country"
+                      label={t("portal-rfq-delivery-country")}
                       icon={Globe2}
                       value={form.delivery_country}
                       onChange={(v) => update("delivery_country", v)}
@@ -390,24 +391,24 @@ export function PortalRfq() {
                         value: c.code,
                         label: c.name,
                       }))}
-                      placeholder="Select country"
+                      placeholder={t("portal-rfq-select-country")}
                     />
                     <FieldText
-                      label="Delivery port"
+                      label={t("portal-rfq-delivery-port")}
                       icon={MapPin}
                       value={form.delivery_port}
                       onChange={(v) => update("delivery_port", v)}
-                      placeholder="Port or city (optional)"
+                      placeholder={t("portal-rfq-delivery-port-placeholder")}
                     />
                     <FieldText
-                      label="Delivery date"
+                      label={t("portal-rfq-delivery-date")}
                       type="date"
                       icon={Calendar}
                       value={form.delivery_date}
                       onChange={(v) => update("delivery_date", v)}
                     />
                     <FieldSelect
-                      label="Incoterm"
+                      label={t("portal-rfq-incoterm")}
                       icon={Truck}
                       value={form.incoterm}
                       onChange={(v) => update("incoterm", v)}
@@ -415,7 +416,7 @@ export function PortalRfq() {
                         value: i.code,
                         label: `${i.code} — ${i.name}`,
                       }))}
-                      placeholder="Select incoterm"
+                      placeholder={t("portal-rfq-select-incoterm")}
                     />
                   </div>
                 </FormSection>
@@ -425,12 +426,12 @@ export function PortalRfq() {
                 {/* Additional */}
                 <FormSection
                   icon={StickyNote}
-                  title="Additional Details"
-                  description="Anything else we should know?"
+                  title={t("portal-rfq-section-additional")}
+                  description={t("portal-rfq-section-additional-desc")}
                 >
                   <div className="grid grid-cols-1 gap-4">
                     <FieldTextarea
-                      label="Specifications"
+                      label={t("portal-rfq-specifications")}
                       icon={FileText}
                       value={form.specifications}
                       onChange={(v) => update("specifications", v)}
@@ -438,7 +439,7 @@ export function PortalRfq() {
                       rows={3}
                     />
                     <FieldTextarea
-                      label="Notes"
+                      label={t("portal-rfq-notes")}
                       icon={StickyNote}
                       value={form.notes}
                       onChange={(v) => update("notes", v)}
@@ -449,7 +450,7 @@ export function PortalRfq() {
                 </FormSection>
 
                 {/* Third-party delivery option */}
-                <FormSection title="Delivery Destination" description="Optionally deliver to a different company" icon={Globe2}>
+                <FormSection title={t("portal-rfq-section-destination")} description={t("portal-rfq-section-destination-desc")} icon={Globe2}>
                   <div className="space-y-3">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -458,7 +459,7 @@ export function PortalRfq() {
                         onChange={(e) => update("is_third_party", e.target.checked)}
                         className="size-4 rounded border-border"
                       />
-                      <span className="text-sm">Deliver to a different company (third-party)</span>
+                      <span className="text-sm">{t("portal-rfq-third-party-toggle")}</span>
                     </label>
                     {form.is_third_party && (
                       <div className="space-y-3 p-3 rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
@@ -571,6 +572,7 @@ export function PortalRfq() {
 
 function RfqCard({ rfq }: { rfq: PortalRfq }) {
   const [expanded, setExpanded] = useState(false);
+  const t = useT();
   const meta = STATUS_META[rfq.status];
   const StatusIcon = meta.icon;
 
@@ -608,7 +610,7 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
             </span>
             <Badge className={cn("text-[10px] py-0 h-4 gap-0.5", meta.className)}>
               <StatusIcon className="size-2.5" />
-              {meta.label}
+              {t(meta.labelKey)}
             </Badge>
           </div>
           <p className="text-sm font-medium truncate mt-1">{rfq.product_name}</p>

@@ -31,55 +31,57 @@ import { fmtRelative, fmtDate } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { ApiKey } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 type SafeApiKey = Omit<ApiKey, "key_hash">;
 
 // --- Permission presets with icons and descriptions in user-friendly language ---
+// `labelKey` and `descKey` are translated via t() at render time.
 const PERMISSION_PRESETS: Record<string, {
-  label: string;
-  desc: string;
+  labelKey: string;
+  descKey: string;
   icon: React.ReactNode;
   perms: string[];
   color: string;
 }> = {
   full_access: {
-    label: "Pun pristup",
-    desc: "Potpuni pristup svim podacima — čitanje, pisanje, brisanje",
+    labelKey: "admin-api-keys-preset-full",
+    descKey: "admin-api-keys-preset-full-desc",
     icon: <Zap className="size-5" />,
     perms: ["*"],
     color: "bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/30 dark:border-amber-700 dark:text-amber-200",
   },
   read_only: {
-    label: "Samo čitanje",
-    desc: "Pregled svih podataka, bez mogućnosti izmene",
+    labelKey: "admin-api-keys-preset-readonly",
+    descKey: "admin-api-keys-preset-readonly-desc",
     icon: <Eye className="size-5" />,
     perms: ["partners:read", "products:read", "offers:read", "deals:read", "invoices:read", "proformas:read", "documents:read"],
     color: "bg-blue-50 border-blue-300 text-blue-900 dark:bg-blue-950/30 dark:border-blue-700 dark:text-blue-200",
   },
   sales: {
-    label: "Prodaja",
-    desc: "Upravljanje partnerima, ponudama i poslovima",
+    labelKey: "admin-api-keys-preset-sales",
+    descKey: "admin-api-keys-preset-sales-desc",
     icon: <BookOpen className="size-5" />,
     perms: ["partners:*", "offers:*", "deals:*", "products:read"],
     color: "bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-950/30 dark:border-emerald-700 dark:text-emerald-200",
   },
   finance: {
-    label: "Finansije",
-    desc: "Upravljanje fakturama, profakturama i računovodstvom",
+    labelKey: "admin-api-keys-preset-finance",
+    descKey: "admin-api-keys-preset-finance-desc",
     icon: <Banknote className="size-5" />,
     perms: ["invoices:*", "proformas:*", "erp:*", "partners:read", "offers:read"],
     color: "bg-violet-50 border-violet-300 text-violet-900 dark:bg-violet-950/30 dark:border-violet-700 dark:text-violet-200",
   },
   logistics: {
-    label: "Logistika",
-    desc: "Upravljanje zalihama i dokumentima",
+    labelKey: "admin-api-keys-preset-logistics",
+    descKey: "admin-api-keys-preset-logistics-desc",
     icon: <Truck className="size-5" />,
     perms: ["inventory:*", "documents:*", "products:read", "partners:read"],
     color: "bg-orange-50 border-orange-300 text-orange-900 dark:bg-orange-950/30 dark:border-orange-700 dark:text-orange-200",
   },
   api_tester: {
-    label: "API Tester",
-    desc: "Pristup za testiranje — samo čitanje osnovnih podataka",
+    labelKey: "admin-api-keys-preset-tester",
+    descKey: "admin-api-keys-preset-tester-desc",
     icon: <Shield className="size-5" />,
     perms: ["partners:read", "products:read", "offers:read", "deals:read"],
     color: "bg-slate-50 border-slate-300 text-slate-900 dark:bg-slate-950/30 dark:border-slate-700 dark:text-slate-200",
@@ -87,14 +89,15 @@ const PERMISSION_PRESETS: Record<string, {
 };
 
 function AdminRequired() {
+  const t = useT();
   return (
     <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10">
       <CardContent className="p-6 flex items-start gap-3">
         <Lock className="size-5 text-amber-600 mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Potreban administratorski pristup</p>
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-access-required")}</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            Upravljanje API ključevima je dostupno samo administratorima.
+            {t("admin-api-keys-admin-only-desc")}
           </p>
         </div>
       </CardContent>
@@ -105,6 +108,7 @@ function AdminRequired() {
 export function ApiKeysView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
@@ -139,7 +143,7 @@ export function ApiKeysView() {
   if (!admin) {
     return (
       <div>
-        <PageHeader title="API Ključevi" description="Upravljanje ključevima za eksterne integracije." />
+        <PageHeader title={t("api-keys")} description={t("admin-api-keys-desc")} />
         <AdminRequired />
       </div>
     );
@@ -150,11 +154,11 @@ export function ApiKeysView() {
   return (
     <div>
       <PageHeader
-        title="API Ključevi"
-        description={`${items.length} ključ${items.length === 1 ? "" : "eva"} izdato`}
+        title={t("api-keys")}
+        description={`${items.length} ${t("admin-api-keys-count")}`}
         actions={
           <Button onClick={() => setShowForm(true)}>
-            <Plus className="size-4 mr-1" /> Novi API ključ
+            <Plus className="size-4 mr-1" /> {t("admin-api-keys-new")}
           </Button>
         }
       />
@@ -163,9 +167,9 @@ export function ApiKeysView() {
         <CardContent className="p-4 flex items-start gap-3">
           <ShieldAlert className="size-5 text-amber-600 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Čuvajte ključeve sigurnim</p>
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-api-keys-keep-safe")}</p>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-              API ključevi omogućavaju eksternim sistemima pristup vašem CRM. Čuvajte ih sigurno i periodično ih rotirajte.
+              {t("admin-api-keys-keep-safe-desc")}
             </p>
           </div>
         </CardContent>
@@ -180,11 +184,11 @@ export function ApiKeysView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<KeyRound className="size-6" />}
-              title="Nema API ključeva"
-              description="Kreirajte vaš prvi API ključ da omogućite eksterne integracije."
+              title={t("admin-api-keys-empty-title")}
+              description={t("admin-api-keys-empty-desc")}
               action={
                 <Button onClick={() => setShowForm(true)}>
-                  <Plus className="size-4 mr-1" /> Novi API ključ
+                  <Plus className="size-4 mr-1" /> {t("admin-api-keys-new")}
                 </Button>
               }
             />
@@ -193,13 +197,13 @@ export function ApiKeysView() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Naziv</TableHead>
-                    <TableHead>Ključ</TableHead>
-                    <TableHead className="hidden lg:table-cell">Dozvole</TableHead>
-                    <TableHead className="hidden md:table-cell">Poslednje korišćenje</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden lg:table-cell">Ističe</TableHead>
-                    <TableHead className="text-right">Akcije</TableHead>
+                    <TableHead>{t("admin-col-name")}</TableHead>
+                    <TableHead>{t("admin-col-key")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-col-permissions")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("admin-col-last-used")}</TableHead>
+                    <TableHead>{t("admin-col-status")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-col-expires")}</TableHead>
+                    <TableHead className="text-right">{t("admin-col-actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -223,13 +227,13 @@ export function ApiKeysView() {
                       <TableCell className="hidden md:table-cell text-xs">{fmtRelative(k.last_used_at)}</TableCell>
                       <TableCell>
                         {k.active ? (
-                          <Badge className="bg-emerald-600 text-white">Aktivan</Badge>
+                          <Badge className="bg-emerald-600 text-white">{t("admin-active-badge")}</Badge>
                         ) : (
-                          <Badge variant="secondary">Neaktivan</Badge>
+                          <Badge variant="secondary">{t("admin-inactive-badge")}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-xs">
-                        {k.expires_at ? fmtDate(k.expires_at) : "Nikada"}
+                        {k.expires_at ? fmtDate(k.expires_at) : t("admin-never")}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -237,7 +241,7 @@ export function ApiKeysView() {
                           variant="ghost"
                           className="size-8 text-destructive"
                           onClick={() => setDeleteId(k.id)}
-                          title="Opozovi" aria-label="Opozovi"
+                          title={t("admin-revoke")} aria-label={t("admin-revoke")}
                         >
                           <Trash2 className="size-4" />
                         </Button>
@@ -269,18 +273,18 @@ export function ApiKeysView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Opozovi ovaj API ključ?</AlertDialogTitle>
+            <AlertDialogTitle>{t("admin-api-keys-revoke-confirm")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Svaki sistem koji koristi ovaj ključ će odmah izgubiti pristup. Ova radnja se ne može poništiti.
+              {t("admin-api-keys-revoke-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Otkaži</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Opozovi
+              {t("admin-revoke")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -299,6 +303,7 @@ function CreateKeyDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [name, setName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string>("");
@@ -356,29 +361,29 @@ function CreateKeyDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRound className="size-5" />
-            Novi API ključ
+            {t("admin-api-keys-new")}
           </DialogTitle>
           <DialogDescription>
-            Kreirajte ključ za eksterni sistem da pristupi vašem CRM. Izaberite nivo pristupa koji odgovara potrebama.
+            {t("admin-api-keys-create-desc")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 py-2">
           {/* Name */}
           <div className="space-y-1.5">
-            <Label>Naziv ključa *</Label>
+            <Label>{t("admin-api-keys-name-label")}</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="npr. Inventar sinhronizacija"
+              placeholder={t("admin-api-keys-name-placeholder")}
             />
-            <p className="text-xs text-muted-foreground">Dajte ključu prepoznatljivo ime da znate za šta se koristi.</p>
+            <p className="text-xs text-muted-foreground">{t("admin-api-keys-name-help")}</p>
           </div>
 
           {/* Access Level - Visual Cards */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Nivo pristupa *</Label>
-            <p className="text-xs text-muted-foreground">Izaberite koji podaci će biti dostupni putem ovog ključa.</p>
+            <Label className="text-sm font-medium">{t("admin-api-keys-access-level")}</Label>
+            <p className="text-xs text-muted-foreground">{t("admin-api-keys-access-level-help")}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {Object.entries(PERMISSION_PRESETS).map(([key, preset]) => (
                 <button
@@ -395,9 +400,9 @@ function CreateKeyDialog({
                     <div className={`shrink-0 ${selectedPreset === key ? "text-primary" : "text-muted-foreground"}`}>
                       {preset.icon}
                     </div>
-                    <span className="font-semibold text-sm">{preset.label}</span>
+                    <span className="font-semibold text-sm">{t(preset.labelKey)}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{preset.desc}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{t(preset.descKey)}</p>
                 </button>
               ))}
             </div>
@@ -405,7 +410,7 @@ function CreateKeyDialog({
 
           {/* Expires */}
           <div className="space-y-1.5">
-            <Label>Datum isteka (opciono)</Label>
+            <Label>{t("admin-api-keys-expiry-label")}</Label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
               <Input
@@ -415,14 +420,14 @@ function CreateKeyDialog({
                 className="pl-9"
               />
             </div>
-            <p className="text-xs text-muted-foreground">Ostavite prazno za ključ koji nikada ne ističe.</p>
+            <p className="text-xs text-muted-foreground">{t("admin-api-keys-expiry-help")}</p>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Otkaži</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving || !name.trim() || !selectedPreset}>
-            {saving ? "Generisanje…" : "Generiši ključ"}
+            {saving ? t("admin-api-keys-generating") : t("admin-api-keys-generate")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -432,6 +437,7 @@ function CreateKeyDialog({
 
 // ---- One-time key reveal dialog ----
 function KeyRevealDialog({ fullKey, onClose }: { fullKey: string | null; onClose: () => void }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -451,10 +457,10 @@ function KeyRevealDialog({ fullKey, onClose }: { fullKey: string | null; onClose
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="size-5 text-amber-600" />
-            Kopirajte vaš API ključ
+            {t("admin-api-keys-copy-title")}
           </DialogTitle>
           <DialogDescription>
-            Ovaj ključ neće biti prikazan ponovo. Kopirajte ga sada i čuvajte ga sigurno.
+            {t("admin-api-keys-copy-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -465,17 +471,17 @@ function KeyRevealDialog({ fullKey, onClose }: { fullKey: string | null; onClose
 
           <Button onClick={copy} variant="outline" className="w-full">
             {copied ? <Check className="size-4 mr-1 text-emerald-600" /> : <Copy className="size-4 mr-1" />}
-            {copied ? "Kopirano!" : "Kopiraj u clipboard"}
+            {copied ? t("admin-api-keys-copied") : t("admin-api-keys-copy")}
           </Button>
 
           <p className="text-xs text-muted-foreground flex items-start gap-1.5">
             <Lock className="size-3 mt-0.5 shrink-0" />
-            Čuvajte ovaj ključ kao lozinku. Svako sa ovim ključem može pristupiti vašem CRM sa dozvolama koje ste dodelili.
+            {t("admin-api-keys-treat-as-password")}
           </p>
         </div>
 
         <DialogFooter>
-          <Button onClick={onClose}>Sačuvao sam ključ</Button>
+          <Button onClick={onClose}>{t("admin-api-keys-saved-key")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

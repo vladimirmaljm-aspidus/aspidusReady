@@ -15,6 +15,7 @@ import { Truck, Ship, Plane, Train, Package, Plus, Send, Trash2, MapPin, ArrowRi
 import { toast } from "sonner";
 import { COUNTRIES, INCOTERMS } from "@/lib/data/reference";
 import { fmtMoney, fmtNumber } from "@/lib/utils/format";
+import { useT } from "@/lib/i18n/store";
 
 type LogisticsMode = "sea_fcl" | "sea_lcl" | "road_ftl" | "road_ltl" | "air" | "rail" | "courier" | "multimodal";
 interface PackingLine {
@@ -39,18 +40,19 @@ interface LogisticsRequest {
   created_at: string;
 }
 
-const MODE_META: Record<LogisticsMode, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
-  sea_fcl: { label: "Sea — Full Container", icon: Ship },
-  sea_lcl: { label: "Sea — Less than Container (LCL)", icon: Ship },
-  road_ftl: { label: "Road — Full Truck", icon: Truck },
-  road_ltl: { label: "Road — Groupage / LTL", icon: Truck },
-  air: { label: "Air Freight", icon: Plane },
-  rail: { label: "Rail", icon: Train },
-  courier: { label: "Courier / Express", icon: Package },
-  multimodal: { label: "Multimodal", icon: Truck },
+const MODE_META: Record<LogisticsMode, { labelKey: string; icon: React.ComponentType<{ className?: string }> }> = {
+  sea_fcl: { labelKey: "portal-logistics-mode-sea-fcl", icon: Ship },
+  sea_lcl: { labelKey: "portal-logistics-mode-sea-lcl", icon: Ship },
+  road_ftl: { labelKey: "portal-logistics-mode-road-ftl", icon: Truck },
+  road_ltl: { labelKey: "portal-logistics-mode-road-ltl", icon: Truck },
+  air: { labelKey: "portal-logistics-mode-air", icon: Plane },
+  rail: { labelKey: "portal-logistics-mode-rail", icon: Train },
+  courier: { labelKey: "portal-logistics-mode-courier", icon: Package },
+  multimodal: { labelKey: "portal-logistics-mode-multimodal", icon: Truck },
 };
 
 export function PortalLogistics() {
+  const t = useT();
   const qc = useQueryClient();
   const [showForm, setShowForm] = React.useState(false);
   const [prefill, setPrefill] = React.useState<any>(null);
@@ -77,23 +79,23 @@ export function PortalLogistics() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Logistics</h1>
-          <p className="text-sm text-muted-foreground">Request shipping quotes — sea, road, air, rail. Fill in origin, destination, cargo and we'll send you a proposal.</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("portal-logistics-title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("portal-logistics-intro")}</p>
         </div>
-        <Button onClick={() => { setPrefill(null); setShowForm(true); }} className="gap-2"><Plus className="size-4" /> New request</Button>
+        <Button onClick={() => { setPrefill(null); setShowForm(true); }} className="gap-2"><Plus className="size-4" /> {t("portal-logistics-new-request")}</Button>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Your logistics requests</CardTitle>
-          <CardDescription>Status of each quote request.</CardDescription>
+          <CardTitle className="text-base">{t("portal-logistics-your-requests")}</CardTitle>
+          <CardDescription>{t("portal-logistics-your-requests-desc")}</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
-          {listQ.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {listQ.isLoading && <p className="text-sm text-muted-foreground">{t("portal-loading-dots")}</p>}
           {!listQ.isLoading && items.length === 0 && (
             <div className="text-center py-10 text-muted-foreground">
               <Truck className="size-8 mx-auto opacity-40 mb-2" />
-              <p className="text-sm">No requests yet. Click <strong>New request</strong> to get started.</p>
+              <p className="text-sm" dangerouslySetInnerHTML={{ __html: t("portal-logistics-empty") }} />
             </div>
           )}
           <div className="space-y-2">
@@ -128,15 +130,15 @@ export function PortalLogistics() {
                       <a
                         href={`/api/portal/logistics/${r.id}/packing-list.pdf`}
                         target="_blank" rel="noopener noreferrer"
-                        title="Download packing list PDF"
+                        title={t("portal-logistics-download-packing-list")}
                         className="inline-flex items-center justify-center size-9 rounded-md hover:bg-accent smooth"
                       ><FileText className="size-4" /></a>
                       <Button
-                        size="icon" variant="ghost" title={open ? "Hide timeline" : "Show timeline"}
+                        size="icon" variant="ghost" title={open ? t("portal-logistics-hide-timeline") : t("portal-logistics-show-timeline")}
                         onClick={() => setOpenTimelineId(open ? null : r.id)}
                       ><History className="size-4" /></Button>
                       <Button
-                        size="icon" variant="ghost" title="Duplicate this request"
+                        size="icon" variant="ghost" title={t("portal-logistics-duplicate")}
                         onClick={(e) => {
                           e.stopPropagation();
                           const { id, number, status, created_at, quoted_price, quoted_currency, quoted_transit_days, tracking_number, tracking_url, carrier, shipped_at, delivered_at, ...rest } = r as any;
@@ -147,11 +149,11 @@ export function PortalLogistics() {
                   </div>
                   {(r.tracking_number || r.carrier) && (
                     <div className="px-4 pb-3 -mt-1 text-xs flex flex-wrap gap-3">
-                      {r.carrier && <span><span className="text-muted-foreground">Carrier:</span> <strong>{r.carrier}</strong></span>}
+                      {r.carrier && <span><span className="text-muted-foreground">{t("portal-logistics-carrier")}</span> <strong>{r.carrier}</strong></span>}
                       {r.tracking_number && (
                         r.tracking_url
-                          ? <a href={r.tracking_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Track {r.tracking_number}</a>
-                          : <span><span className="text-muted-foreground">Tracking:</span> <strong>{r.tracking_number}</strong></span>
+                          ? <a href={r.tracking_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("portal-logistics-track").replace("{number}", r.tracking_number)}</a>
+                          : <span><span className="text-muted-foreground">{t("portal-logistics-tracking")}</span> <strong>{r.tracking_number}</strong></span>
                       )}
                     </div>
                   )}
@@ -179,6 +181,7 @@ export function PortalLogistics() {
 }
 
 function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { open: boolean; onClose: () => void; onCreated: () => void; prefill?: any; profile?: any }) {
+  const t = useT();
   // Sensible default: origin address from the partner's profile (client is
   // usually shipping FROM their own location) — user can overwrite.
   const initialForm = React.useCallback(() => {
@@ -232,9 +235,9 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
   }, [JSON.stringify(f.packing_list)]);
 
   async function submit() {
-    if (!f.mode) return toast.error("Choose transport mode");
-    if (!f.origin_country || !f.destination_country) return toast.error("Origin + destination country required");
-    if (!f.cargo_description) return toast.error("Cargo description required");
+    if (!f.mode) return toast.error(t("portal-logistics-toast-mode"));
+    if (!f.origin_country || !f.destination_country) return toast.error(t("portal-logistics-toast-countries"));
+    if (!f.cargo_description) return toast.error(t("portal-logistics-toast-cargo"));
     setSubmitting(true);
     try {
       const payload = { ...f,
@@ -245,7 +248,7 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
       };
       const r = await fetch("/api/portal/logistics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Failed");
-      toast.success("Logistics request submitted.");
+      toast.success(t("portal-logistics-toast-submitted"));
       onCreated();
     } catch (e: any) { toast.error(e.message); } finally { setSubmitting(false); }
   }
@@ -254,85 +257,85 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto custom-scroll">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Truck className="size-5 text-primary" /> New logistics request</DialogTitle>
-          <DialogDescription>Give us the details — origin, destination, cargo and packing — and we'll come back with a quote.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><Truck className="size-5 text-primary" /> {t("portal-logistics-dialog-title")}</DialogTitle>
+          <DialogDescription>{t("portal-logistics-dialog-desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Transport */}
-          <Section title="Transport" open={openSec.transport} onToggle={() => setOpenSec({ ...openSec, transport: !openSec.transport })}>
+          <Section title={t("portal-logistics-section-transport")} open={openSec.transport} onToggle={() => setOpenSec({ ...openSec, transport: !openSec.transport })}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Fld label="Mode *"><Select value={f.mode} onValueChange={(v) => set("mode", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(MODE_META).map(([k, m]) => <SelectItem key={k} value={k}>{m.label}</SelectItem>)}</SelectContent></Select></Fld>
-              {f.mode.startsWith("sea") && (<Fld label="Container type"><Select value={f.container_type ?? ""} onValueChange={(v) => set("container_type", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["20FT","40FT","40HC","45HC","LCL"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></Fld>)}
-              <Fld label="Incoterm"><Select value={f.incoterm ?? ""} onValueChange={(v) => set("incoterm", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{INCOTERMS.map((i) => <SelectItem key={i.code} value={i.code}>{i.code} — {i.name}</SelectItem>)}</SelectContent></Select></Fld>
-              <Fld label="Urgency"><Select value={f.urgency ?? "normal"} onValueChange={(v) => set("urgency", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="flexible">Flexible</SelectItem><SelectItem value="normal">Normal</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select></Fld>
-              <Fld label="Pickup date"><Input type="date" value={f.target_pickup_date} onChange={(e) => set("target_pickup_date", e.target.value)} /></Fld>
-              <Fld label="Delivery date"><Input type="date" value={f.target_delivery_date} onChange={(e) => set("target_delivery_date", e.target.value)} /></Fld>
+              <Fld label={t("portal-logistics-mode-label")}><Select value={f.mode} onValueChange={(v) => set("mode", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(MODE_META).map(([k, m]) => <SelectItem key={k} value={k}>{t(m.labelKey)}</SelectItem>)}</SelectContent></Select></Fld>
+              {f.mode.startsWith("sea") && (<Fld label={t("portal-logistics-container-type")}><Select value={f.container_type ?? ""} onValueChange={(v) => set("container_type", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["20FT","40FT","40HC","45HC","LCL"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></Fld>)}
+              <Fld label={t("portal-logistics-incoterm")}><Select value={f.incoterm ?? ""} onValueChange={(v) => set("incoterm", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{INCOTERMS.map((i) => <SelectItem key={i.code} value={i.code}>{i.code} — {i.name}</SelectItem>)}</SelectContent></Select></Fld>
+              <Fld label={t("portal-logistics-urgency")}><Select value={f.urgency ?? "normal"} onValueChange={(v) => set("urgency", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="flexible">{t("portal-rfq-dialog-flexible")}</SelectItem><SelectItem value="normal">{t("portal-rfq-dialog-normal")}</SelectItem><SelectItem value="urgent">{t("portal-rfq-dialog-urgent")}</SelectItem></SelectContent></Select></Fld>
+              <Fld label={t("portal-logistics-pickup-date")}><Input type="date" value={f.target_pickup_date} onChange={(e) => set("target_pickup_date", e.target.value)} /></Fld>
+              <Fld label={t("portal-logistics-delivery-date")}><Input type="date" value={f.target_delivery_date} onChange={(e) => set("target_delivery_date", e.target.value)} /></Fld>
             </div>
           </Section>
 
           {/* Origin */}
-          <Section title="Origin / Pickup" open={openSec.origin} onToggle={() => setOpenSec({ ...openSec, origin: !openSec.origin })}>
+          <Section title={t("portal-logistics-section-origin")} open={openSec.origin} onToggle={() => setOpenSec({ ...openSec, origin: !openSec.origin })}>
             <AddressBlock prefix="origin" f={f} set={set} />
           </Section>
 
           {/* Destination */}
-          <Section title="Destination / Delivery" open={openSec.destination} onToggle={() => setOpenSec({ ...openSec, destination: !openSec.destination })}>
+          <Section title={t("portal-logistics-section-destination")} open={openSec.destination} onToggle={() => setOpenSec({ ...openSec, destination: !openSec.destination })}>
             <AddressBlock prefix="destination" f={f} set={set} />
           </Section>
 
           {/* Cargo */}
-          <Section title="Cargo" open={openSec.cargo} onToggle={() => setOpenSec({ ...openSec, cargo: !openSec.cargo })}>
+          <Section title={t("portal-logistics-section-cargo")} open={openSec.cargo} onToggle={() => setOpenSec({ ...openSec, cargo: !openSec.cargo })}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2"><Fld label="Description *"><Textarea rows={2} value={f.cargo_description} onChange={(e) => set("cargo_description", e.target.value)} placeholder="e.g. bagged sugar ICUMSA-45, 25kg PP bags" /></Fld></div>
-              <Fld label="HS codes"><Input value={f.hs_codes} onChange={(e) => set("hs_codes", e.target.value)} placeholder="1701.14, 1701.99" /></Fld>
-              <Fld label="Cargo value"><div className="flex gap-1"><Input type="number" step="any" value={f.cargo_value} onChange={(e) => set("cargo_value", e.target.value === "" ? "" : Number(e.target.value))} /><Select value={f.cargo_currency ?? "USD"} onValueChange={(v) => set("cargo_currency", v)}><SelectTrigger className="w-24"><SelectValue /></SelectTrigger><SelectContent>{["USD","EUR","AED","GBP"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div></Fld>
-              <Fld label="Total weight (kg)"><Input type="number" step="any" value={f.total_weight_kg} onChange={(e) => set("total_weight_kg", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
-              <Fld label="Total volume (m³)"><Input type="number" step="any" value={f.total_volume_cbm} onChange={(e) => set("total_volume_cbm", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
-              <Fld label="Total packages"><Input type="number" value={f.total_packages} onChange={(e) => set("total_packages", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
+              <div className="md:col-span-2"><Fld label={t("portal-logistics-cargo-desc-label")}><Textarea rows={2} value={f.cargo_description} onChange={(e) => set("cargo_description", e.target.value)} placeholder="e.g. bagged sugar ICUMSA-45, 25kg PP bags" /></Fld></div>
+              <Fld label={t("portal-logistics-hs-codes")}><Input value={f.hs_codes} onChange={(e) => set("hs_codes", e.target.value)} placeholder="1701.14, 1701.99" /></Fld>
+              <Fld label={t("portal-logistics-cargo-value")}><div className="flex gap-1"><Input type="number" step="any" value={f.cargo_value} onChange={(e) => set("cargo_value", e.target.value === "" ? "" : Number(e.target.value))} /><Select value={f.cargo_currency ?? "USD"} onValueChange={(v) => set("cargo_currency", v)}><SelectTrigger className="w-24"><SelectValue /></SelectTrigger><SelectContent>{["USD","EUR","AED","GBP"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div></Fld>
+              <Fld label={t("portal-logistics-total-weight")}><Input type="number" step="any" value={f.total_weight_kg} onChange={(e) => set("total_weight_kg", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
+              <Fld label={t("portal-logistics-total-volume")}><Input type="number" step="any" value={f.total_volume_cbm} onChange={(e) => set("total_volume_cbm", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
+              <Fld label={t("portal-logistics-total-packages")}><Input type="number" value={f.total_packages} onChange={(e) => set("total_packages", e.target.value === "" ? "" : Number(e.target.value))} /></Fld>
               <div className="md:col-span-2 flex flex-wrap gap-4 pt-2">
-                <label className="flex items-center gap-2 text-sm"><Checkbox checked={f.is_hazardous} onCheckedChange={(v) => set("is_hazardous", v === true)} /> Hazardous (DGR)</label>
-                <label className="flex items-center gap-2 text-sm"><Checkbox checked={f.is_temperature_controlled} onCheckedChange={(v) => set("is_temperature_controlled", v === true)} /> Temperature-controlled</label>
-                <label className="flex items-center gap-2 text-sm"><Checkbox checked={f.insurance_required} onCheckedChange={(v) => set("insurance_required", v === true)} /> Insurance required</label>
+                <label className="flex items-center gap-2 text-sm"><Checkbox checked={f.is_hazardous} onCheckedChange={(v) => set("is_hazardous", v === true)} /> {t("portal-logistics-hazardous")}</label>
+                <label className="flex items-center gap-2 text-sm"><Checkbox checked={f.is_temperature_controlled} onCheckedChange={(v) => set("is_temperature_controlled", v === true)} /> {t("portal-logistics-temp-controlled")}</label>
+                <label className="flex items-center gap-2 text-sm"><Checkbox checked={f.insurance_required} onCheckedChange={(v) => set("insurance_required", v === true)} /> {t("portal-logistics-insurance")}</label>
               </div>
               {f.is_temperature_controlled && (
-                <div className="md:col-span-2"><Fld label="Temperature range"><Input value={f.temperature_range} onChange={(e) => set("temperature_range", e.target.value)} placeholder="e.g. 2 to 8 °C" /></Fld></div>
+                <div className="md:col-span-2"><Fld label={t("portal-logistics-temp-range")}><Input value={f.temperature_range} onChange={(e) => set("temperature_range", e.target.value)} placeholder="e.g. 2 to 8 °C" /></Fld></div>
               )}
             </div>
           </Section>
 
           {/* Packing list */}
-          <Section title={`Packing list${(f.packing_list as PackingLine[]).length ? ` (${(f.packing_list as PackingLine[]).length} lines)` : ""}`} open={openSec.packing} onToggle={() => setOpenSec({ ...openSec, packing: !openSec.packing })}>
+          <Section title={t("portal-logistics-packing-list-with-count").replace("{n}", String((f.packing_list as PackingLine[]).length))} open={openSec.packing} onToggle={() => setOpenSec({ ...openSec, packing: !openSec.packing })}>
             <div className="space-y-2">
-              {(f.packing_list as PackingLine[]).length === 0 && <p className="text-xs text-muted-foreground">Optional but recommended. Totals auto-fill from packing lines.</p>}
+              {(f.packing_list as PackingLine[]).length === 0 && <p className="text-xs text-muted-foreground">{t("portal-logistics-packing-hint")}</p>}
               {(f.packing_list as PackingLine[]).map((line, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center rounded-md border p-2">
-                  <div className="col-span-12 md:col-span-4"><Input placeholder="Description *" value={line.description} onChange={(e) => updLine(i, { description: e.target.value })} /></div>
-                  <div className="col-span-4 md:col-span-1"><Input placeholder="HS" value={line.hs_code || ""} onChange={(e) => updLine(i, { hs_code: e.target.value })} /></div>
-                  <div className="col-span-4 md:col-span-1"><Input type="number" placeholder="Pkgs" value={line.packages ?? ""} onChange={(e) => updLine(i, { packages: Number(e.target.value) || 0 })} /></div>
-                  <div className="col-span-4 md:col-span-1"><Input placeholder="Type" value={line.package_type || ""} onChange={(e) => updLine(i, { package_type: e.target.value })} /></div>
-                  <div className="col-span-4 md:col-span-1"><Input type="number" placeholder="kg/pkg" step="any" value={line.unit_weight_kg ?? ""} onChange={(e) => updLine(i, { unit_weight_kg: Number(e.target.value) || 0 })} /></div>
-                  <div className="col-span-2 md:col-span-1"><Input type="number" placeholder="L cm" value={line.length_cm ?? ""} onChange={(e) => updLine(i, { length_cm: Number(e.target.value) || 0 })} /></div>
-                  <div className="col-span-2 md:col-span-1"><Input type="number" placeholder="W" value={line.width_cm ?? ""} onChange={(e) => updLine(i, { width_cm: Number(e.target.value) || 0 })} /></div>
-                  <div className="col-span-2 md:col-span-1"><Input type="number" placeholder="H" value={line.height_cm ?? ""} onChange={(e) => updLine(i, { height_cm: Number(e.target.value) || 0 })} /></div>
+                  <div className="col-span-12 md:col-span-4"><Input placeholder={t("portal-logistics-packing-desc-placeholder")} value={line.description} onChange={(e) => updLine(i, { description: e.target.value })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Input placeholder={t("portal-logistics-packing-hs")} value={line.hs_code || ""} onChange={(e) => updLine(i, { hs_code: e.target.value })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Input type="number" placeholder={t("portal-logistics-packing-pkgs")} value={line.packages ?? ""} onChange={(e) => updLine(i, { packages: Number(e.target.value) || 0 })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Input placeholder={t("portal-logistics-packing-type")} value={line.package_type || ""} onChange={(e) => updLine(i, { package_type: e.target.value })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Input type="number" placeholder={t("portal-logistics-packing-weight")} step="any" value={line.unit_weight_kg ?? ""} onChange={(e) => updLine(i, { unit_weight_kg: Number(e.target.value) || 0 })} /></div>
+                  <div className="col-span-2 md:col-span-1"><Input type="number" placeholder={t("portal-logistics-packing-length")} value={line.length_cm ?? ""} onChange={(e) => updLine(i, { length_cm: Number(e.target.value) || 0 })} /></div>
+                  <div className="col-span-2 md:col-span-1"><Input type="number" placeholder={t("portal-logistics-packing-width")} value={line.width_cm ?? ""} onChange={(e) => updLine(i, { width_cm: Number(e.target.value) || 0 })} /></div>
+                  <div className="col-span-2 md:col-span-1"><Input type="number" placeholder={t("portal-logistics-packing-height")} value={line.height_cm ?? ""} onChange={(e) => updLine(i, { height_cm: Number(e.target.value) || 0 })} /></div>
                   <div className="col-span-2 md:col-span-1"><Button size="icon" variant="ghost" onClick={() => delLine(i)}><Trash2 className="size-4 text-destructive" /></Button></div>
                 </div>
               ))}
-              <Button variant="outline" size="sm" onClick={addLine}><Plus className="size-3.5 mr-1" /> Add packing line</Button>
+              <Button variant="outline" size="sm" onClick={addLine}><Plus className="size-3.5 mr-1" /> {t("portal-logistics-add-packing-line")}</Button>
             </div>
           </Section>
 
           {/* Extras */}
-          <Section title="Special instructions" open={openSec.extras} onToggle={() => setOpenSec({ ...openSec, extras: !openSec.extras })}>
-            <Textarea rows={3} value={f.special_instructions} onChange={(e) => set("special_instructions", e.target.value)} placeholder="Any handling requirements, contact preferences, customs specifics…" />
+          <Section title={t("portal-logistics-section-extras")} open={openSec.extras} onToggle={() => setOpenSec({ ...openSec, extras: !openSec.extras })}>
+            <Textarea rows={3} value={f.special_instructions} onChange={(e) => set("special_instructions", e.target.value)} placeholder={t("portal-logistics-extras-placeholder")} />
           </Section>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>{t("portal-action-cancel")}</Button>
           <Button onClick={submit} disabled={submitting}>
             {submitting ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Send className="size-4 mr-2" />}
-            Submit request
+            {t("portal-logistics-submit")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -341,6 +344,7 @@ function LogisticsRequestForm({ open, onClose, onCreated, prefill, profile }: { 
 }
 
 function PortalTimeline({ requestId }: { requestId: string }) {
+  const t = useT();
   interface EventItem {
     id: string;
     event_type: string;
@@ -360,11 +364,11 @@ function PortalTimeline({ requestId }: { requestId: string }) {
     refetchInterval: 20_000,
   });
   const events = q.data?.items || [];
-  if (q.isLoading) return <p className="text-xs text-muted-foreground">Loading timeline…</p>;
-  if (!events.length) return <p className="text-xs text-muted-foreground">No status updates yet — we'll let you know as soon as anything changes.</p>;
+  if (q.isLoading) return <p className="text-xs text-muted-foreground">{t("portal-logistics-loading-timeline")}</p>;
+  if (!events.length) return <p className="text-xs text-muted-foreground">{t("portal-logistics-no-events")}</p>;
 
-  const iconFor = (t: string) => {
-    switch (t) {
+  const iconFor = (eventType: string) => {
+    switch (eventType) {
       case "created": return { Icon: Send, color: "text-primary" };
       case "quoted": return { Icon: FileText, color: "text-blue-600" };
       case "accepted": return { Icon: CheckCircle2, color: "text-emerald-600" };
@@ -419,45 +423,46 @@ function Fld({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function AddressBlock({ prefix, f, set }: { prefix: "origin" | "destination"; f: any; set: (k: string, v: any) => void }) {
+  const t = useT();
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <Fld label="Company">
+      <Fld label={t("portal-logistics-company")}>
         <Input value={f[`${prefix}_company`]} onChange={(e) => set(`${prefix}_company`, e.target.value)} />
       </Fld>
-      <Fld label="Contact name">
+      <Fld label={t("portal-logistics-contact-name")}>
         <Input value={f[`${prefix}_contact_name`]} onChange={(e) => set(`${prefix}_contact_name`, e.target.value)} />
       </Fld>
-      <Fld label="Contact phone">
+      <Fld label={t("portal-logistics-contact-phone")}>
         <Input value={f[`${prefix}_contact_phone`]} onChange={(e) => set(`${prefix}_contact_phone`, e.target.value)} />
       </Fld>
-      <Fld label="Contact email">
+      <Fld label={t("portal-logistics-contact-email")}>
         <Input type="email" value={f[`${prefix}_contact_email`] || ""} onChange={(e) => set(`${prefix}_contact_email`, e.target.value)} />
       </Fld>
-      <Fld label="Country *">
+      <Fld label={t("portal-logistics-country-required")}>
         <Select value={f[`${prefix}_country`] || ""} onValueChange={(v) => set(`${prefix}_country`, v)}>
-          <SelectTrigger><SelectValue placeholder="Choose country" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder={t("portal-logistics-choose-country")} /></SelectTrigger>
           <SelectContent className="max-h-[300px]">
             {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </Fld>
-      <Fld label="State / Province">
+      <Fld label={t("portal-logistics-state-province")}>
         <Input value={f[`${prefix}_state`] || ""} onChange={(e) => set(`${prefix}_state`, e.target.value)} />
       </Fld>
-      <Fld label="City">
+      <Fld label={t("portal-logistics-city")}>
         <Input value={f[`${prefix}_city`]} onChange={(e) => set(`${prefix}_city`, e.target.value)} />
       </Fld>
-      <Fld label="Postal code / P.O. Box">
-        <Input value={f[`${prefix}_postal_code`]} onChange={(e) => set(`${prefix}_postal_code`, e.target.value)} placeholder="ZIP or P.O. Box" />
+      <Fld label={t("portal-logistics-postal-code")}>
+        <Input value={f[`${prefix}_postal_code`]} onChange={(e) => set(`${prefix}_postal_code`, e.target.value)} placeholder={t("portal-logistics-postal-placeholder")} />
       </Fld>
       <div className="md:col-span-2">
-        <Fld label="Address line">
-          <Input value={f[`${prefix}_address_line`]} onChange={(e) => set(`${prefix}_address_line`, e.target.value)} placeholder="Street, number, floor, warehouse, etc." />
+        <Fld label={t("portal-logistics-address-line")}>
+          <Input value={f[`${prefix}_address_line`]} onChange={(e) => set(`${prefix}_address_line`, e.target.value)} placeholder={t("portal-logistics-address-placeholder")} />
         </Fld>
       </div>
       <div className="md:col-span-2">
-        <Fld label="Port / Terminal (if applicable)">
-          <Input value={f[`${prefix}_port`] || ""} onChange={(e) => set(`${prefix}_port`, e.target.value)} placeholder="e.g. Port of Rotterdam, JFK, Belgrade cargo terminal" />
+        <Fld label={t("portal-logistics-port-terminal")}>
+          <Input value={f[`${prefix}_port`] || ""} onChange={(e) => set(`${prefix}_port`, e.target.value)} placeholder={t("portal-logistics-port-placeholder")} />
         </Fld>
       </div>
     </div>

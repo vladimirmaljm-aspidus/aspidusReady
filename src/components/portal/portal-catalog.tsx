@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { fmtDate } from "@/lib/utils/format";
 import type { ProductCatalogEntry } from "@/lib/supabase/types";
 import { RfqFormDialog } from "./rfq-form-dialog";
+import { useT } from "@/lib/i18n/store";
 
 // Category → accent color tokens (emerald / amber / teal / rose / violet)
 const CATEGORY_COLORS: Record<string, string> = {
@@ -64,6 +65,7 @@ function flagEmoji(code: string | null): string {
 }
 
 export function PortalCatalog() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -111,12 +113,15 @@ export function PortalCatalog() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Product <span className="text-gradient-emerald">Catalog</span>
+            {t("portal-catalog-title").split(" ")[0]}{" "}
+            <span className="text-gradient-emerald">
+              {t("portal-catalog-title").split(" ").slice(1).join(" ")}
+            </span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {catalogQ.data
-              ? `${filtered.length} product${filtered.length === 1 ? "" : "s"} available`
-              : "Loading catalog…"}
+              ? t("portal-catalog-count").replace("{n}", String(filtered.length))
+              : t("portal-catalog-loading")}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -125,16 +130,16 @@ export function PortalCatalog() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search products…"
+              placeholder={t("portal-search-products")}
               className="pl-10 h-10 smooth focus-visible:ring-primary/40 focus-visible:border-primary/40"
             />
           </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="h-10 w-full sm:w-44">
-              <SelectValue placeholder="All categories" />
+              <SelectValue placeholder={t("portal-all-categories")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="all">{t("portal-all-categories")}</SelectItem>
               {categories.map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
@@ -242,20 +247,22 @@ export function PortalCatalog() {
 }
 
 function EmptyCatalog() {
+  const t = useT();
   return (
     <div className="card-premium p-12 flex flex-col items-center justify-center text-center">
       <div className="size-16 rounded-full bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center mb-4">
         <Package className="size-7 text-primary" />
       </div>
-      <p className="text-base font-semibold">No products in catalog</p>
+      <p className="text-base font-semibold">{t("portal-catalog-empty-title")}</p>
       <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-        The product catalog is currently empty. Please check back later.
+        {t("portal-catalog-empty-desc")}
       </p>
     </div>
   );
 }
 
 function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEntry; onRequestQuote?: (product: ProductCatalogEntry) => void }) {
+  const t = useT();
   // Normalize specifications — array of {name,value} OR Record<string,string>
   const rawSpecs = product.specifications as unknown;
   const specEntries: { name: string; value: string }[] = Array.isArray(rawSpecs)
@@ -289,7 +296,7 @@ function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEnt
       <div className="px-4 pb-4 space-y-5">
         {product.description && (
           <div>
-            <h3 className="text-sm font-semibold mb-1.5">Description</h3>
+            <h3 className="text-sm font-semibold mb-1.5">{t("portal-catalog-description")}</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {product.description}
             </p>
@@ -298,18 +305,18 @@ function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEnt
 
         {/* Key attributes */}
         <div className="grid grid-cols-2 gap-3">
-          <InfoTile icon={Hash} label="HS code" value={product.hs_code || "—"} mono />
-          <InfoTile icon={Ruler} label="Base unit" value={product.base_unit} />
+          <InfoTile icon={Hash} label={t("portal-catalog-hs-code")} value={product.hs_code || "—"} mono />
+          <InfoTile icon={Ruler} label={t("portal-catalog-base-unit")} value={product.base_unit} />
           <InfoTile
             icon={Globe2}
-            label="Origin"
+            label={t("portal-catalog-origin")}
             value={
               product.origin_country
                 ? `${flagEmoji(product.origin_country)} ${product.origin_country}`
                 : "—"
             }
           />
-          <InfoTile icon={Layers} label="Category" value={product.category} />
+          <InfoTile icon={Layers} label={t("portal-catalog-category")} value={product.category} />
         </div>
 
         {/* Full specifications as definition list */}
@@ -317,7 +324,7 @@ function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEnt
           <div>
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
               <Layers className="size-4 text-primary" />
-              Full specifications
+              {t("portal-catalog-full-specs")}
             </h3>
             <div className="rounded-xl border border-border/60 overflow-hidden shadow-soft bg-card">
               <dl className="divide-y divide-border/60">
@@ -339,7 +346,7 @@ function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEnt
 
         {product.images && product.images.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold mb-2">Images</h3>
+            <h3 className="text-sm font-semibold mb-2">{t("portal-catalog-images")}</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {product.images.map((src, i) => (
                 <img
@@ -355,7 +362,7 @@ function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEnt
 
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground border-t border-border/60 pt-3">
           <MapPin className="size-3" />
-          Last updated {fmtDate(product.updated_at)}
+          {t("portal-catalog-last-updated").replace("{date}", fmtDate(product.updated_at))}
         </div>
 
         {/* Request Quote button — quick action to create an RFQ from this product */}
@@ -367,10 +374,10 @@ function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEnt
               size="lg"
             >
               <ShoppingCart className="size-4" />
-              Request Quote for this Product
+              {t("portal-catalog-request-quote")}
             </Button>
             <p className="text-[11px] text-muted-foreground text-center mt-2">
-              Get a customized offer with pricing, delivery terms, and specifications.
+              {t("portal-catalog-request-quote-desc")}
             </p>
           </div>
         )}

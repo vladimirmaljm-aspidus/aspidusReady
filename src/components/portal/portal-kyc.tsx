@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/store";
 import { fmtBytes, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { COUNTRIES } from "@/lib/data/reference";
 import type {
@@ -88,51 +89,51 @@ type FormState = Partial<KycSubmission> & { documents?: KycDocument[] };
 
 const STEP_DEFS: Array<{
   id: number;
-  label: string;
-  short: string;
+  labelKey: string;
+  shortKey: string;
   companyOnly?: boolean;
 }> = [
-  { id: 1, label: "Entity Type", short: "Entity" },
-  { id: 2, label: "Business Information", short: "Info" },
-  { id: 3, label: "Address & Contact", short: "Address" },
-  { id: 4, label: "Beneficial Owner", short: "Owner", companyOnly: true },
-  { id: 5, label: "Bank Details", short: "Bank" },
-  { id: 6, label: "Document Upload", short: "Documents" },
-  { id: 7, label: "Review & Submit", short: "Review" },
+  { id: 1, labelKey: "portal-kyc-step-entity", shortKey: "portal-kyc-step-short-entity" },
+  { id: 2, labelKey: "portal-kyc-step-business", shortKey: "portal-kyc-step-short-info" },
+  { id: 3, labelKey: "portal-kyc-step-address", shortKey: "portal-kyc-step-short-address" },
+  { id: 4, labelKey: "portal-kyc-step-owner", shortKey: "portal-kyc-step-short-owner", companyOnly: true },
+  { id: 5, labelKey: "portal-kyc-step-bank", shortKey: "portal-kyc-step-short-bank" },
+  { id: 6, labelKey: "portal-kyc-step-documents", shortKey: "portal-kyc-step-short-documents" },
+  { id: 7, labelKey: "portal-kyc-step-review", shortKey: "portal-kyc-step-short-review" },
 ];
 
 const STATUS_META: Record<
   KycStatusCode,
   {
-    label: string;
+    labelKey: string;
     tone: "amber" | "info" | "emerald" | "destructive" | "muted";
     icon: React.ComponentType<{ className?: string }>;
   }
 > = {
-  draft: { label: "Draft", tone: "muted", icon: PencilLine },
-  submitted: { label: "Submitted", tone: "info", icon: Send },
-  under_review: { label: "Under Review", tone: "amber", icon: Clock },
-  approved: { label: "Approved", tone: "emerald", icon: CheckCircle2 },
-  rejected: { label: "Rejected", tone: "destructive", icon: AlertCircle },
-  resubmit: { label: "Resubmit Required", tone: "amber", icon: AlertCircle },
+  draft: { labelKey: "portal-kyc-status-draft", tone: "muted", icon: PencilLine },
+  submitted: { labelKey: "portal-kyc-status-submitted", tone: "info", icon: Send },
+  under_review: { labelKey: "portal-kyc-status-under-review", tone: "amber", icon: Clock },
+  approved: { labelKey: "portal-kyc-status-approved", tone: "emerald", icon: CheckCircle2 },
+  rejected: { labelKey: "portal-kyc-status-rejected", tone: "destructive", icon: AlertCircle },
+  resubmit: { labelKey: "portal-kyc-status-resubmit", tone: "amber", icon: AlertCircle },
 };
 
 const VOLUME_OPTIONS = [
-  { value: "lt_50k", label: "Less than $50,000" },
-  { value: "50k_100k", label: "$50,000 – $100,000" },
-  { value: "100k_250k", label: "$100,000 – $250,000" },
-  { value: "250k_plus", label: "More than $250,000" },
+  { value: "lt_50k", labelKey: "portal-kyc-volume-lt-50k" },
+  { value: "50k_100k", labelKey: "portal-kyc-volume-50k-100k" },
+  { value: "100k_250k", labelKey: "portal-kyc-volume-100k-250k" },
+  { value: "250k_plus", labelKey: "portal-kyc-volume-250k-plus" },
 ];
 
 const ID_TYPE_OPTIONS = [
-  { value: "passport", label: "Passport" },
-  { value: "id_card", label: "National ID Card" },
+  { value: "passport", labelKey: "portal-kyc-passport" },
+  { value: "id_card", labelKey: "portal-kyc-national-id-card" },
 ];
 
 interface DocTypeDef {
   type: KycDocumentType;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
   requiredFor?: "company" | "all";
   optional?: boolean;
   icon: React.ComponentType<{ className?: string }>;
@@ -141,57 +142,57 @@ interface DocTypeDef {
 const DOC_TYPES: DocTypeDef[] = [
   {
     type: "company_registration",
-    label: "Company Registration Certificate",
-    description: "Official certificate of incorporation.",
+    labelKey: "portal-kyc-doc-cat-company-registration",
+    descKey: "portal-kyc-doc-cat-company-registration-desc",
     requiredFor: "company",
     icon: Building2,
   },
   {
     type: "tax_certificate",
-    label: "Tax Certificate",
-    description: "Proof of tax registration.",
+    labelKey: "portal-kyc-doc-cat-tax-certificate",
+    descKey: "portal-kyc-doc-cat-tax-certificate-desc",
     requiredFor: "all",
     icon: Receipt,
   },
   {
     type: "vat_certificate",
-    label: "VAT Certificate",
-    description: "If your business is VAT-registered.",
+    labelKey: "portal-kyc-doc-cat-vat-certificate",
+    descKey: "portal-kyc-doc-cat-vat-certificate-desc",
     optional: true,
     icon: ScrollText,
   },
   {
     type: "id_card",
-    label: "ID Card / Passport of Beneficial Owner",
-    description: "Government-issued identification.",
+    labelKey: "portal-kyc-doc-cat-id-card",
+    descKey: "portal-kyc-doc-cat-id-card-desc",
     requiredFor: "all",
     icon: IdCard,
   },
   {
     type: "bank_statement",
-    label: "Bank Statement",
-    description: "Most recent statement (last 3 months).",
+    labelKey: "portal-kyc-doc-cat-bank-statement",
+    descKey: "portal-kyc-doc-cat-bank-statement-desc",
     requiredFor: "all",
     icon: Banknote,
   },
   {
     type: "utility_bill",
-    label: "Utility Bill",
-    description: "Optional — proof of address.",
+    labelKey: "portal-kyc-doc-cat-utility-bill",
+    descKey: "portal-kyc-doc-cat-utility-bill-desc",
     optional: true,
     icon: Home,
   },
   {
     type: "trade_license",
-    label: "Trade License",
-    description: "Optional — if applicable to your jurisdiction.",
+    labelKey: "portal-kyc-doc-cat-trade-license",
+    descKey: "portal-kyc-doc-cat-trade-license-desc",
     optional: true,
     icon: FileText,
   },
   {
     type: "chamber_of_commerce",
-    label: "Chamber of Commerce Certificate",
-    description: "Optional — official registry extract.",
+    labelKey: "portal-kyc-doc-cat-chamber",
+    descKey: "portal-kyc-doc-cat-chamber-desc",
     optional: true,
     icon: FileCheck2,
   },
@@ -202,6 +203,7 @@ const DOC_TYPES: DocTypeDef[] = [
 // ============================================================
 
 export function PortalKyc() {
+  const t = useT();
   const kycQ = useQuery<{ submission: KycSubmission | null; exempt: boolean }>({
     queryKey: ["portal-kyc"],
     queryFn: async () => {
@@ -226,9 +228,9 @@ export function PortalKyc() {
       <Card className="border-destructive/30 shadow-soft">
         <CardContent className="py-12 flex flex-col items-center justify-center text-center">
           <AlertCircle className="size-6 text-destructive mb-2" />
-          <p className="text-sm font-medium">Unable to load KYC status.</p>
+          <p className="text-sm font-medium">{t("portal-kyc-unable-load")}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Please refresh the page or try again later.
+            {t("portal-kyc-unable-load-desc")}
           </p>
         </CardContent>
       </Card>
@@ -279,14 +281,15 @@ export function PortalKyc() {
 // ============================================================
 
 function ExemptCard() {
+  const t = useT();
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">
-          KYC <span className="text-gradient-emerald">Verification</span>
+          {t("portal-kyc-title").split(" ")[0]} <span className="text-gradient-emerald">{t("portal-kyc-title").split(" ").slice(1).join(" ")}</span>
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Know Your Customer compliance for your trading account.
+          {t("portal-kyc-intro")}
         </p>
       </div>
 
@@ -298,19 +301,17 @@ function ExemptCard() {
               <Crown className="size-8" />
             </div>
             <Badge className="mb-4 border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400 gap-1.5">
-              <Crown className="size-3" /> Premium client
+              <Crown className="size-3" /> {t("portal-kyc-exempt-premium")}
             </Badge>
             <h2 className="text-xl sm:text-2xl font-semibold tracking-tight max-w-lg">
-              KYC verification is not required for your account.
+              {t("portal-kyc-exempt-title")}
             </h2>
             <p className="text-sm text-muted-foreground mt-3 max-w-md leading-relaxed">
-              You are a premium client — your account has been pre-approved by
-              your account manager. No further compliance documentation is
-              needed to trade with us.
+              {t("portal-kyc-exempt-desc")}
             </p>
             <div className="mt-6 flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShieldCheck className="size-3.5 text-emerald-600" />
-              Account fully verified and active.
+              {t("portal-kyc-exempt-verified")}
             </div>
           </CardContent>
         </div>
@@ -332,6 +333,7 @@ function StatusView({
   status: KycStatusCode;
   onUnlock?: () => void;
 }) {
+  const t = useT();
   const meta = STATUS_META[status];
   const ToneIcon = meta.icon;
   const isApproved = status === "approved";
@@ -341,10 +343,10 @@ function StatusView({
     <div className="max-w-3xl mx-auto space-y-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          KYC <span className="text-gradient-emerald">Verification</span>
+          {t("portal-kyc-title").split(" ")[0]} <span className="text-gradient-emerald">{t("portal-kyc-title").split(" ").slice(1).join(" ")}</span>
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Your compliance submission and its review status.
+          {t("portal-kyc-status-desc")}
         </p>
       </div>
 
@@ -396,37 +398,34 @@ function StatusView({
                   )}
                 >
                   <ToneIcon className="size-3" />
-                  {meta.label}
+                  {t(meta.labelKey)}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  Submitted{" "}
-                  {submission.submitted_at
-                    ? fmtDate(submission.submitted_at)
-                    : "—"}
+                  {t("portal-kyc-submitted-label").replace("{date}", submission.submitted_at ? fmtDate(submission.submitted_at) : "—")}
                 </span>
               </div>
               <h2 className="text-lg font-semibold tracking-tight mt-3">
-                {isApproved && "Your data has been verified and saved."}
-                {isRejected && "Your submission needs attention."}
+                {isApproved && t("portal-kyc-approved-title")}
+                {isRejected && t("portal-kyc-rejected-title")}
                 {!isApproved &&
                   !isRejected &&
-                  "Your KYC submission is under review."}
+                  t("portal-kyc-success-title")}
               </h2>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                 {isApproved &&
-                  "Your account has been fully verified. Trade documentation is no longer required from you."}
+                  t("portal-kyc-approved-desc")}
                 {isRejected &&
-                  "Please review the reviewer notes below, update the highlighted fields, and resubmit."}
+                  t("portal-kyc-rejected-desc")}
                 {!isApproved &&
                   !isRejected &&
-                  "Our compliance team will respond within 2–3 business days. You will be notified by email when the review is complete."}
+                  t("portal-kyc-review-desc")}
               </p>
 
               {isRejected && submission.rejection_reason && (
                 <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive mb-1">
                     <AlertCircle className="size-3.5" />
-                    Reviewer notes
+                    {t("portal-kyc-reviewer-notes")}
                   </div>
                   <p className="text-sm text-foreground leading-relaxed">
                     {submission.rejection_reason}
@@ -437,7 +436,7 @@ function StatusView({
               {isApproved && submission.reviewed_at && (
                 <div className="mt-4 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
                   <ShieldCheck className="size-3.5" />
-                  Approved on {fmtDate(submission.reviewed_at)}
+                  {t("portal-kyc-approved-on").replace("{date}", fmtDate(submission.reviewed_at))}
                 </div>
               )}
 
@@ -445,7 +444,7 @@ function StatusView({
                 <div className="mt-5">
                   <Button onClick={onUnlock} className="gap-1.5">
                     <PencilLine className="size-4" />
-                    Update & Resubmit
+                    {t("portal-kyc-update-resubmit")}
                   </Button>
                 </div>
               )}
@@ -455,7 +454,7 @@ function StatusView({
       </Card>
 
       {/* Summary of submitted data (read-only) */}
-      <SubmissionSummary submission={submission} />
+      <SubmissionSummary submission={submission} t={t} />
     </div>
   );
 }
@@ -464,7 +463,7 @@ function StatusView({
 // Submission summary — used both in read-only StatusView and review step
 // ============================================================
 
-function SubmissionSummary({ submission }: { submission: KycSubmission }) {
+function SubmissionSummary({ submission, t }: { submission: KycSubmission; t: (k: string) => string }) {
   const isCompany = submission.entity_type === "company";
   const sections: Array<{
     title: string;
@@ -476,109 +475,109 @@ function SubmissionSummary({ submission }: { submission: KycSubmission }) {
     }>;
   }> = [
     {
-      title: isCompany ? "Business Information" : "Personal Information",
+      title: isCompany ? t("portal-kyc-section-business-info") : t("portal-kyc-section-personal-info"),
       icon: isCompany ? Building2 : User,
       rows: isCompany
         ? [
-            { label: "Legal name", value: submission.legal_name },
-            { label: "Trade name", value: submission.trade_name },
+            { label: t("portal-kyc-legal-name"), value: submission.legal_name },
+            { label: t("portal-kyc-trade-name"), value: submission.trade_name },
             {
-              label: "Registration no.",
+              label: t("portal-kyc-registration-number"),
               value: submission.registration_number,
               mono: true,
             },
-            { label: "Tax ID", value: submission.tax_id, mono: true },
-            { label: "VAT number", value: submission.vat_number, mono: true },
-            { label: "Website", value: submission.company_website },
-            { label: "Business activity", value: submission.business_activity },
+            { label: t("portal-kyc-tax-id"), value: submission.tax_id, mono: true },
+            { label: t("portal-kyc-vat-number"), value: submission.vat_number, mono: true },
+            { label: t("portal-kyc-website"), value: submission.company_website },
+            { label: t("portal-kyc-business-activity"), value: submission.business_activity },
             {
-              label: "Expected monthly volume",
+              label: t("portal-kyc-expected-volume"),
               value: submission.expected_monthly_volume,
             },
-            { label: "Source of funds", value: submission.source_of_funds },
+            { label: t("portal-kyc-source-of-funds"), value: submission.source_of_funds },
           ]
         : [
-            { label: "Full legal name", value: submission.legal_name },
+            { label: t("portal-kyc-full-legal-name"), value: submission.legal_name },
             {
-              label: "ID type",
+              label: t("portal-kyc-id-type"),
               value:
                 submission.owner_id_type === "passport"
-                  ? "Passport"
-                  : "National ID Card",
+                  ? t("portal-kyc-passport")
+                  : t("portal-kyc-national-id-card"),
             },
             {
-              label: "ID number",
+              label: t("portal-kyc-id-number"),
               value: submission.owner_id_number,
               mono: true,
             },
             {
-              label: "Nationality",
+              label: t("portal-kyc-nationality"),
               value: countryName(submission.owner_nationality),
             },
-            { label: "Date of birth", value: submission.owner_dob },
-            { label: "Occupation", value: submission.business_activity },
-            { label: "Source of funds", value: submission.source_of_funds },
+            { label: t("portal-kyc-date-of-birth"), value: submission.owner_dob },
+            { label: t("portal-kyc-occupation"), value: submission.business_activity },
+            { label: t("portal-kyc-source-of-funds"), value: submission.source_of_funds },
           ],
     },
     {
-      title: "Address & Contact",
+      title: t("portal-kyc-section-address"),
       icon: MapPin,
       rows: [
-        { label: "Address", value: submission.address_line },
-        { label: "City", value: submission.city },
-        { label: "State / Province", value: submission.state },
-        { label: "Postal code", value: submission.postal_code, mono: true },
-        { label: "Country", value: countryName(submission.country) },
-        { label: "Contact name", value: submission.contact_name },
-        { label: "Contact email", value: submission.contact_email },
-        { label: "Contact phone", value: submission.contact_phone },
-        { label: "Position", value: submission.contact_position },
+        { label: t("portal-kyc-address-line"), value: submission.address_line },
+        { label: t("portal-kyc-city"), value: submission.city },
+        { label: t("portal-kyc-state-province"), value: submission.state },
+        { label: t("portal-kyc-postal-code"), value: submission.postal_code, mono: true },
+        { label: t("portal-kyc-country"), value: countryName(submission.country) },
+        { label: t("portal-kyc-contact-name"), value: submission.contact_name },
+        { label: t("portal-kyc-contact-email"), value: submission.contact_email },
+        { label: t("portal-kyc-contact-phone"), value: submission.contact_phone },
+        { label: t("portal-kyc-contact-position"), value: submission.contact_position },
       ],
     },
     ...(isCompany
       ? [
           {
-            title: "Beneficial Owner (AML)",
+            title: t("portal-kyc-section-owner"),
             icon: Scale,
             rows: [
-              { label: "Owner name", value: submission.owner_name },
+              { label: t("portal-kyc-owner-full-name"), value: submission.owner_name },
               {
-                label: "ID type",
+                label: t("portal-kyc-id-type"),
                 value:
                   submission.owner_id_type === "passport"
-                    ? "Passport"
-                    : "National ID Card",
+                    ? t("portal-kyc-passport")
+                    : t("portal-kyc-national-id-card"),
               },
               {
-                label: "ID number",
+                label: t("portal-kyc-id-number"),
                 value: submission.owner_id_number,
                 mono: true,
               },
               {
-                label: "Nationality",
+                label: t("portal-kyc-nationality"),
                 value: countryName(submission.owner_nationality),
               },
-              { label: "Date of birth", value: submission.owner_dob },
-              { label: "Address", value: submission.owner_address },
+              { label: t("portal-kyc-date-of-birth"), value: submission.owner_dob },
+              { label: t("portal-kyc-address-line"), value: submission.owner_address },
             ],
           },
         ]
       : []),
     {
-      title: "Bank Details",
+      title: t("portal-kyc-section-bank"),
       icon: Landmark,
       rows: [
-        { label: "Bank name", value: submission.bank_name },
-        { label: "Account number", value: submission.bank_account, mono: true },
-        { label: "IBAN", value: submission.bank_iban, mono: true },
-        { label: "SWIFT / BIC", value: submission.bank_swift, mono: true },
+        { label: t("portal-kyc-bank-name"), value: submission.bank_name },
+        { label: t("portal-kyc-account-number"), value: submission.bank_account, mono: true },
+        { label: t("portal-kyc-iban"), value: submission.bank_iban, mono: true },
+        { label: t("portal-kyc-swift-bic"), value: submission.bank_swift, mono: true },
       ],
     },
     {
-      title: "Documents",
+      title: t("portal-kyc-section-documents"),
       icon: FileText,
       rows: (submission.documents || []).map((d) => ({
-        label: docTypeLabel(d.type),
+        label: docTypeLabel(d.type, t),
         value: `${d.filename} · ${fmtBytes(d.size)}`,
       })),
     },
@@ -597,7 +596,7 @@ function SubmissionSummary({ submission }: { submission: KycSubmission }) {
           <CardContent>
             {s.rows.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">
-                No documents uploaded.
+                {t("portal-kyc-no-docs")}
               </p>
             ) : (
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -639,6 +638,7 @@ function KycWizard({
   rejectionReason?: string;
   onUnlockReset?: () => void;
 }) {
+  const t = useT();
   // Build form state from initial submission (or empty defaults).
   const [form, setForm] = useState<FormState>(() => ({
     entity_type: initial?.entity_type,
@@ -717,11 +717,11 @@ function KycWizard({
       }
       const saved: KycSubmission = await r.json();
       setLastSavedAt(saved.updated_at);
-      if (!silent) toast.success("Draft saved.");
+      if (!silent) toast.success(t("portal-kyc-toast-draft-saved"));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
       if (silent) {
-        toast.error(`Auto-save failed: ${msg}`);
+        toast.error(t("portal-kyc-toast-auto-save-failed").replace("{msg}", msg));
       } else {
         toast.error(msg);
       }
@@ -773,7 +773,7 @@ function KycWizard({
 
   async function handleSubmitForReview() {
     if (!declarationChecked) {
-      toast.error("Please confirm the declaration before submitting.");
+      toast.error(t("portal-kyc-toast-declaration-required"));
       return;
     }
     setSubmitting(true);
@@ -789,7 +789,7 @@ function KycWizard({
       }
       const result: KycSubmission = await r.json();
       setSubmitted(result);
-      toast.success("KYC submitted for review.");
+      toast.success(t("portal-kyc-toast-submitted"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Submission failed");
     } finally {
@@ -816,16 +816,16 @@ function KycWizard({
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            KYC <span className="text-gradient-emerald">Verification</span>
+            {t("portal-kyc-title").split(" ")[0]} <span className="text-gradient-emerald">{t("portal-kyc-title").split(" ").slice(1).join(" ")}</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Complete each step to submit your compliance information for review.
+            {t("portal-kyc-wizard-intro")}
           </p>
         </div>
         {lastSavedAt && (
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Check className="size-3 text-emerald-600" />
-            Draft saved {fmtDateTime(lastSavedAt)}
+            {t("portal-kyc-draft-saved").replace("{date}", fmtDateTime(lastSavedAt))}
           </div>
         )}
       </div>
@@ -839,7 +839,7 @@ function KycWizard({
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-destructive">
-                Previous submission was rejected
+                {t("portal-kyc-rejection-banner")}
               </p>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                 {rejectionReason}
@@ -852,7 +852,7 @@ function KycWizard({
                 onClick={onUnlockReset}
                 className="text-xs h-7"
               >
-                Cancel
+                {t("portal-action-cancel")}
               </Button>
             )}
           </CardContent>
@@ -865,6 +865,7 @@ function KycWizard({
         current={step}
         visited={visitedSteps}
         stepNumber={stepNumber}
+        t={t}
       />
 
       {/* Step content */}
@@ -875,9 +876,9 @@ function KycWizard({
               variant="outline"
               className="tabular border-primary/30 text-primary bg-primary/5"
             >
-              Step {step} / {visibleSteps.length}
+              {t("portal-kyc-step-label").replace("{n}", String(step)).replace("{m}", String(visibleSteps.length))}
             </Badge>
-            <CardTitle className="text-base">{currentStepDef.label}</CardTitle>
+            <CardTitle className="text-base">{t(currentStepDef.labelKey)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="p-6 sm:p-8">
@@ -889,6 +890,7 @@ function KycWizard({
               <StepEntity
                 value={form.entity_type}
                 onChange={(v) => update("entity_type", v)}
+                t={t}
               />
             )}
             {currentStepDef.id === 2 && (
@@ -897,6 +899,7 @@ function KycWizard({
                 form={form}
                 update={update}
                 readOnly={readOnly}
+                t={t}
               />
             )}
             {currentStepDef.id === 3 && (
@@ -904,6 +907,7 @@ function KycWizard({
                 form={form}
                 update={update}
                 readOnly={readOnly}
+                t={t}
               />
             )}
             {currentStepDef.id === 4 && isCompany && (
@@ -911,19 +915,21 @@ function KycWizard({
                 form={form}
                 update={update}
                 readOnly={readOnly}
+                t={t}
               />
             )}
             {currentStepDef.id === 5 && (
-              <StepBankDetails form={form} update={update} readOnly={readOnly} />
+              <StepBankDetails form={form} update={update} readOnly={readOnly} t={t} />
             )}
             {currentStepDef.id === 6 && (
               <StepDocuments
                 documents={form.documents || []}
                 onChange={(docs) => update("documents", docs)}
                 isCompany={!!isCompany}
+                t={t}
               />
             )}
-            {currentStepDef.id === 7 && <StepReview form={form} isCompany={!!isCompany} />}
+            {currentStepDef.id === 7 && <StepReview form={form} isCompany={!!isCompany} t={t} />}
           </div>
         </CardContent>
 
@@ -933,7 +939,7 @@ function KycWizard({
             {step > 1 && (
               <Button variant="ghost" onClick={handleBack} className="gap-1.5">
                 <ArrowLeft className="size-4" />
-                Back
+                {t("portal-kyc-back")}
               </Button>
             )}
             {!isLastStep && (
@@ -942,7 +948,7 @@ function KycWizard({
                 disabled={step === 1 && !form.entity_type}
                 className="gap-1.5"
               >
-                Continue
+                {t("portal-kyc-continue")}
                 <ArrowRight className="size-4" />
               </Button>
             )}
@@ -960,7 +966,7 @@ function KycWizard({
               ) : (
                 <Check className="size-3.5" />
               )}
-              Save draft
+              {t("portal-kyc-save-draft")}
             </Button>
             {isLastStep && (
               <Button
@@ -973,7 +979,7 @@ function KycWizard({
                 ) : (
                   <Send className="size-4" />
                 )}
-                Submit for Review
+                {t("portal-kyc-submit-review")}
               </Button>
             )}
           </div>
@@ -995,11 +1001,10 @@ function KycWizard({
                 htmlFor="declaration"
                 className="text-sm font-medium cursor-pointer"
               >
-                I confirm that the information provided is accurate and complete.
+                {t("portal-kyc-declaration")}
               </Label>
               <p className="text-xs text-muted-foreground mt-1">
-                Submitting false or misleading information may result in account
-                suspension and termination of trading services.
+                {t("portal-kyc-declaration-desc")}
               </p>
             </div>
           </CardContent>
@@ -1018,11 +1023,13 @@ function StepIndicator({
   current,
   visited,
   stepNumber,
+  t,
 }: {
   steps: typeof STEP_DEFS;
   current: number;
   visited: Set<number>;
   stepNumber: (id: number) => number;
+  t: (k: string) => string;
 }) {
   return (
     <div className="card-premium shadow-soft p-4 sm:p-5">
@@ -1054,7 +1061,7 @@ function StepIndicator({
                     isCurrent ? "text-foreground" : "text-muted-foreground"
                   )}
                 >
-                  {s.short}
+                  {t(s.shortKey)}
                 </span>
               </div>
               {!isLast && (
@@ -1080,28 +1087,28 @@ function StepIndicator({
 function StepEntity({
   value,
   onChange,
+  t,
 }: {
   value: PartnerEntityType | undefined;
   onChange: (v: PartnerEntityType) => void;
+  t: (k: string) => string;
 }) {
   const options: Array<{
     value: PartnerEntityType;
-    title: string;
-    description: string;
+    titleKey: string;
+    descKey: string;
     icon: React.ComponentType<{ className?: string }>;
   }> = [
     {
       value: "company",
-      title: "Company",
-      description:
-        "Registered legal entity — corporation, LLC, partnership, or other business structure.",
+      titleKey: "portal-kyc-entity-company-title",
+      descKey: "portal-kyc-entity-company-desc",
       icon: Building2,
     },
     {
       value: "individual",
-      title: "Individual",
-      description:
-        "Sole trader or private person trading in your own name, not through a company.",
+      titleKey: "portal-kyc-entity-individual-title",
+      descKey: "portal-kyc-entity-individual-desc",
       icon: User,
     },
   ];
@@ -1110,8 +1117,7 @@ function StepEntity({
     <div className="space-y-5">
       <div>
         <p className="text-sm text-muted-foreground">
-          Select the entity type that best describes your trading relationship
-          with us. This determines the information we need to collect.
+          {t("portal-kyc-entity-intro")}
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1144,11 +1150,11 @@ function StepEntity({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{opt.title}</h3>
+                    <h3 className="font-semibold">{t(opt.titleKey)}</h3>
                     {selected && <Check className="size-4 text-primary" />}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    {opt.description}
+                    {t(opt.descKey)}
                   </p>
                 </div>
               </div>
@@ -1169,28 +1175,30 @@ function StepBusinessInfo({
   form,
   update,
   readOnly,
+  t,
 }: {
   isCompany: boolean;
   form: FormState;
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
   readOnly: boolean;
+  t: (k: string) => string;
 }) {
   return (
     <div className="space-y-5">
       <SectionIntro
         icon={isCompany ? Building2 : User}
-        title={isCompany ? "Business Information" : "Personal Information"}
+        title={isCompany ? t("portal-kyc-biz-info-title") : t("portal-kyc-personal-info-title")}
         description={
           isCompany
-            ? "Enter your company's registration and operational details."
-            : "Enter your personal identification details."
+            ? t("portal-kyc-biz-info-intro")
+            : t("portal-kyc-personal-info-intro")
         }
       />
 
       {isCompany ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FieldText
-            label="Legal name"
+            label={t("portal-kyc-legal-name")}
             required
             icon={Building2}
             value={form.legal_name ?? ""}
@@ -1199,7 +1207,7 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldText
-            label="Trade name"
+            label={t("portal-kyc-trade-name")}
             icon={Briefcase}
             value={form.trade_name ?? ""}
             onChange={(v) => update("trade_name", v)}
@@ -1207,7 +1215,7 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldText
-            label="Registration number"
+            label={t("portal-kyc-registration-number")}
             required
             icon={Hash}
             value={form.registration_number ?? ""}
@@ -1217,7 +1225,7 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldText
-            label="Tax ID"
+            label={t("portal-kyc-tax-id")}
             required
             icon={Receipt}
             value={form.tax_id ?? ""}
@@ -1227,7 +1235,7 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldText
-            label="VAT number"
+            label={t("portal-kyc-vat-number")}
             icon={ScrollText}
             value={form.vat_number ?? ""}
             onChange={(v) => update("vat_number", v)}
@@ -1236,7 +1244,7 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldText
-            label="Website"
+            label={t("portal-kyc-website")}
             icon={Globe2}
             value={form.company_website ?? ""}
             onChange={(v) => update("company_website", v)}
@@ -1245,7 +1253,7 @@ function StepBusinessInfo({
           />
           <div className="sm:col-span-2">
             <FieldTextarea
-              label="Business activity"
+              label={t("portal-kyc-business-activity")}
               icon={Briefcase}
               value={form.business_activity ?? ""}
               onChange={(v) => update("business_activity", v)}
@@ -1254,16 +1262,17 @@ function StepBusinessInfo({
             />
           </div>
           <FieldSelect
-            label="Expected monthly volume"
+            label={t("portal-kyc-expected-volume")}
             icon={Wallet}
             value={form.expected_monthly_volume ?? ""}
             onChange={(v) => update("expected_monthly_volume", v)}
             options={VOLUME_OPTIONS}
             placeholder="Select range"
             disabled={readOnly}
+            t={t}
           />
           <FieldText
-            label="Source of funds"
+            label={t("portal-kyc-source-of-funds")}
             icon={Banknote}
             value={form.source_of_funds ?? ""}
             onChange={(v) => update("source_of_funds", v)}
@@ -1274,7 +1283,7 @@ function StepBusinessInfo({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FieldText
-            label="Full legal name"
+            label={t("portal-kyc-full-legal-name")}
             required
             icon={User}
             value={form.legal_name ?? ""}
@@ -1283,15 +1292,16 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldSelect
-            label="ID type"
+            label={t("portal-kyc-id-type")}
             icon={IdCard}
             value={form.owner_id_type ?? "passport"}
             onChange={(v) => update("owner_id_type", v)}
             options={ID_TYPE_OPTIONS}
             disabled={readOnly}
+            t={t}
           />
           <FieldText
-            label="ID number"
+            label={t("portal-kyc-id-number")}
             required
             icon={Hash}
             value={form.owner_id_number ?? ""}
@@ -1301,16 +1311,16 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldSelect
-            label="Nationality"
+            label={t("portal-kyc-nationality")}
             icon={Globe2}
             value={form.owner_nationality ?? ""}
             onChange={(v) => update("owner_nationality", v)}
             options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
-            placeholder="Select country"
+            placeholder={t("portal-rfq-select-country")}
             disabled={readOnly}
           />
           <FieldText
-            label="Date of birth"
+            label={t("portal-kyc-date-of-birth")}
             icon={Calendar}
             type="date"
             value={form.owner_dob ?? ""}
@@ -1318,7 +1328,7 @@ function StepBusinessInfo({
             disabled={readOnly}
           />
           <FieldText
-            label="Occupation"
+            label={t("portal-kyc-occupation")}
             icon={Briefcase}
             value={form.business_activity ?? ""}
             onChange={(v) => update("business_activity", v)}
@@ -1327,7 +1337,7 @@ function StepBusinessInfo({
           />
           <div className="sm:col-span-2">
             <FieldText
-              label="Source of funds"
+              label={t("portal-kyc-source-of-funds")}
               icon={Banknote}
               value={form.source_of_funds ?? ""}
               onChange={(v) => update("source_of_funds", v)}
@@ -1349,22 +1359,24 @@ function StepAddressContact({
   form,
   update,
   readOnly,
+  t,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
   readOnly: boolean;
+  t: (k: string) => string;
 }) {
   return (
     <div className="space-y-5">
       <SectionIntro
         icon={MapPin}
-        title="Address & Contact"
-        description="Your registered address and primary contact person."
+        title={t("portal-kyc-address-contact-title")}
+        description={t("portal-kyc-address-contact-intro")}
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <FieldText
-            label="Address line"
+            label={t("portal-kyc-address-line")}
             required
             icon={Home}
             value={form.address_line ?? ""}
@@ -1374,7 +1386,7 @@ function StepAddressContact({
           />
         </div>
         <FieldText
-          label="City"
+          label={t("portal-kyc-city")}
           required
           icon={MapPin}
           value={form.city ?? ""}
@@ -1383,7 +1395,7 @@ function StepAddressContact({
           disabled={readOnly}
         />
         <FieldText
-          label="State / Province"
+          label={t("portal-kyc-state-province")}
           icon={MapPin}
           value={form.state ?? ""}
           onChange={(v) => update("state", v)}
@@ -1391,7 +1403,7 @@ function StepAddressContact({
           disabled={readOnly}
         />
         <FieldText
-          label="Postal code"
+          label={t("portal-kyc-postal-code")}
           icon={Hash}
           value={form.postal_code ?? ""}
           onChange={(v) => update("postal_code", v)}
@@ -1400,13 +1412,13 @@ function StepAddressContact({
           disabled={readOnly}
         />
         <FieldSelect
-          label="Country"
+          label={t("portal-kyc-country")}
           required
           icon={Globe2}
           value={form.country ?? ""}
           onChange={(v) => update("country", v)}
           options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
-          placeholder="Select country"
+          placeholder={t("portal-rfq-select-country")}
           disabled={readOnly}
         />
       </div>
@@ -1414,11 +1426,11 @@ function StepAddressContact({
       <Separator />
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3">
-          Contact person
+          {t("portal-kyc-contact-person")}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FieldText
-            label="Name"
+            label={t("portal-kyc-contact-name")}
             required
             icon={User}
             value={form.contact_name ?? ""}
@@ -1427,7 +1439,7 @@ function StepAddressContact({
             disabled={readOnly}
           />
           <FieldText
-            label="Email"
+            label={t("portal-kyc-contact-email")}
             required
             type="email"
             icon={Mail}
@@ -1437,7 +1449,7 @@ function StepAddressContact({
             disabled={readOnly}
           />
           <FieldText
-            label="Phone"
+            label={t("portal-kyc-contact-phone")}
             required
             icon={Phone}
             value={form.contact_phone ?? ""}
@@ -1446,7 +1458,7 @@ function StepAddressContact({
             disabled={readOnly}
           />
           <FieldText
-            label="Position"
+            label={t("portal-kyc-contact-position")}
             icon={Briefcase}
             value={form.contact_position ?? ""}
             onChange={(v) => update("contact_position", v)}
@@ -1467,29 +1479,29 @@ function StepBeneficialOwner({
   form,
   update,
   readOnly,
+  t,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
   readOnly: boolean;
+  t: (k: string) => string;
 }) {
   return (
     <div className="space-y-5">
       <SectionIntro
         icon={Scale}
-        title="Beneficial Owner"
-        description="AML requirement — identify the person who ultimately owns or controls the company."
+        title={t("portal-kyc-owner-title")}
+        description={t("portal-kyc-owner-intro")}
       />
       <div className="rounded-lg border border-amber-300/40 bg-amber-50/60 dark:bg-amber-500/10 p-3 flex items-start gap-2">
         <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
         <p className="text-xs text-foreground/80 leading-relaxed">
-          The beneficial owner is the person who ultimately owns or controls
-          the company (typically &gt;25% ownership). This information is
-          required under Anti-Money-Laundering regulations.
+          {t("portal-kyc-owner-disclaimer")}
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FieldText
-          label="Owner full name"
+          label={t("portal-kyc-owner-full-name")}
           required
           icon={User}
           value={form.owner_name ?? ""}
@@ -1498,15 +1510,16 @@ function StepBeneficialOwner({
           disabled={readOnly}
         />
         <FieldSelect
-          label="ID type"
+          label={t("portal-kyc-id-type")}
           icon={IdCard}
           value={form.owner_id_type ?? "passport"}
           onChange={(v) => update("owner_id_type", v)}
           options={ID_TYPE_OPTIONS}
           disabled={readOnly}
+          t={t}
         />
         <FieldText
-          label="ID number"
+          label={t("portal-kyc-id-number")}
           required
           icon={Hash}
           value={form.owner_id_number ?? ""}
@@ -1516,16 +1529,16 @@ function StepBeneficialOwner({
           disabled={readOnly}
         />
         <FieldSelect
-          label="Nationality"
+          label={t("portal-kyc-nationality")}
           icon={Globe2}
           value={form.owner_nationality ?? ""}
           onChange={(v) => update("owner_nationality", v)}
           options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
-          placeholder="Select country"
+          placeholder={t("portal-rfq-select-country")}
           disabled={readOnly}
         />
         <FieldText
-          label="Date of birth"
+          label={t("portal-kyc-date-of-birth")}
           icon={Calendar}
           type="date"
           value={form.owner_dob ?? ""}
@@ -1534,7 +1547,7 @@ function StepBeneficialOwner({
         />
         <div className="sm:col-span-2">
           <FieldText
-            label="Address"
+            label={t("portal-kyc-address-line")}
             icon={Home}
             value={form.owner_address ?? ""}
             onChange={(v) => update("owner_address", v)}
@@ -1555,21 +1568,23 @@ function StepBankDetails({
   form,
   update,
   readOnly,
+  t,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
   readOnly: boolean;
+  t: (k: string) => string;
 }) {
   return (
     <div className="space-y-5">
       <SectionIntro
         icon={Landmark}
-        title="Bank Details"
-        description="Account where payments will be settled. All fields are optional at draft stage but required before trading."
+        title={t("portal-kyc-bank-title")}
+        description={t("portal-kyc-bank-intro")}
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FieldText
-          label="Bank name"
+          label={t("portal-kyc-bank-name")}
           icon={Landmark}
           value={form.bank_name ?? ""}
           onChange={(v) => update("bank_name", v)}
@@ -1577,7 +1592,7 @@ function StepBankDetails({
           disabled={readOnly}
         />
         <FieldText
-          label="Account number"
+          label={t("portal-kyc-account-number")}
           icon={Hash}
           value={form.bank_account ?? ""}
           onChange={(v) => update("bank_account", v)}
@@ -1586,7 +1601,7 @@ function StepBankDetails({
           disabled={readOnly}
         />
         <FieldText
-          label="IBAN"
+          label={t("portal-kyc-iban")}
           icon={Hash}
           value={form.bank_iban ?? ""}
           onChange={(v) => update("bank_iban", v)}
@@ -1595,7 +1610,7 @@ function StepBankDetails({
           disabled={readOnly}
         />
         <FieldText
-          label="SWIFT / BIC"
+          label={t("portal-kyc-swift-bic")}
           icon={Globe2}
           value={form.bank_swift ?? ""}
           onChange={(v) => update("bank_swift", v)}
@@ -1616,10 +1631,12 @@ function StepDocuments({
   documents,
   onChange,
   isCompany,
+  t,
 }: {
   documents: KycDocument[];
   onChange: (docs: KycDocument[]) => void;
   isCompany: boolean;
+  t: (k: string) => string;
 }) {
   const [uploadingType, setUploadingType] = useState<KycDocumentType | null>(
     null
@@ -1637,12 +1654,12 @@ function StepDocuments({
     // Client-side sanity checks before the round-trip so the user gets
     // instant feedback instead of a 400 from the server.
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("File is too large. Maximum size is 10 MB.");
+      toast.error(t("portal-kyc-toast-file-too-large"));
       return;
     }
     const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
     if (file.type && !allowed.includes(file.type)) {
-      toast.error("Unsupported file type. Allowed: PDF, JPEG, PNG, WebP.");
+      toast.error(t("portal-kyc-toast-file-type"));
       return;
     }
     setUploadingType(dt.type);
@@ -1664,7 +1681,7 @@ function StepDocuments({
       // Replace any existing document of the same type, otherwise append.
       const filtered = documents.filter((d) => d.type !== dt.type);
       onChange([...filtered, doc]);
-      toast.success(`${dt.label} uploaded.`);
+      toast.success(t("portal-kyc-toast-doc-uploaded").replace("{label}", t(dt.labelKey)));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -1685,7 +1702,7 @@ function StepDocuments({
         throw new Error(err.error || "Failed to remove document.");
       }
       onChange(documents.filter((d) => d.type !== dt.type));
-      toast.success(`${dt.label} removed.`);
+      toast.success(t("portal-kyc-toast-doc-removed").replace("{label}", t(dt.labelKey)));
     } catch (e: any) {
       toast.error(e.message || "Failed to remove document.");
     }
@@ -1695,8 +1712,8 @@ function StepDocuments({
     <div className="space-y-5">
       <SectionIntro
         icon={FileText}
-        title="Document Upload"
-        description="Upload clear scans or photos of the required documents. PDF, JPG, PNG accepted."
+        title={t("portal-kyc-docs-title")}
+        description={t("portal-kyc-docs-intro")}
       />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {visibleDocTypes.map((dt) => {
@@ -1731,22 +1748,22 @@ function StepDocuments({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium">{dt.label}</p>
+                    <p className="text-sm font-medium">{t(dt.labelKey)}</p>
                     {isRequired ? (
                       <Badge className="text-[10px] py-0 h-4 border-transparent bg-primary/10 text-primary">
-                        Required
+                        {t("portal-kyc-doc-required")}
                       </Badge>
                     ) : (
                       <Badge
                         variant="outline"
                         className="text-[10px] py-0 h-4 text-muted-foreground"
                       >
-                        Optional
+                        {t("portal-kyc-doc-optional")}
                       </Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {dt.description}
+                    {t(dt.descKey)}
                   </p>
                 </div>
               </div>
@@ -1767,7 +1784,7 @@ function StepDocuments({
                     size="icon"
                     className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => handleRemove(dt)}
-                    aria-label={`Remove ${dt.label}`}
+                    aria-label={`${t("portal-action-cancel")} ${t(dt.labelKey)}`}
                   >
                     <X className="size-3.5" />
                   </Button>
@@ -1798,10 +1815,10 @@ function StepDocuments({
                     <UploadCloud className="size-4 text-muted-foreground" />
                   )}
                   <span className="text-xs font-medium">
-                    {isUploading ? "Uploading…" : "Click to upload"}
+                    {isUploading ? t("portal-kyc-doc-uploading") : t("portal-kyc-doc-click-upload")}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
-                    PDF, JPG, PNG — up to 10 MB
+                    {t("portal-kyc-doc-formats")}
                   </span>
                 </label>
               )}
@@ -1820,9 +1837,11 @@ function StepDocuments({
 function StepReview({
   form,
   isCompany,
+  t,
 }: {
   form: FormState;
   isCompany: boolean;
+  t: (k: string) => string;
 }) {
   // Build a pseudo-submission object to reuse SubmissionSummary
   const submission = {
@@ -1833,17 +1852,17 @@ function StepReview({
     <div className="space-y-5">
       <SectionIntro
         icon={ShieldCheck}
-        title="Review & Submit"
-        description="Please review all information below. You can return to any step to make changes before submitting."
+        title={t("portal-kyc-review-title")}
+        description={t("portal-kyc-review-intro")}
       />
-      <SubmissionSummary submission={submission} />
+      <SubmissionSummary submission={submission} t={t} />
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
         <ShieldCheck className="size-4 text-primary mt-0.5 shrink-0" />
         <p className="text-xs text-foreground/80 leading-relaxed">
           {isCompany
-            ? "Once submitted, our compliance team will verify your company information and uploaded documents."
-            : "Once submitted, our compliance team will verify your personal information and uploaded documents."}{" "}
-          You will receive a response within 2–3 business days.
+            ? t("portal-kyc-review-disclaimer-company")
+            : t("portal-kyc-review-disclaimer-individual")}{" "}
+          {t("portal-kyc-review-response-time")}
         </p>
       </div>
     </div>
@@ -1855,6 +1874,7 @@ function StepReview({
 // ============================================================
 
 function SuccessState({ submission }: { submission: KycSubmission }) {
+  const t = useT();
   return (
     <div className="max-w-2xl mx-auto">
       <Card className="border-emerald-300/40 shadow-soft-lg overflow-hidden">
@@ -1865,19 +1885,18 @@ function SuccessState({ submission }: { submission: KycSubmission }) {
               <CheckCircle2 className="size-8" />
             </div>
             <Badge className="mb-4 border-transparent bg-emerald-600 text-white gap-1.5">
-              <CheckCircle2 className="size-3" /> Submitted
+              <CheckCircle2 className="size-3" /> {t("portal-kyc-status-submitted")}
             </Badge>
             <h2 className="text-xl sm:text-2xl font-semibold tracking-tight max-w-lg">
-              Your KYC submission is under review.
+              {t("portal-kyc-success-title")}
             </h2>
             <p className="text-sm text-muted-foreground mt-3 max-w-md leading-relaxed">
-              We&apos;ll notify you within 2–3 business days. You can track the
-              status of your submission here at any time.
+              {t("portal-kyc-success-desc")}
             </p>
             {submission.submitted_at && (
               <div className="mt-5 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="size-3.5" />
-                Submitted {fmtDateTime(submission.submitted_at)}
+                {t("portal-kyc-submitted-label").replace("{date}", fmtDateTime(submission.submitted_at))}
               </div>
             )}
           </CardContent>
@@ -1885,7 +1904,7 @@ function SuccessState({ submission }: { submission: KycSubmission }) {
       </Card>
       <div className="mt-4 text-center">
         <Button variant="outline" onClick={() => window.location.reload()}>
-          Refresh status
+          {t("portal-kyc-success-refresh")}
         </Button>
       </div>
     </div>
@@ -2005,16 +2024,20 @@ function FieldSelect({
   options,
   placeholder,
   disabled,
+  t,
 }: {
   label: string;
   required?: boolean;
   icon: React.ComponentType<{ className?: string }>;
   value: string;
   onChange: (v: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label?: string; labelKey?: string }>;
   placeholder?: string;
   disabled?: boolean;
+  t?: (k: string) => string;
 }) {
+  const resolveLabel = (o: { label?: string; labelKey?: string }) =>
+    o.labelKey && t ? t(o.labelKey) : o.label ?? "";
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
@@ -2028,12 +2051,12 @@ function FieldSelect({
         disabled={disabled}
       >
         <SelectTrigger className="h-10 w-full">
-          <SelectValue placeholder={placeholder || "Select…"} />
+          <SelectValue placeholder={placeholder || (t ? t("portal-rfq-select-placeholder") : "Select…")} />
         </SelectTrigger>
         <SelectContent>
           {options.map((o) => (
             <SelectItem key={o.value} value={o.value}>
-              {o.label}
+              {resolveLabel(o)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -2051,8 +2074,8 @@ function countryName(code: string | null | undefined): string | null {
   return COUNTRIES.find((c) => c.code === code)?.name ?? code;
 }
 
-function docTypeLabel(type: KycDocumentType): string {
-  return (
-    DOC_TYPES.find((d) => d.type === type)?.label ?? type.replace(/_/g, " ")
-  );
+function docTypeLabel(type: KycDocumentType, t?: (k: string) => string): string {
+  const def = DOC_TYPES.find((d) => d.type === type);
+  if (!def) return type.replace(/_/g, " ");
+  return t ? t(def.labelKey) : def.labelKey;
 }
