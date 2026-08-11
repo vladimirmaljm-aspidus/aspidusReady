@@ -1750,11 +1750,35 @@ export const DASHBOARD: Record<Locale, Record<string, string>> = {
   },
 };
 
+// ─── Domain dictionaries ───────────────────────────────────────────────────
+// Split by module so parallel translation work never touches the same file.
+// Each domain dict is namespaced by key prefix (e.g. "invoices-", "kyc-") by
+// convention to avoid collisions — see src/lib/i18n/domains/*.ts.
+
+import { CRM } from "./domains/crm";
+import { FINANCE } from "./domains/finance";
+import { LOGISTICS } from "./domains/logistics";
+import { DOCUMENTS } from "./domains/documents";
+import { ADMINISTRATION } from "./domains/administration";
+import { PLATFORM } from "./domains/platform";
+import { MISC } from "./domains/misc";
+import { PORTAL } from "./domains/portal";
+
+const DOMAIN_DICTS: Record<Locale, Record<string, string>>[] = [
+  CRM, FINANCE, LOGISTICS, DOCUMENTS, ADMINISTRATION, PLATFORM, MISC, PORTAL,
+];
+
 // ─── Helper ────────────────────────────────────────────────────────────────
 
 export function t(locale: Locale, key: string): string {
-  // Try UI first, then NAV, then SECTIONS, then DASHBOARD
-  return UI[locale][key] || NAV[locale][key] || SECTIONS[locale][key] || DASHBOARD[locale][key] || key;
+  if (UI[locale][key]) return UI[locale][key];
+  if (NAV[locale][key]) return NAV[locale][key];
+  if (SECTIONS[locale][key]) return SECTIONS[locale][key];
+  if (DASHBOARD[locale][key]) return DASHBOARD[locale][key];
+  for (const dict of DOMAIN_DICTS) {
+    if (dict[locale]?.[key]) return dict[locale][key];
+  }
+  return key;
 }
 
 export const LOCALE_LABELS: Record<Locale, string> = {
