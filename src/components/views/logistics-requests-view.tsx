@@ -22,6 +22,8 @@ import type { Partner } from "@/lib/supabase/types";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import { downloadPdf } from "@/lib/utils/download";
+import { useI18nStore } from "@/lib/i18n/store";
+import { t } from "@/lib/i18n/dictionaries";
 
 interface LogisticsEvent {
   id: string;
@@ -94,15 +96,15 @@ interface LogisticsRequest {
   updated_at: string;
 }
 
-const MODE_META: Record<string, { label: string; Icon: any; color: string }> = {
-  sea_fcl:    { label: "Sea (FCL)",   Icon: Ship,    color: "text-blue-600" },
-  sea_lcl:    { label: "Sea (LCL)",   Icon: Ship,    color: "text-blue-500" },
-  road_ftl:   { label: "Road (FTL)",  Icon: Truck,   color: "text-amber-600" },
-  road_ltl:   { label: "Road (LTL)",  Icon: Truck,   color: "text-amber-500" },
-  air:        { label: "Air",         Icon: Plane,   color: "text-sky-600" },
-  rail:       { label: "Rail",        Icon: Train,   color: "text-emerald-600" },
-  courier:    { label: "Courier",     Icon: Package, color: "text-purple-600" },
-  multimodal: { label: "Multimodal",  Icon: Package, color: "text-gray-600" },
+const MODE_META: Record<string, { labelKey: string; Icon: any; color: string }> = {
+  sea_fcl:    { labelKey: "log-mode-sea-fcl",    Icon: Ship,    color: "text-blue-600" },
+  sea_lcl:    { labelKey: "log-mode-sea-lcl",    Icon: Ship,    color: "text-blue-500" },
+  road_ftl:   { labelKey: "log-mode-road-ftl",   Icon: Truck,   color: "text-amber-600" },
+  road_ltl:   { labelKey: "log-mode-road-ltl",   Icon: Truck,   color: "text-amber-500" },
+  air:        { labelKey: "log-mode-air",        Icon: Plane,   color: "text-sky-600" },
+  rail:       { labelKey: "log-mode-rail",       Icon: Train,   color: "text-emerald-600" },
+  courier:    { labelKey: "log-mode-courier",    Icon: Package, color: "text-purple-600" },
+  multimodal: { labelKey: "log-mode-multimodal", Icon: Package, color: "text-gray-600" },
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -115,10 +117,17 @@ const STATUS_STYLE: Record<string, string> = {
   completed:   "bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 border-emerald-600/30",
 };
 
+function statusLabel(locale: import("@/lib/i18n/dictionaries").Locale, status: string): string {
+  const key = `log-status-${status.replace(/_/g, "-")}`;
+  const translated = t(locale, key);
+  return translated === key ? status.replace("_", " ") : translated;
+}
+
 export function LogisticsRequestsView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
   const qc = useQueryClient();
+  const locale = useI18nStore((s) => s.locale);
 
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebounced(search, 300);
@@ -157,7 +166,7 @@ export function LogisticsRequestsView() {
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Delete failed");
     },
     onSuccess: () => {
-      toast.success("Deleted.");
+      toast.success(t(locale, "log-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["logistics-requests"] });
       setToDelete(null);
       setOpenId(null);
@@ -174,26 +183,26 @@ export function LogisticsRequestsView() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Logistics Requests"
-        description="Freight quote requests submitted by portal clients (sea, road, air, rail)."
+        title={t(locale, "log-page-title")}
+        description={t(locale, "log-page-description")}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatTile label="Pending" value={counts.pending || 0} />
-        <StatTile label="Quoted" value={counts.quoted || 0} />
-        <StatTile label="In progress" value={counts.in_progress || 0} />
-        <StatTile label="Completed" value={counts.completed || 0} />
+        <StatTile label={t(locale, "log-stat-pending")} value={counts.pending || 0} />
+        <StatTile label={t(locale, "log-stat-quoted")} value={counts.quoted || 0} />
+        <StatTile label={t(locale, "log-stat-in-progress")} value={counts.in_progress || 0} />
+        <StatTile label={t(locale, "log-stat-completed")} value={counts.completed || 0} />
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <CardTitle className="text-base">All requests</CardTitle>
-              <CardDescription className="text-xs">Click a row to view the full request and enter a quote.</CardDescription>
+              <CardTitle className="text-base">{t(locale, "log-all-requests")}</CardTitle>
+              <CardDescription className="text-xs">{t(locale, "log-all-requests-desc")}</CardDescription>
             </div>
             <Button size="sm" variant="outline" onClick={() => listQ.refetch()}>
-              <RefreshCw className={cn("size-3.5 mr-1", listQ.isFetching && "animate-spin")} /> Refresh
+              <RefreshCw className={cn("size-3.5 mr-1", listQ.isFetching && "animate-spin")} /> {t(locale, "refresh")}
             </Button>
           </div>
         </CardHeader>
@@ -201,19 +210,19 @@ export function LogisticsRequestsView() {
           <div className="flex flex-wrap gap-2 items-center">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <Input placeholder="Search number, cargo, city…" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder={t(locale, "log-search-placeholder")} className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="quoted">Quoted</SelectItem>
-                <SelectItem value="accepted">Accepted</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="in_progress">In progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="all">{t(locale, "log-all-statuses")}</SelectItem>
+                <SelectItem value="pending">{t(locale, "log-status-pending")}</SelectItem>
+                <SelectItem value="quoted">{t(locale, "log-status-quoted")}</SelectItem>
+                <SelectItem value="accepted">{t(locale, "log-status-accepted")}</SelectItem>
+                <SelectItem value="rejected">{t(locale, "log-status-rejected")}</SelectItem>
+                <SelectItem value="in_progress">{t(locale, "log-status-in-progress")}</SelectItem>
+                <SelectItem value="completed">{t(locale, "log-status-completed")}</SelectItem>
+                <SelectItem value="cancelled">{t(locale, "log-status-cancelled")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -222,21 +231,23 @@ export function LogisticsRequestsView() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Number</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Mode</TableHead>
-                  <TableHead>Route</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Received</TableHead>
+                  <TableHead>{t(locale, "log-col-number")}</TableHead>
+                  <TableHead>{t(locale, "log-col-client")}</TableHead>
+                  <TableHead>{t(locale, "log-col-mode")}</TableHead>
+                  <TableHead>{t(locale, "log-col-route")}</TableHead>
+                  <TableHead>{t(locale, "log-col-cargo")}</TableHead>
+                  <TableHead>{t(locale, "status")}</TableHead>
+                  <TableHead className="text-right">{t(locale, "log-col-received")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {listQ.isLoading && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>}
-                {!listQ.isLoading && items.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No logistics requests yet.</TableCell></TableRow>}
+                {listQ.isLoading && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">{t(locale, "log-loading")}</TableCell></TableRow>}
+                {!listQ.isLoading && items.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">{t(locale, "log-no-requests-yet")}</TableCell></TableRow>}
                 {items.map((r) => {
-                  const meta = MODE_META[r.mode] || { label: r.mode, Icon: Package, color: "text-gray-500" };
-                  const Icon = meta.Icon;
+                  const meta = MODE_META[r.mode];
+                  const modeLabel = meta ? t(locale, meta.labelKey) : r.mode;
+                  const Icon = meta?.Icon || Package;
+                  const color = meta?.color || "text-gray-500";
                   const partner = partnerMap.get(r.partner_id);
                   return (
                     <TableRow key={r.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setOpenId(r.id)}>
@@ -244,8 +255,8 @@ export function LogisticsRequestsView() {
                       <TableCell className="text-sm">{partner?.name || r.partner_id.slice(0, 8)}</TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-1.5 text-xs">
-                          <Icon className={cn("size-4", meta.color)} />
-                          {meta.label}
+                          <Icon className={cn("size-4", color)} />
+                          {modeLabel}
                           {r.container_type && <span className="text-muted-foreground">· {r.container_type}</span>}
                         </span>
                       </TableCell>
@@ -259,7 +270,7 @@ export function LogisticsRequestsView() {
                         {r.cargo_description || "—"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn("text-[10px] capitalize", STATUS_STYLE[r.status])}>{r.status.replace("_", " ")}</Badge>
+                        <Badge variant="outline" className={cn("text-[10px] capitalize", STATUS_STYLE[r.status])}>{statusLabel(locale, r.status)}</Badge>
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground" title={fmtDateTime(r.created_at)}>{fmtRelative(r.created_at)}</TableCell>
                     </TableRow>
@@ -281,13 +292,13 @@ export function LogisticsRequestsView() {
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><ShieldAlert className="size-5 text-destructive" /> Delete this request?</AlertDialogTitle>
-            <AlertDialogDescription>{toDelete?.number} — this cannot be undone.</AlertDialogDescription>
+            <AlertDialogTitle className="flex items-center gap-2"><ShieldAlert className="size-5 text-destructive" /> {t(locale, "log-delete-confirm-title")}</AlertDialogTitle>
+            <AlertDialogDescription>{toDelete?.number} — {t(locale, "log-delete-confirm-desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t(locale, "cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => toDelete && delMut.mutate(toDelete.id)}>
-              Delete
+              {t(locale, "delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -309,6 +320,7 @@ function RequestDetailSheet({
 }) {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const locale = useI18nStore((s) => s.locale);
   const canUpdate = useCan("logistics.update");
   const canDelete = useCan("logistics.delete");
   const canConvert = useCan("logistics.convert");
@@ -356,14 +368,14 @@ function RequestDetailSheet({
       if (!req) return;
       const r = await fetch(api(`/api/logistics-requests/${req.id}/to-offer`), { method: "POST" });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || "Failed to create offer");
+      if (!r.ok) throw new Error(data.error || t(locale, "log-offer-create-failed"));
       return data;
     },
     onSuccess: (data: any) => {
-      toast.success("Offer created from this request.");
+      toast.success(t(locale, "log-offer-created"));
       qc.invalidateQueries({ queryKey: ["logistics-requests"] });
       qc.invalidateQueries({ queryKey: ["logistics-events"] });
-      if (data?.offer_id) toast.info(`Offer id: ${data.offer_id}`);
+      if (data?.offer_id) toast.info(`${t(locale, "log-offer-id")} ${data.offer_id}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -386,30 +398,31 @@ function RequestDetailSheet({
       const r = await fetch(api(`/api/logistics-requests/${req.id}`), {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Save failed");
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t(locale, "log-save-failed"));
     },
     onSuccess: () => {
-      toast.success("Saved.");
+      toast.success(t(locale, "log-saved-toast"));
       qc.invalidateQueries({ queryKey: ["logistics-requests"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   if (!req) return null;
-  const meta = MODE_META[req.mode] || { label: req.mode, Icon: Package, color: "" };
-  const ModeIcon = meta.Icon;
+  const meta = MODE_META[req.mode];
+  const modeLabel = meta ? t(locale, meta.labelKey) : req.mode;
+  const ModeIcon = meta?.Icon || Package;
 
   return (
     <Sheet open={!!req} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <ModeIcon className={cn("size-5", meta.color)} />
+            <ModeIcon className={cn("size-5", meta?.color)} />
             {req.number}
-            <Badge variant="outline" className={cn("text-[10px] capitalize ml-2", STATUS_STYLE[req.status])}>{req.status.replace("_", " ")}</Badge>
+            <Badge variant="outline" className={cn("text-[10px] capitalize ml-2", STATUS_STYLE[req.status])}>{statusLabel(locale, req.status)}</Badge>
           </SheetTitle>
           <SheetDescription>
-            {partner?.name || req.partner_id.slice(0, 8)} · {meta.label}
+            {partner?.name || req.partner_id.slice(0, 8)} · {modeLabel}
             {req.container_type && <> · {req.container_type}</>}
             {req.incoterm && <> · {req.incoterm}</>}
           </SheetDescription>
@@ -417,38 +430,38 @@ function RequestDetailSheet({
 
         <div className="space-y-5 mt-4 pb-6">
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Route</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{t(locale, "log-section-route")}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <AddressCard title="Origin" data={{
+              <AddressCard title={t(locale, "log-address-origin")} data={{
                 company: req.origin_company, address: req.origin_address_line,
                 city: req.origin_city, postal: req.origin_postal_code, country: req.origin_country,
                 port: req.origin_port, contact_name: req.origin_contact_name,
                 contact_phone: req.origin_contact_phone, contact_email: req.origin_contact_email,
-              }} />
-              <AddressCard title="Destination" data={{
+              }} locale={locale} />
+              <AddressCard title={t(locale, "log-address-destination")} data={{
                 company: req.destination_company, address: req.destination_address_line,
                 city: req.destination_city, postal: req.destination_postal_code, country: req.destination_country,
                 port: req.destination_port, contact_name: req.destination_contact_name,
                 contact_phone: req.destination_contact_phone, contact_email: req.destination_contact_email,
-              }} />
+              }} locale={locale} />
             </div>
           </section>
 
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Cargo</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{t(locale, "log-section-cargo")}</h3>
             <div className="rounded-lg border p-3 text-sm space-y-1.5">
-              <p><span className="text-muted-foreground">Description:</span> {req.cargo_description || "—"}</p>
+              <p><span className="text-muted-foreground">{t(locale, "log-field-description")}</span> {req.cargo_description || "—"}</p>
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div><span className="text-muted-foreground">Weight:</span> {req.total_weight_kg ?? "—"} kg</div>
-                <div><span className="text-muted-foreground">Volume:</span> {req.total_volume_cbm ?? "—"} CBM</div>
-                <div><span className="text-muted-foreground">Packages:</span> {req.total_packages ?? "—"}</div>
+                <div><span className="text-muted-foreground">{t(locale, "log-field-weight")}</span> {req.total_weight_kg ?? "—"} kg</div>
+                <div><span className="text-muted-foreground">{t(locale, "log-field-volume")}</span> {req.total_volume_cbm ?? "—"} CBM</div>
+                <div><span className="text-muted-foreground">{t(locale, "log-field-packages")}</span> {req.total_packages ?? "—"}</div>
               </div>
-              {req.hs_codes && <p className="text-xs"><span className="text-muted-foreground">HS Codes:</span> {req.hs_codes}</p>}
-              {req.cargo_value != null && <p className="text-xs"><span className="text-muted-foreground">Value:</span> {req.cargo_value} {req.cargo_currency}</p>}
+              {req.hs_codes && <p className="text-xs"><span className="text-muted-foreground">{t(locale, "log-field-hs-codes")}</span> {req.hs_codes}</p>}
+              {req.cargo_value != null && <p className="text-xs"><span className="text-muted-foreground">{t(locale, "log-field-value")}</span> {req.cargo_value} {req.cargo_currency}</p>}
               <div className="flex flex-wrap gap-1 mt-1">
-                {req.is_hazardous && <Badge variant="destructive" className="text-[10px]">Hazardous</Badge>}
-                {req.is_temperature_controlled && <Badge variant="outline" className="text-[10px]">Temp {req.temperature_range || "controlled"}</Badge>}
-                {req.insurance_required && <Badge variant="outline" className="text-[10px]">Insurance</Badge>}
+                {req.is_hazardous && <Badge variant="destructive" className="text-[10px]">{t(locale, "log-badge-hazardous")}</Badge>}
+                {req.is_temperature_controlled && <Badge variant="outline" className="text-[10px]">{t(locale, "log-badge-temp-controlled")} {req.temperature_range || t(locale, "log-badge-controlled")}</Badge>}
+                {req.insurance_required && <Badge variant="outline" className="text-[10px]">{t(locale, "log-badge-insurance")}</Badge>}
                 {req.urgency !== "normal" && <Badge variant="outline" className="text-[10px] capitalize">{req.urgency}</Badge>}
               </div>
             </div>
@@ -457,18 +470,18 @@ function RequestDetailSheet({
           {req.packing_list && req.packing_list.length > 0 && (
             <section>
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
-                <ClipboardList className="size-3.5" /> Packing list ({req.packing_list.length})
+                <ClipboardList className="size-3.5" /> {t(locale, "log-section-packing-list")} ({req.packing_list.length})
               </h3>
               <div className="border rounded-lg overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Description</TableHead>
-                      <TableHead>HS</TableHead>
-                      <TableHead className="text-right">Pkgs</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Unit kg</TableHead>
-                      <TableHead>Dims (cm)</TableHead>
+                      <TableHead>{t(locale, "description")}</TableHead>
+                      <TableHead>{t(locale, "log-col-hs")}</TableHead>
+                      <TableHead className="text-right">{t(locale, "log-col-pkgs")}</TableHead>
+                      <TableHead>{t(locale, "type")}</TableHead>
+                      <TableHead className="text-right">{t(locale, "log-col-unit-kg")}</TableHead>
+                      <TableHead>{t(locale, "log-col-dims")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -490,59 +503,59 @@ function RequestDetailSheet({
 
           {(req.target_pickup_date || req.target_delivery_date) && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Timing</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{t(locale, "log-section-timing")}</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-muted-foreground">Pickup:</span> {req.target_pickup_date || "—"}</div>
-                <div><span className="text-muted-foreground">Delivery:</span> {req.target_delivery_date || "—"}</div>
+                <div><span className="text-muted-foreground">{t(locale, "log-field-pickup")}</span> {req.target_pickup_date || "—"}</div>
+                <div><span className="text-muted-foreground">{t(locale, "log-field-delivery")}</span> {req.target_delivery_date || "—"}</div>
               </div>
             </section>
           )}
 
           {req.special_instructions && (
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Special instructions</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{t(locale, "log-section-special-instructions")}</h3>
               <p className="rounded-lg border p-3 text-sm whitespace-pre-wrap">{req.special_instructions}</p>
             </section>
           )}
 
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
-              <History className="size-3.5" /> Timeline
+              <History className="size-3.5" /> {t(locale, "log-section-timeline")}
             </h3>
-            <TimelineList events={eventsQ.data?.items || []} loading={eventsQ.isLoading} />
+            <TimelineList events={eventsQ.data?.items || []} loading={eventsQ.isLoading} locale={locale} />
           </section>
 
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quote / status</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{t(locale, "log-section-quote-status")}</h3>
             <div className="rounded-lg border p-3 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Status</Label>
+                  <Label className="text-xs">{t(locale, "log-field-status")}</Label>
                   <Select value={status} onValueChange={setStatus}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="quoted">Quoted</SelectItem>
-                      <SelectItem value="accepted">Accepted</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="in_progress">In progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="pending">{t(locale, "log-status-pending")}</SelectItem>
+                      <SelectItem value="quoted">{t(locale, "log-status-quoted")}</SelectItem>
+                      <SelectItem value="accepted">{t(locale, "log-status-accepted")}</SelectItem>
+                      <SelectItem value="rejected">{t(locale, "log-status-rejected")}</SelectItem>
+                      <SelectItem value="in_progress">{t(locale, "log-status-in-progress")}</SelectItem>
+                      <SelectItem value="completed">{t(locale, "log-status-completed")}</SelectItem>
+                      <SelectItem value="cancelled">{t(locale, "log-status-cancelled")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Transit days</Label>
-                  <Input type="number" value={days} onChange={(e) => setDays(e.target.value)} placeholder="e.g. 21" />
+                  <Label className="text-xs">{t(locale, "log-field-transit-days")}</Label>
+                  <Input type="number" value={days} onChange={(e) => setDays(e.target.value)} placeholder={t(locale, "log-field-transit-days-placeholder")} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <Label className="text-xs">Price</Label>
+                  <Label className="text-xs">{t(locale, "log-field-price")}</Label>
                   <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
                 </div>
                 <div>
-                  <Label className="text-xs">Currency</Label>
+                  <Label className="text-xs">{t(locale, "log-field-currency")}</Label>
                   <Select value={currency} onValueChange={setCurrency}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -556,40 +569,40 @@ function RequestDetailSheet({
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Notes to client (visible in portal)</Label>
-                <Textarea rows={3} value={quoteNotes} onChange={(e) => setQuoteNotes(e.target.value)} placeholder="Route, carrier, terms…" />
+                <Label className="text-xs">{t(locale, "log-field-notes-client")}</Label>
+                <Textarea rows={3} value={quoteNotes} onChange={(e) => setQuoteNotes(e.target.value)} placeholder={t(locale, "log-field-notes-client-placeholder")} />
               </div>
               <div>
-                <Label className="text-xs">Internal notes (admin only)</Label>
-                <Textarea rows={2} value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} placeholder="Cost breakdown, supplier ref…" />
+                <Label className="text-xs">{t(locale, "log-field-notes-internal")}</Label>
+                <Textarea rows={2} value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} placeholder={t(locale, "log-field-notes-internal-placeholder")} />
               </div>
 
               {/* Tracking + carrier — most useful once the shipment is in progress. */}
               <div className="pt-2 border-t">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Shipment tracking</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">{t(locale, "log-shipment-tracking")}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs">Carrier</Label>
-                    <Input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Maersk, DHL, MSC…" />
+                    <Label className="text-xs">{t(locale, "log-field-carrier")}</Label>
+                    <Input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder={t(locale, "log-field-carrier-placeholder")} />
                   </div>
                   <div>
-                    <Label className="text-xs">Carrier reference</Label>
-                    <Input value={carrierReference} onChange={(e) => setCarrierReference(e.target.value)} placeholder="Booking / BL / AWB no." />
+                    <Label className="text-xs">{t(locale, "log-field-carrier-reference")}</Label>
+                    <Input value={carrierReference} onChange={(e) => setCarrierReference(e.target.value)} placeholder={t(locale, "log-field-carrier-reference-placeholder")} />
                   </div>
                   <div>
-                    <Label className="text-xs">Tracking number</Label>
-                    <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="e.g. MSCU1234567" />
+                    <Label className="text-xs">{t(locale, "log-field-tracking-number")}</Label>
+                    <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder={t(locale, "log-field-tracking-number-placeholder")} />
                   </div>
                   <div>
-                    <Label className="text-xs">Tracking URL</Label>
+                    <Label className="text-xs">{t(locale, "log-field-tracking-url")}</Label>
                     <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="https://…" />
                   </div>
                 </div>
                 {(req.quoted_at || req.shipped_at || req.delivered_at) && (
                   <div className="mt-2 text-xs text-muted-foreground flex flex-wrap gap-3">
-                    {req.quoted_at && <span>Quoted {fmtRelative(req.quoted_at)}</span>}
-                    {req.shipped_at && <span>Shipped {fmtRelative(req.shipped_at)}</span>}
-                    {req.delivered_at && <span>Delivered {fmtRelative(req.delivered_at)}</span>}
+                    {req.quoted_at && <span>{t(locale, "log-quoted-at")} {fmtRelative(req.quoted_at)}</span>}
+                    {req.shipped_at && <span>{t(locale, "log-shipped-at")} {fmtRelative(req.shipped_at)}</span>}
+                    {req.delivered_at && <span>{t(locale, "log-delivered-at")} {fmtRelative(req.delivered_at)}</span>}
                   </div>
                 )}
               </div>
@@ -608,9 +621,9 @@ function RequestDetailSheet({
                         api(`/api/logistics-requests/${req.id}/packing-list.pdf`),
                         `PackingList_${req.number || req.id}.pdf`,
                       );
-                      toast.success("PDF downloaded");
+                      toast.success(t(locale, "log-pdf-downloaded"));
                     } catch (e: any) {
-                      toast.error(e?.message || "Failed to download PDF");
+                      toast.error(e?.message || t(locale, "log-pdf-download-failed"));
                     } finally {
                       setDownloading(false);
                     }
@@ -621,24 +634,24 @@ function RequestDetailSheet({
                   ) : (
                     <FileText className="size-3.5 mr-1" />
                   )}
-                  Download packing list PDF
+                  {t(locale, "log-download-packing-list")}
                 </Button>
               </div>
               <div className="flex items-center justify-between gap-2 pt-2 border-t flex-wrap">
                 {canDelete ? (
                   <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(req)}>
-                    <Trash2 className="size-4 mr-1" /> Delete
+                    <Trash2 className="size-4 mr-1" /> {t(locale, "delete")}
                   </Button>
                 ) : <span />}
                 <div className="flex items-center gap-2">
                   {canConvert && (
                     <Button size="sm" variant="outline" onClick={() => toOfferMut.mutate()} disabled={toOfferMut.isPending || !price}>
-                      <ArrowRightCircle className="size-4 mr-1" /> {toOfferMut.isPending ? "Creating…" : "Convert to Offer"}
+                      <ArrowRightCircle className="size-4 mr-1" /> {toOfferMut.isPending ? t(locale, "log-creating") : t(locale, "log-convert-to-offer")}
                     </Button>
                   )}
                   {canUpdate && (
                     <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
-                      {saveMut.isPending ? "Saving…" : "Save changes"}
+                      {saveMut.isPending ? t(locale, "log-saving") : t(locale, "log-save-changes")}
                     </Button>
                   )}
                 </div>
@@ -651,7 +664,7 @@ function RequestDetailSheet({
   );
 }
 
-function AddressCard({ title, data }: { title: string; data: any }) {
+function AddressCard({ title, data, locale }: { title: string; data: any; locale: import("@/lib/i18n/dictionaries").Locale }) {
   const bits = [data.address, data.city, data.postal, data.country].filter(Boolean).join(", ");
   const mapsUrl = bits ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bits)}` : null;
   return (
@@ -659,7 +672,7 @@ function AddressCard({ title, data }: { title: string; data: any }) {
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{title}</p>
       <p className="font-medium">{data.company || "—"}</p>
       <p className="text-xs text-muted-foreground">{bits || "—"}</p>
-      {data.port && <p className="text-xs"><span className="text-muted-foreground">Port:</span> {data.port}</p>}
+      {data.port && <p className="text-xs"><span className="text-muted-foreground">{t(locale, "log-field-port")}</span> {data.port}</p>}
       {(data.contact_name || data.contact_phone || data.contact_email) && (
         <div className="text-xs pt-1 border-t mt-1">
           {data.contact_name && <p>{data.contact_name}</p>}
@@ -669,19 +682,19 @@ function AddressCard({ title, data }: { title: string; data: any }) {
       )}
       {mapsUrl && (
         <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary inline-flex items-center gap-1 hover:underline">
-          <MapPin className="size-3" /> Open in Maps
+          <MapPin className="size-3" /> {t(locale, "log-open-in-maps")}
         </a>
       )}
     </div>
   );
 }
 
-function TimelineList({ events, loading }: { events: LogisticsEvent[]; loading: boolean }) {
-  if (loading) return <p className="text-xs text-muted-foreground">Loading timeline…</p>;
-  if (!events.length) return <p className="text-xs text-muted-foreground py-2">No events yet — the timeline records every status change, quote, and note.</p>;
+function TimelineList({ events, loading, locale }: { events: LogisticsEvent[]; loading: boolean; locale: import("@/lib/i18n/dictionaries").Locale }) {
+  if (loading) return <p className="text-xs text-muted-foreground">{t(locale, "log-timeline-loading")}</p>;
+  if (!events.length) return <p className="text-xs text-muted-foreground py-2">{t(locale, "log-timeline-empty")}</p>;
 
-  const iconFor = (t: string) => {
-    switch (t) {
+  const iconFor = (evtType: string) => {
+    switch (evtType) {
       case "created": return { Icon: Send, color: "text-primary" };
       case "quoted": return { Icon: FileText, color: "text-blue-600" };
       case "accepted": return { Icon: CheckCircle2, color: "text-emerald-600" };

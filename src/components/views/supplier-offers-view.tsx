@@ -48,6 +48,8 @@ import { getCountry } from "@/lib/data/geo/countries";
 import { CountrySelect } from "@/components/common/country-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useI18nStore } from "@/lib/i18n/store";
+import { t, type Locale } from "@/lib/i18n/dictionaries";
 
 function flagEmoji(countryCode: string | null | undefined): string {
   if (!countryCode || countryCode.length !== 2) return "";
@@ -56,9 +58,14 @@ function flagEmoji(countryCode: string | null | undefined): string {
   return String.fromCodePoint(...codePoints);
 }
 
-const STATUS_LABELS: Record<SupplierOfferStatus, string> = {
-  active: "Active", expired: "Expired", on_hold: "On Hold", consumed: "Consumed",
-};
+function statusLabels(locale: Locale): Record<SupplierOfferStatus, string> {
+  return {
+    active: t(locale, "active"),
+    expired: t(locale, "crm-expired"),
+    on_hold: t(locale, "crm-on-hold"),
+    consumed: t(locale, "crm-consumed"),
+  };
+}
 
 const STATUS_BADGE: Record<SupplierOfferStatus, string> = {
   active: "bg-chart-1/15 text-chart-1 border-chart-1/30",
@@ -67,12 +74,14 @@ const STATUS_BADGE: Record<SupplierOfferStatus, string> = {
   consumed: "bg-secondary text-secondary-foreground border-border",
 };
 
-const STATUS_VALUES: { code: string; label: string }[] = [
-  { code: "active", label: "Active" },
-  { code: "expired", label: "Expired" },
-  { code: "on_hold", label: "On Hold" },
-  { code: "consumed", label: "Consumed" },
-];
+function statusValues(locale: Locale): { code: string; label: string }[] {
+  return [
+    { code: "active", label: t(locale, "active") },
+    { code: "expired", label: t(locale, "crm-expired") },
+    { code: "on_hold", label: t(locale, "crm-on-hold") },
+    { code: "consumed", label: t(locale, "crm-consumed") },
+  ];
+}
 
 function incotermLabel(code: string): string {
   const i = getIncoterm(code);
@@ -82,6 +91,9 @@ function incotermLabel(code: string): string {
 export function SupplierOffersView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
+  const STATUS_LABELS = statusLabels(locale);
+  const STATUS_VALUES = statusValues(locale);
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -158,11 +170,11 @@ export function SupplierOffersView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Offer deleted.");
+      toast.success(t(locale, "crm-offer-deleted"));
       qc.invalidateQueries({ queryKey: ["supplier-offers", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t(locale, "crm-delete-failed")),
   });
 
   const items = data?.items || [];
@@ -170,11 +182,11 @@ export function SupplierOffersView() {
   return (
     <div>
       <PageHeader
-        title="Supplier Offers"
-        description={`${data?.total ?? 0} offers`}
+        title={t(locale, "supplier-offers")}
+        description={`${data?.total ?? 0} ${t(locale, "offers").toLowerCase()}`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New Offer
+            <Plus className="size-4 mr-1" /> {t(locale, "crm-new-offer")}
           </Button>
         }
       />
@@ -184,34 +196,34 @@ export function SupplierOffersView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by offer #, packaging…"
+              placeholder={t(locale, "crm-search-offer-packaging")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={productFilter} onValueChange={setProductFilter}>
-            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder="Product" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder={t(locale, "crm-product")} /></SelectTrigger>
             <SelectContent className="max-h-72">
-              <SelectItem value="all">All products</SelectItem>
+              <SelectItem value="all">{t(locale, "crm-all-products")}</SelectItem>
               {(catalog.data?.items || []).map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Supplier" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t(locale, "crm-supplier")} /></SelectTrigger>
             <SelectContent className="max-h-72">
-              <SelectItem value="all">All suppliers</SelectItem>
+              <SelectItem value="all">{t(locale, "crm-all-suppliers")}</SelectItem>
               {supplierPartners.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full md:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-40"><SelectValue placeholder={t(locale, "status")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="all">{t(locale, "crm-all-statuses")}</SelectItem>
               {STATUS_VALUES.map((s) => (
                 <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>
               ))}
@@ -229,26 +241,26 @@ export function SupplierOffersView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Handshake className="size-6" />}
-              title="No supplier offers"
-              description="Add your first supplier offer to get started."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New Offer</Button>}
+              title={t(locale, "crm-no-supplier-offers")}
+              description={t(locale, "crm-no-supplier-offers-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t(locale, "crm-new-offer")}</Button>}
             />
           ) : (
             <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Offer #</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="hidden md:table-cell">Supplier</TableHead>
-                    <TableHead className="text-right">Unit Price</TableHead>
-                    <TableHead className="hidden lg:table-cell text-right">Min Order</TableHead>
-                    <TableHead className="hidden md:table-cell">Incoterm</TableHead>
-                    <TableHead className="hidden xl:table-cell">Origin</TableHead>
-                    <TableHead className="hidden xl:table-cell text-right">Lead</TableHead>
-                    <TableHead className="hidden lg:table-cell">Valid Until</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t(locale, "crm-offer-number")}</TableHead>
+                    <TableHead>{t(locale, "crm-product")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t(locale, "crm-supplier")}</TableHead>
+                    <TableHead className="text-right">{t(locale, "crm-unit-price")}</TableHead>
+                    <TableHead className="hidden lg:table-cell text-right">{t(locale, "crm-min-order")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t(locale, "crm-incoterm")}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t(locale, "crm-origin")}</TableHead>
+                    <TableHead className="hidden xl:table-cell text-right">{t(locale, "crm-lead")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t(locale, "crm-valid-until")}</TableHead>
+                    <TableHead>{t(locale, "status")}</TableHead>
+                    <TableHead className="text-right">{t(locale, "actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -265,7 +277,7 @@ export function SupplierOffersView() {
                           <span className="font-mono text-xs tabular">{o.offer_number || "—"}</span>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium text-sm truncate max-w-[200px]">{product?.name || "Unknown product"}</div>
+                          <div className="font-medium text-sm truncate max-w-[200px]">{product?.name || t(locale, "crm-unknown-product")}</div>
                           <div className="text-xs text-muted-foreground md:hidden">{supplier?.name || "—"}</div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-sm">{supplier?.name || "—"}</TableCell>
@@ -293,13 +305,13 @@ export function SupplierOffersView() {
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(o.id)} title="View">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(o.id)} title={t(locale, "view")}>
                               <Eye className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(o); setShowForm(true); }} title="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(o); setShowForm(true); }} title={t(locale, "edit")}>
                               <Pencil className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(o.id)} title="Delete">
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(o.id)} title={t(locale, "delete")}>
                               <Trash2 className="size-4" />
                             </Button>
                           </div>
@@ -331,9 +343,9 @@ export function SupplierOffersView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Handshake className="size-5" />
-              {detail.data?.offer_number || "Supplier Offer"}
+              {detail.data?.offer_number || t(locale, "crm-supplier-offer")}
             </SheetTitle>
-            <SheetDescription>Offer details and supplier comparison</SheetDescription>
+            <SheetDescription>{t(locale, "crm-offer-details-comparison")}</SheetDescription>
           </SheetHeader>
           {detail.isLoading ? (
             <div className="p-4 space-y-3">
@@ -356,18 +368,18 @@ export function SupplierOffersView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete offer?</AlertDialogTitle>
+            <AlertDialogTitle>{t(locale, "crm-delete-offer-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Trade calculations referencing this offer may lose their source.
+              {t(locale, "crm-delete-offer-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t(locale, "cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t(locale, "delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -409,6 +421,8 @@ function OfferDetail({
   partnerMap: Map<string, Partner>;
   currentId: string;
 }) {
+  const locale = useI18nStore((s) => s.locale);
+  const STATUS_LABELS = statusLabels(locale);
   const otherOffers = comparison.filter((o) => o.id !== currentId);
   const cur = getCurrency(offer.currency);
   const incoterm = getIncoterm(offer.incoterm);
@@ -429,43 +443,43 @@ function OfferDetail({
       {/* Heading summary */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <CardContent className="p-4 space-y-1">
-          <p className="text-xs text-muted-foreground">Product</p>
-          <p className="font-medium">{product?.name || "Unknown product"}</p>
-          <p className="text-xs text-muted-foreground mt-2">Supplier</p>
-          <p className="font-medium">{supplier?.name || "Unknown supplier"}</p>
+          <p className="text-xs text-muted-foreground">{t(locale, "crm-product")}</p>
+          <p className="font-medium">{product?.name || t(locale, "crm-unknown-product")}</p>
+          <p className="text-xs text-muted-foreground mt-2">{t(locale, "crm-supplier")}</p>
+          <p className="font-medium">{supplier?.name || t(locale, "crm-unknown-supplier")}</p>
         </CardContent>
       </Card>
 
-      <OfferSection icon={DollarSign} title="Pricing">
-        <OfferRow label="Unit price" value={`${fmtMoney(offer.unit_price, offer.currency)} / ${product?.base_unit || "unit"}`} mono />
-        <OfferRow label="Currency" value={`${cur?.code} — ${cur?.name}`} />
-        <OfferRow label="Minimum order qty" value={offer.min_order_qty ? offer.min_order_qty.toLocaleString() : null} mono />
-        <OfferRow label="Price valid until" value={fmtDate(offer.price_valid_until)} mono />
+      <OfferSection icon={DollarSign} title={t(locale, "crm-pricing")}>
+        <OfferRow label={t(locale, "crm-unit-price")} value={`${fmtMoney(offer.unit_price, offer.currency)} / ${product?.base_unit || t(locale, "crm-unit")}`} mono />
+        <OfferRow label={t(locale, "currency")} value={`${cur?.code} — ${cur?.name}`} />
+        <OfferRow label={t(locale, "crm-min-order-qty")} value={offer.min_order_qty ? offer.min_order_qty.toLocaleString() : null} mono />
+        <OfferRow label={t(locale, "crm-price-valid-until")} value={fmtDate(offer.price_valid_until)} mono />
       </OfferSection>
 
-      <OfferSection icon={Package} title="Packaging & Loadability">
-        <OfferRow label="Packaging" value={offer.packaging} />
-        <OfferRow label="Packing details" value={offer.packing_details} />
-        <OfferRow label="Loadability" value={offer.loadability} />
-        <OfferRow label="Specification notes" value={offer.specification_notes} />
+      <OfferSection icon={Package} title={t(locale, "crm-packaging-loadability")}>
+        <OfferRow label={t(locale, "crm-packaging")} value={offer.packaging} />
+        <OfferRow label={t(locale, "crm-packing-details")} value={offer.packing_details} />
+        <OfferRow label={t(locale, "crm-loadability")} value={offer.loadability} />
+        <OfferRow label={t(locale, "crm-specification-notes")} value={offer.specification_notes} />
       </OfferSection>
 
-      <OfferSection icon={Ship} title="Trade Terms">
-        <OfferRow label="Incoterm" value={incoterm ? `${incoterm.code} — ${incoterm.name}` : offer.incoterm} />
-        <OfferRow label="Loading port" value={<span className="flex items-center gap-1"><MapPin className="size-3 text-muted-foreground" />{offer.loading_port}</span>} />
-        <OfferRow label="Delivery port" value={<span className="flex items-center gap-1"><MapPin className="size-3 text-muted-foreground" />{offer.delivery_port}</span>} />
-        <OfferRow label="Lead time" value={<span className="flex items-center gap-1"><Clock className="size-3 text-muted-foreground" />{offer.lead_time_days ? `${offer.lead_time_days} days` : null}</span>} />
-        <OfferRow label="Payment terms" value={<span className="flex items-center gap-1"><CreditCard className="size-3 text-muted-foreground" />{PAYMENT_TERMS.find((p) => p.code === offer.payment_terms)?.name || offer.payment_terms}</span>} />
+      <OfferSection icon={Ship} title={t(locale, "crm-trade-terms")}>
+        <OfferRow label={t(locale, "crm-incoterm")} value={incoterm ? `${incoterm.code} — ${incoterm.name}` : offer.incoterm} />
+        <OfferRow label={t(locale, "crm-loading-port")} value={<span className="flex items-center gap-1"><MapPin className="size-3 text-muted-foreground" />{offer.loading_port}</span>} />
+        <OfferRow label={t(locale, "crm-delivery-port")} value={<span className="flex items-center gap-1"><MapPin className="size-3 text-muted-foreground" />{offer.delivery_port}</span>} />
+        <OfferRow label={t(locale, "crm-lead-time")} value={<span className="flex items-center gap-1"><Clock className="size-3 text-muted-foreground" />{offer.lead_time_days ? `${offer.lead_time_days} ${t(locale, "crm-days")}` : null}</span>} />
+        <OfferRow label={t(locale, "crm-payment-terms")} value={<span className="flex items-center gap-1"><CreditCard className="size-3 text-muted-foreground" />{PAYMENT_TERMS.find((p) => p.code === offer.payment_terms)?.name || offer.payment_terms}</span>} />
       </OfferSection>
 
-      <OfferSection icon={ShieldCheck} title="Quality">
-        <OfferRow label="Inspection" value={offer.inspection} />
-        <OfferRow label="Certificate" value={offer.certificate} />
+      <OfferSection icon={ShieldCheck} title={t(locale, "crm-quality")}>
+        <OfferRow label={t(locale, "crm-inspection")} value={offer.inspection} />
+        <OfferRow label={t(locale, "crm-certificate")} value={offer.certificate} />
       </OfferSection>
 
       {offer.notes && (
         <div>
-          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5"><FileText className="size-3.5" /> Notes</p>
+          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5"><FileText className="size-3.5" /> {t(locale, "crm-notes")}</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/50 border border-border/60">{offer.notes}</p>
         </div>
       )}
@@ -475,20 +489,20 @@ function OfferDetail({
       {/* Compare with other suppliers */}
       <div>
         <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
-          <ArrowLeftRight className="size-3.5" /> Compare with other suppliers ({otherOffers.length})
+          <ArrowLeftRight className="size-3.5" /> {t(locale, "crm-compare-with-other-suppliers")} ({otherOffers.length})
         </p>
         {otherOffers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No other offers for this product.</p>
+          <p className="text-sm text-muted-foreground">{t(locale, "crm-no-other-offers")}</p>
         ) : (
           <div className="border border-border/60 rounded-md overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead className="h-8 text-xs">Supplier</TableHead>
-                  <TableHead className="h-8 text-xs text-right">Unit price</TableHead>
-                  <TableHead className="h-8 text-xs">Incoterm</TableHead>
-                  <TableHead className="h-8 text-xs hidden sm:table-cell">Origin</TableHead>
-                  <TableHead className="h-8 text-xs">Status</TableHead>
+                  <TableHead className="h-8 text-xs">{t(locale, "crm-supplier")}</TableHead>
+                  <TableHead className="h-8 text-xs text-right">{t(locale, "crm-unit-price")}</TableHead>
+                  <TableHead className="h-8 text-xs">{t(locale, "crm-incoterm")}</TableHead>
+                  <TableHead className="h-8 text-xs hidden sm:table-cell">{t(locale, "crm-origin")}</TableHead>
+                  <TableHead className="h-8 text-xs">{t(locale, "status")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -514,7 +528,7 @@ function OfferDetail({
       </div>
 
       <div className="pt-3 border-t">
-        <p className="text-xs text-muted-foreground">Created {fmtDate(offer.created_at)}</p>
+        <p className="text-xs text-muted-foreground">{t(locale, "crm-created")} {fmtDate(offer.created_at)}</p>
       </div>
     </div>
   );
@@ -533,6 +547,8 @@ function OfferFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
+  const STATUS_VALUES = statusValues(locale);
 
   const [form, setForm] = useState<Partial<SupplierOffer>>({});
   const [saving, setSaving] = useState(false);
@@ -556,8 +572,8 @@ function OfferFormDialog({
   }
 
   async function save() {
-    if (!form.product_id) { toast.error("Product is required."); return; }
-    if (!form.supplier_id) { toast.error("Supplier is required."); return; }
+    if (!form.product_id) { toast.error(t(locale, "crm-product-required")); return; }
+    if (!form.supplier_id) { toast.error(t(locale, "crm-supplier-required")); return; }
     setSaving(true);
     try {
       const method = offer ? "PUT" : "POST";
@@ -569,12 +585,12 @@ function OfferFormDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Request failed");
+        throw new Error(e.error || t(locale, "crm-request-failed"));
       }
-      toast.success(offer ? "Offer updated." : "Offer created.");
+      toast.success(offer ? t(locale, "crm-offer-updated") : t(locale, "crm-offer-created"));
       onSaved();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Saving failed.");
+      toast.error(e instanceof Error ? e.message : t(locale, "crm-saving-failed"));
     } finally {
       setSaving(false);
     }
@@ -584,16 +600,16 @@ function OfferFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>{offer ? "Edit offer" : "New offer"}</DialogTitle>
-          <DialogDescription>Per-supplier pricing and trade terms for a catalog product.</DialogDescription>
+          <DialogTitle>{offer ? t(locale, "crm-edit-offer") : t(locale, "crm-new-offer")}</DialogTitle>
+          <DialogDescription>{t(locale, "crm-per-supplier-pricing-desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
           <div className="space-y-1.5">
-            <Label>Product *</Label>
+            <Label>{t(locale, "crm-product-required-label")}</Label>
             <Select value={form.product_id || ""} onValueChange={(v) => set("product_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t(locale, "crm-select-product")} /></SelectTrigger>
               <SelectContent className="max-h-72">
                 {catalog.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -602,9 +618,9 @@ function OfferFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Supplier *</Label>
+            <Label>{t(locale, "crm-supplier-required-label")}</Label>
             <Select value={form.supplier_id || ""} onValueChange={(v) => set("supplier_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t(locale, "crm-select-supplier")} /></SelectTrigger>
               <SelectContent className="max-h-72">
                 {supplierPartners.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -613,11 +629,11 @@ function OfferFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Offer number</Label>
-            <Input value={form.offer_number || ""} onChange={(e) => set("offer_number", e.target.value)} placeholder="Supplier's reference (optional)" className="font-mono" />
+            <Label>{t(locale, "crm-offer-number")}</Label>
+            <Input value={form.offer_number || ""} onChange={(e) => set("offer_number", e.target.value)} placeholder={t(locale, "crm-suppliers-reference-optional")} className="font-mono" />
           </div>
           <div className="space-y-1.5">
-            <Label>Status</Label>
+            <Label>{t(locale, "status")}</Label>
             <Select value={form.status || "active"} onValueChange={(v) => set("status", v as SupplierOfferStatus)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -628,13 +644,13 @@ function OfferFormDialog({
             </Select>
           </div>
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Pricing</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t(locale, "crm-pricing")}</p></div>
           <div className="space-y-1.5">
-            <Label>Unit price *</Label>
+            <Label>{t(locale, "crm-unit-price-required")}</Label>
             <Input type="number" min={0} step="0.01" value={form.unit_price ?? 0} onChange={(e) => set("unit_price", Number(e.target.value))} className="tabular" />
           </div>
           <div className="space-y-1.5">
-            <Label>Currency</Label>
+            <Label>{t(locale, "currency")}</Label>
             <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
@@ -647,43 +663,43 @@ function OfferFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Minimum order qty</Label>
+            <Label>{t(locale, "crm-min-order-qty")}</Label>
             <Input type="number" min={0} value={form.min_order_qty ?? ""} onChange={(e) => set("min_order_qty", e.target.value ? Number(e.target.value) : null)} className="tabular" />
           </div>
           <div className="space-y-1.5">
-            <Label>Price valid until</Label>
+            <Label>{t(locale, "crm-price-valid-until")}</Label>
             <Input type="date" value={form.price_valid_until ? form.price_valid_until.slice(0, 10) : ""} onChange={(e) => set("price_valid_until", e.target.value ? new Date(e.target.value).toISOString() : null)} className="tabular" />
           </div>
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Packaging & Loadability</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t(locale, "crm-packaging-loadability")}</p></div>
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Packaging</Label>
-            <Input value={form.packaging || ""} onChange={(e) => set("packaging", e.target.value)} placeholder='e.g. "50 kg PP bags"' />
+            <Label>{t(locale, "crm-packaging")}</Label>
+            <Input value={form.packaging || ""} onChange={(e) => set("packaging", e.target.value)} placeholder={t(locale, "crm-packaging-placeholder")} />
           </div>
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Packing details</Label>
-            <Textarea rows={2} value={form.packing_details || ""} onChange={(e) => set("packing_details", e.target.value)} placeholder="Palletizing, wrapping, etc." />
+            <Label>{t(locale, "crm-packing-details")}</Label>
+            <Textarea rows={2} value={form.packing_details || ""} onChange={(e) => set("packing_details", e.target.value)} placeholder={t(locale, "crm-packing-details-placeholder")} />
           </div>
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Loadability</Label>
+            <Label>{t(locale, "crm-loadability")}</Label>
             <Input value={form.loadability || ""} onChange={(e) => set("loadability", e.target.value)} placeholder='e.g. "28 MT per 40&apos; HC container"' />
           </div>
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Specification notes</Label>
-            <Textarea rows={2} value={form.specification_notes || ""} onChange={(e) => set("specification_notes", e.target.value)} placeholder="Deviations from base product spec" />
+            <Label>{t(locale, "crm-specification-notes")}</Label>
+            <Textarea rows={2} value={form.specification_notes || ""} onChange={(e) => set("specification_notes", e.target.value)} placeholder={t(locale, "crm-spec-notes-placeholder")} />
           </div>
           <div className="space-y-1.5">
-            <Label>Origin country</Label>
+            <Label>{t(locale, "crm-origin-country")}</Label>
             <CountrySelect
               value={form.origin_country}
               onChange={(v) => set("origin_country", v)}
-              placeholder="Not specified"
+              placeholder={t(locale, "crm-not-specified")}
             />
           </div>
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Trade Terms</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t(locale, "crm-trade-terms")}</p></div>
           <div className="space-y-1.5">
-            <Label>Incoterm</Label>
+            <Label>{t(locale, "crm-incoterm")}</Label>
             <Select value={form.incoterm || "FOB"} onValueChange={(v) => set("incoterm", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
@@ -696,11 +712,11 @@ function OfferFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Payment terms</Label>
+            <Label>{t(locale, "crm-payment-terms")}</Label>
             <Select value={form.payment_terms || "__none__"} onValueChange={(v) => set("payment_terms", v === "__none__" ? null : v)}>
-              <SelectTrigger><SelectValue placeholder="Not specified" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t(locale, "crm-not-specified")} /></SelectTrigger>
               <SelectContent className="max-h-72">
-                <SelectItem value="__none__">Not specified</SelectItem>
+                <SelectItem value="__none__">{t(locale, "crm-not-specified")}</SelectItem>
                 {PAYMENT_TERMS.map((p) => (
                   <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
                 ))}
@@ -708,39 +724,39 @@ function OfferFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Loading port</Label>
+            <Label>{t(locale, "crm-loading-port")}</Label>
             <Input value={form.loading_port || ""} onChange={(e) => set("loading_port", e.target.value)} placeholder="e.g. Santos" />
           </div>
           <div className="space-y-1.5">
-            <Label>Delivery port</Label>
+            <Label>{t(locale, "crm-delivery-port")}</Label>
             <Input value={form.delivery_port || ""} onChange={(e) => set("delivery_port", e.target.value)} placeholder="e.g. Bar" />
           </div>
           <div className="space-y-1.5">
-            <Label>Lead time (days)</Label>
+            <Label>{t(locale, "crm-lead-time-days")}</Label>
             <Input type="number" min={0} value={form.lead_time_days ?? ""} onChange={(e) => set("lead_time_days", e.target.value ? Number(e.target.value) : null)} className="tabular" />
           </div>
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Quality</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t(locale, "crm-quality")}</p></div>
           <div className="space-y-1.5">
-            <Label>Inspection</Label>
+            <Label>{t(locale, "crm-inspection")}</Label>
             <Input value={form.inspection || ""} onChange={(e) => set("inspection", e.target.value)} placeholder="e.g. SGS" />
           </div>
           <div className="space-y-1.5">
-            <Label>Certificate</Label>
+            <Label>{t(locale, "crm-certificate")}</Label>
             <Input value={form.certificate || ""} onChange={(e) => set("certificate", e.target.value)} placeholder="e.g. ISO 22000, Halal" />
           </div>
 
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Notes</Label>
+            <Label>{t(locale, "crm-notes")}</Label>
             <Textarea rows={2} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} />
           </div>
         </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t(locale, "cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t(locale, "crm-saving") : t(locale, "save")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { useI18nStore } from "@/lib/i18n/store";
+import { t } from "@/lib/i18n/dictionaries";
 
 // MapLibre auto-detects its worker script URL from `import.meta.url` of its
 // own module. Under Turbopack/webpack that module is bundled into a hashed
@@ -144,7 +146,7 @@ function fmtHours(h: number): string {
 /*  Map component                                                             */
 /* -------------------------------------------------------------------------- */
 
-function RouteMap({ plan, loading }: { plan: RoutePlan | null; loading: boolean }) {
+function RouteMap({ plan, loading, locale }: { plan: RoutePlan | null; loading: boolean; locale: import("@/lib/i18n/dictionaries").Locale }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const mapRef = React.useRef<maplibregl.Map | null>(null);
   const markersRef = React.useRef<maplibregl.Marker[]>([]);
@@ -256,15 +258,15 @@ function RouteMap({ plan, loading }: { plan: RoutePlan | null; loading: boolean 
       markersRef.current.push(marker);
     };
 
-    addMarker(plan.origin.coords, "#10b981", `Origin: ${plan.origin.label}`, 12);
-    addMarker(plan.originPort.coords, "#0ea5e9", `Port: ${plan.originPort.label}`, 9);
+    addMarker(plan.origin.coords, "#10b981", `${t(locale, "log-origin")}: ${plan.origin.label}`, 12);
+    addMarker(plan.originPort.coords, "#0ea5e9", `${t(locale, "log-legend-port")}: ${plan.originPort.label}`, 9);
     for (const wp of plan.intermediateWaypoints) {
       addMarker([wp.lng, wp.lat], "#8b5cf6", wp.name, 7);
     }
-    addMarker(plan.destinationPort.coords, "#0ea5e9", `Port: ${plan.destinationPort.label}`, 9);
-    addMarker(plan.destination.coords, "#ef4444", `Destination: ${plan.destination.label}`, 12);
+    addMarker(plan.destinationPort.coords, "#0ea5e9", `${t(locale, "log-legend-port")}: ${plan.destinationPort.label}`, 9);
+    addMarker(plan.destination.coords, "#ef4444", `${t(locale, "log-legend-destination")}: ${plan.destination.label}`, 12);
     for (const b of plan.borderCrossings) {
-      addMarker(b.at, "#f59e0b", `Border: ${b.fromCountry} → ${b.toCountry}`, 6);
+      addMarker(b.at, "#f59e0b", `${t(locale, "log-marker-border")}: ${b.fromCountry} → ${b.toCountry}`, 6);
     }
 
     // Fit bounds to the whole route
@@ -275,7 +277,7 @@ function RouteMap({ plan, loading }: { plan: RoutePlan | null; loading: boolean 
     if (!bounds.isEmpty()) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 8, duration: 600 });
     }
-  }, [plan, ready]);
+  }, [plan, ready, locale]);
 
   return (
     <div className="absolute inset-0 rounded-2xl overflow-hidden">
@@ -289,10 +291,10 @@ function RouteMap({ plan, loading }: { plan: RoutePlan | null; loading: boolean 
       {mapError ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-slate-950 gap-2 px-6 text-center">
           <AlertCircle className="size-6 text-amber-400" />
-          <p className="text-sm text-slate-200">Couldn't load the basemap.</p>
-          <p className="text-xs text-slate-400">Check your connection and try again.</p>
+          <p className="text-sm text-slate-200">{t(locale, "log-map-load-failed")}</p>
+          <p className="text-xs text-slate-400">{t(locale, "log-map-load-failed-hint")}</p>
           <Button size="sm" variant="secondary" className="mt-1" onClick={() => setRetryKey((k) => k + 1)}>
-            Retry
+            {t(locale, "log-retry")}
           </Button>
         </div>
       ) : (!ready || loading) ? (
@@ -311,6 +313,7 @@ function RouteMap({ plan, loading }: { plan: RoutePlan | null; loading: boolean 
 export function TradeGlobeView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
   const [selectedRequest, setSelectedRequest] = React.useState<LogisticsRequest | null>(null);
 
   const { data, isLoading: listLoading } = useQuery({
@@ -331,7 +334,7 @@ export function TradeGlobeView() {
         body: JSON.stringify(body),
       });
       const json = await r.json();
-      if (!r.ok) throw new Error(json.error || "Failed to build route plan");
+      if (!r.ok) throw new Error(json.error || t(locale, "log-route-build-failed"));
       return json.plan as RoutePlan;
     },
   });
@@ -451,7 +454,7 @@ export function TradeGlobeView() {
               <p className="text-sm">Select a logistics request to plot its real route</p>
             </div>
           ) : (
-            <RouteMap plan={plan} loading={routePlanMutation.isPending} />
+            <RouteMap plan={plan} loading={routePlanMutation.isPending} locale={locale} />
           )}
           {routePlanMutation.isError && (
             <div className="absolute inset-x-3 top-3 z-10">

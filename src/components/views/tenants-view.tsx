@@ -40,6 +40,8 @@ import { Tenant } from "@/lib/supabase/types";
 import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 import { COUNTRIES, CURRENCIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useI18nStore } from "@/lib/i18n/store";
+import { t } from "@/lib/i18n/dictionaries";
 
 // ---- helpers ----
 function flagEmoji(countryCode: string | null | undefined): string {
@@ -58,8 +60,8 @@ function countryLabel(code: string | null | undefined): string {
 type Plan = Tenant["plan"];
 type TenantStatus = Tenant["status"];
 
-const PLAN_LABELS: Record<Plan, string> = {
-  trial: "Trial", starter: "Starter", business: "Business", enterprise: "Enterprise", custom: "Custom",
+const PLAN_LABEL_KEYS: Record<Plan, string> = {
+  trial: "pf-plan-trial", starter: "pf-plan-starter", business: "pf-plan-business", enterprise: "pf-plan-enterprise", custom: "pf-plan-custom",
 };
 
 const PLAN_BADGE: Record<Plan, string> = {
@@ -70,8 +72,8 @@ const PLAN_BADGE: Record<Plan, string> = {
   custom: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30",
 };
 
-const STATUS_LABELS: Record<TenantStatus, string> = {
-  active: "Active", suspended: "Suspended", cancelled: "Cancelled",
+const STATUS_LABEL_KEYS: Record<TenantStatus, string> = {
+  active: "active", suspended: "pf-status-suspended", cancelled: "pf-status-cancelled",
 };
 
 const STATUS_BADGE: Record<TenantStatus, string> = {
@@ -83,6 +85,7 @@ const STATUS_BADGE: Record<TenantStatus, string> = {
 export function TenantsView({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
 
   const qc = useQueryClient();
   const user = useAppStore((s) => s.user);
@@ -138,32 +141,32 @@ export function TenantsView({ embedded = false }: { embedded?: boolean } = {}) {
 
   const items = data?.items || [];
   const totalTenants = items.length;
-  const activeCount = items.filter((t) => t.status === "active").length;
+  const activeCount = items.filter((tn) => tn.status === "active").length;
   const planBreakdown: Record<Plan, number> = { trial: 0, starter: 0, business: 0, enterprise: 0, custom: 0 };
-  items.forEach((t) => { planBreakdown[t.plan]++; });
+  items.forEach((tn) => { planBreakdown[tn.plan]++; });
 
   return (
     <div>
       <PageHeader
-        title="Tenants"
-        description={`${totalTenants} total`}
+        title={t(locale, "tenants")}
+        description={`${totalTenants} ${t(locale, "total").toLowerCase()}`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New Tenant
+            <Plus className="size-4 mr-1" /> {t(locale, "pf-new-tenant")}
           </Button>
         }
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Total Tenants" value={totalTenants} icon={Building2} sub="Across platform" />
-        <KpiCard label="Active" value={activeCount} icon={CheckCircle2} sub={`${totalTenants > 0 ? Math.round((activeCount / totalTenants) * 100) : 0}% of total`} />
+        <KpiCard label={t(locale, "pf-kpi-total-tenants")} value={totalTenants} icon={Building2} sub={t(locale, "pf-kpi-total-tenants-sub")} />
+        <KpiCard label={t(locale, "active")} value={activeCount} icon={CheckCircle2} sub={t(locale, "pf-kpi-active-sub").replace("{pct}", String(totalTenants > 0 ? Math.round((activeCount / totalTenants) * 100) : 0))} />
         <KpiCard
-          label="Plan Breakdown"
+          label={t(locale, "pf-kpi-plan-breakdown")}
           value={`${planBreakdown.business}b · ${planBreakdown.enterprise}e`}
           icon={Layers}
-          sub={`trial ${planBreakdown.trial} · starter ${planBreakdown.starter}`}
+          sub={`${t(locale, "pf-plan-trial")} ${planBreakdown.trial} · ${t(locale, "pf-plan-starter")} ${planBreakdown.starter}`}
         />
-        <KpiCard label="Total User Seats" value={items.reduce((s, t) => s + (t.max_users || 0), 0)} icon={Users} sub="Allocated capacity" />
+        <KpiCard label={t(locale, "pf-kpi-total-seats")} value={items.reduce((s, tn) => s + (tn.max_users || 0), 0)} icon={Users} sub={t(locale, "pf-kpi-total-seats-sub")} />
       </div>
 
       <Card className="border-border/60 shadow-soft rounded-xl">
@@ -175,62 +178,62 @@ export function TenantsView({ embedded = false }: { embedded?: boolean } = {}) {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Building2 className="size-6" />}
-              title="No tenants"
-              description="Create your first tenant to get started."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New Tenant</Button>}
+              title={t(locale, "pf-no-tenants")}
+              description={t(locale, "pf-no-tenants-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t(locale, "pf-new-tenant")}</Button>}
             />
           ) : (
             <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="hidden md:table-cell">Country</TableHead>
-                    <TableHead className="hidden lg:table-cell">Currency</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Users</TableHead>
-                    <TableHead className="hidden xl:table-cell">Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t(locale, "name")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t(locale, "pf-country")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t(locale, "pf-currency")}</TableHead>
+                    <TableHead>{t(locale, "pf-plan")}</TableHead>
+                    <TableHead>{t(locale, "status")}</TableHead>
+                    <TableHead className="text-right">{t(locale, "pf-users")}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t(locale, "pf-created")}</TableHead>
+                    <TableHead className="text-right">{t(locale, "actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((t) => (
-                    <TableRow key={t.id} className="hover:bg-muted/50 transition-colors">
+                  {items.map((tn) => (
+                    <TableRow key={tn.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {t.primary_color && (
-                            <span className="size-3 rounded-full border border-border/60 shrink-0" style={{ backgroundColor: t.primary_color }} />
+                          {tn.primary_color && (
+                            <span className="size-3 rounded-full border border-border/60 shrink-0" style={{ backgroundColor: tn.primary_color }} />
                           )}
                           <div className="min-w-0">
-                            <div className="font-medium truncate">{t.name}</div>
-                            <div className="text-xs text-muted-foreground truncate">{t.legal_name || "—"}</div>
+                            <div className="font-medium truncate">{tn.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">{tn.legal_name || "—"}</div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <div className="flex items-center gap-1.5 text-sm">
-                          <span className="text-base leading-none">{flagEmoji(t.country) || "🏳️"}</span>
-                          <span>{countryLabel(t.country)}</span>
+                          <span className="text-base leading-none">{flagEmoji(tn.country) || "🏳️"}</span>
+                          <span>{countryLabel(tn.country)}</span>
                         </div>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        <Badge variant="outline" className="font-mono tabular">{t.currency}</Badge>
+                        <Badge variant="outline" className="font-mono tabular">{tn.currency}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={PLAN_BADGE[t.plan]}>{PLAN_LABELS[t.plan]}</Badge>
+                        <Badge variant="outline" className={PLAN_BADGE[tn.plan]}>{t(locale, PLAN_LABEL_KEYS[tn.plan])}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={STATUS_BADGE[t.status]}>{STATUS_LABELS[t.status]}</Badge>
+                        <Badge variant="outline" className={STATUS_BADGE[tn.status]}>{t(locale, STATUS_LABEL_KEYS[tn.status])}</Badge>
                       </TableCell>
-                      <TableCell className="text-right tabular text-sm">{t.max_users}</TableCell>
-                      <TableCell className="hidden xl:table-cell text-sm text-muted-foreground tabular">{fmtDate(t.created_at)}</TableCell>
+                      <TableCell className="text-right tabular text-sm">{tn.max_users}</TableCell>
+                      <TableCell className="hidden xl:table-cell text-sm text-muted-foreground tabular">{fmtDate(tn.created_at)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(t); setShowForm(true); }} title="Edit">
+                          <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(tn); setShowForm(true); }} title={t(locale, "edit")}>
                             <Pencil className="size-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(t.id)} title="Delete">
+                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(tn.id)} title={t(locale, "delete")}>
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
@@ -257,18 +260,18 @@ export function TenantsView({ embedded = false }: { embedded?: boolean } = {}) {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete tenant?</AlertDialogTitle>
+            <AlertDialogTitle>{t(locale, "pf-delete-tenant-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. All tenant data, users, and configuration will be removed.
+              {t(locale, "pf-delete-tenant-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t(locale, "cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t(locale, "delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

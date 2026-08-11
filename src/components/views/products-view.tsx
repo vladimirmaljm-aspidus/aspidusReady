@@ -49,6 +49,8 @@ import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
 import { BulkActionBar, useRowSelection } from "@/components/common/bulk-action-bar";
 import { EyeOff, Trash } from "lucide-react";
+import { useI18nStore } from "@/lib/i18n/store";
+import { t } from "@/lib/i18n/dictionaries";
 
 type StockStatus = "ok" | "low" | "out";
 
@@ -74,6 +76,7 @@ function generatePageNumbers(current: number, total: number): (number | "ellipsi
 export function ProductsView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -129,12 +132,12 @@ export function ProductsView() {
       return { ok, fail };
     },
     onSuccess: ({ ok, fail }) => {
-      if (fail === 0) toast.success(`${ok} products updated.`);
-      else toast.warning(`${ok} updated · ${fail} failed.`);
+      if (fail === 0) toast.success(`${ok} ${t(locale, "crm-products-updated")}`);
+      else toast.warning(`${ok} ${t(locale, "crm-updated-lower")} · ${fail} ${t(locale, "crm-failed-lower")}`);
       qc.invalidateQueries({ queryKey: ["products", tenantKey] });
       rowSel.clear();
     },
-    onError: () => toast.error("Bulk update failed."),
+    onError: () => toast.error(t(locale, "crm-bulk-update-failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -149,12 +152,12 @@ export function ProductsView() {
       return { ok, fail };
     },
     onSuccess: ({ ok, fail }) => {
-      if (fail === 0) toast.success(`${ok} products deleted.`);
-      else toast.warning(`${ok} deleted · ${fail} failed.`);
+      if (fail === 0) toast.success(`${ok} ${t(locale, "crm-products-deleted")}`);
+      else toast.warning(`${ok} ${t(locale, "crm-deleted-lower")} · ${fail} ${t(locale, "crm-failed-lower")}`);
       qc.invalidateQueries({ queryKey: ["products", tenantKey] });
       rowSel.clear();
     },
-    onError: () => toast.error("Bulk delete failed."),
+    onError: () => toast.error(t(locale, "crm-bulk-delete-failed")),
   });
 
   const categories = useMemo(() => {
@@ -174,12 +177,12 @@ export function ProductsView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Product deleted.");
+      toast.success(t(locale, "crm-product-deleted"));
       qc.invalidateQueries({ queryKey: ["products", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t(locale, "crm-delete-failed")),
   });
 
   async function toggleCatalog(p: Product, next: boolean) {
@@ -199,28 +202,28 @@ export function ProductsView() {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
-        throw new Error(err.error || "Update failed");
+        throw new Error(err.error || t(locale, "crm-update-failed"));
       }
-      toast.success(next ? "Now visible in portal catalog." : "Hidden from portal catalog.");
+      toast.success(next ? t(locale, "crm-now-visible-portal") : t(locale, "crm-hidden-portal"));
       qc.invalidateQueries({ queryKey: ["products", tenantKey] });
       qc.invalidateQueries({ queryKey: ["portal-catalog"] });
     } catch (e: any) {
-      toast.error(e.message || "Update failed.");
+      toast.error(e.message || t(locale, "crm-update-failed"));
     }
   }
 
   return (
     <div>
       <PageHeader
-        title="Products"
-        description={`${total} total`}
+        title={t(locale, "products")}
+        description={`${total} ${t(locale, "crm-total-lower")}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => window.open("/api/products/export?format=csv", "_blank")}>
-              <Download className="size-4 mr-1" /> Export CSV
+              <Download className="size-4 mr-1" /> {t(locale, "crm-export-csv")}
             </Button>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New product
+              <Plus className="size-4 mr-1" /> {t(locale, "crm-new-product")}
             </Button>
           </div>
         }
@@ -232,15 +235,14 @@ export function ProductsView() {
         <div className="flex items-start gap-3">
           <Info className="size-5 text-primary shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <h3 className="text-sm font-semibold">Products — Your Complete Inventory</h3>
+            <h3 className="text-sm font-semibold">{t(locale, "crm-products-banner-title")}</h3>
             <p className="text-sm text-muted-foreground">
-              This is your single source for all products. Each product contains full trade data:
-              HS codes, specifications, pricing, packaging, and logistics.
+              {t(locale, "crm-products-banner-desc")}
             </p>
             <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
-              <span>📋 <strong>Active products</strong> are available for creating offers, invoices, and proformas</span>
-              <span>👁️ <strong>Show in Portal</strong> toggle controls which products your clients can see on the portal catalog</span>
-              <span>📦 <strong>Stock</strong> tracks your current inventory</span>
+              <span>📋 {t(locale, "crm-products-banner-active")}</span>
+              <span>👁️ {t(locale, "crm-products-banner-portal")}</span>
+              <span>📦 {t(locale, "crm-products-banner-stock")}</span>
             </div>
           </div>
         </div>
@@ -251,16 +253,16 @@ export function ProductsView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by SKU or name…"
+              placeholder={t(locale, "crm-search-sku-name")}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={categoryFilter} onValueChange={handleCategoryChange}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t(locale, "crm-category")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="all">{t(locale, "crm-all-categories")}</SelectItem>
               {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -276,9 +278,9 @@ export function ProductsView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Package className="size-6" />}
-              title="No products"
-              description="Add your first product to populate the catalog."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New product</Button>}
+              title={t(locale, "crm-no-products")}
+              description={t(locale, "crm-no-products-populate-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t(locale, "crm-new-product")}</Button>}
             />
           ) : (
             <>
@@ -290,19 +292,19 @@ export function ProductsView() {
                         <Checkbox
                           checked={rowSel.allOnPageSelected}
                           onCheckedChange={rowSel.toggleAllOnPage}
-                          aria-label="Select all on page"
+                          aria-label={t(locale, "crm-select-all-on-page")}
                         />
                       </TableHead>
-                      <TableHead className="w-28">SKU</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="hidden md:table-cell">Category</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="text-right">Stock</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center" title="When enabled, this product appears in the portal catalog that your clients can browse">
-                        Portal
+                      <TableHead className="w-28">{t(locale, "crm-sku")}</TableHead>
+                      <TableHead>{t(locale, "name")}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t(locale, "crm-category")}</TableHead>
+                      <TableHead className="text-right">{t(locale, "crm-price")}</TableHead>
+                      <TableHead className="text-right">{t(locale, "crm-stock")}</TableHead>
+                      <TableHead>{t(locale, "status")}</TableHead>
+                      <TableHead className="text-center" title={t(locale, "crm-portal-toggle-tooltip")}>
+                        {t(locale, "portal")}
                       </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right">{t(locale, "actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -319,7 +321,7 @@ export function ProductsView() {
                             <Checkbox
                               checked={rowSel.isSelected(p.id)}
                               onCheckedChange={() => rowSel.toggle(p.id)}
-                              aria-label={`Select ${p.sku}`}
+                              aria-label={`${t(locale, "crm-select")} ${p.sku}`}
                             />
                           </TableCell>
                           <TableCell className="font-mono text-xs tabular">{p.sku}</TableCell>
@@ -350,25 +352,25 @@ export function ProductsView() {
                           </TableCell>
                           <TableCell>
                             {p.active
-                              ? <Badge>Active</Badge>
-                              : <Badge variant="secondary">Inactive</Badge>}
+                              ? <Badge>{t(locale, "active")}</Badge>
+                              : <Badge variant="secondary">{t(locale, "inactive")}</Badge>}
                           </TableCell>
                           <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={!!p.show_in_catalog}
                               onCheckedChange={(v) => toggleCatalog(p, v)}
-                              aria-label="Show in portal catalog"
+                              aria-label={t(locale, "crm-show-in-portal-catalog")}
                             />
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title="View" aria-label="View">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title={t(locale, "view")} aria-label={t(locale, "view")}>
                                 <Eye className="size-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title="Edit" aria-label="Edit">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title={t(locale, "edit")} aria-label={t(locale, "edit")}>
                                 <Pencil className="size-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Delete" aria-label="Delete">
+                              <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title={t(locale, "delete")} aria-label={t(locale, "delete")}>
                                 <Trash2 className="size-4" />
                               </Button>
                             </div>
@@ -384,8 +386,8 @@ export function ProductsView() {
               <div className="flex items-center justify-between border-t px-4 py-3 gap-3 flex-wrap">
                 <p className="text-sm text-muted-foreground">
                   {total > 0
-                    ? <>Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}</>
-                    : <>No results</>}
+                    ? <>{t(locale, "crm-showing")} {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} {t(locale, "crm-of")} {total}</>
+                    : <>{t(locale, "no_results")}</>}
                 </p>
                 <div className="flex items-center gap-3">
                   <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
@@ -449,7 +451,7 @@ export function ProductsView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Package className="size-5" />
-              {selected?.name || "Product"}
+              {selected?.name || t(locale, "crm-product")}
             </SheetTitle>
             <SheetDescription className="font-mono">{selected?.sku}</SheetDescription>
           </SheetHeader>
@@ -468,18 +470,18 @@ export function ProductsView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogTitle>{t(locale, "crm-delete-product-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Inventory history and related offers may lose their reference.
+              {t(locale, "crm-delete-product-inventory-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t(locale, "cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t(locale, "delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -488,11 +490,11 @@ export function ProductsView() {
       <BulkActionBar
         count={rowSel.count}
         onClear={rowSel.clear}
-        label={rowSel.count === 1 ? "product selected" : "products selected"}
+        label={rowSel.count === 1 ? t(locale, "crm-product-selected") : t(locale, "crm-products-selected")}
         actions={[
           {
             key: "show-in-portal",
-            label: "Show in portal",
+            label: t(locale, "crm-show-in-portal"),
             icon: <Eye className="size-4" />,
             variant: "default",
             disabled: bulkCatalogMut.isPending,
@@ -500,7 +502,7 @@ export function ProductsView() {
           },
           {
             key: "hide-from-portal",
-            label: "Hide from portal",
+            label: t(locale, "crm-hide-from-portal"),
             icon: <EyeOff className="size-4" />,
             variant: "outline",
             disabled: bulkCatalogMut.isPending,
@@ -508,11 +510,11 @@ export function ProductsView() {
           },
           {
             key: "delete",
-            label: "Delete",
+            label: t(locale, "delete"),
             icon: <Trash className="size-4" />,
             variant: "destructive",
             disabled: bulkDeleteMut.isPending,
-            confirm: `Delete ${rowSel.count} product(s)? This cannot be undone.`,
+            confirm: `${t(locale, "crm-delete-n-products-confirm")} (${rowSel.count})`,
             onClick: () => bulkDeleteMut.mutate(rowSel.ids),
           },
         ]}
@@ -523,31 +525,32 @@ export function ProductsView() {
 
 // ---- Detail panel ----
 function ProductDetail({ product }: { product: Product }) {
+  const locale = useI18nStore((s) => s.locale);
   const st = stockStatus(product);
   const margin = product.cost && product.cost > 0 && product.price > 0
     ? Math.round(((product.price - product.cost) / product.price) * 100)
     : null;
 
   const info = [
-    { label: "Unit", value: product.unit },
-    { label: "Category", value: product.category || null },
-    { label: "Price", value: fmtMoney(product.price, product.currency) },
-    { label: "Cost", value: product.cost ? fmtMoney(product.cost, product.currency) : null },
-    { label: "Margin", value: margin !== null ? `${margin}%` : null },
-    { label: "Stock", value: fmtNumber(product.stock) },
-    { label: "Reorder level", value: fmtNumber(product.reorder_level) },
+    { label: t(locale, "crm-unit"), value: product.unit },
+    { label: t(locale, "crm-category"), value: product.category || null },
+    { label: t(locale, "crm-price"), value: fmtMoney(product.price, product.currency) },
+    { label: t(locale, "crm-cost"), value: product.cost ? fmtMoney(product.cost, product.currency) : null },
+    { label: t(locale, "crm-margin"), value: margin !== null ? `${margin}%` : null },
+    { label: t(locale, "crm-stock"), value: fmtNumber(product.stock) },
+    { label: t(locale, "crm-reorder-level"), value: fmtNumber(product.reorder_level) },
   ].filter((x) => x.value);
 
   // Known imported data keys that should be displayed with nice labels
   const IMPORTED_KEY_LABELS: Record<string, string> = {
-    hs_code: "HS Code",
-    brand: "Brand",
-    shelf_life: "Shelf Life",
-    image_url: "Image URL",
-    logistics: "Logistics",
-    coa_params: "COA Parameters",
-    tags: "Tags",
-    inventory: "Inventory",
+    hs_code: t(locale, "crm-hs-code"),
+    brand: t(locale, "crm-brand"),
+    shelf_life: t(locale, "crm-shelf-life"),
+    image_url: t(locale, "crm-image-url"),
+    logistics: t(locale, "crm-logistics-label"),
+    coa_params: t(locale, "crm-coa-parameters"),
+    tags: t(locale, "crm-tags"),
+    inventory: t(locale, "inventory"),
   };
 
   // Separate imported data fields from generic attributes
@@ -559,29 +562,29 @@ function ProductDetail({ product }: { product: Product }) {
     <div className="px-4 pb-6 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={product.active ? "default" : "secondary"}>
-          {product.active ? "Active" : "Inactive"}
+          {product.active ? t(locale, "active") : t(locale, "inactive")}
         </Badge>
         {product.category && <Badge variant="outline">{product.category}</Badge>}
         {st === "out" && (
           <Badge variant="destructive" className="gap-1">
-            <AlertTriangle className="size-3" /> Out of stock
+            <AlertTriangle className="size-3" /> {t(locale, "crm-out-of-stock")}
           </Badge>
         )}
         {st === "low" && (
           <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 gap-1">
-            <AlertTriangle className="size-3" /> Low stock
+            <AlertTriangle className="size-3" /> {t(locale, "crm-low-stock")}
           </Badge>
         )}
         {st === "ok" && (
           <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 gap-1">
-            <CheckCircle2 className="size-3" /> In stock
+            <CheckCircle2 className="size-3" /> {t(locale, "crm-in-stock")}
           </Badge>
         )}
       </div>
 
       {product.description && (
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Description</p>
+          <p className="text-xs text-muted-foreground mb-1">{t(locale, "description")}</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/50">{product.description}</p>
         </div>
       )}
@@ -600,7 +603,7 @@ function ProductDetail({ product }: { product: Product }) {
       {/* Imported data fields (hs_code, brand, shelf_life, image_url, logistics, coa_params, tags, inventory) */}
       {importedEntries.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Product Details</p>
+          <p className="text-xs text-muted-foreground mb-2">{t(locale, "crm-product-details")}</p>
           <div className="grid grid-cols-2 gap-2">
             {importedEntries.map(([k, v]) => (
               <Card key={k} className="border-border/60 shadow-soft rounded-xl">
@@ -647,7 +650,7 @@ function ProductDetail({ product }: { product: Product }) {
       {/* Other attributes */}
       {otherEntries.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Attributes</p>
+          <p className="text-xs text-muted-foreground mb-2">{t(locale, "crm-attributes")}</p>
           <div className="flex flex-wrap gap-1.5">
             {otherEntries.map(([k, v]) => (
               <Badge key={k} variant="secondary" className="font-mono text-xs">
@@ -659,8 +662,8 @@ function ProductDetail({ product }: { product: Product }) {
       )}
 
       <div className="pt-4 border-t space-y-1">
-        <p className="text-xs text-muted-foreground">Created: {fmtDate(product.created_at)}</p>
-        <p className="text-xs text-muted-foreground">Updated: {fmtRelative(product.updated_at)}</p>
+        <p className="text-xs text-muted-foreground">{t(locale, "crm-created")}: {fmtDate(product.created_at)}</p>
+        <p className="text-xs text-muted-foreground">{t(locale, "crm-updated")}: {fmtRelative(product.updated_at)}</p>
       </div>
     </div>
   );
@@ -688,6 +691,7 @@ function ProductFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
 
   const [form, setForm] = useState<Partial<Product>>({});
   const [saving, setSaving] = useState(false);
@@ -721,7 +725,7 @@ function ProductFormDialog({
   }, [form.name]);
 
   async function save() {
-    if (!form.name) { toast.error("Name is required."); return; }
+    if (!form.name) { toast.error(t(locale, "crm-name-required")); return; }
     // Auto-generate SKU if not provided
     const finalSku = form.sku || generateSku(form.name || "");
     setSaving(true);
@@ -736,12 +740,12 @@ function ProductFormDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Request failed");
+        throw new Error(e.error || t(locale, "crm-request-failed"));
       }
-      toast.success(product ? "Product updated." : "Product created successfully!");
+      toast.success(product ? t(locale, "crm-product-updated") : t(locale, "crm-product-created"));
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Saving failed.");
+      toast.error(e.message || t(locale, "crm-saving-failed"));
     } finally {
       setSaving(false);
     }
@@ -751,9 +755,9 @@ function ProductFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>{product ? "Edit product" : "New product"}</DialogTitle>
+          <DialogTitle>{product ? t(locale, "crm-edit-product") : t(locale, "crm-new-product")}</DialogTitle>
           <DialogDescription>
-            {product ? "Update the product details." : "Start with the basics — you can add more details later."}
+            {product ? t(locale, "crm-update-product-details") : t(locale, "crm-start-with-basics")}
           </DialogDescription>
         </DialogHeader>
 
@@ -762,7 +766,7 @@ function ProductFormDialog({
           {/* ── Essential fields (always visible) ── */}
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-sm font-semibold">Product name *</Label>
+              <Label className="text-sm font-semibold">{t(locale, "crm-product-name-required")}</Label>
               <Input
                 value={form.name || ""}
                 onChange={(e) => set("name", e.target.value)}
@@ -774,7 +778,7 @@ function ProductFormDialog({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Price</Label>
+                <Label>{t(locale, "crm-price")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -785,18 +789,18 @@ function ProductFormDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Unit</Label>
+                <Label>{t(locale, "crm-unit")}</Label>
                 <Select value={form.unit || "pcs"} onValueChange={(v) => set("unit", v)}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue placeholder={t(locale, "crm-select-unit")} /></SelectTrigger>
                   <SelectContent>
                     {PRODUCT_UNITS.map((u) => <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Category</Label>
+                <Label>{t(locale, "crm-category")}</Label>
                 <Select value={form.category || ""} onValueChange={(v) => set("category", v)}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue placeholder={t(locale, "crm-select-category")} /></SelectTrigger>
                   <SelectContent className="max-h-72">
                     {PRODUCT_CATEGORIES_LOCAL.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
@@ -807,7 +811,7 @@ function ProductFormDialog({
             {/* Prominent SKU auto-generate */}
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <Label>SKU</Label>
+                <Label>{t(locale, "crm-sku")}</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -815,13 +819,13 @@ function ProductFormDialog({
                   className="h-7 gap-1.5 text-xs"
                   onClick={handleAutoSku}
                 >
-                  <Wand2 className="size-3.5" /> Auto-generate
+                  <Wand2 className="size-3.5" /> {t(locale, "crm-auto-generate")}
                 </Button>
               </div>
               <Input
                 value={form.sku || ""}
                 onChange={(e) => set("sku", e.target.value)}
-                placeholder="Auto-generated from name"
+                placeholder={t(locale, "crm-auto-generated-from-name")}
                 className="font-mono"
               />
             </div>
@@ -839,9 +843,9 @@ function ProductFormDialog({
                 ) : (
                   <ChevronRight className="size-4 transition-transform" />
                 )}
-                More Details
+                {t(locale, "crm-more-details")}
                 {!moreOpen && (form.cost || form.description || form.currency !== "USD" || form.reorder_level) && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">filled</Badge>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t(locale, "crm-filled")}</Badge>
                 )}
               </button>
             </CollapsibleTrigger>
@@ -849,7 +853,7 @@ function ProductFormDialog({
               <div className="space-y-3 pt-1 pb-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Cost</Label>
+                    <Label>{t(locale, "crm-cost")}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -859,16 +863,16 @@ function ProductFormDialog({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Currency</Label>
+                    <Label>{t(locale, "currency")}</Label>
                     <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
-                      <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t(locale, "crm-select-currency")} /></SelectTrigger>
                       <SelectContent className="max-h-72">
                         {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Stock</Label>
+                    <Label>{t(locale, "crm-stock")}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -877,7 +881,7 @@ function ProductFormDialog({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Reorder level</Label>
+                    <Label>{t(locale, "crm-reorder-level")}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -888,28 +892,28 @@ function ProductFormDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Description</Label>
+                  <Label>{t(locale, "description")}</Label>
                   <Textarea
                     rows={3}
                     value={form.description || ""}
                     onChange={(e) => set("description", e.target.value)}
-                    placeholder="Optional product description…"
+                    placeholder={t(locale, "crm-optional-product-description")}
                   />
                 </div>
 
                 <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
                   <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} />
                   <div>
-                    <p className="text-sm font-medium">Active</p>
-                    <p className="text-xs text-muted-foreground">Active products are available for new offers.</p>
+                    <p className="text-sm font-medium">{t(locale, "active")}</p>
+                    <p className="text-xs text-muted-foreground">{t(locale, "crm-active-products-available")}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
                   <Switch checked={!!form.show_in_catalog} onCheckedChange={(v) => set("show_in_catalog", v)} />
                   <div>
-                    <p className="text-sm font-medium">Show in portal catalog</p>
-                    <p className="text-xs text-muted-foreground">Portal clients will see this product under Catalog. Cost, margin and stock stay hidden.</p>
+                    <p className="text-sm font-medium">{t(locale, "crm-show-in-portal-catalog")}</p>
+                    <p className="text-xs text-muted-foreground">{t(locale, "crm-portal-clients-see-desc")}</p>
                   </div>
                 </div>
               </div>
@@ -919,9 +923,9 @@ function ProductFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t(locale, "cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : product ? "Update" : "Create product"}
+            {saving ? t(locale, "crm-saving") : product ? t(locale, "crm-update") : t(locale, "crm-create-product")}
           </Button>
         </DialogFooter>
       </DialogContent>
