@@ -216,7 +216,7 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
     >
       {/* ─── Brand Section ──────────────────────────────────────────────── */}
       <div className={cn(
-        "h-[68px] flex items-center gap-3 px-4 border-b border-white/[0.06] shrink-0",
+        "h-[68px] flex items-center gap-3 px-4 border-b border-sidebar-border shrink-0",
         !sidebarCollapsed && "px-5"
       )}>
         {/* Logo */}
@@ -235,10 +235,10 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
             ? "opacity-0 w-0"
             : "opacity-100 w-auto"
         )}>
-          <p className="font-semibold text-[15px] tracking-tight text-white truncate leading-tight">
+          <p className="font-semibold text-[15px] tracking-tight text-sidebar-foreground truncate leading-tight">
             Aspidus
           </p>
-          <p className="text-[10px] text-white/40 truncate leading-tight mt-0.5">
+          <p className="text-[10px] text-sidebar-foreground/55 truncate leading-tight mt-0.5">
             {t(locale, "trade-platform")}
           </p>
         </div>
@@ -286,7 +286,7 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
                 "overflow-hidden transition-all duration-300",
                 sidebarCollapsed ? "h-0 opacity-0 mb-0" : "h-auto opacity-100 mb-2"
               )}>
-                <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/25 select-none">
+                <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/45 select-none">
                   {sectionLabel}
                 </p>
               </div>
@@ -318,14 +318,14 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
       </nav>
 
       {/* ─── Bottom Section ─────────────────────────────────────────────── */}
-      <div className="shrink-0 border-t border-white/[0.06]">
+      <div className="shrink-0 border-t border-sidebar-border">
         {/* User Info */}
         {user && (
           <div className={cn(
             "flex items-center gap-3 px-4 py-3",
             !sidebarCollapsed && "px-5"
           )}>
-            <Avatar className="size-8 ring-2 ring-white/10 shrink-0">
+            <Avatar className="size-8 ring-2 ring-sidebar-border shrink-0">
               <AvatarFallback className={cn(
                 "bg-gradient-emerald text-white text-xs font-semibold",
                 "transition-transform duration-200 hover:scale-105"
@@ -337,10 +337,10 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
               "min-w-0 overflow-hidden transition-all duration-300",
               sidebarCollapsed ? "opacity-0 w-0" : "opacity-100 w-auto"
             )}>
-              <p className="text-[13px] font-medium text-white/90 truncate leading-tight">
+              <p className="text-[13px] font-medium text-sidebar-foreground truncate leading-tight">
                 {user.full_name || user.username}
               </p>
-              <p className="text-[10px] text-white/35 truncate leading-tight mt-0.5">
+              <p className="text-[10px] text-sidebar-foreground/55 truncate leading-tight mt-0.5">
                 {formatRole(user.role)}
               </p>
             </div>
@@ -358,7 +358,7 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
                 onClick={toggleSidebar}
                 className={cn(
                   "w-full flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium",
-                  "text-white/35 hover:text-white/70 hover:bg-white/[0.04]",
+                  "text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent",
                   "transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/50",
                   sidebarCollapsed ? "justify-center px-0" : ""
@@ -368,7 +368,7 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
                 <div className={cn(
                   "size-5 flex items-center justify-center shrink-0",
                   "rounded-md transition-colors duration-200",
-                  "bg-white/[0.04] group-hover:bg-white/[0.08]"
+                  "bg-sidebar-accent group-hover:bg-sidebar-accent"
                 )}>
                   {sidebarCollapsed ? (
                     <ChevronRight className="size-3.5" />
@@ -421,8 +421,8 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick, badgeCou
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/50",
         collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
         active
-          ? "text-white/95"
-          : "text-white/45 hover:text-white/80 hover:bg-white/[0.04]"
+          ? "text-sidebar-foreground"
+          : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
       )}
     >
       {/* Active left indicator */}
@@ -450,7 +450,7 @@ function NavItemButton({ icon: Icon, label, active, collapsed, onClick, badgeCou
             "size-[18px] transition-colors duration-200",
             active
               ? "text-sidebar-primary"
-              : "text-white/35 group-hover:text-white/60"
+              : "text-sidebar-foreground/45 group-hover:text-sidebar-foreground/80"
           )}
         />
         {/* Collapsed-mode badge dot with count */}

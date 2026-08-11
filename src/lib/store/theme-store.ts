@@ -6,28 +6,28 @@
 
 import { create } from "zustand";
 
-export type ThemeAccent = "emerald" | "ocean" | "sunset" | "rose" | "violet";
+export type ThemeAccent = "navy" | "slate" | "burgundy" | "forest";
 
 export interface ThemeConfig {
   accent: ThemeAccent;
-  radius: number; // 0.5 - 1.0
+  radius: number; // 0.375 - 0.625
   sidebarDark: boolean;
 }
 
+// A restrained, corporate palette — deep, desaturated hues rather than
+// bright consumer-app colors. Navy is the platform default.
 const ACCENT_MAP: Record<ThemeAccent, { light: string; dark: string; h: number }> = {
-  emerald: { light: "oklch(0.455 0.125 170)", dark: "oklch(0.675 0.135 168)", h: 170 },
-  ocean:   { light: "oklch(0.455 0.125 220)", dark: "oklch(0.675 0.135 218)", h: 220 },
-  sunset:  { light: "oklch(0.555 0.155 35)",  dark: "oklch(0.735 0.155 33)",  h: 35 },
-  rose:    { light: "oklch(0.495 0.155 350)", dark: "oklch(0.695 0.155 348)", h: 350 },
-  violet:  { light: "oklch(0.495 0.155 290)", dark: "oklch(0.695 0.155 288)", h: 290 },
+  navy:     { light: "oklch(0.33 0.085 258)", dark: "oklch(0.66 0.11 258)", h: 258 },
+  slate:    { light: "oklch(0.36 0.02 255)",  dark: "oklch(0.68 0.02 255)", h: 255 },
+  burgundy: { light: "oklch(0.38 0.11 18)",   dark: "oklch(0.62 0.13 18)",  h: 18 },
+  forest:   { light: "oklch(0.4 0.08 152)",   dark: "oklch(0.62 0.1 152)",  h: 152 },
 };
 
 const ACCENT_LABELS: Record<ThemeAccent, string> = {
-  emerald: "Emerald",
-  ocean: "Ocean",
-  sunset: "Sunset",
-  rose: "Rose",
-  violet: "Violet",
+  navy: "Navy",
+  slate: "Slate",
+  burgundy: "Burgundy",
+  forest: "Forest",
 };
 
 export { ACCENT_MAP, ACCENT_LABELS };
@@ -35,16 +35,30 @@ export { ACCENT_MAP, ACCENT_LABELS };
 interface ThemeCustomState {
   config: ThemeConfig;
   setConfig: (c: Partial<ThemeConfig>) => void;
-  applyTheme: () => void;
+  applyTheme: (isDark?: boolean) => void;
 }
 
+const DEFAULT_CONFIG: ThemeConfig = { accent: "navy", radius: 0.5, sidebarDark: false };
+
 function loadConfig(): ThemeConfig {
-  if (typeof window === "undefined") return { accent: "emerald", radius: 0.75, sidebarDark: true };
+  if (typeof window === "undefined") return DEFAULT_CONFIG;
   try {
     const saved = localStorage.getItem("aspidus-theme-config");
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migrate old consumer-palette accent names (emerald/ocean/sunset/rose/violet)
+      // to the new corporate palette so returning users don't get stuck on a
+      // value that no longer exists in ACCENT_MAP.
+      if (!(parsed.accent in ACCENT_MAP)) parsed.accent = "navy";
+      return { ...DEFAULT_CONFIG, ...parsed };
+    }
   } catch {}
-  return { accent: "emerald", radius: 0.75, sidebarDark: true };
+  return DEFAULT_CONFIG;
+}
+
+function isDarkNow(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.documentElement.classList.contains("dark");
 }
 
 export const useThemeCustomStore = create<ThemeCustomState>((set, get) => ({
@@ -54,35 +68,31 @@ export const useThemeCustomStore = create<ThemeCustomState>((set, get) => ({
     if (typeof window !== "undefined") localStorage.setItem("aspidus-theme-config", JSON.stringify(config));
     set({ config });
     // Apply immediately
-    applyThemeVars(config);
+    applyThemeVars(config, isDarkNow());
   },
-  applyTheme: () => {
-    applyThemeVars(get().config);
+  applyTheme: (isDark) => {
+    applyThemeVars(get().config, isDark ?? isDarkNow());
   },
 }));
 
-function applyThemeVars(config: ThemeConfig) {
+function applyThemeVars(config: ThemeConfig, isDark: boolean) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   const accent = ACCENT_MAP[config.accent];
   if (!accent) return;
+  const value = isDark ? accent.dark : accent.light;
+  const fgLightness = isDark ? "0.125 0.005" : "0.99 0.002";
 
-  // Light mode primary
-  root.style.setProperty("--primary", accent.light);
-  root.style.setProperty("--primary-foreground", `oklch(0.99 0.002 ${accent.h})`);
-  root.style.setProperty("--ring", accent.light);
-  root.style.setProperty("--accent-color", `oklch(0.948 0.012 ${accent.h})`);
-  root.style.setProperty("--accent-foreground", `oklch(0.285 0.045 ${accent.h})`);
-  root.style.setProperty("--chart-1", accent.light);
+  root.style.setProperty("--primary", value);
+  root.style.setProperty("--primary-foreground", `oklch(${fgLightness} ${accent.h})`);
+  root.style.setProperty("--ring", value);
+  root.style.setProperty("--accent", isDark ? `oklch(0.255 0.03 ${accent.h})` : `oklch(0.94 0.014 ${accent.h})`);
+  root.style.setProperty("--accent-foreground", isDark ? `oklch(0.9 0.025 ${accent.h})` : `oklch(0.26 0.06 ${accent.h})`);
+  root.style.setProperty("--chart-1", value);
 
-  // Dark mode primary
-  root.style.setProperty("--primary-dark", accent.dark);
-  root.style.setProperty("--ring-dark", accent.dark);
-  root.style.setProperty("--chart-1-dark", accent.dark);
-
-  // Sidebar primary
-  root.style.setProperty("--sidebar-primary", `oklch(0.595 0.135 ${accent.h})`);
-  root.style.setProperty("--sidebar-ring", `oklch(0.595 0.135 ${accent.h})`);
+  // Sidebar primary — matches the same accent, tuned per mode
+  root.style.setProperty("--sidebar-primary", value);
+  root.style.setProperty("--sidebar-ring", value);
 
   // Radius
   root.style.setProperty("--radius", `${config.radius}rem`);

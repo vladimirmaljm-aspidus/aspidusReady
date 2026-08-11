@@ -2,13 +2,19 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, ReactNode, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { useThemeCustomStore } from "@/lib/store/theme-store";
 
 function ThemeInitializer() {
   const applyTheme = useThemeCustomStore((s) => s.applyTheme);
+  const { resolvedTheme } = useTheme();
   useEffect(() => {
-    applyTheme();
-  }, [applyTheme]);
+    // Re-apply the custom accent whenever light/dark mode changes — the
+    // accent's dark-mode value differs from its light-mode value, and both
+    // are pushed as an inline style (so they win over the stylesheet
+    // defaults), so this must be re-run on every mode switch, not just once.
+    applyTheme(resolvedTheme === "dark");
+  }, [applyTheme, resolvedTheme]);
   return null;
 }
 

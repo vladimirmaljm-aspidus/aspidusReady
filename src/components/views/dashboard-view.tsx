@@ -243,17 +243,11 @@ export function DashboardView() {
   return (
     <div className="space-y-6">
       {/* ---------- Hero ---------- */}
-      <div className="border-gradient bg-mesh rounded-[var(--radius-xl)] px-5 py-5 md:px-7 md:py-6 shadow-soft smooth">
+      <div className="bg-card border border-border rounded-[var(--radius-lg)] px-5 py-5 md:px-7 md:py-6 shadow-soft smooth">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-muted-foreground font-medium">
-                <span className="size-1.5 rounded-full bg-primary" />
-                Live
-              </span>
-              <span className="tabular">{todayLabel()}</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+            <p className="text-xs text-muted-foreground mb-1.5 tabular">{todayLabel()}</p>
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
               {greeting()}, <span className="text-foreground">{userName}</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-1">

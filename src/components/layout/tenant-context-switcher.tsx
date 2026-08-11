@@ -137,7 +137,7 @@ export function TenantContextSwitcher() {
               </>
             ) : (
               <>
-                <div className="size-6 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white shrink-0">
+                <div className="size-6 rounded-md bg-gradient-to-br from-[oklch(0.33_0.085_258)] to-[oklch(0.685_0.105_82)] flex items-center justify-center text-white shrink-0">
                   <Globe className="size-3.5" />
                 </div>
                 <div className="hidden sm:block min-w-0 text-left">
@@ -161,7 +161,7 @@ export function TenantContextSwitcher() {
                 className="cursor-pointer"
               >
                 <div className="flex items-center gap-2 w-full">
-                  <div className="size-7 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white shrink-0">
+                  <div className="size-7 rounded-md bg-gradient-to-br from-[oklch(0.33_0.085_258)] to-[oklch(0.685_0.105_82)] flex items-center justify-center text-white shrink-0">
                     <Globe className="size-4" />
                   </div>
                   <div className="flex-1 min-w-0">

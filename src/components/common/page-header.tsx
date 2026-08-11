@@ -24,7 +24,7 @@ export function PageHeader({
   description,
   actions,
   breadcrumbs,
-  gradient = true,
+  gradient = false,
   className,
 }: {
   title: string;
@@ -34,7 +34,7 @@ export function PageHeader({
   /** Optional breadcrumb trail rendered above the title */
   breadcrumbs?: BreadcrumbItemData[];
 
-  /** Apply emerald gradient to the title. @default true */
+  /** Apply the brand gradient to the title. @default false — plain foreground reads more corporate. */
   gradient?: boolean;
 
   className?: string;
