@@ -23,6 +23,7 @@ import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import { CURRENCIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import type { MemorandumSettings, Tenant } from "@/lib/supabase/types";
+import { LOCALE_LABELS, LOCALE_FLAGS, type Locale } from "@/lib/i18n/dictionaries";
 
 type CompanyForm = {
   name: string;
@@ -152,8 +153,9 @@ export function SettingsView() {
           <TabsTrigger value="memorandum">Memorandum</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="company" className="mt-4">
+        <TabsContent value="company" className="mt-4 space-y-4">
           <CompanyTab />
+          <DefaultLanguageCard />
         </TabsContent>
         <TabsContent value="security" className="mt-4">
           <SecurityTab />
@@ -304,6 +306,51 @@ function CompanyTab() {
         {/* Logo Upload */}
         <LogoUpload />
 
+        <div className="mt-4 flex justify-end">
+          <Button onClick={() => save(value)} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DefaultLanguageCard() {
+  const { value, setValue, loading, saving, save } = useSettingLoader<Locale>("default_locale", "en");
+
+  if (loading) {
+    return (
+      <Card className="border-border/60 shadow-soft rounded-xl">
+        <CardContent className="p-6">
+          <Skeleton className="h-10 w-full max-w-xs" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-border/60 shadow-soft rounded-xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Globe className="size-5" /> Default Language</CardTitle>
+        <CardDescription>
+          Applies to users in this tenant who haven&apos;t chosen their own language yet. Document generation always stays in English.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="max-w-xs space-y-1.5">
+          <Label>Language</Label>
+          <Select value={value} onValueChange={(v) => setValue(v as Locale)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.keys(LOCALE_LABELS) as Locale[]).map((loc) => (
+                <SelectItem key={loc} value={loc}>
+                  {LOCALE_FLAGS[loc]} {LOCALE_LABELS[loc]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="mt-4 flex justify-end">
           <Button onClick={() => save(value)} disabled={saving}>
             {saving ? "Saving…" : "Save"}

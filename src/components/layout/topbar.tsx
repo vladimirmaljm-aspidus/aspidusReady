@@ -380,16 +380,18 @@ export function Topbar() {
               {t(locale, "switch-language")}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent align="end" className="w-40 rounded-xl p-1.5 shadow-soft-lg border-border/50">
-            <DropdownMenuItem
-              onClick={() => setLocale("en")}
-              className={cn("cursor-pointer rounded-lg px-3 py-2 text-sm smooth", locale === "en" && "bg-accent/50")}
-            >
-              <span className="mr-2">🇬🇧</span>
-              English
-              {locale === "en" && <Check className="size-3.5 ml-auto text-primary" />}
-            </DropdownMenuItem>
-
+          <DropdownMenuContent align="end" className="w-44 rounded-xl p-1.5 shadow-soft-lg border-border/50">
+            {(Object.keys(LOCALE_LABELS) as Locale[]).map((loc) => (
+              <DropdownMenuItem
+                key={loc}
+                onClick={() => setLocale(loc)}
+                className={cn("cursor-pointer rounded-lg px-3 py-2 text-sm smooth", locale === loc && "bg-accent/50")}
+              >
+                <span className="mr-2">{LOCALE_FLAGS[loc]}</span>
+                {LOCALE_LABELS[loc]}
+                {locale === loc && <Check className="size-3.5 ml-auto text-primary" />}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
 

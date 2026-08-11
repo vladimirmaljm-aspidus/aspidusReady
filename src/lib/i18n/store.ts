@@ -1,33 +1,74 @@
-/**
- * Aspidus — i18n Store (Zustand)
- * Client-side language switching with persistence
- */
 "use client";
-
 import { create } from "zustand";
 import type { Locale } from "@/lib/i18n/dictionaries";
 import { t as translate } from "@/lib/i18n/dictionaries";
 
-interface I18nState {
-  locale: Locale;
-  setLocale: (l: Locale) => void;
+const VALID_LOCALES: Locale[] = ["en", "sr", "tr", "de", "ru"];
+function isLocale(v: unknown): v is Locale {
+  return typeof v === "string" && (VALID_LOCALES as string[]).includes(v);
 }
 
-export const useI18nStore = create<I18nState>((set) => ({
-  locale: (typeof window !== "undefined" && localStorage.getItem("aspidus-locale") as Locale) || "en",
+interface I18nState {
+  locale: Locale;
+  hydrated: boolean;
+  setLocale: (l: Locale) => void;
+  hydrate: () => Promise<void>;
+}
+
+export const useI18nStore = create<I18nState>((set, get) => ({
+  locale: (typeof window !== "undefined" && (localStorage.getItem("aspidus-locale") as Locale)) || "en",
+  hydrated: false,
+
   setLocale: (locale) => {
     if (typeof window !== "undefined") localStorage.setItem("aspidus-locale", locale);
     set({ locale });
+    if (typeof window !== "undefined") {
+      fetch("/api/user-preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "locale", value: locale }),
+      }).catch(() => {});
+    }
+  },
+
+  // Priority: user's saved preference -> tenant default -> localStorage cache -> "en"
+  hydrate: async () => {
+    if (get().hydrated || typeof window === "undefined") return;
+    set({ hydrated: true });
+    try {
+      const res = await fetch("/api/user-preferences");
+      if (res.ok) {
+        const data = await res.json();
+        const saved = data?.map?.locale;
+        if (isLocale(saved)) {
+          localStorage.setItem("aspidus-locale", saved);
+          set({ locale: saved });
+          return;
+        }
+      }
+    } catch {
+      // ignore, fall through
+    }
+    try {
+      const res = await fetch("/api/auth/me");
+      if (res.ok) {
+        const data = await res.json();
+        if (isLocale(data?.default_locale)) {
+          set({ locale: data.default_locale });
+          localStorage.setItem("aspidus-locale", data.default_locale);
+        }
+      }
+    } catch {
+      // ignore, keep localStorage/default value
+    }
   },
 }));
 
-/** Hook-friendly translation helper */
 export function useT() {
   const locale = useI18nStore((s) => s.locale);
   return (key: string) => translate(locale, key);
 }
 
-/** Direct translation (for non-React contexts) */
 export function getT(locale: Locale) {
   return (key: string) => translate(locale, key);
 }

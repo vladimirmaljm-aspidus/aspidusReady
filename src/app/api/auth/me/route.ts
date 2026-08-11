@@ -48,7 +48,13 @@ export async function GET() {
     }
 
     const { password_hash, totp_secret, ...safeUser } = user;
-    return NextResponse.json({ user: safeUser });
+    let defaultLocale: string | null = null;
+    try {
+      defaultLocale = await store.getSetting<string>("default_locale", user.tenant_id ?? null);
+    } catch {
+      // non-fatal — locale falls back client-side
+    }
+    return NextResponse.json({ user: safeUser, default_locale: defaultLocale });
   } catch (e) {
     console.error("[auth/me] Error:", e);
     // Return null user instead of crashing — app will show login page
