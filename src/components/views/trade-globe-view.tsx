@@ -27,6 +27,16 @@ import {
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
+// MapLibre auto-detects its worker script URL from `import.meta.url` of its
+// own module. Under Turbopack/webpack that module is bundled into a hashed
+// chunk, so the auto-detected URL 404s — the module worker then never
+// initializes, and every GeoJSON-backed source (route lines, basemap fills)
+// hangs forever with no error surfaced to the main thread. Pointing MapLibre
+// at our own statically-served copy of the worker script sidesteps this.
+if (typeof window !== "undefined") {
+  maplibregl.setWorkerUrl("/map/maplibre-gl-worker.mjs");
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Types (mirror src/lib/logistics/route-plan.ts)                            */
 /* -------------------------------------------------------------------------- */
@@ -97,7 +107,22 @@ interface LogisticsRequest {
   [key: string]: any;
 }
 
-const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
+// Self-hosted basemap — no external tile service. `demotiles.maplibre.org`
+// is explicitly a demo/dev endpoint (unreliable under production load, and
+// a single point of failure behind CSP/network policy). Countries are
+// served from our own static asset instead, so the map never depends on
+// any third-party domain being reachable.
+const MAP_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    countries: { type: "geojson", data: "/map/countries-110m.geojson" },
+  },
+  layers: [
+    { id: "ocean", type: "background", paint: { "background-color": "#0a0e1a" } },
+    { id: "land", type: "fill", source: "countries", paint: { "fill-color": "#1a2138" } },
+    { id: "land-outline", type: "line", source: "countries", paint: { "line-color": "#334155", "line-width": 0.6 } },
+  ],
+};
 const ROAD_COLOR = "#f59e0b";
 const SEA_COLOR = "#3b82f6";
 

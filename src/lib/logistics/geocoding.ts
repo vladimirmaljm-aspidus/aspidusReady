@@ -41,6 +41,31 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
  * Geocode a free-text address (or place name) to coordinates.
  * Returns null if nothing was found or the lookup failed.
  */
+async function fetchOnce(q: string): Promise<GeocodeResult | null | "retry"> {
+  try {
+    const params = new URLSearchParams({ q, format: "json", limit: "1", addressdetails: "1" });
+    const res = await fetch(`${NOMINATIM_URL}?${params}`, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(10_000),
+    });
+    // 429/5xx are transient (rate limit, momentary outage) — worth a retry,
+    // not a permanent "no such address" the way a clean 200-with-no-results is.
+    if (res.status === 429 || res.status >= 500) return "retry";
+    if (!res.ok) return null;
+    const data = await res.json();
+    const hit = Array.isArray(data) ? data[0] : null;
+    if (!hit) return null;
+    return {
+      lat: parseFloat(hit.lat),
+      lng: parseFloat(hit.lon),
+      displayName: hit.display_name as string,
+      countryCode: (hit.address?.country_code as string | undefined)?.toUpperCase() || null,
+    } satisfies GeocodeResult;
+  } catch {
+    return "retry";
+  }
+}
+
 export async function geocodeAddress(query: string): Promise<GeocodeResult | null> {
   const q = query.trim();
   if (!q) return null;
@@ -48,32 +73,17 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | nul
   if (cache.has(key)) return cache.get(key)!;
 
   const result = await enqueue(async () => {
-    try {
-      const params = new URLSearchParams({
-        q,
-        format: "json",
-        limit: "1",
-        addressdetails: "1",
-      });
-      const res = await fetch(`${NOMINATIM_URL}?${params}`, {
-        headers: { "User-Agent": USER_AGENT },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      const hit = Array.isArray(data) ? data[0] : null;
-      if (!hit) return null;
-      return {
-        lat: parseFloat(hit.lat),
-        lng: parseFloat(hit.lon),
-        displayName: hit.display_name as string,
-        countryCode: (hit.address?.country_code as string | undefined)?.toUpperCase() || null,
-      } satisfies GeocodeResult;
-    } catch {
-      return null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const r = await fetchOnce(q);
+      if (r !== "retry") return r;
+      await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
     }
+    return null;
   });
 
+  // Only cache definite outcomes (found or genuinely no match) — never a
+  // transient failure, so a rate-limit blip doesn't permanently poison an
+  // address that would otherwise resolve fine on the next lookup.
   cache.set(key, result);
   return result;
 }
