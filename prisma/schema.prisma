@@ -236,6 +236,7 @@ model Product {
 
   // Relations
   inventoryMovements InventoryMovement[]
+  offers             Offer[]             @relation("OfferProduct")
 
   @@index([tenant_id])
   @@index([sku])
@@ -314,10 +315,49 @@ model Offer {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  // Trade / import fields (synced with live DB)
+  product_id       String? // linked product (FK to Product)
+  services         String? // JSON array of service line items
+  payment_bank_idx Int? // index into tenant bank_accounts JSON
+  pol_country      String? // country of port of loading
+  pod_country      String? // country of port of discharge
+  delivery_address String?
+  delivery_city    String?
+  delivery_country String?
+  specification    String?
+  origin_country   String?
+  quantity         Float   @default(0)
+  unit             String  @default("MT")
+
+  // Multi-currency (synced with live DB)
+  exchange_rate      Float?
+  exchange_rate_date DateTime?
+  exchange_rate_note String?
+
+  // Portal view tracking & client acceptance (synced with live DB)
+  viewed_at                DateTime?
+  viewed_by_email          String?
+  view_count               Int       @default(0)
+  client_accepted_at       DateTime?
+  client_signature         String?
+  client_note              String?
+  admin_reviewed_by_client Boolean   @default(false)
+
+  // Audit / soft delete (synced with live DB)
+  old_id     String?
+  deleted_at DateTime?
+  version    Int       @default(1)
+
+  // PDF / document register (synced with live DB)
+  pdf_file_url     String?
+  pdf_generated_at DateTime?
+  document_id      String?
+
   // Relations
   deal       Deal?       @relation(fields: [deal_id], references: [id])
   partner    Partner     @relation(fields: [partner_id], references: [id])
   owner      User?       @relation("OfferOwner", fields: [owner_id], references: [id])
+  product    Product?    @relation("OfferProduct", fields: [product_id], references: [id])
   invoices   Invoice[]
   proformas  Proforma[]
   portalRfqs PortalRfq[] @relation("RfqLinkedOffer")
@@ -327,6 +367,8 @@ model Offer {
   @@index([partner_id])
   @@index([owner_id])
   @@index([status])
+  @@index([product_id])
+  @@index([deleted_at])
 }
 
 // ============================================================
@@ -530,6 +572,36 @@ model Invoice {
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
 
+  // Trade / import fields (synced with live DB)
+  incoterm         String?
+  pol              String? // port of loading
+  pol_country      String?
+  pod              String? // port of discharge
+  pod_country      String?
+  vessel           String?
+  container_no     String?
+  lead_time        String?
+  packaging        String?
+  delivery_address String?
+  delivery_city    String?
+  delivery_country String?
+  specification    String?
+  origin_country   String?
+
+  // Multi-currency (synced with live DB)
+  exchange_rate      Float?
+  exchange_rate_date DateTime?
+  exchange_rate_note String?
+
+  // Portal view tracking (synced with live DB)
+  viewed_at       DateTime?
+  viewed_by_email String?
+  view_count      Int       @default(0)
+
+  // Audit / soft delete (synced with live DB)
+  deleted_at DateTime?
+  version    Int       @default(1)
+
   // Relations
   tenant  Tenant  @relation(fields: [tenant_id], references: [id])
   offer   Offer?  @relation(fields: [offer_id], references: [id])
@@ -540,6 +612,7 @@ model Invoice {
   @@index([partner_id])
   @@index([status])
   @@index([due_date])
+  @@index([deleted_at])
 }
 
 // ============================================================
@@ -568,6 +641,36 @@ model Proforma {
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
 
+  // Trade / import fields (synced with live DB)
+  incoterm         String?
+  pol              String? // port of loading
+  pol_country      String?
+  pod              String? // port of discharge
+  pod_country      String?
+  vessel           String?
+  container_no     String?
+  lead_time        String?
+  packaging        String?
+  delivery_address String?
+  delivery_city    String?
+  delivery_country String?
+  specification    String?
+  origin_country   String?
+
+  // Multi-currency (synced with live DB)
+  exchange_rate      Float?
+  exchange_rate_date DateTime?
+  exchange_rate_note String?
+
+  // Portal view tracking (synced with live DB)
+  viewed_at       DateTime?
+  viewed_by_email String?
+  view_count      Int       @default(0)
+
+  // Audit / soft delete (synced with live DB)
+  deleted_at DateTime?
+  version    Int       @default(1)
+
   // Relations
   tenant  Tenant  @relation(fields: [tenant_id], references: [id])
   offer   Offer?  @relation(fields: [offer_id], references: [id])
@@ -577,6 +680,7 @@ model Proforma {
   @@index([offer_id])
   @@index([partner_id])
   @@index([status])
+  @@index([deleted_at])
 }
 
 // ============================================================
@@ -924,6 +1028,11 @@ model TradeCalculation {
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
 
+  // Commission tracking (synced with live DB migration 007)
+  commission_agent_id String?
+  commission_type     String?
+  commission_rate     Float   @default(0)
+
   // Relations
   tenant   Tenant   @relation(fields: [tenant_id], references: [id])
   supplier Partner? @relation("TradeCalcSupplier", fields: [supplier_id], references: [id])
@@ -934,6 +1043,7 @@ model TradeCalculation {
   @@index([supplier_id])
   @@index([buyer_id])
   @@index([created_by])
+  @@index([commission_agent_id])
 }
 
 // ============================================================

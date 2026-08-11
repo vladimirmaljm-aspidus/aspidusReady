@@ -53,6 +53,11 @@ export async function GET(req: NextRequest) {
     if (!product) {
       return NextResponse.json({ error: "Product not found." }, { status: 404 });
     }
+    // Tenant ownership check — without this, any authenticated user could fetch
+    // any other tenant's product by ID (audit finding C-1).
+    if ("user" in auth && !auth.isSuperAdmin && product.tenant_id !== tenantId) {
+      return NextResponse.json({ error: "Product not found." }, { status: 404 });
+    }
 
     // 2. Supplier offers for this product
     const supplierOffers = await store.listSupplierOffers(tenantId, {

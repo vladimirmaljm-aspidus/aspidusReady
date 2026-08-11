@@ -106,6 +106,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
+    // Status guard (H-6) — only draft/cancelled proformas can be
+    // hard-deleted. Sent/accepted/paid proformas carry an audit trail.
+    if (existing.status && !["draft", "cancelled"].includes(existing.status)) {
+      return NextResponse.json(
+        { error: `Cannot delete a record in status '${existing.status}'.` },
+        { status: 409 },
+      );
+    }
     await auth.store.deleteProforma(id);
     await audit(auth.store, auth.user, req, "proforma.delete", "proforma", id);
     return NextResponse.json({ ok: true });

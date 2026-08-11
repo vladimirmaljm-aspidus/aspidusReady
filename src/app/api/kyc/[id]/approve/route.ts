@@ -38,6 +38,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
+  // Status guard (H-3) — only submissions in "submitted" or "under_review"
+  // state can be approved. Blocks approving an already-approved /
+  // rejected / resubmit submission.
+  if (existing.status !== "submitted" && existing.status !== "under_review" && existing.status !== "draft") {
+    return NextResponse.json(
+      { error: `Cannot approve a KYC submission in status '${existing.status}'.`,
+      },
+      { status: 409 },
+    );
+  }
   let body: { tier?: "premium" | "business" | "standard" | "basic" } = {};
   try { body = await req.json(); } catch { /* empty body is fine */ }
 

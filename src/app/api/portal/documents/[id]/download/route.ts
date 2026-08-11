@@ -3,6 +3,7 @@ import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
 import { getSupabase } from "@/lib/supabase/client";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .from(BUCKET)
     .createSignedUrl(path, 300, inline ? undefined : { download: (doc as any).filename || true });
   if (error || !data?.signedUrl) return NextResponse.json({ error: "Storage unavailable." }, { status: 502 });
+
+  // Audit: portal document downloads were silent. (Audit finding E P1.)
+  try {
+    await audit(
+      store,
+      {
+        id: access.partner_id,
+        username: access.portal_email || `portal:${access.partner_id}`,
+        tenant_id: access.tenant_id,
+      },
+      req,
+      "portal.document.download",
+      "shared_document",
+      id,
+      { filename: (doc as any).filename || null, inline },
+    );
+  } catch (e) {
+    console.error("[portal document download audit]", e);
+  }
 
   return NextResponse.redirect(data.signedUrl, 302);
   } catch (error: any) {

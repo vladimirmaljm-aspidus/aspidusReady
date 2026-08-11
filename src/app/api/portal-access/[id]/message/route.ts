@@ -31,81 +31,86 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "portal.message"); if (_d) return _d; }
-  { const { requireFeature } = await import("@/lib/api/feature-guard");
-    const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; }
-
-  if (!auth.isSuperAdmin && auth.user.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
-  }
-
-  const { id } = await params;
-  let _reqBody;
   try {
-    _reqBody = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-  const { message, send_email } = _reqBody;
-  const body = sanitizeMessageBody(message);
-  if (!body) return NextResponse.json({ error: "Message is required." }, { status: 400 });
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+    { const { requirePermission } = await import("@/lib/permissions/can");
+      const _d = requirePermission(auth, "portal.message"); if (_d) return _d; }
+    { const { requireFeature } = await import("@/lib/api/feature-guard");
+      const _f = await requireFeature(auth.tenantId, "module_portal", auth.isSuperAdmin); if (_f) return _f; }
 
-  const access = await auth.store.getPortalAccessById(id);
-  if (!access) return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
-  if (!auth.isSuperAdmin && access.tenant_id !== auth.tenantId) {
-    return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
-  }
-
-  try {
-    const msg = await insertMessage({
-      tenant_id: access.tenant_id,
-      partner_id: access.partner_id,
-      portal_access_id: access.id,
-      direction: "admin_to_portal",
-      body,
-      sender_username: auth.user.username,
-      sender_user_id: auth.user.id,
-      attachment_url: null,
-      attachment_name: null,
-      attachment_type: null,
-    });
-
-    // Notify the portal client via in-app notification (visible in portal).
-    try {
-      const tenant = await auth.store.getTenant(access.tenant_id);
-      await auth.store.createNotification({
-        tenant_id: access.tenant_id,
-        user_id: null,
-        partner_id: access.partner_id,
-        type: "portal_message" as any,
-        title: `New message from ${tenant?.name || "your account manager"}`,
-        message: body.slice(0, 200),
-        entity_type: "portal_access",
-        entity_id: access.id,
-        action_url: `/portal/messages`,
-        action_label: "Open messages",
-      } as any);
-    } catch (e) { console.warn("[admin.message notify]", e); }
-
-    if (send_email && access.portal_email) {
-      const tenant = await auth.store.getTenant(access.tenant_id);
-      const { subject, html } = newMessageEmail({
-        toName: access.portal_email,
-        fromName: tenant?.name || "Aspidus",
-        preview: body,
-        tenantName: tenant?.name || "Aspidus",
-        portalUrl: `${process.env.APP_BASE_URL || "https://aspidus.onrender.com"}/portal/login`,
-        direction: "admin_to_portal",
-      });
-      await sendEmail({ to: access.portal_email, subject, html, tenantId: access.tenant_id }).catch((e) => console.warn("[admin.message.email]", e));
+    if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+      return NextResponse.json({ error: "Admin access required." }, { status: 403 });
     }
 
-    await audit(auth.store, auth.user, req, "admin.message.sent", "portal_access", id, { partner_id: access.partner_id, preview: body.slice(0, 200) });
-    return NextResponse.json(msg);
+    const { id } = await params;
+    let _reqBody;
+    try {
+      _reqBody = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
+    const { message, send_email } = _reqBody;
+    const body = sanitizeMessageBody(message);
+    if (!body) return NextResponse.json({ error: "Message is required." }, { status: 400 });
+
+    const access = await auth.store.getPortalAccessById(id);
+    if (!access) return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    if (!auth.isSuperAdmin && access.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
+    }
+
+    try {
+      const msg = await insertMessage({
+        tenant_id: access.tenant_id,
+        partner_id: access.partner_id,
+        portal_access_id: access.id,
+        direction: "admin_to_portal",
+        body,
+        sender_username: auth.user.username,
+        sender_user_id: auth.user.id,
+        attachment_url: null,
+        attachment_name: null,
+        attachment_type: null,
+      });
+
+      // Notify the portal client via in-app notification (visible in portal).
+      try {
+        const tenant = await auth.store.getTenant(access.tenant_id);
+        await auth.store.createNotification({
+          tenant_id: access.tenant_id,
+          user_id: null,
+          partner_id: access.partner_id,
+          type: "portal_message" as any,
+          title: `New message from ${tenant?.name || "your account manager"}`,
+          message: body.slice(0, 200),
+          entity_type: "portal_access",
+          entity_id: access.id,
+          action_url: `/portal/messages`,
+          action_label: "Open messages",
+        } as any);
+      } catch (e) { console.warn("[admin.message notify]", e); }
+
+      if (send_email && access.portal_email) {
+        const tenant = await auth.store.getTenant(access.tenant_id);
+        const { subject, html } = newMessageEmail({
+          toName: access.portal_email,
+          fromName: tenant?.name || "Aspidus",
+          preview: body,
+          tenantName: tenant?.name || "Aspidus",
+          portalUrl: `${process.env.APP_BASE_URL || "https://aspidus.onrender.com"}/portal/login`,
+          direction: "admin_to_portal",
+        });
+        await sendEmail({ to: access.portal_email, subject, html, tenantId: access.tenant_id }).catch((e) => console.warn("[admin.message.email]", e));
+      }
+
+      await audit(auth.store, auth.user, req, "admin.message.sent", "portal_access", id, { partner_id: access.partner_id, preview: body.slice(0, 200) });
+      return NextResponse.json(msg);
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message }, { status: 500 });
+    }
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[portal-access.message.POST]", e);
+    return NextResponse.json({ error: e?.message || "Internal server error." }, { status: 500 });
   }
 }

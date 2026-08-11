@@ -84,7 +84,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // providers that go through the success path; we double-check + bump
       // attempts for clarity).
       const nextAttempts = (Number((entry as any).attempts) || 0) + 1;
-      await sb
+      // Defense-in-depth: scope the update by tenant_id so a concurrent tenant
+      // swap can't retarget the row. (Audit finding M-4.)
+      let sentUpdate = sb
         .from("mail_queue")
         .update({
           status: "sent",
@@ -93,6 +95,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           error: null,
         })
         .eq("id", id);
+      if (!auth.isSuperAdmin && tid) {
+        sentUpdate = sentUpdate.eq("tenant_id", tid);
+      }
+      await sentUpdate;
 
       try {
         await audit(auth.store, auth.user, req, "mail.retry_sent", "mail_queue", id, {
@@ -107,14 +113,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } catch (e: any) {
       // sendEmail threw — surface its error AND bump the queue entry's
       // attempts counter so the UI shows the latest retry attempt count.
+      // Mark status as "failed" so the queue view shows the row as failed
+      // (not silently stuck on "queued"). (Audit finding M-6.)
       const nextAttempts = (Number((entry as any).attempts) || 0) + 1;
-      await sb
+      let failedUpdate = sb
         .from("mail_queue")
         .update({
+          status: "failed",
           attempts: nextAttempts,
           error: e.message,
         })
         .eq("id", id);
+      if (!auth.isSuperAdmin && tid) {
+        failedUpdate = failedUpdate.eq("tenant_id", tid);
+      }
+      await failedUpdate;
 
       return NextResponse.json({ error: e.message }, { status: 500 });
     }

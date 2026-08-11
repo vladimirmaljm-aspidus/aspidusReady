@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
 import { TradeCostLine } from "@/lib/supabase/types";
 import { TRADE_COST_TYPES } from "@/lib/data/reference";
+import { getExchangeRate } from "@/lib/utils/exchange-rates";
 
 export const runtime = "nodejs";
 
@@ -93,8 +94,14 @@ export async function POST(req: NextRequest) {
   const effectiveFx = currenciesDiffer ? fxRate : 1;
 
   let landedCost = buyTotal;
-  const computedLines: TradeCostLine[] = (body.cost_lines || []).map((line: TradeCostLine) => {
-    const ref = TRADE_COST_TYPES.find((t) => t.code === line.type);
+  // Cost lines: each line has its own `currency`. Convert each line's amount
+  // to buy_currency via its `fx_rate` before adding to landedCost. This is the
+  // fix for the silent multi-currency bug (EUR freight was summed as if USD).
+  // The `fx_rate` is snapshotted server-side from the live rate at save time
+  // so historical calcs stay accurate when rates move.
+  const buyCurrency = (body.buy_currency || "USD").toUpperCase();
+  const computedLines: TradeCostLine[] = [];
+  for (const line of (body.cost_lines || []) as TradeCostLine[]) {
     let amount = 0;
     if (line.basis === "unit") amount = line.value * qty;
     else if (line.basis === "fixed") amount = line.value;
@@ -103,9 +110,32 @@ export async function POST(req: NextRequest) {
       // percent applies to buyTotal + accumulated costs (CIF value)
       amount = (landedCost * line.value) / 100;
     }
-    landedCost += amount;
-    return { ...line, amount: Math.round(amount * 100) / 100 };
-  });
+    amount = Math.round(amount * 100) / 100;
+
+    // Resolve line.fx_rate: prefer user-supplied, else snapshot live rate
+    // when line.currency differs from buy_currency. Same currency = 1.
+    const lineCurrency = (line.currency || buyCurrency).toUpperCase();
+    let fxRate: number | undefined = undefined;
+    if (lineCurrency === buyCurrency) {
+      fxRate = 1;
+    } else if (typeof line.fx_rate === "number" && line.fx_rate > 0) {
+      // User-supplied (possibly manual) rate — trust it.
+      fxRate = line.fx_rate;
+    } else {
+      const live = await getExchangeRate(lineCurrency, buyCurrency);
+      fxRate = live && live > 0 ? live : 1;
+    }
+    const convertedAmount = Math.round(amount * fxRate * 100) / 100;
+
+    landedCost += convertedAmount;
+    computedLines.push({
+      ...line,
+      currency: lineCurrency,
+      amount,
+      fx_rate: fxRate,
+      converted_amount: convertedAmount,
+    });
+  }
 
   const sellTotal = (body.sell_price_per_unit || 0) * qty;
   // Convert landed cost (buy currency) → sell currency for the margin math.

@@ -1532,23 +1532,40 @@ export class PrismaStore implements Store {
   }
 
   async upsertTradeCalculation(t: Partial<TradeCalculation> & { id?: string }): Promise<TradeCalculation> {
+    // Field names MUST match the TradeCalculation Prisma model (prisma/schema.prisma).
+    // The previous version wrote to non-existent columns (product_catalog_id,
+    // unit_price, currency, incoterm, total_cost, cost_per_unit) — silently
+    // dropping every real field on dev (SQLite) builds. Audit finding 1b.
     const data: any = {
       tenant_id: t.tenant_id ?? "",
       name: t.name ?? "",
-      product_catalog_id: t.product_catalog_id ?? null,
+      product_id: t.product_id ?? null,
+      supplier_offer_id: t.supplier_offer_id ?? null,
       supplier_id: t.supplier_id ?? null,
       buyer_id: t.buyer_id ?? null,
-      origin_country: t.origin_country ?? null,
-      destination_country: t.destination_country ?? null,
       quantity: t.quantity ?? 0,
       unit: t.unit ?? "MT",
-      unit_price: t.unit_price ?? 0,
-      currency: t.currency ?? "USD",
-      incoterm: t.incoterm ?? "FOB",
+      num_containers: t.num_containers ?? 1,
+      container_type: t.container_type ?? null,
+      buy_price_per_unit: t.buy_price_per_unit ?? 0,
+      buy_currency: t.buy_currency ?? "USD",
+      buy_incoterm: t.buy_incoterm ?? "FOB",
+      sell_price_per_unit: t.sell_price_per_unit ?? 0,
+      sell_currency: t.sell_currency ?? "USD",
+      sell_incoterm: t.sell_incoterm ?? "CIF",
+      transport_mode: t.transport_mode ?? "sea",
+      loading_port: t.loading_port ?? null,
+      delivery_port: t.delivery_port ?? null,
+      exchange_rate: t.exchange_rate ?? 1.0,
       cost_lines: stringifyJSON(t.cost_lines) ?? "[]",
-      total_cost: t.total_cost ?? 0,
+      total_buy_cost: t.total_buy_cost ?? 0,
       total_landed_cost: t.total_landed_cost ?? 0,
-      cost_per_unit: t.cost_per_unit ?? 0,
+      total_sell_revenue: t.total_sell_revenue ?? 0,
+      gross_margin: t.gross_margin ?? 0,
+      margin_percent: t.margin_percent ?? 0,
+      commission_agent_id: t.commission_agent_id ?? null,
+      commission_type: t.commission_type ?? null,
+      commission_rate: t.commission_rate ?? 0,
       created_by: t.created_by ?? null,
     };
     let r;

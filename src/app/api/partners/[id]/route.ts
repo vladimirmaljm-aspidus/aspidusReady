@@ -62,8 +62,48 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
+
+    // Dependency check (H-5) — refuse delete if dependent records exist
+    // (offers / invoices / proformas / KYC / portal access / trade
+    // calculations). Caller can pass ?force=1 to override (will leave
+    // orphans — admin recovery only).
+    const sb = (auth.store as any).sb();
+    const [offers, invoices, proformas, kyc, portal, tradeCalcs] = await Promise.all([
+      sb.from("offers").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("invoices").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("proformas").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("kyc_submissions").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("portal_access").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("trade_calculations").select("id", { count: "exact", head: true }).eq("buyer_id", id),
+    ]);
+    const depCount =
+      (offers.count || 0) +
+      (invoices.count || 0) +
+      (proformas.count || 0) +
+      (kyc.count || 0) +
+      (portal.count || 0) +
+      (tradeCalcs.count || 0);
+    const force = req.nextUrl.searchParams.get("force") === "1";
+    if (depCount > 0 && !force) {
+      return NextResponse.json({
+        error: `Cannot delete partner — ${depCount} dependent record(s) exist.`,
+        dependencies: {
+          offers: offers.count,
+          invoices: invoices.count,
+          proformas: proformas.count,
+          kyc: kyc.count,
+          portal: portal.count,
+          trade_calcs: tradeCalcs.count,
+        },
+        hint: "Pass ?force=1 to delete anyway (will leave orphans).",
+      }, { status: 409 });
+    }
+
     await auth.store.deletePartner(id);
-    await audit(auth.store, auth.user, req, "partner.delete", "partner", id);
+    await audit(auth.store, auth.user, req, "partner.delete", "partner", id, {
+      forced: force,
+      dependencies_ignored: force ? depCount : 0,
+    });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });

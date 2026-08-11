@@ -106,6 +106,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
+    // Status guard (H-6) — only draft or cancelled invoices can be
+    // hard-deleted. Paid/sent/overdue/partial invoices carry an audit
+    // trail and must be voided (status=cancelled) instead.
+    if (existing.status && !["draft", "cancelled"].includes(existing.status)) {
+      return NextResponse.json(
+        { error: `Cannot delete a record in status '${existing.status}'.` },
+        { status: 409 },
+      );
+    }
     await auth.store.deleteInvoice(id);
     await audit(auth.store, auth.user, req, "invoice.delete", "invoice", id);
     return NextResponse.json({ ok: true });
