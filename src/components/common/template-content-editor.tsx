@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useT } from "@/lib/i18n/store";
 
 // Re-export types + helpers from shared lib (so server-side PDF code can import them too)
 export type { ContentSegment, ContentConfig, PlaceholderData } from "@/lib/utils/content-config";
@@ -88,6 +89,7 @@ function coerceConfig(value: string, fallback: ContentSegment[]): ContentConfig 
 
 export function TemplateContentEditor({ value, onChange, label, defaultSegments }: TemplateContentEditorProps) {
   const fallback = defaultSegments || DEFAULT_HEADER_SEGMENTS;
+  const t = useT();
 
   const [config, setConfig] = React.useState<ContentConfig>(() => coerceConfig(value, fallback));
   const [selectedSegId, setSelectedSegId] = React.useState<string | null>(config.segments[0]?.id || null);
@@ -125,7 +127,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
   const addSegment = () => {
     const newSeg: ContentSegment = {
       id: genId(),
-      text: "New text...",
+      text: t("misc-tce-new-text"),
       fontSize: 9,
       bold: false,
       italic: false,
@@ -164,7 +166,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">{label}</Label>
         <Button size="sm" variant="outline" onClick={addSegment}>
-          <Plus className="size-3 mr-1" /> Add Line
+          <Plus className="size-3 mr-1" /> {t("misc-tce-add-line")}
         </Button>
       </div>
 
@@ -201,13 +203,13 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
             }}
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs text-muted-foreground">Line {idx + 1}</span>
+              <span className="text-xs text-muted-foreground">{t("misc-tce-line").replace("{n}", String(idx + 1))}</span>
               <Button
                 size="icon"
                 variant="ghost"
                 className="size-6 ml-auto"
                 onClick={() => removeSegment(seg.id)}
-                title="Remove line"
+                title={t("misc-tce-remove-line")}
               >
                 <Trash2 className="size-3" />
               </Button>
@@ -216,7 +218,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
               value={seg.text}
               onChange={(e) => updateSegment(seg.id, { text: e.target.value })}
               onFocus={() => setSelectedSegId(seg.id)}
-              placeholder="Enter text or drag a placeholder here…"
+              placeholder={t("misc-tce-placeholder")}
               className="text-sm"
               style={{
                 fontWeight: seg.bold ? 700 : 400,
@@ -227,7 +229,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
             />
             {dragOverSegId === seg.id && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded bg-primary/5 text-[10px] font-medium text-primary">
-                Drop here to insert into Line {idx + 1}
+                {t("misc-tce-drop-here").replace("{n}", String(idx + 1))}
               </div>
             )}
           </div>
@@ -240,7 +242,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
           <Separator />
           <div className="grid grid-cols-4 gap-2">
             <div className="space-y-1">
-              <Label className="text-xs">Size</Label>
+              <Label className="text-xs">{t("misc-tce-size")}</Label>
               <Input
                 type="number"
                 value={selectedSeg.fontSize}
@@ -249,7 +251,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Color</Label>
+              <Label className="text-xs">{t("misc-tce-color")}</Label>
               <Input
                 type="color"
                 value={selectedSeg.color}
@@ -258,7 +260,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
               />
             </div>
             <div className="col-span-2 space-y-1">
-              <Label className="text-xs">Alignment</Label>
+              <Label className="text-xs">{t("misc-tce-alignment")}</Label>
               <div className="flex gap-1">
                 <Button
                   size="sm"
@@ -290,14 +292,14 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
               variant={selectedSeg.bold ? "default" : "outline"}
               onClick={() => updateSegment(selectedSeg.id, { bold: !selectedSeg.bold })}
             >
-              <Bold className="size-3" /> Bold
+              <Bold className="size-3" /> {t("misc-tce-bold")}
             </Button>
             <Button
               size="sm"
               variant={selectedSeg.italic ? "default" : "outline"}
               onClick={() => updateSegment(selectedSeg.id, { italic: !selectedSeg.italic })}
             >
-              <Italic className="size-3" /> Italic
+              <Italic className="size-3" /> {t("misc-tce-italic")}
             </Button>
           </div>
         </>
@@ -306,7 +308,7 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
       {/* Placeholders — DRAG onto a line above (click also works as a fallback) */}
       <Separator />
       <div className="space-y-1">
-        <Label className="text-xs">Placeholders — drag onto a line (or click to add to selected line):</Label>
+        <Label className="text-xs">{t("misc-tce-placeholders")}</Label>
         <div className="flex flex-wrap gap-1 mt-1 max-h-32 overflow-y-auto">
           {CONTENT_PLACEHOLDERS.map((ph) => (
             <div
@@ -329,10 +331,10 @@ export function TemplateContentEditor({ value, onChange, label, defaultSegments 
       {/* Live preview */}
       <Separator />
       <div className="space-y-1">
-        <Label className="text-xs">Preview:</Label>
+        <Label className="text-xs">{t("misc-tce-preview")}</Label>
         <div className="border rounded p-2 bg-white mt-1 space-y-1" style={{ minHeight: 40 }}>
           {config.segments.length === 0 ? (
-            <span className="text-xs text-muted-foreground">No content — add a line above.</span>
+            <span className="text-xs text-muted-foreground">{t("misc-tce-no-content")}</span>
           ) : (
             config.segments.map((seg) => (
               <div

@@ -592,6 +592,13 @@ export const UI: Record<Locale, Record<string, string>> = {
     "erp-quick-initialize-eu": "Initialize EU Chart",
     "erp-quick-initialize-uae": "Initialize UAE Chart",
     "erp-quick-view-reports": "View Reports",
+
+    // ── Pagination / Carousel / Dialog / Sheet sr-only & aria ──
+    "ui-more-pages": "More pages",
+    "ui-go-prev-page": "Go to previous page",
+    "ui-go-next-page": "Go to next page",
+    "ui-previous-slide": "Previous slide",
+    "ui-next-slide": "Next slide",
   },
   sr: {
     search: "Pretraga",
@@ -857,6 +864,13 @@ export const UI: Record<Locale, Record<string, string>> = {
     "erp-quick-initialize-eu": "Inicijalizuj EU kontni plan",
     "erp-quick-initialize-uae": "Inicijalizuj UAE kontni plan",
     "erp-quick-view-reports": "Pregled izveštaja",
+
+    // ── Pagination / Carousel / Dialog / Sheet sr-only & aria ──
+    "ui-more-pages": "Još stranica",
+    "ui-go-prev-page": "Idi na prethodnu stranu",
+    "ui-go-next-page": "Idi na sledeću stranu",
+    "ui-previous-slide": "Prethodni slajd",
+    "ui-next-slide": "Sledeći slajd",
   },
   tr: {
     search: "Ara",
@@ -1122,6 +1136,13 @@ export const UI: Record<Locale, Record<string, string>> = {
     "erp-quick-initialize-eu": "AB Hesap Planını Başlat",
     "erp-quick-initialize-uae": "BAE Hesap Planını Başlat",
     "erp-quick-view-reports": "Raporları Görüntüle",
+
+    // ── Pagination / Carousel / Dialog / Sheet sr-only & aria ──
+    "ui-more-pages": "Daha fazla sayfa",
+    "ui-go-prev-page": "Önceki sayfaya git",
+    "ui-go-next-page": "Sonraki sayfaya git",
+    "ui-previous-slide": "Önceki slayt",
+    "ui-next-slide": "Sonraki slayt",
   },
   de: {
     search: "Suche",
@@ -1387,6 +1408,13 @@ export const UI: Record<Locale, Record<string, string>> = {
     "erp-quick-initialize-eu": "EU-Kontenplan initialisieren",
     "erp-quick-initialize-uae": "VAE-Kontenplan initialisieren",
     "erp-quick-view-reports": "Berichte anzeigen",
+
+    // ── Pagination / Carousel / Dialog / Sheet sr-only & aria ──
+    "ui-more-pages": "Weitere Seiten",
+    "ui-go-prev-page": "Zur vorherigen Seite",
+    "ui-go-next-page": "Zur nächsten Seite",
+    "ui-previous-slide": "Vorherige Folie",
+    "ui-next-slide": "Nächste Folie",
   },
   ru: {
     search: "Поиск",
@@ -1652,6 +1680,13 @@ export const UI: Record<Locale, Record<string, string>> = {
     "erp-quick-initialize-eu": "Инициализировать план счетов ЕС",
     "erp-quick-initialize-uae": "Инициализировать план счетов ОАЭ",
     "erp-quick-view-reports": "Просмотр отчётов",
+
+    // ── Pagination / Carousel / Dialog / Sheet sr-only & aria ──
+    "ui-more-pages": "Больше страниц",
+    "ui-go-prev-page": "На предыдущую страницу",
+    "ui-go-next-page": "На следующую страницу",
+    "ui-previous-slide": "Предыдущий слайд",
+    "ui-next-slide": "Следующий слайд",
   },
 };
 

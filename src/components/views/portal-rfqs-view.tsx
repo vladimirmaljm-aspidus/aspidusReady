@@ -43,15 +43,16 @@ import {
 } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 // ---------- static lookups ----------
 
-const STATUS_LABELS: Record<PortalRfqStatus, string> = {
-  pending: "Pending",
-  quoted: "Quoted",
-  accepted: "Accepted",
-  declined: "Declined",
-  expired: "Expired",
+const STATUS_LABEL_KEYS: Record<PortalRfqStatus, string> = {
+  pending: "portal-rfqs-status-pending",
+  quoted: "portal-rfqs-status-quoted",
+  accepted: "portal-rfqs-status-accepted",
+  declined: "portal-rfqs-status-declined",
+  expired: "portal-rfqs-status-expired",
 };
 
 function statusBadgeClass(status: PortalRfqStatus): string {
@@ -94,6 +95,7 @@ function countryLabel(code: string | null): string {
 export function PortalRfqsView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -144,42 +146,42 @@ export function PortalRfqsView() {
   }, [items]);
 
   function resolvePartnerName(rfq: PortalRfq): string {
-    return partnerMap.get(rfq.partner_id)?.name || "Unknown partner";
+    return partnerMap.get(rfq.partner_id)?.name || t("portal-rfqs-unknown-partner");
   }
 
   return (
     <div>
       <PageHeader
-        title="Client Requests"
-        description="RFQs submitted by portal clients for products not in catalog."
+        title={t("portal-rfqs-title")}
+        description={t("portal-rfqs-desc")}
       />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <KpiCard
-          label="Pending"
+          label={t("portal-rfqs-kpi-pending")}
           value={kpis.pending}
-          sub="Awaiting quote"
+          sub={t("portal-rfqs-kpi-pending-sub")}
           icon={Clock}
           iconClassName={kpis.pending > 0 ? "text-warning" : undefined}
         />
         <KpiCard
-          label="Quoted"
+          label={t("portal-rfqs-kpi-quoted")}
           value={kpis.quoted}
-          sub="Awaiting client"
+          sub={t("portal-rfqs-kpi-quoted-sub")}
           icon={FileText}
         />
         <KpiCard
-          label="Accepted"
+          label={t("portal-rfqs-kpi-accepted")}
           value={kpis.accepted}
-          sub="Won orders"
+          sub={t("portal-rfqs-kpi-accepted-sub")}
           icon={CheckCircle2}
           iconClassName="text-success"
         />
         <KpiCard
-          label="Declined"
+          label={t("portal-rfqs-kpi-declined")}
           value={kpis.declined}
-          sub="Lost / refused"
+          sub={t("portal-rfqs-kpi-declined-sub")}
           icon={XCircle}
           iconClassName="text-destructive"
         />
@@ -191,7 +193,7 @@ export function PortalRfqsView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by RFQ number or product…"
+              placeholder={t("portal-rfqs-search-placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -199,23 +201,23 @@ export function PortalRfqsView() {
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full md:w-44">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t("status")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="quoted">Quoted</SelectItem>
-              <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="declined">Declined</SelectItem>
-              <SelectItem value="expired">Expired</SelectItem>
+              <SelectItem value="all">{t("portal-rfqs-all-statuses")}</SelectItem>
+              <SelectItem value="pending">{t("portal-rfqs-status-pending")}</SelectItem>
+              <SelectItem value="quoted">{t("portal-rfqs-status-quoted")}</SelectItem>
+              <SelectItem value="accepted">{t("portal-rfqs-status-accepted")}</SelectItem>
+              <SelectItem value="declined">{t("portal-rfqs-status-declined")}</SelectItem>
+              <SelectItem value="expired">{t("portal-rfqs-status-expired")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={partnerFilter} onValueChange={setPartnerFilter}>
             <SelectTrigger className="w-full md:w-52">
-              <SelectValue placeholder="Partner" />
+              <SelectValue placeholder={t("portal-rfqs-col-partner")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All partners</SelectItem>
+              <SelectItem value="all">{t("portal-rfqs-all-partners")}</SelectItem>
               {(partnersQ.data?.items || []).slice(0, 100).map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
               ))}
@@ -234,23 +236,23 @@ export function PortalRfqsView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Inbox className="size-6" />}
-              title="No client requests"
-              description="When portal clients submit RFQs for products not in your catalog, they will appear here."
+              title={t("portal-rfqs-empty-title")}
+              description={t("portal-rfqs-empty-desc")}
             />
           ) : (
             <div className="max-h-[calc(100vh-380px)] overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Number</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="hidden md:table-cell">Partner</TableHead>
-                    <TableHead className="hidden lg:table-cell">Category</TableHead>
-                    <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="hidden sm:table-cell text-right">Target</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden xl:table-cell">Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("portal-rfqs-col-number")}</TableHead>
+                    <TableHead>{t("portal-rfqs-col-product")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("portal-rfqs-col-partner")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("portal-rfqs-col-category")}</TableHead>
+                    <TableHead className="text-right">{t("portal-rfqs-col-qty")}</TableHead>
+                    <TableHead className="hidden sm:table-cell text-right">{t("portal-rfqs-col-target")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t("portal-rfqs-col-created")}</TableHead>
+                    <TableHead className="text-right">{t("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -293,7 +295,7 @@ export function PortalRfqsView() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge className={statusBadgeClass(rfq.status)}>{STATUS_LABELS[rfq.status]}</Badge>
+                        <Badge className={statusBadgeClass(rfq.status)}>{t(STATUS_LABEL_KEYS[rfq.status])}</Badge>
                       </TableCell>
                       <TableCell className="hidden xl:table-cell text-xs text-muted-foreground tabular">
                         {fmtRelative(rfq.created_at)}
@@ -306,7 +308,7 @@ export function PortalRfqsView() {
                           onClick={() => setDetailId(rfq.id)}
                         >
                           <Eye className="size-3.5 mr-1" />
-                          View
+                          {t("view")}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -345,6 +347,7 @@ function RfqDetailSheet({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [status, setStatus] = useState<PortalRfqStatus | "">("");
   const [adminNotes, setAdminNotes] = useState("");
@@ -399,11 +402,11 @@ function RfqDetailSheet({
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Client request updated.");
+      toast.success(t("portal-rfqs-toast-updated"));
       setDirty(false);
       onSaved();
     },
-    onError: (e: any) => toast.error(e.message || "Could not save."),
+    onError: (e: any) => toast.error(e.message || t("portal-rfqs-toast-save-failed")),
   });
 
   const rfq = q.data;
@@ -415,14 +418,14 @@ function RfqDetailSheet({
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/60 sticky top-0 bg-card z-20">
           <SheetTitle className="flex items-center gap-2 pr-8">
             <Inbox className="size-5 text-primary" />
-            <span className="truncate">{rfq?.product_name || "Client Request"}</span>
+            <span className="truncate">{rfq?.product_name || t("portal-rfqs-detail-default-title")}</span>
           </SheetTitle>
           <SheetDescription className="flex flex-wrap items-center gap-2 mt-1">
             {rfq && (
               <>
                 <span className="font-mono tabular text-xs">{rfq.number}</span>
-                <Badge className={statusBadgeClass(rfq.status)}>{STATUS_LABELS[rfq.status]}</Badge>
-                <span className="text-xs text-muted-foreground">Created {fmtRelative(rfq.created_at)}</span>
+                <Badge className={statusBadgeClass(rfq.status)}>{t(STATUS_LABEL_KEYS[rfq.status])}</Badge>
+                <span className="text-xs text-muted-foreground">{t("portal-rfqs-created-prefix")} {fmtRelative(rfq.created_at)}</span>
               </>
             )}
           </SheetDescription>
@@ -436,7 +439,7 @@ function RfqDetailSheet({
           </div>
         ) : !rfq ? (
           <div className="p-6">
-            <EmptyState title="Request not found" description="This RFQ may have been deleted." />
+            <EmptyState title={t("portal-rfqs-not-found-title")} description={t("portal-rfqs-not-found-desc")} />
           </div>
         ) : (
           <div className="px-6 py-5 space-y-5">
@@ -445,7 +448,7 @@ function RfqDetailSheet({
               <CardHeader className="pb-2 pt-4">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Package className="size-4 text-primary" />
-                  Product Requested
+                  {t("portal-rfqs-card-product")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
@@ -457,27 +460,27 @@ function RfqDetailSheet({
                 </div>
                 <Separator />
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <InfoRow icon={Tag} label="Category" value={categoryLabel(rfq.category)} />
-                  <InfoRow icon={Boxes} label="Quantity" value={`${fmtNumber(rfq.quantity)} ${unitLabel(rfq.unit)}`} />
+                  <InfoRow icon={Tag} label={t("portal-rfqs-label-category")} value={categoryLabel(rfq.category)} />
+                  <InfoRow icon={Boxes} label={t("portal-rfqs-label-quantity")} value={`${fmtNumber(rfq.quantity)} ${unitLabel(rfq.unit)}`} />
                   <InfoRow
                     icon={DollarSign}
-                    label="Target Price"
+                    label={t("portal-rfqs-label-target-price")}
                     value={rfq.target_price ? `${fmtMoney(rfq.target_price, rfq.currency)} / ${rfq.unit}` : "—"}
                   />
-                  <InfoRow icon={Hash} label="Currency" value={rfq.currency} />
+                  <InfoRow icon={Hash} label={t("portal-rfqs-label-currency")} value={rfq.currency} />
                 </div>
                 {rfq.specifications && (
                   <>
                     <Separator />
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Specifications</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">{t("portal-rfqs-label-specifications")}</p>
                       <p className="text-sm whitespace-pre-wrap">{rfq.specifications}</p>
                     </div>
                   </>
                 )}
                 {rfq.notes && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Client Notes</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">{t("portal-rfqs-label-client-notes")}</p>
                     <p className="text-sm whitespace-pre-wrap p-2.5 rounded-md bg-muted/40 border border-border/40">
                       {rfq.notes}
                     </p>
@@ -492,14 +495,14 @@ function RfqDetailSheet({
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Ship className="size-4 text-primary" />
-                    Delivery
+                    {t("portal-rfqs-card-delivery")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-2">
-                  <InfoRow icon={MapPin} label="Country" value={countryLabel(rfq.delivery_country)} />
-                  <InfoRow icon={Ship} label="Port" value={rfq.delivery_port || "—"} />
-                  <InfoRow icon={CalendarDays} label="Date" value={rfq.delivery_date ? fmtDate(rfq.delivery_date) : "—"} />
-                  <InfoRow icon={ArrowRightLeft} label="Incoterm" value={incotermLabel(rfq.incoterm)} />
+                  <InfoRow icon={MapPin} label={t("portal-rfqs-label-country")} value={countryLabel(rfq.delivery_country)} />
+                  <InfoRow icon={Ship} label={t("portal-rfqs-label-port")} value={rfq.delivery_port || "—"} />
+                  <InfoRow icon={CalendarDays} label={t("portal-rfqs-label-date")} value={rfq.delivery_date ? fmtDate(rfq.delivery_date) : "—"} />
+                  <InfoRow icon={ArrowRightLeft} label={t("portal-rfqs-label-incoterm")} value={incotermLabel(rfq.incoterm)} />
                 </CardContent>
               </Card>
 
@@ -507,7 +510,7 @@ function RfqDetailSheet({
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Building2 className="size-4 text-primary" />
-                    Partner
+                    {t("portal-rfqs-card-partner")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -518,14 +521,14 @@ function RfqDetailSheet({
                         <p className="text-xs text-muted-foreground">{partner.email || "—"}</p>
                       </div>
                       <div className="grid grid-cols-1 gap-1.5 text-xs">
-                        <PartnerRow label="Type" value={partner.type} />
-                        <PartnerRow label="Contact" value={partner.contact_name || partner.contact_email || "—"} />
-                        <PartnerRow label="Country" value={countryLabel(partner.country)} />
-                        <PartnerRow label="Phone" value={partner.contact_phone || partner.phone || "—"} />
+                        <PartnerRow label={t("portal-rfqs-label-type")} value={partner.type} />
+                        <PartnerRow label={t("portal-rfqs-label-contact")} value={partner.contact_name || partner.contact_email || "—"} />
+                        <PartnerRow label={t("portal-rfqs-label-country")} value={countryLabel(partner.country)} />
+                        <PartnerRow label={t("portal-rfqs-label-phone")} value={partner.contact_phone || partner.phone || "—"} />
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Partner record not found.</p>
+                    <p className="text-sm text-muted-foreground">{t("portal-rfqs-partner-not-found")}</p>
                   )}
                 </CardContent>
               </Card>
@@ -537,20 +540,20 @@ function RfqDetailSheet({
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Wallet className="size-4 text-primary" />
-                    Commercial &amp; Delivery Schedule
+                    {t("portal-rfqs-card-commercial")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <InfoRow icon={DollarSign} label="Payment method" value={rfq.payment_method ? rfq.payment_method.toUpperCase() : "—"} />
-                    <InfoRow icon={Wallet} label="Payment terms" value={rfq.payment_terms || "—"} />
-                    <InfoRow icon={Zap} label="Urgency" value={rfq.urgency || "—"} />
-                    <InfoRow icon={Repeat} label="Schedule" value={rfq.delivery_schedule || "—"} />
+                    <InfoRow icon={DollarSign} label={t("portal-rfqs-label-payment-method")} value={rfq.payment_method ? rfq.payment_method.toUpperCase() : "—"} />
+                    <InfoRow icon={Wallet} label={t("portal-rfqs-label-payment-terms")} value={rfq.payment_terms || "—"} />
+                    <InfoRow icon={Zap} label={t("portal-rfqs-label-urgency")} value={rfq.urgency || "—"} />
+                    <InfoRow icon={Repeat} label={t("portal-rfqs-label-schedule")} value={rfq.delivery_schedule || "—"} />
                     {rfq.delivery_schedule && rfq.delivery_schedule !== "one_time" && (
                       <>
-                        <InfoRow icon={Boxes} label="Qty per shipment" value={rfq.per_shipment_qty != null ? `${fmtNumber(rfq.per_shipment_qty)} ${unitLabel(rfq.unit)}` : "—"} />
-                        <InfoRow icon={RefreshCw} label="Shipments / period" value={rfq.shipments_per_period != null ? String(rfq.shipments_per_period) : "—"} />
-                        <InfoRow icon={CalendarDays} label="Contract duration" value={rfq.contract_duration_months != null ? `${rfq.contract_duration_months} months` : "—"} />
+                        <InfoRow icon={Boxes} label={t("portal-rfqs-label-qty-per-shipment")} value={rfq.per_shipment_qty != null ? `${fmtNumber(rfq.per_shipment_qty)} ${unitLabel(rfq.unit)}` : "—"} />
+                        <InfoRow icon={RefreshCw} label={t("portal-rfqs-label-shipments-period")} value={rfq.shipments_per_period != null ? String(rfq.shipments_per_period) : "—"} />
+                        <InfoRow icon={CalendarDays} label={t("portal-rfqs-label-contract-duration")} value={rfq.contract_duration_months != null ? `${rfq.contract_duration_months} ${t("portal-rfqs-months-suffix")}` : "—"} />
                       </>
                     )}
                   </div>
@@ -564,25 +567,25 @@ function RfqDetailSheet({
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Factory className="size-4 text-primary" />
-                    Use case &amp; requirements
+                    {t("portal-rfqs-card-use-case")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-3">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <InfoRow icon={Factory} label="Target market" value={rfq.target_market || "—"} />
-                    <InfoRow icon={ShieldCheck} label="Quality standard" value={rfq.quality_standard || "—"} />
+                    <InfoRow icon={Factory} label={t("portal-rfqs-label-target-market")} value={rfq.target_market || "—"} />
+                    <InfoRow icon={ShieldCheck} label={t("portal-rfqs-label-quality-standard")} value={rfq.quality_standard || "—"} />
                   </div>
                   {rfq.end_use && (
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-1">End use</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">{t("portal-rfqs-label-end-use")}</p>
                       <p className="text-sm whitespace-pre-wrap p-2.5 rounded-md bg-muted/40 border border-border/40">{rfq.end_use}</p>
                     </div>
                   )}
                   {rfq.certifications_required && (
-                    <InfoRow icon={ShieldCheck} label="Certifications required" value={rfq.certifications_required} />
+                    <InfoRow icon={ShieldCheck} label={t("portal-rfqs-label-certifications")} value={rfq.certifications_required} />
                   )}
                   {rfq.packaging_requirements && (
-                    <InfoRow icon={Package} label="Packaging" value={rfq.packaging_requirements} />
+                    <InfoRow icon={Package} label={t("portal-rfqs-label-packaging")} value={rfq.packaging_requirements} />
                   )}
                 </CardContent>
               </Card>
@@ -594,24 +597,24 @@ function RfqDetailSheet({
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-sm flex items-center gap-2">
                     {rfq.buyer_type === "third_party" ? <UsersIcon className="size-4 text-amber-600" /> : <User className="size-4 text-primary" />}
-                    Buyer &mdash; {rfq.buyer_type === "third_party" ? "Third-party (sourcing on behalf)" : "Client is the buyer"}
+                    {rfq.buyer_type === "third_party" ? t("portal-rfqs-buyer-third-party") : t("portal-rfqs-buyer-client")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
                   {rfq.buyer_type === "third_party" ? (
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                      <InfoRow icon={Building2} label="Company" value={rfq.third_party_company_name || "—"} />
-                      <InfoRow icon={Factory} label="Business type" value={rfq.third_party_business_type || "—"} />
-                      <InfoRow icon={Globe2} label="Country" value={countryLabel(rfq.third_party_country)} />
-                      <InfoRow icon={Hash} label="Tax ID" value={rfq.third_party_tax_id || "—"} />
-                      <InfoRow icon={FileText} label="Email" value={rfq.third_party_contact_email || "—"} />
-                      <InfoRow icon={FileText} label="Phone" value={rfq.third_party_contact_phone || "—"} />
+                      <InfoRow icon={Building2} label={t("portal-rfqs-label-company")} value={rfq.third_party_company_name || "—"} />
+                      <InfoRow icon={Factory} label={t("portal-rfqs-label-business-type")} value={rfq.third_party_business_type || "—"} />
+                      <InfoRow icon={Globe2} label={t("portal-rfqs-label-country")} value={countryLabel(rfq.third_party_country)} />
+                      <InfoRow icon={Hash} label={t("portal-rfqs-label-tax-id")} value={rfq.third_party_tax_id || "—"} />
+                      <InfoRow icon={FileText} label={t("portal-rfqs-label-email")} value={rfq.third_party_contact_email || "—"} />
+                      <InfoRow icon={FileText} label={t("portal-rfqs-label-phone")} value={rfq.third_party_contact_phone || "—"} />
                       {rfq.third_party_website && (
-                        <div className="col-span-2 text-sm"><span className="text-xs text-muted-foreground">Website:</span> <a href={rfq.third_party_website} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline">{rfq.third_party_website}</a></div>
+                        <div className="col-span-2 text-sm"><span className="text-xs text-muted-foreground">{t("portal-rfqs-label-website")}</span> <a href={rfq.third_party_website} target="_blank" rel="noopener noreferrer" className="ml-1 text-primary hover:underline">{rfq.third_party_website}</a></div>
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">The requesting client's company is the buyer of record.</p>
+                    <p className="text-sm text-muted-foreground">{t("portal-rfqs-buyer-third-party-desc")}</p>
                   )}
                 </CardContent>
               </Card>
@@ -622,31 +625,31 @@ function RfqDetailSheet({
               <CardHeader className="pb-2 pt-4">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <FileCheck2 className="size-4 text-primary" />
-                  Admin Response
+                  {t("portal-rfqs-card-admin")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Status</Label>
+                    <Label className="text-xs">{t("portal-rfqs-label-status")}</Label>
                     <Select
                       value={status}
                       onValueChange={(v) => { setStatus(v as PortalRfqStatus); setDirty(true); }}
                     >
-                      <SelectTrigger><SelectValue placeholder="Set status" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("portal-rfqs-placeholder-status")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="quoted">Quoted</SelectItem>
-                        <SelectItem value="accepted">Accepted</SelectItem>
-                        <SelectItem value="declined">Declined</SelectItem>
-                        <SelectItem value="expired">Expired</SelectItem>
+                        <SelectItem value="pending">{t("portal-rfqs-status-pending")}</SelectItem>
+                        <SelectItem value="quoted">{t("portal-rfqs-status-quoted")}</SelectItem>
+                        <SelectItem value="accepted">{t("portal-rfqs-status-accepted")}</SelectItem>
+                        <SelectItem value="declined">{t("portal-rfqs-status-declined")}</SelectItem>
+                        <SelectItem value="expired">{t("portal-rfqs-status-expired")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Linked Offer ID (optional)</Label>
+                    <Label className="text-xs">{t("portal-rfqs-label-linked-offer")}</Label>
                     <Input
-                      placeholder="e.g. OF-2026-0123"
+                      placeholder={t("portal-rfqs-placeholder-linked-offer")}
                       value={linkedOfferId}
                       onChange={(e) => { setLinkedOfferId(e.target.value); setDirty(true); }}
                       className="font-mono text-sm"
@@ -657,10 +660,10 @@ function RfqDetailSheet({
                 <div className="space-y-1.5">
                   <Label className="text-xs flex items-center gap-1.5">
                     <StickyNote className="size-3.5" />
-                    Admin Notes
+                    {t("portal-rfqs-label-admin-notes")}
                   </Label>
                   <Textarea
-                    placeholder="Internal notes about this RFQ — pricing strategy, supplier availability, response plan…"
+                    placeholder={t("portal-rfqs-placeholder-admin-notes")}
                     rows={4}
                     value={adminNotes}
                     onChange={(e) => { setAdminNotes(e.target.value); setDirty(true); }}
@@ -683,14 +686,14 @@ function RfqDetailSheet({
                           });
                           if (!res.ok) throw new Error("Failed to create demand");
                           const data = await res.json();
-                          toast.success(`Demand created: ${data.demand?.demand_number || data.id}`);
+                          toast.success(t("portal-rfqs-toast-demand-created").replace("{number}", data.demand?.demand_number || data.id));
                         } catch {
-                          toast.error("Failed to convert RFQ to demand");
+                          toast.error(t("portal-rfqs-toast-demand-failed"));
                         }
                       }}
                     >
                       <ArrowRightLeft className="size-3.5 mr-1" />
-                      Convert to Demand
+                      {t("portal-rfqs-convert-to-demand")}
                     </Button>
                     <Button
                       size="sm"
@@ -704,14 +707,14 @@ function RfqDetailSheet({
                           });
                           if (!res.ok) throw new Error("Failed to create offer");
                           const data = await res.json();
-                          toast.success(`Offer created: ${data.offer?.offer_number || data.id}`);
+                          toast.success(t("portal-rfqs-toast-offer-created").replace("{number}", data.offer?.offer_number || data.id));
                         } catch {
-                          toast.error("Failed to create offer from RFQ");
+                          toast.error(t("portal-rfqs-toast-offer-failed"));
                         }
                       }}
                     >
                       <FilePlus2 className="size-3.5 mr-1" />
-                      Create Offer
+                      {t("portal-rfqs-create-offer")}
                     </Button>
                   </div>
                   <Button
@@ -725,7 +728,7 @@ function RfqDetailSheet({
                     ) : (
                       <Save className="size-3.5 mr-1" />
                     )}
-                    Save changes
+                    {t("portal-rfqs-save-changes")}
                   </Button>
                 </div>
               </CardContent>
@@ -733,13 +736,13 @@ function RfqDetailSheet({
 
             {rfq.linked_offer_id && !dirty && (
               <div className="text-xs text-muted-foreground">
-                Linked offer: <span className="font-mono tabular">{rfq.linked_offer_id}</span>
+                {t("portal-rfqs-label-linked-offer-prefix")} <span className="font-mono tabular">{rfq.linked_offer_id}</span>
               </div>
             )}
 
             <div className="pt-3 border-t border-border/60">
               <p className="text-xs text-muted-foreground">
-                Last updated {fmtDateTime(rfq.updated_at)}
+                {t("portal-rfqs-label-last-updated")} {fmtDateTime(rfq.updated_at)}
               </p>
             </div>
           </div>

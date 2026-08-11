@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PageHeader } from "@/components/common/page-header";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { fmtDateTime } from "@/lib/utils/format";
+import { useT } from "@/lib/i18n/store";
 
 // ─── Row type returned by /api/super-admin/verification-logs ─────────────────
 interface VerificationLogRow {
@@ -91,6 +92,7 @@ function mapLinkForRow(log: VerificationLogRow): string | null {
 // Main view
 // ============================================================
 export function VerificationLogsView() {
+  const t = useT();
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebounced(search, 300);
 
@@ -102,7 +104,7 @@ export function VerificationLogsView() {
       const r = await fetch(`/api/super-admin/verification-logs?${params}`);
       if (!r.ok) {
         const err = await r.json().catch(() => ({ error: r.statusText }));
-        throw new Error(err.error || "Failed to load verification logs");
+        throw new Error(err.error || t("pf-vlogs-load-failed"));
       }
       return r.json();
     },
@@ -114,8 +116,8 @@ export function VerificationLogsView() {
   return (
     <div>
       <PageHeader
-        title="Verification Logs"
-        description="Track who verified documents, from where, and on what device. Super-admin only."
+        title={t("verification-logs")}
+        description={t("pf-vlogs-desc")}
       />
 
       {/* ─── Summary + Search ──────────────────────────────────────── */}
@@ -123,19 +125,19 @@ export function VerificationLogsView() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">
             <Shield className="size-3 mr-1" />
-            {total} total verifications
+            {t("pf-vlogs-total-verifications").replace("{n}", String(total))}
           </Badge>
           {error && (
             <Badge variant="destructive" className="text-xs">
               <AlertCircle className="size-3 mr-1" />
-              API error
+              {t("pf-vlogs-api-error")}
             </Badge>
           )}
         </div>
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Filter by verification code…"
+            placeholder={t("pf-vlogs-filter-placeholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -149,13 +151,12 @@ export function VerificationLogsView() {
           <CardContent className="p-4 flex items-start gap-2 text-sm">
             <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
             <div className="min-w-0 space-y-1">
-              <p className="font-medium text-destructive">Failed to load logs</p>
+              <p className="font-medium text-destructive">{t("pf-vlogs-load-failed")}</p>
               <p className="text-muted-foreground text-xs break-words">
                 {error instanceof Error ? error.message : String(error)}
               </p>
               <p className="text-xs text-muted-foreground">
-                If the migration <code className="px-1 py-0.5 rounded bg-muted">006_document_verification_logs.sql</code>{" "}
-                has not been applied yet, apply it via Supabase Studio → SQL Editor.
+                {t("pf-vlogs-migration-hint").replace("{file}", "006_document_verification_logs.sql")}
               </p>
             </div>
           </CardContent>
@@ -169,16 +170,16 @@ export function VerificationLogsView() {
             <Table>
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow>
-                  <TableHead className="text-xs">Code</TableHead>
-                  <TableHead className="text-xs">Doc Type</TableHead>
-                  <TableHead className="text-xs">Doc #</TableHead>
-                  <TableHead className="text-xs">IP</TableHead>
-                  <TableHead className="text-xs">Location</TableHead>
-                  <TableHead className="text-xs">Device</TableHead>
-                  <TableHead className="text-xs">Browser</TableHead>
-                  <TableHead className="text-xs">Result</TableHead>
-                  <TableHead className="text-xs">Time</TableHead>
-                  <TableHead className="text-xs">Map</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-code")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-doc-type")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-doc-number")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-ip")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-location")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-device")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-browser")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-result")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-time")}</TableHead>
+                  <TableHead className="text-xs">{t("pf-vlogs-col-map")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -186,7 +187,7 @@ export function VerificationLogsView() {
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-12">
                       <Loader2 className="size-5 animate-spin inline mr-2 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Loading…</span>
+                      <span className="text-sm text-muted-foreground">{t("loading")}</span>
                     </TableCell>
                   </TableRow>
                 )}
@@ -194,7 +195,9 @@ export function VerificationLogsView() {
                 {!isLoading && logs.length === 0 && !error && (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-12 text-sm text-muted-foreground">
-                      No verification logs found{debouncedSearch ? ` for "${debouncedSearch}"` : ""}.
+                      {debouncedSearch
+                        ? t("pf-vlogs-no-logs-search").replace("{q}", debouncedSearch)
+                        : t("pf-vlogs-no-logs-found")}
                     </TableCell>
                   </TableRow>
                 )}
@@ -239,10 +242,10 @@ export function VerificationLogsView() {
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center text-blue-600 hover:underline"
-                            title="Open in Google Maps"
+                            title={t("pf-vlogs-open-maps")}
                           >
                             <ExternalLink className="size-3.5" />
-                            <span className="sr-only">Open in Google Maps</span>
+                            <span className="sr-only">{t("pf-vlogs-open-maps")}</span>
                           </a>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -260,8 +263,7 @@ export function VerificationLogsView() {
       {/* ─── Footer hint ───────────────────────────────────────────── */}
       <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
         <Globe className="size-3" />
-        Showing the most recent {logs.length} of {total} verifications.
-        Use the code filter above to focus on a specific document.
+        {t("pf-vlogs-footer-summary").replace("{shown}", String(logs.length)).replace("{total}", String(total))}
       </p>
     </div>
   );

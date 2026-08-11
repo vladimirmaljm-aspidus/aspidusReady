@@ -28,15 +28,16 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 // ---------- stage lookups ----------
 const STAGE_LABELS: Record<DealStage, string> = {
-  lead: "Lead",
-  qualified: "Qualified",
-  proposal: "Proposal",
-  negotiation: "Negotiation",
-  won: "Won",
-  lost: "Lost",
+  lead: "misc-stage-lead",
+  qualified: "misc-stage-qualified",
+  proposal: "misc-stage-proposal",
+  negotiation: "misc-stage-negotiation",
+  won: "misc-stage-won",
+  lost: "misc-stage-lost",
 };
 
 // Restrained palette — only chart-1 (emerald), chart-2 (teal), and muted-foreground.
@@ -61,11 +62,11 @@ const STAGE_DOT: Record<DealStage, string> = {
 };
 
 // ---------- helpers ----------
-function greeting(d = new Date()): string {
+function greetingKey(d = new Date()): string {
   const h = d.getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return "misc-good-morning";
+  if (h < 18) return "misc-good-afternoon";
+  return "misc-good-evening";
 }
 
 function todayLabel(d = new Date()): string {
@@ -105,6 +106,7 @@ function actionTone(action: string | null | undefined): string {
 export function DashboardView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const setView = useAppStore((s) => s.setView);
@@ -196,7 +198,7 @@ export function DashboardView() {
       const fill = STAGE_FILL[stage];
       return {
         stage,
-        name: STAGE_LABELS[stage],
+        name: t(STAGE_LABELS[stage]),
         count: found?.count || 0,
         value: found?.value || 0,
         fill: fill.color,
@@ -210,7 +212,7 @@ export function DashboardView() {
     return (
       <Card className="card-premium">
         <CardContent className="py-12 text-center text-muted-foreground">
-          Failed to load the dashboard. Please try again.
+          {t("misc-dashboard-load-failed")}
         </CardContent>
       </Card>
     );
@@ -229,7 +231,7 @@ export function DashboardView() {
     (a) => a.action?.includes("kyc"),
   ).length;
 
-  const userName = user?.full_name || user?.username || "there";
+  const userName = user?.full_name || user?.username || t("misc-there-fallback");
   const tenantName = activeTenantName || user?.tenant_id || "Aspidus";
 
   const lowStockCount = k.low_stock_count || 0;
@@ -248,19 +250,19 @@ export function DashboardView() {
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground mb-1.5 tabular">{todayLabel()}</p>
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
-              {greeting()}, <span className="text-foreground">{userName}</span>
+              {t(greetingKey())}, <span className="text-foreground">{userName}</span>
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Here is your trade operations snapshot for{" "}
+              {t("misc-trade-snapshot-for")}{" "}
               <span className="font-medium text-foreground">{tenantName}</span>.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => setView("audit")}>
-              <ScrollText className="size-4 mr-1.5" /> Audit log
+              <ScrollText className="size-4 mr-1.5" /> {t("audit")}
             </Button>
             <Button size="sm" onClick={() => setView("trade-calculator")}>
-              <Calculator className="size-4 mr-1.5" /> Trade calculator
+              <Calculator className="size-4 mr-1.5" /> {t("misc-trade-calculator-title")}
             </Button>
           </div>
         </div>
@@ -270,49 +272,49 @@ export function DashboardView() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="min-w-0">
           <KpiCard
-            label="Total Partners"
+            label={t("misc-total-partners")}
             value={fmtNumber(k.partners_total)}
-            sub={`${k.partners_active} active`}
+            sub={t("misc-active-sub").replace("{n}", String(k.partners_active))}
             icon={Users}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Active Deals"
+            label={t("active-deals")}
             value={fmtNumber(k.deals_open)}
-            sub="in progress"
+            sub={t("misc-in-progress")}
             icon={Handshake}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Pipeline Value"
+            label={t("misc-pipeline-value")}
             value={fmtMoney(pipelineValue)}
-            sub="open deals"
+            sub={t("misc-open-deals")}
             icon={TrendingUp}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Won (MTD)"
+            label={t("misc-won-mtd")}
             value={fmtMoney(wonMtd)}
-            sub="this month"
+            sub={t("misc-this-month")}
             icon={Trophy}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Outstanding Invoices"
+            label={t("misc-outstanding-invoices")}
             value={fmtNumber(overdueInvoices)}
-            sub="awaiting payment"
+            sub={t("misc-awaiting-payment")}
             icon={Receipt}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Low Stock Items"
+            label={t("misc-low-stock-items")}
             value={fmtNumber(lowStockCount)}
-            sub="need reorder"
+            sub={t("misc-need-reorder")}
             icon={AlertTriangle}
             iconClassName={lowStockCount > 0 ? "text-warning" : undefined}
           />
@@ -323,34 +325,34 @@ export function DashboardView() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="min-w-0">
           <KpiCard
-            label="Avg Margin %"
+            label={t("misc-avg-margin-pct")}
             value={`${avgMarginPct.toFixed(1)}%`}
-            sub={`across ${fmtNumber(tradeQ.data?.items?.length || 0)} calc(s)`}
+            sub={`${t("misc-across-calcs")} ${fmtNumber(tradeQ.data?.items?.length || 0)} ${t("misc-calcs-suffix")}`}
             icon={Percent}
             iconClassName={marginTone}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Total Trade Volume"
+            label={t("misc-total-trade-volume")}
             value={fmtMoney(totalTradeVolume)}
-            sub="sell-side revenue"
+            sub={t("misc-sell-side-revenue")}
             icon={TrendingUp}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Active Supplier Offers"
+            label={t("misc-active-supplier-offers")}
             value={fmtNumber(activeSupplierOffers)}
-            sub="currently live"
+            sub={t("misc-currently-live")}
             icon={FileText}
           />
         </div>
         <div className="min-w-0">
           <KpiCard
-            label="Pending RFQs"
+            label={t("misc-pending-rfqs")}
             value={fmtNumber(pendingRfqs)}
-            sub="awaiting quote"
+            sub={t("misc-awaiting-quote")}
             icon={Inbox}
           />
         </div>
@@ -363,15 +365,15 @@ export function DashboardView() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <CardTitle className="text-base">Revenue &amp; Margin Trend</CardTitle>
-                <CardDescription>Last 14 days · revenue area + margin line</CardDescription>
+                <CardTitle className="text-base">{t("misc-revenue-margin-trend")}</CardTitle>
+                <CardDescription>{t("misc-last-14-days-desc")}</CardDescription>
               </div>
               <div className="flex items-center gap-3 text-xs shrink-0">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-chart-1" /> Revenue
+                  <span className="size-2 rounded-full bg-chart-1" /> {t("misc-revenue-legend")}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-chart-2" /> Margin %
+                  <span className="size-2 rounded-full bg-chart-2" /> {t("misc-margin-pct")}
                 </span>
               </div>
             </div>
@@ -380,7 +382,7 @@ export function DashboardView() {
             <div className="h-72">
               {revenueMarginTrend.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                  No revenue recorded yet.
+                  {t("misc-no-revenue-recorded")}
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -415,8 +417,8 @@ export function DashboardView() {
                         fontSize: 12,
                       }}
                       formatter={(v: number, name: string) => {
-                        if (name === "margin") return [`${Number(v).toFixed(1)}%`, "Margin"];
-                        return [fmtMoney(v), "Revenue"];
+                        if (name === "margin") return [`${Number(v).toFixed(1)}%`, t("misc-margin")];
+                        return [fmtMoney(v), t("misc-revenue-legend")];
                       }}
                     />
                     <Area
@@ -447,11 +449,11 @@ export function DashboardView() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <CardTitle className="text-base">Deal Pipeline Funnel</CardTitle>
-                <CardDescription>Deals by stage · count &amp; value</CardDescription>
+                <CardTitle className="text-base">{t("misc-deal-pipeline-funnel")}</CardTitle>
+                <CardDescription>{t("misc-deals-by-stage-desc")}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" onClick={() => setView("deals")}>
-                View deals <ArrowUpRight className="size-3 ml-1" />
+                {t("misc-view-deals")} <ArrowUpRight className="size-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -487,7 +489,7 @@ export function DashboardView() {
                     }}
                     formatter={(v: number, _n: string, p: any) => {
                       const c = p?.payload?.count ?? 0;
-                      return [`${fmtMoney(v)} · ${c} deal(s)`, p?.payload?.name || "Stage"];
+                      return [`${fmtMoney(v)} · ${c} ${t("misc-deal-count-suffix")}`, p?.payload?.name || t("misc-stage-label")];
                     }}
                   />
                   <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
@@ -522,11 +524,11 @@ export function DashboardView() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <CardTitle className="text-base">Recent Activity</CardTitle>
-                <CardDescription>Latest events across the workspace</CardDescription>
+                <CardTitle className="text-base">{t("recent-activity")}</CardTitle>
+                <CardDescription>{t("misc-latest-events-desc")}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" onClick={() => setView("audit")}>
-                View all
+                {t("view-all")}
               </Button>
             </div>
           </CardHeader>
@@ -534,11 +536,11 @@ export function DashboardView() {
             <div className="max-h-96 overflow-y-auto custom-scroll px-4 pb-4 space-y-1">
               {(data.recent_activity || []).length === 0 && (
                 <p className="text-sm text-muted-foreground py-8 text-center">
-                  No recent activity.
+                  {t("misc-no-recent-activity")}
                 </p>
               )}
               {(data.recent_activity || []).map((a: AuditLog) => {
-                const name = a.username || "system";
+                const name = a.username || t("misc-system-user");
                 const init = name.slice(0, 2).toUpperCase();
                 return (
                   <div
@@ -579,29 +581,29 @@ export function DashboardView() {
         {/* Action Items */}
         <Card className="card-premium">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Action Items</CardTitle>
-            <CardDescription>Items that need your attention</CardDescription>
+            <CardTitle className="text-base">{t("misc-action-items")}</CardTitle>
+            <CardDescription>{t("misc-items-need-attention")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <ActionRow
               icon={ShieldCheck}
-              label="Pending KYC reviews"
+              label={t("misc-pending-kyc-reviews")}
               count={pendingKyc}
-              hint="Submissions awaiting review"
+              hint={t("misc-submissions-awaiting-review")}
               onClick={() => setView("kyc-review")}
             />
             <ActionRow
               icon={Inbox}
-              label="Pending RFQs"
+              label={t("misc-pending-rfqs")}
               count={pendingRfqs}
-              hint="Client requests awaiting quote"
+              hint={t("misc-client-requests-awaiting-quote")}
               onClick={() => setView("portal-rfqs")}
             />
             <ActionRow
               icon={Receipt}
-              label="Overdue invoices"
+              label={t("misc-overdue-invoices")}
               count={overdueInvoices}
-              hint="Invoices past due date"
+              hint={t("misc-invoices-past-due")}
               onClick={() => setView("invoices")}
             />
             {/* Low stock list */}
@@ -615,14 +617,14 @@ export function DashboardView() {
                         : "size-3.5 text-muted-foreground"
                     }
                   />
-                  Low stock products
+                  {t("misc-low-stock-products")}
                 </p>
                 <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setView("products")}>
-                  Manage <ChevronRight className="size-3 ml-0.5" />
+                  {t("misc-manage")} <ChevronRight className="size-3 ml-0.5" />
                 </Button>
               </div>
               {lowStock.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-3 text-center">All products well stocked.</p>
+                <p className="text-sm text-muted-foreground py-3 text-center">{t("misc-all-products-stocked")}</p>
               ) : (
                 <div className="max-h-48 overflow-y-auto custom-scroll space-y-1.5">
                   {lowStock.map((p) => {
@@ -661,27 +663,27 @@ export function DashboardView() {
       {/* ---------- Quick Actions ---------- */}
       <Card className="card-premium">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Quick Actions</CardTitle>
-          <CardDescription>Jump straight into the most common workflows</CardDescription>
+          <CardTitle className="text-base">{t("quick-actions")}</CardTitle>
+          <CardDescription>{t("misc-jump-common-workflows")}</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <QuickAction
-            label="New Partner"
+            label={t("misc-new-partner")}
             icon={Users}
             onClick={() => setView("partners")}
           />
           <QuickAction
-            label="New Offer"
+            label={t("new-offer")}
             icon={FileText}
             onClick={() => setView("offers")}
           />
           <QuickAction
-            label="New Deal"
+            label={t("new-deal")}
             icon={Handshake}
             onClick={() => setView("deals")}
           />
           <QuickAction
-            label="Trade Calculator"
+            label={t("misc-trade-calculator-title")}
             icon={Calculator}
             onClick={() => setView("trade-calculator")}
           />
@@ -730,6 +732,7 @@ function QuickAction({
   icon: React.ComponentType<{ className?: string }>;
   onClick: () => void;
 }) {
+  const t = useT();
   return (
     <button
       onClick={onClick}
@@ -742,7 +745,7 @@ function QuickAction({
         <div className="min-w-0">
           <p className="text-sm font-semibold tracking-tight">{label}</p>
           <p className="text-xs text-background/70 flex items-center gap-0.5 mt-0.5">
-            Open <ArrowRight className="size-3 group-hover:translate-x-0.5 smooth-fast" />
+            {t("misc-open-action")} <ArrowRight className="size-3 group-hover:translate-x-0.5 smooth-fast" />
           </p>
         </div>
       </div>

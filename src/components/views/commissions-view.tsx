@@ -43,8 +43,7 @@ import { CURRENCIES as REF_CURRENCIES } from "@/lib/data/reference";
 
 import type { CommissionAgent, DealCommission, CommissionPayout, CommissionSummary, CommissionType, CommissionStatus } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
-
-/* ─── Constants ───────────────────────────────────────────────────────────── */
+import { useT } from "@/lib/i18n/store";
 
 const COMMISSION_TYPE_LABELS: Record<CommissionType, string> = {
   profit_percent: "% of Profit",
@@ -98,6 +97,7 @@ export function CommissionsView() {
 
   const qc = useQueryClient();
   const locale = useLocale();
+  const t = useT();
   const [tab, setTab] = useState("agents");
 
   /* ── Queries ──────────────────────────────────────────────────────── */
@@ -189,8 +189,8 @@ export function CommissionsView() {
   return (
     <div>
       <PageHeader
-        title={"Commissions"}
-        description={"Manage commission agents, deal commissions, and payouts"}
+        title={t("commissions")}
+        description={t("fin-commissions-desc")}
       />
 
       {/* ── Summary Cards ─────────────────────────────────────────────── */}
@@ -218,15 +218,15 @@ export function CommissionsView() {
         <TabsList className="flex w-full overflow-x-auto justify-start mb-4 sm:grid sm:grid-cols-3">
           <TabsTrigger value="agents" className="gap-1.5">
             <Users className="size-4" />
-            {"Agents"}
+            {t("commission-agents")}
           </TabsTrigger>
           <TabsTrigger value="deals" className="gap-1.5">
             <HandCoins className="size-4" />
-            {"Deal Commissions"}
+            {t("commission-deal-commissions")}
           </TabsTrigger>
           <TabsTrigger value="payouts" className="gap-1.5">
             <Wallet className="size-4" />
-            {"Payouts"}
+            {t("commission-payouts")}
           </TabsTrigger>
         </TabsList>
 

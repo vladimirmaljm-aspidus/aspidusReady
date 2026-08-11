@@ -30,11 +30,12 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtDate, fmtRelative, fmtNumber, fmtMoney } from "@/lib/utils/format";
 import { UserTask } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 type Priority = "low" | "medium" | "high";
 
 const PRIORITY_LABEL: Record<Priority, string> = {
-  low: "Low", medium: "Medium", high: "High",
+  low: "misc-priority-low", medium: "misc-priority-medium", high: "misc-priority-high",
 };
 
 const PRIORITY_BADGE: Record<Priority, string> = {
@@ -61,6 +62,7 @@ function toInputDate(iso: string | null): string {
 export function TasksView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const [mine, setMine] = useState(true);
@@ -76,7 +78,7 @@ export function TasksView() {
     queryFn: async () => {
       const url = mine ? api("/api/tasks?mine=true") : api("/api/tasks");
       const r = await fetch(url);
-      if (!r.ok) throw new Error("Failed to load tasks");
+      if (!r.ok) throw new Error(t("misc-toast-load-tasks-failed"));
       return r.json() as Promise<{ items: UserTask[] }>;
     },
   });
@@ -92,7 +94,7 @@ export function TasksView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ done }),
       });
-      if (!r.ok) throw new Error("Failed to update task");
+      if (!r.ok) throw new Error(t("misc-toast-task-update-failed"));
       return r.json();
     },
     onMutate: async ({ id, done }) => {
@@ -107,7 +109,7 @@ export function TasksView() {
     },
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(queryKey, ctx.prev);
-      toast.error("Failed to update task.");
+      toast.error(t("misc-toast-task-update-failed"));
     },
     onSettled: () => qc.invalidateQueries({ queryKey }),
   });
@@ -115,29 +117,29 @@ export function TasksView() {
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
       const r = await fetch(api(`/api/tasks/${id}`), { method: "DELETE" });
-      if (!r.ok) throw new Error("Failed to delete task");
+      if (!r.ok) throw new Error(t("misc-toast-task-delete-failed"));
     },
     onSuccess: () => {
-      toast.success("Task deleted.");
+      toast.success(t("misc-toast-task-deleted"));
       qc.invalidateQueries({ queryKey });
       setDeleteId(null);
     },
-    onError: () => toast.error("Failed to delete task."),
+    onError: () => toast.error(t("misc-toast-task-delete-failed")),
   });
 
   return (
     <div>
       <PageHeader
-        title="Tasks"
-        description={`${active.length} active · ${done.length} completed`}
+        title={t("tasks")}
+        description={t("misc-tasks-count-summary").replace("{active}", String(active.length)).replace("{done}", String(done.length))}
         actions={
           <>
             <label className="flex items-center gap-2 text-sm text-muted-foreground mr-1">
               <Switch checked={mine} onCheckedChange={setMine} />
-              Only mine
+              {t("misc-only-mine")}
             </label>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New task
+              <Plus className="size-4 mr-1" /> {t("misc-new-task")}
             </Button>
           </>
         }
@@ -154,14 +156,14 @@ export function TasksView() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<ListChecks className="size-6" />}
-          title="No tasks"
-          description="Create your first task to keep track of your work."
-          action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New task</Button>}
+          title={t("misc-no-tasks")}
+          description={t("misc-no-tasks-desc")}
+          action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("misc-new-task")}</Button>}
         />
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           <TaskColumn
-            title="Active"
+            title={t("active")}
             icon={<ListChecks className="size-4" />}
             count={active.length}
             tasks={active}
@@ -170,7 +172,7 @@ export function TasksView() {
             onDelete={(t) => setDeleteId(t.id)}
           />
           <TaskColumn
-            title="Completed"
+            title={t("completed")}
             icon={<CheckCircle2 className="size-4" />}
             count={done.length}
             tasks={done}
@@ -194,18 +196,18 @@ export function TasksView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete task?</AlertDialogTitle>
+            <AlertDialogTitle>{t("misc-delete-task-confirm")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone.
+              {t("misc-action-cannot-be-undone")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -225,6 +227,7 @@ function TaskColumn({
   onEdit: (t: UserTask) => void;
   onDelete: (t: UserTask) => void;
 }) {
+  const t = useT();
   return (
     <div>
       <div className="flex items-center gap-2 mb-3 px-1">
@@ -236,52 +239,52 @@ function TaskColumn({
         {tasks.length === 0 ? (
           <Card className="border-border/60 shadow-soft rounded-xl">
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              No tasks here.
+              {t("misc-no-tasks-here")}
             </CardContent>
           </Card>
         ) : (
-          tasks.map((t) => (
+          tasks.map((task) => (
             <Card
-              key={t.id}
+              key={task.id}
               className="border-border/60 shadow-soft rounded-xl hover:shadow-soft-md transition-shadow"
             >
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <Checkbox
-                    checked={t.done}
-                    onCheckedChange={() => onToggle(t)}
+                    checked={task.done}
+                    onCheckedChange={() => onToggle(task)}
                     className="mt-1"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className={`text-sm font-medium ${t.done ? "line-through text-muted-foreground" : ""}`}>
-                        {t.title}
+                      <p className={`text-sm font-medium ${task.done ? "line-through text-muted-foreground" : ""}`}>
+                        {task.title}
                       </p>
-                      <Badge className={PRIORITY_BADGE[t.priority]}>
-                        {PRIORITY_LABEL[t.priority]}
+                      <Badge className={PRIORITY_BADGE[task.priority]}>
+                        {t(PRIORITY_LABEL[task.priority])}
                       </Badge>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>
-                        Due:{" "}
-                        <span className={`tabular ${isPast(t.due_date) && !t.done ? "text-destructive font-medium" : ""}`}>
-                          {fmtDate(t.due_date)}
+                        {t("misc-due-label")}{" "}
+                        <span className={`tabular ${isPast(task.due_date) && !task.done ? "text-destructive font-medium" : ""}`}>
+                          {fmtDate(task.due_date)}
                         </span>
                       </span>
-                      <span className="tabular">Created {fmtRelative(t.created_at)}</span>
-                      {t.entity_type && t.entity_id && (
+                      <span className="tabular">{t("misc-created-label")} {fmtRelative(task.created_at)}</span>
+                      {task.entity_type && task.entity_id && (
                         <span className="inline-flex items-center gap-1 font-mono">
                           <Link2 className="size-3" />
-                          {t.entity_type}:{t.entity_id.slice(0, 8)}
+                          {task.entity_type}:{task.entity_id.slice(0, 8)}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="size-8" onClick={() => onEdit(t)} title="Edit">
+                    <Button size="icon" variant="ghost" className="size-8" onClick={() => onEdit(task)} title={t("edit")}>
                       <Pencil className="size-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => onDelete(t)} title="Delete">
+                    <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => onDelete(task)} title={t("delete")}>
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
@@ -305,6 +308,7 @@ function TaskFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
@@ -322,7 +326,7 @@ function TaskFormDialog({
   }, [open, task]);
 
   async function save() {
-    if (!title.trim()) { toast.error("Please enter a title."); return; }
+    if (!title.trim()) { toast.error(t("misc-toast-enter-title")); return; }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -346,12 +350,12 @@ function TaskFormDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to save task");
+        throw new Error(e.error || t("misc-toast-task-save-failed"));
       }
-      toast.success(task ? "Task updated." : "Task created.");
+      toast.success(task ? t("misc-toast-task-updated") : t("misc-toast-task-created"));
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Failed to save task.");
+      toast.error(e.message || t("misc-toast-task-save-failed"));
     } finally {
       setSaving(false);
     }
@@ -361,39 +365,39 @@ function TaskFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md">
         <DialogHeader>
-          <DialogTitle>{task ? "Edit task" : "New task"}</DialogTitle>
-          <DialogDescription>Fill in the basic task details.</DialogDescription>
+          <DialogTitle>{task ? t("misc-edit-task") : t("misc-new-task")}</DialogTitle>
+          <DialogDescription>{t("misc-task-form-desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
         <div className="grid gap-3 py-2">
           <div className="space-y-1.5">
-            <Label>Title *</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Call the customer…" />
+            <Label>{t("misc-title-required")}</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("misc-task-title-placeholder")} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Priority</Label>
+              <Label>{t("misc-priority-label")}</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="low">{t("misc-priority-low")}</SelectItem>
+                  <SelectItem value="medium">{t("misc-priority-medium")}</SelectItem>
+                  <SelectItem value="high">{t("misc-priority-high")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Due date</Label>
+              <Label>{t("misc-due-date")}</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-md bg-muted/30">
             <div>
-              <p className="text-sm font-medium">Done</p>
-              <p className="text-xs text-muted-foreground">Mark this task as completed.</p>
+              <p className="text-sm font-medium">{t("misc-done-label")}</p>
+              <p className="text-xs text-muted-foreground">{t("misc-mark-completed-desc")}</p>
             </div>
             <Switch checked={done} onCheckedChange={setDone} />
           </div>
@@ -401,9 +405,9 @@ function TaskFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("misc-saving") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>

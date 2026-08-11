@@ -15,6 +15,7 @@ import { CheckCircle2, XCircle, RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
+import { useT } from "@/lib/i18n/store";
 
 interface UpgradeRequest {
   id: string;
@@ -40,6 +41,7 @@ interface Tenant { id: string; name: string; plan?: string }
 
 export function PlanUpgradeQueueView() {
   const qc = useQueryClient();
+  const t = useT();
   const [statusFilter, setStatusFilter] = React.useState<string>("pending");
   const [reviewing, setReviewing] = React.useState<UpgradeRequest | null>(null);
   const [decision, setDecision] = React.useState<"approve" | "reject">("approve");
@@ -73,10 +75,10 @@ export function PlanUpgradeQueueView() {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision, months, admin_note: note || undefined }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Failed");
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t("failed"));
     },
     onSuccess: () => {
-      toast.success(decision === "approve" ? "Plan upgraded." : "Request rejected.");
+      toast.success(decision === "approve" ? t("pf-plan-upgraded") : t("pf-request-rejected"));
       qc.invalidateQueries({ queryKey: ["plan-upgrade-queue"] });
       setReviewing(null); setNote(""); setMonths(12);
     },
@@ -86,46 +88,46 @@ export function PlanUpgradeQueueView() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Plan Upgrade Queue"
-        description="Approve or reject subscription upgrade requests from tenants."
+        title={t("plan-upgrade-queue")}
+        description={t("pf-upgrade-queue-desc")}
       />
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="size-4 text-primary" /> Requests</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="size-4 text-primary" /> {t("pf-requests")}</CardTitle>
             <div className="flex items-center gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="all">{t("all")}</SelectItem>
+                  <SelectItem value="pending">{t("pending")}</SelectItem>
+                  <SelectItem value="approved">{t("pf-status-approved")}</SelectItem>
+                  <SelectItem value="rejected">{t("pf-status-rejected")}</SelectItem>
                 </SelectContent>
               </Select>
               <Button size="sm" variant="outline" onClick={() => listQ.refetch()}>
-                <RefreshCw className="size-3.5 mr-1" /> Refresh
+                <RefreshCw className="size-3.5 mr-1" /> {t("refresh")}
               </Button>
             </div>
           </div>
-          <CardDescription className="text-xs">Click a row to approve or reject.</CardDescription>
+          <CardDescription className="text-xs">{t("pf-click-row-hint")}</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="border rounded-lg overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>From → To</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Message</TableHead>
-                  <TableHead>Requested</TableHead>
-                  <TableHead>Reviewed</TableHead>
+                  <TableHead>{t("pf-tenant")}</TableHead>
+                  <TableHead>{t("pf-from-to")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("pf-message")}</TableHead>
+                  <TableHead>{t("pf-requested")}</TableHead>
+                  <TableHead>{t("pf-reviewed")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {listQ.isLoading && <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>}
-                {!listQ.isLoading && items.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Nothing here.</TableCell></TableRow>}
+                {listQ.isLoading && <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">{t("loading")}</TableCell></TableRow>}
+                {!listQ.isLoading && items.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">{t("pf-nothing-here")}</TableCell></TableRow>}
                 {items.map((r) => (
                   <TableRow key={r.id} className={r.status === "pending" ? "cursor-pointer hover:bg-accent/40" : "opacity-70"} onClick={() => r.status === "pending" && setReviewing(r)}>
                     <TableCell className="font-medium">{tenantName.get(r.tenant_id) || r.tenant_id.slice(0, 8)}</TableCell>
@@ -149,45 +151,45 @@ export function PlanUpgradeQueueView() {
       <Dialog open={!!reviewing} onOpenChange={(o) => !o && setReviewing(null)}>
         <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>Review upgrade request</DialogTitle>
+            <DialogTitle>{t("pf-review-upgrade")}</DialogTitle>
             <DialogDescription>
-              {reviewing && `${tenantName.get(reviewing.tenant_id) || "Tenant"} — ${reviewing.current_plan || "—"} → ${reviewing.requested_plan}`}
+              {reviewing && `${tenantName.get(reviewing.tenant_id) || t("pf-tenant")} — ${reviewing.current_plan || "—"} → ${reviewing.requested_plan}`}
             </DialogDescription>
           </DialogHeader>
           {reviewing?.message && (
             <div className="rounded-lg bg-muted/40 p-3 text-sm">
-              <p className="text-xs text-muted-foreground mb-1">Client message</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("pf-client-message")}</p>
               <p>{reviewing.message}</p>
             </div>
           )}
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">Decision</Label>
+              <Label className="text-xs">{t("pf-decision")}</Label>
               <div className="flex gap-2 mt-1">
                 <Button size="sm" variant={decision === "approve" ? "default" : "outline"} onClick={() => setDecision("approve")}>
-                  <CheckCircle2 className="size-4 mr-1" /> Approve
+                  <CheckCircle2 className="size-4 mr-1" /> {t("approve")}
                 </Button>
                 <Button size="sm" variant={decision === "reject" ? "default" : "outline"} className={decision === "reject" ? "bg-destructive" : ""} onClick={() => setDecision("reject")}>
-                  <XCircle className="size-4 mr-1" /> Reject
+                  <XCircle className="size-4 mr-1" /> {t("reject")}
                 </Button>
               </div>
             </div>
             {decision === "approve" && (
               <div>
-                <Label className="text-xs">Subscription length (months)</Label>
+                <Label className="text-xs">{t("pf-subscription-length")}</Label>
                 <Input type="number" min={1} value={months} onChange={(e) => setMonths(Number(e.target.value) || 12)} />
-                <p className="text-[10px] text-muted-foreground mt-1">Tenant's plan will switch immediately and subscription_end will be stamped {months} months from now.</p>
+                <p className="text-[10px] text-muted-foreground mt-1">{t("pf-subscription-stamp-hint").replace("{n}", String(months))}</p>
               </div>
             )}
             <div>
-              <Label className="text-xs">Note (optional, shared with tenant)</Label>
-              <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why…" />
+              <Label className="text-xs">{t("pf-note-optional")}</Label>
+              <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("pf-note-placeholder")} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReviewing(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setReviewing(null)}>{t("cancel")}</Button>
             <Button onClick={() => reviewMut.mutate()} disabled={reviewMut.isPending}>
-              {reviewMut.isPending ? "Saving…" : decision === "approve" ? "Approve & upgrade" : "Reject"}
+              {reviewMut.isPending ? t("pf-saving") : decision === "approve" ? t("pf-approve-upgrade") : t("reject")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -55,37 +55,38 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
+import { useT } from "@/lib/i18n/store";
 
-const TYPE_LABELS: Record<PartnerType, string> = {
-  buyer: "Buyer",
-  supplier: "Supplier",
-  both: "Buyer & Supplier",
-  agent: "Agent",
-  logistics: "Logistics",
-  customs: "Customs",
-  bank: "Bank",
-  inspector: "Inspector",
+const TYPE_LABEL_KEYS: Record<PartnerType, string> = {
+  buyer: "crm-type-buyer",
+  supplier: "crm-type-supplier",
+  both: "crm-type-both",
+  agent: "crm-type-agent",
+  logistics: "crm-type-logistics",
+  customs: "crm-type-customs",
+  bank: "crm-type-bank",
+  inspector: "crm-type-inspector",
 };
 
-const STATUS_LABELS = {
-  active: "Active", inactive: "Inactive", blacklisted: "Blacklisted",
+const STATUS_LABEL_KEYS = {
+  active: "active", inactive: "inactive", blacklisted: "crm-blacklisted",
 } as const;
 
 const STATUS_BADGE = {
   active: "default", inactive: "secondary", blacklisted: "destructive",
 } as const;
 
-const KYC_LABELS = {
-  not_submitted: "Not submitted", pending: "Pending", approved: "Approved", rejected: "Rejected",
+const KYC_LABEL_KEYS = {
+  not_submitted: "kyc-not-submitted", pending: "pending", approved: "crm-approved", rejected: "crm-rejected",
 } as const;
 
-const PORTAL_STATUS_LABELS: Record<string, string> = {
-  pending_approval: "Pending Approval",
-  approved: "Approved",
-  invited: "Invited",
-  active: "Active",
-  suspended: "Suspended",
-  revoked: "Revoked",
+const PORTAL_STATUS_LABEL_KEYS: Record<string, string> = {
+  pending_approval: "crm-portal-status-pending-approval",
+  approved: "crm-portal-status-approved",
+  invited: "crm-portal-status-invited",
+  active: "crm-portal-status-active",
+  suspended: "crm-portal-status-suspended",
+  revoked: "crm-portal-status-revoked",
 };
 
 const PORTAL_STATUS_ICON: Record<string, typeof Clock> = {
@@ -104,6 +105,15 @@ const PORTAL_STATUS_BADGE: Record<string, "default" | "secondary" | "destructive
   active: "default",
   suspended: "destructive",
   revoked: "destructive",
+};
+
+// Portal tier label translation keys for the labels.
+const TIER_LABEL_KEYS: Record<PortalTier, string> = {
+  premium: "crm-portal-tier-premium",
+  business: "crm-portal-tier-business",
+  standard: "crm-portal-tier-standard",
+  basic: "crm-portal-tier-basic",
+  limited: "crm-portal-tier-basic-legacy",
 };
 
 const TIER_INFO: Record<PortalTier, { label: string; description: string; features: string[] }> = {
@@ -182,6 +192,7 @@ function generatePartnerCode(name: string): string {
 }
 
 export function PartnersView() {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -246,12 +257,12 @@ export function PartnersView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Partner deleted.");
+      toast.success(t("crm-partner-deleted"));
       qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("crm-delete-failed")),
   });
 
   const items = data?.items || [];
@@ -261,15 +272,15 @@ export function PartnersView() {
   return (
     <div>
       <PageHeader
-        title="Partners"
-        description={`${total} total`}
+        title={t("partners")}
+        description={t("crm-total-count").replace("${n}", String(total))}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => window.open("/api/partners/export?format=csv", "_blank")}>
-              <Download className="size-4 mr-1" /> Export CSV
+              <Download className="size-4 mr-1" /> {t("crm-export-csv")}
             </Button>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New partner
+              <Plus className="size-4 mr-1" /> {t("crm-new-partner")}
             </Button>
           </div>
         }
@@ -280,33 +291,33 @@ export function PartnersView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, email, or phone…"
+              placeholder={t("crm-search-by-name-email-phone")}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("status")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="blacklisted">Blacklisted</SelectItem>
+              <SelectItem value="all">{t("crm-all-statuses")}</SelectItem>
+              <SelectItem value="active">{t("active")}</SelectItem>
+              <SelectItem value="inactive">{t("inactive")}</SelectItem>
+              <SelectItem value="blacklisted">{t("crm-blacklisted")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={typeFilter} onValueChange={handleTypeFilterChange}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Type" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("type")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="buyer">Buyer</SelectItem>
-              <SelectItem value="supplier">Supplier</SelectItem>
-              <SelectItem value="both">Buyer & Supplier</SelectItem>
-              <SelectItem value="agent">Agent</SelectItem>
-              <SelectItem value="logistics">Logistics</SelectItem>
-              <SelectItem value="customs">Customs</SelectItem>
-              <SelectItem value="bank">Bank</SelectItem>
-              <SelectItem value="inspector">Inspector</SelectItem>
+              <SelectItem value="all">{t("crm-all-types")}</SelectItem>
+              <SelectItem value="buyer">{t("crm-type-buyer")}</SelectItem>
+              <SelectItem value="supplier">{t("crm-type-supplier")}</SelectItem>
+              <SelectItem value="both">{t("crm-type-both")}</SelectItem>
+              <SelectItem value="agent">{t("crm-type-agent")}</SelectItem>
+              <SelectItem value="logistics">{t("crm-type-logistics")}</SelectItem>
+              <SelectItem value="customs">{t("crm-type-customs")}</SelectItem>
+              <SelectItem value="bank">{t("crm-type-bank")}</SelectItem>
+              <SelectItem value="inspector">{t("crm-type-inspector")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -321,9 +332,9 @@ export function PartnersView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Users className="size-6" />}
-              title="No partners"
-              description="Add your first partner to get started."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New partner</Button>}
+              title={t("crm-no-partners")}
+              description={t("crm-no-partners-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("crm-new-partner")}</Button>}
             />
           ) : (
             <>
@@ -331,14 +342,14 @@ export function PartnersView() {
                 <Table>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="hidden md:table-cell">Type</TableHead>
-                      <TableHead className="hidden lg:table-cell">Contact</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-32">Risk</TableHead>
-                      <TableHead className="hidden xl:table-cell">KYC</TableHead>
-                      <TableHead className="hidden xl:table-cell">Portal</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t("name")}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t("type")}</TableHead>
+                      <TableHead className="hidden lg:table-cell">{t("crm-contact-person")}</TableHead>
+                      <TableHead>{t("status")}</TableHead>
+                      <TableHead className="w-32">{t("crm-risk")}</TableHead>
+                      <TableHead className="hidden xl:table-cell">{t("crm-kyc-short")}</TableHead>
+                      <TableHead className="hidden xl:table-cell">{t("crm-portal-access-section")}</TableHead>
+                      <TableHead className="text-right">{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -360,14 +371,14 @@ export function PartnersView() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <Badge variant="outline">{TYPE_LABELS[p.type]}</Badge>
+                          <Badge variant="outline">{t(TYPE_LABEL_KEYS[p.type])}</Badge>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
                           <div className="text-sm">{p.contact_name || "—"}</div>
                           <div className="text-xs text-muted-foreground">{p.contact_email || p.email || "—"}</div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={STATUS_BADGE[p.status]}>{STATUS_LABELS[p.status]}</Badge>
+                          <Badge variant={STATUS_BADGE[p.status]}>{t(STATUS_LABEL_KEYS[p.status])}</Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -377,7 +388,7 @@ export function PartnersView() {
                         </TableCell>
                         <TableCell className="hidden xl:table-cell">
                           <Badge variant={p.kyc_status === "approved" ? "default" : p.kyc_status === "pending" ? "secondary" : "outline"}>
-                            {KYC_LABELS[p.kyc_status]}
+                            {t(KYC_LABEL_KEYS[p.kyc_status])}
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden xl:table-cell">
@@ -391,14 +402,14 @@ export function PartnersView() {
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title="View">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title={t("view")}>
                               <Eye className="size-4" />
                             </Button>
                             <Button
                               size="icon"
                               variant="ghost"
                               className="size-8 text-primary"
-                              title="View 360°"
+                              title={t("crm-view-360")}
                               onClick={() => {
                                 setSelectedId(p.id);
                                 setView("partner-360");
@@ -406,10 +417,10 @@ export function PartnersView() {
                             >
                               <Maximize2 className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title={t("edit")}>
                               <Pencil className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Delete">
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title={t("delete")}>
                               <Trash2 className="size-4" />
                             </Button>
                           </div>
@@ -424,8 +435,8 @@ export function PartnersView() {
               <div className="flex items-center justify-between border-t px-4 py-3 gap-3 flex-wrap">
                 <p className="text-sm text-muted-foreground">
                   {total > 0
-                    ? <>Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}</>
-                    : <>No results</>}
+                    ? <>{t("crm-showing-range").replace("${from}", String((page - 1) * PAGE_SIZE + 1)).replace("${to}", String(Math.min(page * PAGE_SIZE, total))).replace("${total}", String(total))}</>
+                    : <>{t("crm-no-results")}</>}
                 </p>
                 <div className="flex items-center gap-3">
                   <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
@@ -489,9 +500,9 @@ export function PartnersView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Building2 className="size-5" />
-              {detail.data?.name || "Partner"}
+              {detail.data?.name || t("crm-partner")}
             </SheetTitle>
-            <SheetDescription>Partner details</SheetDescription>
+            <SheetDescription>{t("crm-partner-details")}</SheetDescription>
           </SheetHeader>
           {detail.isLoading ? (
             <div className="p-4 space-y-3">
@@ -508,18 +519,18 @@ export function PartnersView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete partner?</AlertDialogTitle>
+            <AlertDialogTitle>{t("crm-delete-partner-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Related offers and deals may lose their reference.
+              {t("crm-delete-partner-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -543,16 +554,17 @@ function generatePageNumbers(current: number, total: number): (number | "ellipsi
 
 // ---- Detail panel ----
 function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
   const qc = useQueryClient();
   const contactInfo = [
-    { icon: Mail, label: "Email", value: partner.email },
-    { icon: Phone, label: "Phone", value: partner.phone },
-    { icon: Globe, label: "Website", value: partner.website },
-    { icon: MapPin, label: "Address", value: [partner.address_line, partner.city, partner.state, partner.postal_code, partner.country].filter(Boolean).join(", ") || null },
-    { icon: Building2, label: "Tax ID", value: partner.tax_id },
+    { icon: Mail, label: t("email"), value: partner.email },
+    { icon: Phone, label: t("crm-contact-phone"), value: partner.phone },
+    { icon: Globe, label: t("crm-website"), value: partner.website },
+    { icon: MapPin, label: t("crm-address"), value: [partner.address_line, partner.city, partner.state, partner.postal_code, partner.country].filter(Boolean).join(", ") || null },
+    { icon: Building2, label: t("crm-tax-id"), value: partner.tax_id },
   ].filter((x) => x.value);
 
   // Portal access state
@@ -618,7 +630,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Portal access activated!");
+      toast.success(t("crm-portal-access-activated"));
       qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, partner.id] });
       qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
       setShowActivateDialog(false);
@@ -640,7 +652,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Invite email sent!");
+      toast.success(t("crm-invite-email-sent"));
       qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, partner.id] });
     },
     onError: (e: any) => toast.error(e.message || "Failed to send invite."),
@@ -648,7 +660,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
   const handleActivatePortal = async () => {
     if (!portalEmail.trim()) {
-      toast.error("Portal email is required.");
+      toast.error(t("crm-portal-email-required"));
       return;
     }
     createPortalMut.mutate({
@@ -692,9 +704,9 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       }
       setTestPassword(pwd);
       qc.invalidateQueries({ queryKey: ["portal-access", tenantKey, partner.id] });
-      toast.success("Test password set successfully!");
+      toast.success(t("crm-test-password-set"));
     } catch (e: any) {
-      toast.error(e.message || "Failed to set test password.");
+      toast.error(e.message || t("crm-failed-set-test-password"));
     } finally {
       setSettingTestPwd(false);
     }
@@ -706,9 +718,9 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       if (type === "url") { setCopiedUrl(true); setTimeout(() => setCopiedUrl(false), 2000); }
       if (type === "pwd") { setCopiedPwd(true); setTimeout(() => setCopiedPwd(false), 2000); }
       if (type === "email") { setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 2000); }
-      toast.success("Copied to clipboard!");
+      toast.success(t("crm-copied-to-clipboard"));
     } catch {
-      toast.error("Failed to copy to clipboard.");
+      toast.error(t("crm-failed-copy-clipboard"));
     }
   };
 
@@ -720,26 +732,26 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
     <div className="px-4 pb-6">
       {/* Badges */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <Badge variant={STATUS_BADGE[partner.status]}>{STATUS_LABELS[partner.status]}</Badge>
-        <Badge variant="outline">{TYPE_LABELS[partner.type]}</Badge>
-        <Badge variant="outline">{partner.entity_type === "company" ? "Company" : "Individual"}</Badge>
+        <Badge variant={STATUS_BADGE[partner.status]}>{t(STATUS_LABEL_KEYS[partner.status])}</Badge>
+        <Badge variant="outline">{t(TYPE_LABEL_KEYS[partner.type])}</Badge>
+        <Badge variant="outline">{partner.entity_type === "company" ? t("crm-company") : t("crm-individual")}</Badge>
         <Badge variant={partner.kyc_status === "approved" ? "default" : "outline"} className="gap-1">
-          <ShieldCheck className="size-3" /> {KYC_LABELS[partner.kyc_status]}
+          <ShieldCheck className="size-3" /> {t(KYC_LABEL_KEYS[partner.kyc_status])}
         </Badge>
         {partner.portal_enabled && (
           <Badge variant="secondary" className="gap-1">
-            <Star className="size-3" /> Portal: {partner.portal_level}
+            <Star className="size-3" /> {t("crm-portal-tier-prefix").replace("${tier}", partner.portal_level)}
           </Badge>
         )}
         {partner.is_commissioner && (
           <Badge variant="secondary" className="gap-1 bg-primary/10 text-primary">
-            <DollarSign className="size-3" /> Commission Agent
+            <DollarSign className="size-3" /> {t("crm-commission-agent-badge")}
           </Badge>
         )}
         {portalAccess && (
           <Badge variant={PORTAL_STATUS_BADGE[portalAccess.status]} className="gap-1">
             {(() => { const Icon = PORTAL_STATUS_ICON[portalAccess.status]; return <Icon className="size-3" />; })()}
-            Portal: {PORTAL_STATUS_LABELS[portalAccess.status]}
+            {t("crm-portal-prefix")}{t(PORTAL_STATUS_LABEL_KEYS[portalAccess.status])}
           </Badge>
         )}
       </div>
@@ -748,13 +760,13 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
       <div className="grid grid-cols-2 gap-2 mb-4">
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Risk</p>
+            <p className="text-xs text-muted-foreground">{t("crm-risk")}</p>
             <p className={`text-2xl font-semibold tabular ${riskColor(partner.risk_score)}`}>{partner.risk_score}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Deals</p>
+            <p className="text-xs text-muted-foreground">{t("crm-deals-tab")}</p>
             <p className="text-2xl font-semibold tabular">{fmtNumber(deals.length)}</p>
           </CardContent>
         </Card>
@@ -762,12 +774,12 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
       <Tabs defaultValue="info">
         <TabsList className="flex w-full overflow-x-auto justify-start sm:grid sm:grid-cols-5">
-          <TabsTrigger value="info">Info</TabsTrigger>
-          <TabsTrigger value="contact">Contact</TabsTrigger>
-          <TabsTrigger value="bank">Bank</TabsTrigger>
-          <TabsTrigger value="deals">Deals</TabsTrigger>
+          <TabsTrigger value="info">{t("crm-overview")}</TabsTrigger>
+          <TabsTrigger value="contact">{t("crm-contact-person")}</TabsTrigger>
+          <TabsTrigger value="bank">{t("crm-bank-details-section")}</TabsTrigger>
+          <TabsTrigger value="deals">{t("crm-deals-tab")}</TabsTrigger>
           <TabsTrigger value="portal" className="gap-1">
-            <KeyRound className="size-3.5" /> Portal
+            <KeyRound className="size-3.5" /> {t("crm-portal-access-section")}
           </TabsTrigger>
         </TabsList>
 
@@ -776,31 +788,31 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
           <div className="grid grid-cols-2 gap-2">
             {partner.preferred_currency && (
               <div className="p-2 rounded-md bg-muted/30">
-                <p className="text-xs text-muted-foreground">Currency</p>
+                <p className="text-xs text-muted-foreground">{t("currency")}</p>
                 <p className="text-sm font-medium">{partner.preferred_currency}</p>
               </div>
             )}
             {partner.preferred_payment_terms && (
               <div className="p-2 rounded-md bg-muted/30">
-                <p className="text-xs text-muted-foreground">Payment Terms</p>
+                <p className="text-xs text-muted-foreground">{t("crm-payment-terms")}</p>
                 <p className="text-sm font-medium">{partner.preferred_payment_terms}</p>
               </div>
             )}
             {partner.preferred_incoterm && (
               <div className="p-2 rounded-md bg-muted/30">
-                <p className="text-xs text-muted-foreground">Incoterm</p>
+                <p className="text-xs text-muted-foreground">{t("crm-incoterm")}</p>
                 <p className="text-sm font-medium">{partner.preferred_incoterm}</p>
               </div>
             )}
             {partner.vat_number && (
               <div className="p-2 rounded-md bg-muted/30">
-                <p className="text-xs text-muted-foreground">VAT Number</p>
+                <p className="text-xs text-muted-foreground">{t("crm-vat-number")}</p>
                 <p className="text-sm font-medium">{partner.vat_number}</p>
               </div>
             )}
             {partner.registration_number && (
               <div className="p-2 rounded-md bg-muted/30">
-                <p className="text-xs text-muted-foreground">Registration No.</p>
+                <p className="text-xs text-muted-foreground">{t("crm-registration-no")}</p>
                 <p className="text-sm font-medium">{partner.registration_number}</p>
               </div>
             )}
@@ -809,12 +821,12 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
           {/* KYC details */}
           <div className="p-3 rounded-md border border-border/60">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <ShieldCheck className="size-3" /> KYC Verification
+              <ShieldCheck className="size-3" /> {t("crm-kyc-verification")}
             </p>
-            <p className="text-sm font-medium">{KYC_LABELS[partner.kyc_status]}</p>
+            <p className="text-sm font-medium">{t(KYC_LABEL_KEYS[partner.kyc_status])}</p>
             {partner.kyc_reviewed_by && (
               <p className="text-xs text-muted-foreground mt-1">
-                Reviewed {partner.kyc_reviewed_at ? fmtDate(partner.kyc_reviewed_at) : ""}
+                {t("crm-reviewed")} {partner.kyc_reviewed_at ? fmtDate(partner.kyc_reviewed_at) : ""}
               </p>
             )}
           </div>
@@ -822,17 +834,17 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
           {/* Portal info (summary in info tab) */}
           <div className="p-3 rounded-md border border-border/60">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <Star className="size-3" /> Portal Access
+              <Star className="size-3" /> {t("crm-portal-access-section")}
             </p>
             <p className="text-sm font-medium">
-              {partner.portal_enabled ? `Enabled (${partner.portal_level})` : "Disabled"}
+              {partner.portal_enabled ? t("crm-portal-enabled").replace("${tier}", partner.portal_level) : t("crm-portal-disabled")}
             </p>
           </div>
 
           {/* Notes */}
           {partner.notes && (
             <div className="text-sm mt-3">
-              <p className="text-xs text-muted-foreground mb-1">Notes</p>
+              <p className="text-xs text-muted-foreground mb-1">{t("crm-notes-label")}</p>
               <p className="whitespace-pre-wrap p-3 rounded-md bg-muted/50">{partner.notes}</p>
             </div>
           )}
@@ -846,14 +858,14 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
           {/* Created / Updated */}
           <div className="text-xs text-muted-foreground pt-2 border-t">
-            <p>Created {fmtDate(partner.created_at)}</p>
-            <p>Updated {fmtRelative(partner.updated_at)}</p>
+            <p>{t("crm-created-label")} {fmtDate(partner.created_at)}</p>
+            <p>{t("crm-updated-label")} {fmtRelative(partner.updated_at)}</p>
           </div>
         </TabsContent>
 
         <TabsContent value="contact" className="space-y-2 mt-3">
           {contactInfo.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No contact information.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">{t("crm-no-contact-info")}</p>
           ) : contactInfo.map((x) => {
             const Icon = x.icon;
             return (
@@ -869,7 +881,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
           {/* Contact person */}
           {(partner.contact_name || partner.contact_email || partner.contact_phone) && (
             <div className="pt-3 border-t mt-3">
-              <p className="text-xs text-muted-foreground mb-2">Contact Person</p>
+              <p className="text-xs text-muted-foreground mb-2">{t("crm-contact-person-section")}</p>
               <div className="space-y-1">
                 {partner.contact_name && <p className="text-sm">{partner.contact_name}</p>}
                 {partner.contact_email && <p className="text-sm text-muted-foreground">{partner.contact_email}</p>}
@@ -881,30 +893,30 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
         <TabsContent value="bank" className="space-y-2 mt-3">
           {(!partner.bank_name && !partner.bank_account && !partner.bank_swift && !partner.bank_iban) ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No bank details on file.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">{t("crm-no-bank-details")}</p>
           ) : (
             <div className="space-y-2">
               {partner.bank_name && (
                 <div className="p-2 rounded-md hover:bg-muted/30">
-                  <p className="text-xs text-muted-foreground">Bank Name</p>
+                  <p className="text-xs text-muted-foreground">{t("crm-bank-name")}</p>
                   <p className="text-sm">{partner.bank_name}</p>
                 </div>
               )}
               {partner.bank_account && (
                 <div className="p-2 rounded-md hover:bg-muted/30">
-                  <p className="text-xs text-muted-foreground">Account</p>
+                  <p className="text-xs text-muted-foreground">{t("crm-account")}</p>
                   <p className="text-sm font-mono tabular">{partner.bank_account}</p>
                 </div>
               )}
               {partner.bank_iban && (
                 <div className="p-2 rounded-md hover:bg-muted/30">
-                  <p className="text-xs text-muted-foreground">IBAN</p>
+                  <p className="text-xs text-muted-foreground">{t("crm-iban")}</p>
                   <p className="text-sm font-mono tabular">{partner.bank_iban}</p>
                 </div>
               )}
               {partner.bank_swift && (
                 <div className="p-2 rounded-md hover:bg-muted/30">
-                  <p className="text-xs text-muted-foreground">SWIFT / BIC</p>
+                  <p className="text-xs text-muted-foreground">{t("crm-swift-bic")}</p>
                   <p className="text-sm font-mono tabular">{partner.bank_swift}</p>
                 </div>
               )}
@@ -914,7 +926,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
         <TabsContent value="deals" className="mt-3">
           {deals.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No deals yet.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">{t("crm-no-deals-yet")}</p>
           ) : (
             <div className="space-y-2">
               {deals.map((d) => (
@@ -946,12 +958,12 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                     <div className="flex items-center gap-2">
                       {(() => { const Icon = PORTAL_STATUS_ICON[portalAccess.status]; return <Icon className="size-5" />; })()}
                       <div>
-                        <p className="text-sm font-medium">Portal Status</p>
-                        <p className="text-xs text-muted-foreground">{PORTAL_STATUS_LABELS[portalAccess.status]}</p>
+                        <p className="text-sm font-medium">{t("crm-portal-status")}</p>
+                        <p className="text-xs text-muted-foreground">{t(PORTAL_STATUS_LABEL_KEYS[portalAccess.status])}</p>
                       </div>
                     </div>
                     <Badge variant={PORTAL_STATUS_BADGE[portalAccess.status]} className="text-sm px-3 py-1">
-                      {PORTAL_STATUS_LABELS[portalAccess.status]}
+                      {t(PORTAL_STATUS_LABEL_KEYS[portalAccess.status])}
                     </Badge>
                   </div>
 
@@ -959,18 +971,18 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2 text-sm">
                       <CheckCircle2 className={`size-4 ${portalAccess.status !== "pending_approval" ? "text-emerald-500" : "text-muted-foreground"}`} />
-                      <span className={portalAccess.status === "pending_approval" ? "text-muted-foreground" : ""}>Approved</span>
+                      <span className={portalAccess.status === "pending_approval" ? "text-muted-foreground" : ""}>{t("crm-approved")}</span>
                       {portalAccess.approved_at && <span className="text-xs text-muted-foreground ml-auto">{fmtDate(portalAccess.approved_at)}</span>}
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Send className={`size-4 ${["invited", "active"].includes(portalAccess.status) ? "text-emerald-500" : "text-muted-foreground"}`} />
-                      <span className={!["invited", "active"].includes(portalAccess.status) ? "text-muted-foreground" : ""}>Invite Sent</span>
+                      <span className={!["invited", "active"].includes(portalAccess.status) ? "text-muted-foreground" : ""}>{t("crm-invite-sent")}</span>
                       {portalAccess.invited_at && <span className="text-xs text-muted-foreground ml-auto">{fmtDate(portalAccess.invited_at)}</span>}
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <CheckCircle2 className={`size-4 ${portalAccess.status === "active" ? "text-emerald-500" : "text-muted-foreground"}`} />
-                      <span className={portalAccess.status !== "active" ? "text-muted-foreground" : ""}>Active</span>
-                      {portalAccess.last_login_at && <span className="text-xs text-muted-foreground ml-auto">Last login {fmtRelative(portalAccess.last_login_at)}</span>}
+                      <span className={portalAccess.status !== "active" ? "text-muted-foreground" : ""}>{t("crm-portal-status-active")}</span>
+                      {portalAccess.last_login_at && <span className="text-xs text-muted-foreground ml-auto">{t("crm-last-login")} {fmtRelative(portalAccess.last_login_at)}</span>}
                     </div>
                   </div>
                 </CardContent>
@@ -979,23 +991,23 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
               {/* Portal Details */}
               <Card className="border-border/60 shadow-soft rounded-xl">
                 <CardContent className="p-4 space-y-3">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Details</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("crm-portal-details")}</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-2 rounded-md bg-muted/30">
-                      <p className="text-xs text-muted-foreground">Portal Email</p>
+                      <p className="text-xs text-muted-foreground">{t("crm-portal-email")}</p>
                       <p className="text-sm font-medium">{portalAccess.portal_email || "—"}</p>
                     </div>
                     <div className="p-2 rounded-md bg-muted/30">
-                      <p className="text-xs text-muted-foreground">Tier</p>
+                      <p className="text-xs text-muted-foreground">{t("crm-tier")}</p>
                       <p className="text-sm font-medium">{TIER_INFO[portalAccess.tier].label}</p>
                     </div>
                     <div className="p-2 rounded-md bg-muted/30">
-                      <p className="text-xs text-muted-foreground">Welcome Email</p>
-                      <p className="text-sm font-medium">{portalAccess.welcome_email_sent ? "Sent" : "Not sent"}</p>
+                      <p className="text-xs text-muted-foreground">{t("crm-welcome-email")}</p>
+                      <p className="text-sm font-medium">{portalAccess.welcome_email_sent ? t("crm-sent") : t("crm-not-sent")}</p>
                     </div>
                     <div className="p-2 rounded-md bg-muted/30">
-                      <p className="text-xs text-muted-foreground">Password Set</p>
-                      <p className="text-sm font-medium">{portalAccess.must_set_password ? "Pending" : "Yes"}</p>
+                      <p className="text-xs text-muted-foreground">{t("crm-password-set")}</p>
+                      <p className="text-sm font-medium">{portalAccess.must_set_password ? t("pending") : t("crm-yes")}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -1003,7 +1015,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
               {/* Actions */}
               <div className="space-y-2">
-                {/* Send Invite Email */}
+                {/* {t("crm-send-invite-email")} */}
                 {!portalAccess.welcome_email_sent && portalAccess.status !== "active" && (
                   <Button
                     className="w-full"
@@ -1015,7 +1027,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                     ) : (
                       <Send className="size-4 mr-2" />
                     )}
-                    Send Invite Email
+                    {t("crm-send-invite-email")}
                   </Button>
                 )}
 
@@ -1032,7 +1044,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                     ) : (
                       <Send className="size-4 mr-2" />
                     )}
-                    Re-send Invite Email
+                    {t("crm-re-send-invite-email")}
                   </Button>
                 )}
               </div>
@@ -1042,11 +1054,11 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <KeyRound className="size-4 text-muted-foreground" />
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Test Portal Login</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("crm-test-portal-login")}</p>
                   </div>
                   <div className="p-3 rounded-md bg-muted/30 space-y-2">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">Portal Email</p>
+                      <p className="text-xs text-muted-foreground">{t("crm-portal-email")}</p>
                       <div className="flex items-center gap-1">
                         <p className="text-sm font-mono">{portalAccess.portal_email || "—"}</p>
                         {portalAccess.portal_email && (
@@ -1054,7 +1066,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                             type="button"
                             onClick={() => copyToClipboard(portalAccess.portal_email!, "email")}
                             className="text-muted-foreground hover:text-foreground smooth"
-                            title="Copy email"
+                            title={t("crm-copy-email")}
                           >
                             {copiedEmail ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
                           </button>
@@ -1062,35 +1074,35 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">Status</p>
+                      <p className="text-xs text-muted-foreground">{t("status")}</p>
                       <Badge variant={PORTAL_STATUS_BADGE[portalAccess.status]} className="text-xs">
-                        {PORTAL_STATUS_LABELS[portalAccess.status]}
+                        {t(PORTAL_STATUS_LABEL_KEYS[portalAccess.status])}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">Password Set</p>
-                      <p className="text-sm font-medium">{portalAccess.must_set_password ? "No" : "Yes"}</p>
+                      <p className="text-xs text-muted-foreground">{t("crm-password-set")}</p>
+                      <p className="text-sm font-medium">{portalAccess.must_set_password ? t("crm-no-value") : t("crm-yes")}</p>
                     </div>
                   </div>
 
                   {/* Test Password Section */}
                   {testPassword && (
                     <div className="p-3 rounded-lg border border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-800 space-y-2">
-                      <p className="text-xs font-medium text-green-800 dark:text-green-300">Test Credentials</p>
+                      <p className="text-xs font-medium text-green-800 dark:text-green-300">{t("crm-test-credentials")}</p>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs text-muted-foreground">Email</p>
+                          <p className="text-xs text-muted-foreground">{t("email")}</p>
                           <code className="text-xs font-mono">{portalAccess.portal_email}</code>
                         </div>
                         <div className="flex items-center justify-between">
-                          <p className="text-xs text-muted-foreground">Password</p>
+                          <p className="text-xs text-muted-foreground">{t("crm-password")}</p>
                           <div className="flex items-center gap-1">
                             <code className="text-xs font-mono">{testPassword}</code>
                             <button
                               type="button"
                               onClick={() => copyToClipboard(testPassword, "pwd")}
                               className="text-muted-foreground hover:text-foreground smooth"
-                              title="Copy password"
+                              title={t("crm-copy-password")}
                             >
                               {copiedPwd ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
                             </button>
@@ -1113,7 +1125,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                       ) : (
                         <KeyRound className="size-4 mr-2" />
                       )}
-                      {testPassword ? "Reset Test Password" : "Set Test Password"}
+                      {testPassword ? t("crm-reset-test-password") : t("crm-set-test-password")}
                     </Button>
 
                     {/* Copy Portal Login URL */}
@@ -1127,10 +1139,10 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                       ) : (
                         <LinkIcon className="size-4 mr-2" />
                       )}
-                      {copiedUrl ? "Copied!" : "Copy Portal Login URL"}
+                      {copiedUrl ? t("crm-copied") : t("crm-copy-portal-login-url")}
                     </Button>
 
-                    {/* Open Portal Login */}
+                    {/* {t("crm-open-portal-login")} */}
                     <Button variant="outline" className="w-full" asChild>
                       <a
                         href={`/portal/login?email=${encodeURIComponent(portalAccess.portal_email || "")}`}
@@ -1138,7 +1150,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                         rel="noopener noreferrer"
                       >
                         <ExternalLink className="size-4 mr-2" />
-                        Open Portal Login
+                        {t("crm-open-portal-login")}
                       </a>
                     </Button>
                   </div>
@@ -1150,7 +1162,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="size-4 text-primary" />
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Portal Messages</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("crm-portal-messages")}</p>
                   </div>
 
                   {/* Message history */}
@@ -1161,7 +1173,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                     <Input
                       value={adminMessage}
                       onChange={(e) => setAdminMessage(e.target.value)}
-                      placeholder="Type a message to the client…"
+                      placeholder={t("crm-type-message")}
                       disabled={sendingMessage}
                     />
                     <Button
@@ -1179,12 +1191,12 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                             const e = await r.json().catch(() => ({}));
                             throw new Error(e.error || "Failed");
                           }
-                          toast.success("Message sent to portal client.");
+                          toast.success(t("crm-message-sent"));
                           setAdminMessage("");
                           // Refresh message thread
                           setMessageRefreshKey(k => k + 1);
                         } catch (e: any) {
-                          toast.error(e.message || "Failed to send message.");
+                          toast.error(e.message || t("crm-failed-send-invite"));
                         } finally {
                           setSendingMessage(false);
                         }
@@ -1205,14 +1217,14 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
                   <KeyRound className="size-8 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="font-medium">No Portal Access</p>
+                  <p className="font-medium">{t("crm-no-portal-access")}</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Activate the portal to allow this partner to view offers, submit RFQs, and manage their account online.
+                    {t("crm-activate-portal-desc")}
                   </p>
                 </div>
                 <Button onClick={() => setShowActivateDialog(true)} size="lg">
                   <Zap className="size-4 mr-2" />
-                  Activate Portal
+                  {t("crm-activate-portal")}
                 </Button>
               </CardContent>
             </Card>
@@ -1226,32 +1238,32 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="size-5" />
-              Activate Portal Access
+              {t("crm-activate-portal-access")}
             </DialogTitle>
             <DialogDescription>
-              Create a portal account for {partner.name}. They&apos;ll receive an invite email to set up their password.
+              {t("crm-activate-portal-desc-2").replace("${name}", partner.name)}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-2">
             {/* Portal Email */}
             <div className="space-y-2">
-              <Label htmlFor="portal-email">Portal Email</Label>
+              <Label htmlFor="portal-email">{t("crm-portal-email")}</Label>
               <Input
                 id="portal-email"
                 type="email"
                 value={portalEmail}
                 onChange={(e) => setPortalEmail(e.target.value)}
-                placeholder="partner@company.com"
+                placeholder={t("crm-portal-email-ph")}
               />
               <p className="text-xs text-muted-foreground">
-                This email will be used for portal login. Auto-filled from partner email.
+                {t("crm-portal-email-desc")}
               </p>
             </div>
 
             {/* Tier Selection */}
             <div className="space-y-3">
-              <Label>Access Tier</Label>
+              <Label>{t("crm-access-tier")}</Label>
               <div className="space-y-2">
                 {ORDERED_TIERS.map((meta) => {
                   const tier = meta.value;
@@ -1291,7 +1303,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setShowActivateDialog(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               onClick={handleActivatePortal}
@@ -1302,7 +1314,7 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
               ) : (
                 <Zap className="size-4 mr-2" />
               )}
-              Create & Invite
+              {t("crm-create-and-invite")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1313,17 +1325,17 @@ function PartnerDetail({ partner, deals }: { partner: Partner; deals: any[] }) {
 
 // ---- Visual type buttons for the form ----
 const TYPE_BUTTONS = [
-  { value: "buyer" as PartnerType, label: "Buyer", description: "Buys from you", icon: "🛒" },
-  { value: "supplier" as PartnerType, label: "Supplier", description: "Sells to you", icon: "📦" },
-  { value: "both" as PartnerType, label: "Both", description: "Buyer & supplier", icon: "🔄" },
-  { value: "agent" as PartnerType, label: "Agent", description: "Commission agent", icon: "💼" },
+  { value: "buyer" as PartnerType, labelKey: "crm-type-buyer", descriptionKey: "crm-type-buyer-desc", icon: "🛒" },
+  { value: "supplier" as PartnerType, labelKey: "crm-type-supplier", descriptionKey: "crm-type-supplier-desc", icon: "📦" },
+  { value: "both" as PartnerType, labelKey: "crm-type-both", descriptionKey: "crm-type-both-desc", icon: "🔄" },
+  { value: "agent" as PartnerType, labelKey: "crm-type-agent", descriptionKey: "crm-type-agent-desc", icon: "💼" },
 ] as const;
 
 const OTHER_TYPES = [
-  { value: "logistics", label: "Logistics Provider" },
-  { value: "customs", label: "Customs Broker" },
-  { value: "bank", label: "Bank / Financial" },
-  { value: "inspector", label: "Inspection Agency" },
+  { value: "logistics", labelKey: "crm-type-logistics-provider" },
+  { value: "customs", labelKey: "crm-type-customs-broker" },
+  { value: "bank", labelKey: "crm-type-bank-financial" },
+  { value: "inspector", labelKey: "crm-type-inspection-agency" },
 ];
 
 // ---- Form dialog ----
@@ -1335,6 +1347,7 @@ function PartnerFormDialog({
   partner: Partner | null;
   onSaved: () => void;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -1389,8 +1402,8 @@ function PartnerFormDialog({
   }, [isEditing]);
 
   async function save() {
-    if (!form.name?.trim()) { toast.error("Name is required."); return; }
-    if (quickCreate && !form.email?.trim()) { toast.error("Email is required for Quick Create."); return; }
+    if (!form.name?.trim()) { toast.error(t("crm-name-required-toast")); return; }
+    if (quickCreate && !form.email?.trim()) { toast.error(t("crm-email-required-quick")); return; }
     setSaving(true);
     try {
       const method = partner ? "PUT" : "POST";
@@ -1405,10 +1418,10 @@ function PartnerFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(partner ? "Partner updated." : `"${form.name}" created successfully!`);
+      toast.success(partner ? t("crm-partner-updated") : t("crm-partner-created").replace("${name}", form.name || ""));
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Saving failed.");
+      toast.error(e.message || t("crm-saving-failed-toast"));
     } finally {
       setSaving(false);
     }
@@ -1418,9 +1431,9 @@ function PartnerFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>{partner ? "Edit partner" : "New partner"}</DialogTitle>
+          <DialogTitle>{partner ? t("crm-edit-partner") : t("crm-new-partner")}</DialogTitle>
           <DialogDescription>
-            {partner ? "Update partner information." : quickCreate ? "Just the basics — name and email to get started." : "Add detailed partner information."}
+            {partner ? t("crm-update-partner-info") : quickCreate ? t("crm-quick-create-basics") : t("crm-add-detailed-partner-info")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1437,7 +1450,7 @@ function PartnerFormDialog({
                   className="gap-1"
                 >
                   <Zap className="size-3.5" />
-                  Quick Create
+                  {t("crm-quick-create")}
                 </Button>
                 <Button
                   size="sm"
@@ -1446,7 +1459,7 @@ function PartnerFormDialog({
                   className="gap-1"
                 >
                   <Building2 className="size-3.5" />
-                  Full Form
+                  {t("crm-full-form")}
                 </Button>
               </div>
             )}
@@ -1456,12 +1469,12 @@ function PartnerFormDialog({
               <div className="space-y-4">
                 {/* Name */}
                 <div className="space-y-2">
-                  <Label htmlFor="quick-name">Partner Name *</Label>
+                  <Label htmlFor="quick-name">{t("crm-partner-name-required")}</Label>
                   <Input
                     id="quick-name"
                     value={form.name || ""}
                     onChange={(e) => handleNameChange(e.target.value)}
-                    placeholder="Acme Trading Ltd."
+                    placeholder={t("crm-partner-name-ph")}
                     className="text-lg"
                     autoFocus
                   />
@@ -1469,18 +1482,18 @@ function PartnerFormDialog({
 
                 {/* Type - Visual Buttons */}
                 <div className="space-y-2">
-                  <Label>Partner Type</Label>
+                  <Label>{t("crm-partner-type-label")}</Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {TYPE_BUTTONS.map((t) => {
-                      const isSelected = form.type === t.value && !showOtherTypes;
+                    {TYPE_BUTTONS.map((tb) => {
+                      const isSelected = form.type === tb.value && !showOtherTypes;
                       return (
                         <button
-                          key={t.value}
+                          key={tb.value}
                           type="button"
                           onClick={() => {
-                            set("type", t.value);
+                            set("type", tb.value);
                             setShowOtherTypes(false);
-                            if (t.value === "agent") {
+                            if (tb.value === "agent") {
                               set("is_commissioner" as keyof Partner, true as any);
                             } else {
                               set("is_commissioner" as keyof Partner, false as any);
@@ -1492,10 +1505,10 @@ function PartnerFormDialog({
                               : "border-border/60 hover:border-border hover:bg-muted/30"
                           }`}
                         >
-                          <span className="text-xl">{t.icon}</span>
+                          <span className="text-xl">{tb.icon}</span>
                           <div>
-                            <p className={`font-medium text-sm ${isSelected ? "text-primary" : ""}`}>{t.label}</p>
-                            <p className="text-xs text-muted-foreground">{t.description}</p>
+                            <p className={`font-medium text-sm ${isSelected ? "text-primary" : ""}`}>{t(tb.labelKey)}</p>
+                            <p className="text-xs text-muted-foreground">{t(tb.descriptionKey)}</p>
                           </div>
                         </button>
                       );
@@ -1508,16 +1521,16 @@ function PartnerFormDialog({
                       onClick={() => setShowOtherTypes(true)}
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline"
                     >
-                      Other types (logistics, customs, bank, inspector)…
+                      {t("crm-other-types-link")}
                     </button>
                   )}
                   {showOtherTypes && (
                     <div className="space-y-1.5">
-                      <Label>Specific Type</Label>
+                      <Label>{t("crm-specific-type")}</Label>
                       <Select value={form.type || "logistics"} onValueChange={(v) => set("type", v as PartnerType)}>
-                        <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={t("crm-select-type")} /></SelectTrigger>
                         <SelectContent>
-                          {OTHER_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                          {OTHER_TYPES.map((ot) => <SelectItem key={ot.value} value={ot.value}>{t(ot.labelKey)}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1526,24 +1539,24 @@ function PartnerFormDialog({
 
                 {/* Email */}
                 <div className="space-y-2">
-                  <Label htmlFor="quick-email">Email *</Label>
+                  <Label htmlFor="quick-email">{t("email")} *</Label>
                   <Input
                     id="quick-email"
                     type="email"
                     value={form.email || ""}
                     onChange={(e) => set("email", e.target.value)}
-                    placeholder="contact@company.com"
+                    placeholder={t("crm-email-ph")}
                   />
                 </div>
 
                 {/* Phone (optional) */}
                 <div className="space-y-2">
-                  <Label htmlFor="quick-phone">Phone <span className="text-muted-foreground">(optional)</span></Label>
+                  <Label htmlFor="quick-phone">{t("crm-contact-phone")} <span className="text-muted-foreground">{t("crm-optional")}</span></Label>
                   <Input
                     id="quick-phone"
                     value={form.phone || ""}
                     onChange={(e) => set("phone", e.target.value)}
-                    placeholder="+1 555 123 4567"
+                    placeholder={t("crm-phone-ph")}
                   />
                 </div>
               </div>
@@ -1552,24 +1565,24 @@ function PartnerFormDialog({
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="md:col-span-2 space-y-1.5">
-                    <Label>Partner Name *</Label>
+                    <Label>{t("crm-partner-name-required")}</Label>
                     <Input value={form.name || ""} onChange={(e) => handleNameChange(e.target.value)} placeholder="Acme Trading Ltd." />
                   </div>
 
                   {/* Type - Visual Buttons for full form too */}
                   <div className="md:col-span-2 space-y-2">
-                    <Label>Type</Label>
+                    <Label>{t("type")}</Label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {TYPE_BUTTONS.map((t) => {
-                        const isSelected = form.type === t.value && !showOtherTypes;
+                      {TYPE_BUTTONS.map((tb) => {
+                        const isSelected = form.type === tb.value && !showOtherTypes;
                         return (
                           <button
-                            key={t.value}
+                            key={tb.value}
                             type="button"
                             onClick={() => {
-                              set("type", t.value);
+                              set("type", tb.value);
                               setShowOtherTypes(false);
-                              if (t.value === "agent") {
+                              if (tb.value === "agent") {
                                 set("is_commissioner" as keyof Partner, true as any);
                               } else {
                                 set("is_commissioner" as keyof Partner, false as any);
@@ -1581,8 +1594,8 @@ function PartnerFormDialog({
                                 : "border-border/60 hover:border-border hover:bg-muted/30"
                             }`}
                           >
-                            <span className="text-lg">{t.icon}</span>
-                            <p className={`text-xs font-medium ${isSelected ? "text-primary" : ""}`}>{t.label}</p>
+                            <span className="text-lg">{tb.icon}</span>
+                            <p className={`text-xs font-medium ${isSelected ? "text-primary" : ""}`}>{t(tb.labelKey)}</p>
                           </button>
                         );
                       })}
@@ -1594,16 +1607,16 @@ function PartnerFormDialog({
                         onClick={() => setShowOtherTypes(true)}
                         className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline"
                       >
-                        Other types…
+                        {t("crm-other-types-link-short")}
                       </button>
                     )}
                     {showOtherTypes && (
                       <div className="space-y-1.5">
-                        <Label>Specific Type</Label>
+                        <Label>{t("crm-specific-type")}</Label>
                         <Select value={form.type || "logistics"} onValueChange={(v) => set("type", v as PartnerType)}>
-                          <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder={t("crm-select-type")} /></SelectTrigger>
                           <SelectContent>
-                            {OTHER_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                            {OTHER_TYPES.map((ot) => <SelectItem key={ot.value} value={ot.value}>{t(ot.labelKey)}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1611,11 +1624,11 @@ function PartnerFormDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label>Email</Label>
+                    <Label>{t("email")}</Label>
                     <Input type="email" value={form.email || ""} onChange={(e) => set("email", e.target.value)} placeholder="contact@company.com" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Phone</Label>
+                    <Label>{t("crm-contact-phone")}</Label>
                     <Input value={form.phone || ""} onChange={(e) => set("phone", e.target.value)} placeholder="+1 555 123 4567" />
                   </div>
                 </div>
@@ -1628,9 +1641,9 @@ function PartnerFormDialog({
                       className="flex items-center gap-2 w-full py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {moreOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                      More Details
+                      {t("crm-more-details")}
                       {!moreOpen && (form.address_line || form.city || form.tax_id || form.bank_name || form.notes || form.contact_name) && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Filled</Badge>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t("crm-filled")}</Badge>
                       )}
                     </button>
                   </CollapsibleTrigger>
@@ -1639,105 +1652,105 @@ function PartnerFormDialog({
 
                       {/* Address & Trade */}
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Address &amp; Trade</p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{t("crm-address-trade")}</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
-                            <Label>Status</Label>
+                            <Label>{t("status")}</Label>
                             <Select value={form.status || "active"} onValueChange={(v) => set("status", v as Partner["status"])}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
-                                <SelectItem value="blacklisted">Blacklisted</SelectItem>
+                                <SelectItem value="active">{t("active")}</SelectItem>
+                                <SelectItem value="inactive">{t("inactive")}</SelectItem>
+                                <SelectItem value="blacklisted">{t("crm-blacklisted")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Entity Type</Label>
+                            <Label>{t("crm-entity-type-label")}</Label>
                             <Select value={form.entity_type || "company"} onValueChange={(v) => set("entity_type", v as PartnerEntityType)}>
-                              <SelectTrigger><SelectValue placeholder="Select entity type" /></SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder={t("crm-select-entity-type")} /></SelectTrigger>
                               <SelectContent>
-                                {ENTITY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                {ENTITY_TYPES.map((et) => <SelectItem key={et.value} value={et.value}>{et.label}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Tax ID</Label>
-                            <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} placeholder="e.g. VAT number" />
+                            <Label>{t("crm-tax-id")}</Label>
+                            <Input value={form.tax_id || ""} onChange={(e) => set("tax_id", e.target.value)} placeholder={t("crm-tax-id-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>VAT Number</Label>
-                            <Input value={form.vat_number || ""} onChange={(e) => set("vat_number", e.target.value)} placeholder="e.g. EU VAT number" />
+                            <Label>{t("crm-vat-number")}</Label>
+                            <Input value={form.vat_number || ""} onChange={(e) => set("vat_number", e.target.value)} placeholder={t("crm-vat-number-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Registration No.</Label>
-                            <Input value={form.registration_number || ""} onChange={(e) => set("registration_number", e.target.value)} placeholder="Company registration number" />
+                            <Label>{t("crm-registration-no")}</Label>
+                            <Input value={form.registration_number || ""} onChange={(e) => set("registration_number", e.target.value)} placeholder={t("crm-registration-no-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Website</Label>
+                            <Label>{t("crm-website")}</Label>
                             <Input value={form.website || ""} onChange={(e) => set("website", e.target.value)} placeholder="https://" />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Currency</Label>
+                            <Label>{t("currency")}</Label>
                             <Select value={form.preferred_currency || "USD"} onValueChange={(v) => set("preferred_currency", v)}>
-                              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder={t("crm-select-currency")} /></SelectTrigger>
                               <SelectContent className="max-h-72">
                                 {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Payment Terms</Label>
+                            <Label>{t("crm-payment-terms")}</Label>
                             <Select value={form.preferred_payment_terms || "net30"} onValueChange={(v) => set("preferred_payment_terms", v)}>
-                              <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder={t("crm-select-payment-terms")} /></SelectTrigger>
                               <SelectContent>
-                                {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                                {PAYMENT_TERMS_LOCAL.map((pt) => <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="md:col-span-2 space-y-1.5">
-                            <Label>Address</Label>
-                            <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} placeholder="Street and number" />
+                            <Label>{t("crm-address")}</Label>
+                            <Input value={form.address_line || ""} onChange={(e) => set("address_line", e.target.value)} placeholder={t("crm-address")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>City</Label>
+                            <Label>{t("crm-city")}</Label>
                             <Input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>State / Region</Label>
+                            <Label>{t("crm-state-region")}</Label>
                             <Input value={form.state || ""} onChange={(e) => set("state", e.target.value)} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Postal code</Label>
+                            <Label>{t("crm-postal-code")}</Label>
                             <Input value={form.postal_code || ""} onChange={(e) => set("postal_code", e.target.value)} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Country</Label>
+                            <Label>{t("crm-country")}</Label>
                             <SearchableSelect
                               options={getCountriesForSelect()}
                               value={form.country || ""}
                               onChange={(v) => set("country", v)}
-                              placeholder="Select country…"
-                              searchPlaceholder="Search countries…"
+                              placeholder={t("crm-select-country")}
+                              searchPlaceholder={t("crm-search-countries")}
                               clearable
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>City</Label>
+                            <Label>{t("crm-city")}</Label>
                             {form.country ? (
                               <SearchableSelect
                                 options={getCitiesForSelect(form.country)}
                                 value={form.city || ""}
                                 onChange={(v) => set("city", v)}
-                                placeholder="Select city…"
-                                searchPlaceholder="Search cities…"
+                                placeholder={t("crm-select-city")}
+                                searchPlaceholder={t("crm-search-cities")}
                                 clearable
                               />
                             ) : (
                               <Input
                                 value={form.city || ""}
                                 onChange={(e) => set("city", e.target.value)}
-                                placeholder="Select country first…"
+                                placeholder={t("crm-select-country-first")}
                               />
                             )}
                           </div>
@@ -1746,18 +1759,18 @@ function PartnerFormDialog({
 
                       {/* Contact Person */}
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Contact Person</p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{t("crm-contact-person-section")}</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
-                            <Label>Name</Label>
-                            <Input value={form.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} placeholder="John Doe" />
+                            <Label>{t("name")}</Label>
+                            <Input value={form.contact_name || ""} onChange={(e) => set("contact_name", e.target.value)} placeholder={t("crm-contact-name-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Email</Label>
-                            <Input type="email" value={form.contact_email || ""} onChange={(e) => set("contact_email", e.target.value)} placeholder="john@company.com" />
+                            <Label>{t("email")}</Label>
+                            <Input type="email" value={form.contact_email || ""} onChange={(e) => set("contact_email", e.target.value)} placeholder={t("crm-contact-email-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Phone</Label>
+                            <Label>{t("crm-contact-phone")}</Label>
                             <Input value={form.contact_phone || ""} onChange={(e) => set("contact_phone", e.target.value)} placeholder="+1 555 123 4567" />
                           </div>
                         </div>
@@ -1765,49 +1778,49 @@ function PartnerFormDialog({
 
                       {/* Bank Details */}
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Bank Details</p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{t("crm-bank-details-section")}</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
-                            <Label>Bank Name</Label>
-                            <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} placeholder="e.g. Deutsche Bank" />
+                            <Label>{t("crm-bank-name")}</Label>
+                            <Input value={form.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} placeholder={t("crm-bank-name-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>Account</Label>
-                            <Input value={form.bank_account || ""} onChange={(e) => set("bank_account", e.target.value)} placeholder="IBAN or account number" />
+                            <Label>{t("crm-account")}</Label>
+                            <Input value={form.bank_account || ""} onChange={(e) => set("bank_account", e.target.value)} placeholder={t("crm-account-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>IBAN</Label>
-                            <Input value={form.bank_iban || ""} onChange={(e) => set("bank_iban", e.target.value)} placeholder="e.g. DE89 3704 0044 0532 0130 00" />
+                            <Label>{t("crm-iban")}</Label>
+                            <Input value={form.bank_iban || ""} onChange={(e) => set("bank_iban", e.target.value)} placeholder={t("crm-iban-ph")} />
                           </div>
                           <div className="space-y-1.5">
-                            <Label>SWIFT / BIC</Label>
-                            <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} placeholder="e.g. DEUTDEFF" />
+                            <Label>{t("crm-swift-bic")}</Label>
+                            <Input value={form.bank_swift || ""} onChange={(e) => set("bank_swift", e.target.value)} placeholder={t("crm-swift-ph")} />
                           </div>
                         </div>
                       </div>
 
                       {/* Notes & Options */}
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Notes &amp; Options</p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{t("crm-notes-options")}</p>
                         <div className="space-y-3">
                           <div className="space-y-1.5">
-                            <Label>Notes</Label>
-                            <Textarea rows={3} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder="Any additional notes about this partner…" />
+                            <Label>{t("crm-notes-label")}</Label>
+                            <Textarea rows={3} value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} placeholder={t("crm-partner-notes-ph")} />
                           </div>
 
                           <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
                             <Switch checked={!!form.portal_enabled} onCheckedChange={(v) => set("portal_enabled", v)} />
                             <div>
-                              <p className="text-sm font-medium">Portal access</p>
-                              <p className="text-xs text-muted-foreground">Allow partner portal access.</p>
+                              <p className="text-sm font-medium">{t("crm-portal-access-toggle")}</p>
+                              <p className="text-xs text-muted-foreground">{t("crm-portal-access-toggle-desc")}</p>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
                             <Switch checked={!!form.is_commissioner} onCheckedChange={(v) => set("is_commissioner", v)} />
                             <div>
-                              <p className="text-sm font-medium text-primary">Commission Agent</p>
-                              <p className="text-xs text-muted-foreground">Mark this partner as a commission agent who earns from deals they introduce.</p>
+                              <p className="text-sm font-medium text-primary">{t("crm-commission-agent-section")}</p>
+                              <p className="text-xs text-muted-foreground">{t("crm-commission-agent-desc")}</p>
                             </div>
                           </div>
                         </div>
@@ -1822,9 +1835,9 @@ function PartnerFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : (partner ? "Save changes" : quickCreate ? "Create partner" : "Create partner")}
+            {saving ? t("crm-saving-ellipsis") : (partner ? t("crm-save-changes") : quickCreate ? t("crm-create-partner") : t("crm-create-partner"))}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1845,6 +1858,7 @@ function PortalMessageThread({
   tenantId: string;
   refreshKey?: number;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -1891,7 +1905,7 @@ function PortalMessageThread({
   if (messages.length === 0) {
     return (
       <div className="text-center py-4 text-xs text-muted-foreground">
-        No messages yet. Send a message below to start a conversation.
+        {t("crm-no-messages")}
       </div>
     );
   }

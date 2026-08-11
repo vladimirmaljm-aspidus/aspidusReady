@@ -40,6 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import type { Partner } from "@/lib/supabase/types";
+import { useT } from "@/lib/i18n/store";
 
 export interface PartnerPickerProps {
   /** Currently selected partner_id (controlled). */
@@ -71,13 +72,14 @@ export function PartnerPicker({
   onSelect,
   filterType,
   allowClear = true,
-  placeholder = "Search partners…",
+  placeholder,
   fallbackName,
   disabled,
   className,
 }: PartnerPickerProps) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -125,6 +127,7 @@ export function PartnerPicker({
   // parent-provided name so editing existing records still shows something.
   const selected = allPartners.find((p) => p.id === value) || null;
   const showName = selected?.name || fallbackName || "";
+  const triggerPlaceholder = placeholder || t("crm-no-partner");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -154,7 +157,7 @@ export function PartnerPicker({
           ) : (
             <span className="flex items-center gap-1.5">
               <Search className="size-3.5" />
-              <span className="text-sm">{placeholder}</span>
+              <span className="text-sm">{triggerPlaceholder}</span>
             </span>
           )}
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
@@ -163,7 +166,7 @@ export function PartnerPicker({
       <PopoverContent className="w-[480px] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search by name, email, country, city…"
+            placeholder={t("crm-search-partners-by")}
             value={search}
             onValueChange={setSearch}
           />
@@ -172,11 +175,11 @@ export function PartnerPicker({
               {isLoading || (isFetching && !allPartners.length) ? (
                 <span className="flex items-center justify-center gap-1.5">
                   <Search className="size-3.5 animate-spin" />
-                  Loading partners…
+                  {t("crm-loading-partners")}
                 </span>
               ) : (
                 <span>
-                  No partners match &ldquo;{search}&rdquo;.
+                  {t("crm-no-partners-match").replace("{search}", search)}
                 </span>
               )}
             </CommandEmpty>
@@ -192,12 +195,12 @@ export function PartnerPicker({
                   className="text-muted-foreground"
                 >
                   <UserX className="size-4" />
-                  <span>No partner</span>
+                  <span>{t("crm-no-partner")}</span>
                 </CommandItem>
               </CommandGroup>
             )}
 
-            <CommandGroup heading={`${filterType ? filterType[0].toUpperCase() + filterType.slice(1) + "s" : "Partners"} (${filtered.length})`}>
+            <CommandGroup heading={(filterType ? t("crm-partner-type-prefix").replace("{type}", filterType.charAt(0).toUpperCase() + filterType.slice(1)) : t("partners")) + ` (${filtered.length})`}>
               {filtered.map((p) => (
                 <PartnerItem
                   key={p.id}

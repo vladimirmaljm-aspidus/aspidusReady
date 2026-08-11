@@ -193,6 +193,50 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-windows": "Windows",
     "log-device-linux": "Linux",
     "log-device-web": "Web",
+
+    // ── Trade Calculator — transport modes & hints ──
+    "log-transport-sea-container": "Sea Freight — Container",
+    "log-transport-sea-bulk": "Sea Freight — Bulk Vessel",
+    "log-transport-road": "Road Transport",
+    "log-transport-rail": "Rail Freight",
+    "log-transport-air": "Air Freight",
+    "log-transport-multimodal": "Multimodal",
+    "log-transport-sea-container-hint": "Containerized (20ft / 40ft / 40HC)",
+    "log-transport-sea-bulk-hint": "Whole-ship charter, per-MT freight rate",
+    "log-transport-road-hint": "Truck(s) — standard, reefer, tanker, flatbed",
+    "log-transport-rail-hint": "Wagons / containers on flatcars",
+    "log-transport-air-hint": "Air Waybill (AWB) — chargeable weight",
+    "log-transport-multimodal-hint": "Combined sea + road + rail",
+    "log-select-transport-mode-hint": "Select a transport mode to see applicable fields.",
+    "log-transport-mode": "Transport mode",
+
+    // ── Trade Calculator — truck types ──
+    "log-truck-standard": "Standard Dry Van",
+    "log-truck-refrigerated": "Refrigerated (Reefer)",
+    "log-truck-tanker": "Tanker",
+    "log-truck-flatbed": "Flatbed",
+    "log-truck-lowboy": "Lowboy / Heavy Haul",
+    "log-truck-type": "Truck type",
+    "log-num-trucks": "Num trucks",
+    "log-truck-fields-hint": "Use the Loading port field below for the pickup address and the Delivery port field for the drop-off address.",
+
+    // ── Trade Calculator — container / vessel / air fields ──
+    "log-container-type": "Container type",
+    "log-num-containers": "Num containers",
+    "log-num-wagons-containers": "Num wagons / containers",
+    "log-vessel-capacity": "Vessel capacity (MT)",
+    "log-vessel-capacity-placeholder": "e.g. 30000",
+    "log-freight-rate-per-mt": "Freight rate / MT",
+    "log-freight-rate-mt-placeholder": "Freight rate per metric ton",
+    "log-vessel-fields-hint": "Use the Loading & Delivery port fields below for port of loading / discharge. Vessel capacity & per-MT rate are advisory — add them as a FREIGHT cost line.",
+    "log-chargeable-weight": "Chargeable weight (kg)",
+    "log-chargeable-weight-placeholder": "Greater of gross or volumetric weight",
+    "log-air-fields-hint": "Air freight uses IATA AWB. Use Loading & Delivery port fields for origin / destination airports.",
+
+    // ── Trade Calculator — ports ──
+    "log-loading-port": "Loading port",
+    "log-delivery-port": "Delivery port",
+    "log-port-autocomplete-placeholder": "Start typing port name…",
   },
   sr: {
     "log-marker-border": "Granični prelaz",
@@ -383,6 +427,50 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-windows": "Windows",
     "log-device-linux": "Linux",
     "log-device-web": "Veb",
+
+    // ── Trade Calculator — transport modes & hints ──
+    "log-transport-sea-container": "Pomorski transport — kontejnerski",
+    "log-transport-sea-bulk": "Pomorski transport — rasuti teret",
+    "log-transport-road": "Drumski transport",
+    "log-transport-rail": "Železnički transport",
+    "log-transport-air": "Vazdušni transport",
+    "log-transport-multimodal": "Multimodalni",
+    "log-transport-sea-container-hint": "Kontejnerski (20ft / 40ft / 40HC)",
+    "log-transport-sea-bulk-hint": "Iznajmljen ceo brod, cena po MT",
+    "log-transport-road-hint": "Kamioni — standard, hladnjača, cisterna, platforma",
+    "log-transport-rail-hint": "Vagoni / kontejneri na platformama",
+    "log-transport-air-hint": "AWB — naplativa težina",
+    "log-transport-multimodal-hint": "Kombinovano more + drum + železnica",
+    "log-select-transport-mode-hint": "Izaberite mod transporta da vidite relevantna polja.",
+    "log-transport-mode": "Mod transporta",
+
+    // ── Trade Calculator — truck types ──
+    "log-truck-standard": "Standardni suvi kamion",
+    "log-truck-refrigerated": "Hladnjača",
+    "log-truck-tanker": "Cisterna",
+    "log-truck-flatbed": "Platforma",
+    "log-truck-lowboy": "Niskoprofilni / teški teret",
+    "log-truck-type": "Tip kamiona",
+    "log-num-trucks": "Br. kamiona",
+    "log-truck-fields-hint": "Koristite polje „Luka utovara“ za adresu preuzimanja i polje „Luka istovara“ za adresu dostave.",
+
+    // ── Trade Calculator — container / vessel / air fields ──
+    "log-container-type": "Tip kontejnera",
+    "log-num-containers": "Br. kontejnera",
+    "log-num-wagons-containers": "Br. vagona / kontejnera",
+    "log-vessel-capacity": "Kapacitet broda (MT)",
+    "log-vessel-capacity-placeholder": "npr. 30000",
+    "log-freight-rate-per-mt": "Cena vožnje / MT",
+    "log-freight-rate-mt-placeholder": "Cena vožnje po metričkoj toni",
+    "log-vessel-fields-hint": "Koristite polja „Luka utovara“ i „Luka istovara“ ispod za luku utovara / istovara. Kapacitet broda i cena po MT su informativni — dodajte ih kao stavku vožnje.",
+    "log-chargeable-weight": "Naplativa težina (kg)",
+    "log-chargeable-weight-placeholder": "Veća od bruto ili zapreminske težine",
+    "log-air-fields-hint": "Vazdušni transport koristi IATA AWB. Koristite polja „Luka utovara“ i „Luka istovara“ za aerodrome polaska / dolaska.",
+
+    // ── Trade Calculator — ports ──
+    "log-loading-port": "Luka utovara",
+    "log-delivery-port": "Luka istovara",
+    "log-port-autocomplete-placeholder": "Krenite da kucate naziv luke…",
   },
   tr: {
     "log-marker-border": "Sınır geçişi",
@@ -573,6 +661,50 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-windows": "Windows",
     "log-device-linux": "Linux",
     "log-device-web": "Web",
+
+    // ── Trade Calculator — transport modes & hints ──
+    "log-transport-sea-container": "Deniz Taşımacılığı — Konteyner",
+    "log-transport-sea-bulk": "Deniz Taşımacılığı — Dökme Yük",
+    "log-transport-road": "Kara Taşımacılığı",
+    "log-transport-rail": "Demiryolu Taşımacılığı",
+    "log-transport-air": "Hava Taşımacılığı",
+    "log-transport-multimodal": "Multimodal",
+    "log-transport-sea-container-hint": "Konteynerli (20ft / 40ft / 40HC)",
+    "log-transport-sea-bulk-hint": "Tüm gemi kiralama, MT başına navlun",
+    "log-transport-road-hint": "Kamyon(lar) — standart, reefer, tanker, flatbed",
+    "log-transport-rail-hint": "Vagonlar / flatcar üzerinde konteynerler",
+    "log-transport-air-hint": "AWB — tahakkuk eden ağırlık",
+    "log-transport-multimodal-hint": "Kombine deniz + kara + demiryolu",
+    "log-select-transport-mode-hint": "Uygun alanları görmek için bir taşıma modu seçin.",
+    "log-transport-mode": "Taşıma modu",
+
+    // ── Trade Calculator — truck types ──
+    "log-truck-standard": "Standart Kuru Dorse",
+    "log-truck-refrigerated": "Refrigerated (Reefer)",
+    "log-truck-tanker": "Tanker",
+    "log-truck-flatbed": "Flatbed",
+    "log-truck-lowboy": "Lowboy / Ağır Yük",
+    "log-truck-type": "Kamyon tipi",
+    "log-num-trucks": "Kamyon sayısı",
+    "log-truck-fields-hint": "Alış adresi için aşağıdaki Yükleme limanı alanını, teslimat adresi için Teslimat limanı alanını kullanın.",
+
+    // ── Trade Calculator — container / vessel / air fields ──
+    "log-container-type": "Konteyner tipi",
+    "log-num-containers": "Konteyner sayısı",
+    "log-num-wagons-containers": "Vagon / konteyner sayısı",
+    "log-vessel-capacity": "Gemi kapasitesi (MT)",
+    "log-vessel-capacity-placeholder": "örn. 30000",
+    "log-freight-rate-per-mt": "Navlun / MT",
+    "log-freight-rate-mt-placeholder": "Metrik ton başına navlun oranı",
+    "log-vessel-fields-hint": "Yükleme / boşaltma limanı için aşağıdaki Yükleme & Teslimat limanı alanlarını kullanın. Gemi kapasitesi ve MT başına oran bilgilendirme amaçlıdır — bunları bir NAVLUN maliyet satırı olarak ekleyin.",
+    "log-chargeable-weight": "Tahakkuk eden ağırlık (kg)",
+    "log-chargeable-weight-placeholder": "Brüt veya hacimsel ağırlığın büyüğü",
+    "log-air-fields-hint": "Hava taşımacılığı IATA AWB kullanır. Kalkış / varış havalimanları için Yükleme & Teslimat limanı alanlarını kullanın.",
+
+    // ── Trade Calculator — ports ──
+    "log-loading-port": "Yükleme limanı",
+    "log-delivery-port": "Teslimat limanı",
+    "log-port-autocomplete-placeholder": "Liman adını yazmaya başlayın…",
   },
   de: {
     "log-marker-border": "Grenzübergang",
@@ -763,6 +895,50 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-windows": "Windows",
     "log-device-linux": "Linux",
     "log-device-web": "Web",
+
+    // ── Trade Calculator — transport modes & hints ──
+    "log-transport-sea-container": "Seefracht — Container",
+    "log-transport-sea-bulk": "Seefracht — Massengut",
+    "log-transport-road": "Straßentransport",
+    "log-transport-rail": "Schienenfracht",
+    "log-transport-air": "Luftfracht",
+    "log-transport-multimodal": "Multimodal",
+    "log-transport-sea-container-hint": "Containerisiert (20ft / 40ft / 40HC)",
+    "log-transport-sea-bulk-hint": "Ganzschiff-Charter, Frachtrate pro MT",
+    "log-transport-road-hint": "LKW(s) — Standard, Kühl, Tank, Plane",
+    "log-transport-rail-hint": "Waggons / Container auf Flachwagen",
+    "log-transport-air-hint": "AWB — berechenbares Gewicht",
+    "log-transport-multimodal-hint": "Kombiniert See + Straße + Schiene",
+    "log-select-transport-mode-hint": "Wählen Sie einen Transportmodus, um die entsprechenden Felder zu sehen.",
+    "log-transport-mode": "Transportmodus",
+
+    // ── Trade Calculator — truck types ──
+    "log-truck-standard": "Standard Trockenwagen",
+    "log-truck-refrigerated": "Kühlwagen (Reefer)",
+    "log-truck-tanker": "Tankwagen",
+    "log-truck-flatbed": "Plane",
+    "log-truck-lowboy": "Tieflader / Schwertransport",
+    "log-truck-type": "LKW-Typ",
+    "log-num-trucks": "Anzahl LKW",
+    "log-truck-fields-hint": "Verwenden Sie das Feld „Verladehafen“ unten für die Abholadresse und das Feld „Lieferhafen“ für die Lieferadresse.",
+
+    // ── Trade Calculator — container / vessel / air fields ──
+    "log-container-type": "Containertyp",
+    "log-num-containers": "Anzahl Container",
+    "log-num-wagons-containers": "Anzahl Waggons / Container",
+    "log-vessel-capacity": "Schiffskapazität (MT)",
+    "log-vessel-capacity-placeholder": "z. B. 30000",
+    "log-freight-rate-per-mt": "Frachtrate / MT",
+    "log-freight-rate-mt-placeholder": "Frachtrate pro Metrischer Tonne",
+    "log-vessel-fields-hint": "Verwenden Sie die Felder „Verlade- & Lieferhafen“ unten für Lade-/Löschhafen. Schiffskapazität & Rate pro MT sind Richtwerte — fügen Sie sie als FRACHT-Kostenposition hinzu.",
+    "log-chargeable-weight": "Berechenbares Gewicht (kg)",
+    "log-chargeable-weight-placeholder": "Das größere von Brutto- oder Volumengewicht",
+    "log-air-fields-hint": "Luftfracht verwendet IATA AWB. Verwenden Sie die Felder „Verlade- & Lieferhafen“ für Start-/Zielflughäfen.",
+
+    // ── Trade Calculator — ports ──
+    "log-loading-port": "Verladehafen",
+    "log-delivery-port": "Lieferhafen",
+    "log-port-autocomplete-placeholder": "Hafennamen eingeben…",
   },
   ru: {
     "log-marker-border": "Пересечение границы",
@@ -953,5 +1129,49 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-windows": "Windows",
     "log-device-linux": "Linux",
     "log-device-web": "Веб",
+
+    // ── Trade Calculator — transport modes & hints ──
+    "log-transport-sea-container": "Морские перевозки — Контейнеры",
+    "log-transport-sea-bulk": "Морские перевозки — Наливной/Насыпной",
+    "log-transport-road": "Автотранспорт",
+    "log-transport-rail": "Железнодорожные перевозки",
+    "log-transport-air": "Авиаперевозки",
+    "log-transport-multimodal": "Мультимодальные",
+    "log-transport-sea-container-hint": "Контейнерные (20ft / 40ft / 40HC)",
+    "log-transport-sea-bulk-hint": "Фрахт всего судна, ставка за МТ",
+    "log-transport-road-hint": "Грузовики — стандарт, реф, цистерна, платформа",
+    "log-transport-rail-hint": "Вагоны / контейнеры на платформах",
+    "log-transport-air-hint": "AWB — оплачиваемый вес",
+    "log-transport-multimodal-hint": "Комбинированные: море + автотранспорт + ж/д",
+    "log-select-transport-mode-hint": "Выберите режим перевозки, чтобы увидеть соответствующие поля.",
+    "log-transport-mode": "Режим перевозки",
+
+    // ── Trade Calculator — truck types ──
+    "log-truck-standard": "Стандартный сухогрузный",
+    "log-truck-refrigerated": "Рефрижератор",
+    "log-truck-tanker": "Цистерна",
+    "log-truck-flatbed": "Платформа",
+    "log-truck-lowboy": "Тяжеловоз / Низкорамный",
+    "log-truck-type": "Тип грузовика",
+    "log-num-trucks": "Кол-во грузовиков",
+    "log-truck-fields-hint": "Используйте поле «Порт погрузки» для адреса забора и «Порт доставки» для адреса доставки.",
+
+    // ── Trade Calculator — container / vessel / air fields ──
+    "log-container-type": "Тип контейнера",
+    "log-num-containers": "Кол-во контейнеров",
+    "log-num-wagons-containers": "Кол-во вагонов / контейнеров",
+    "log-vessel-capacity": "Вместимость судна (МТ)",
+    "log-vessel-capacity-placeholder": "напр. 30000",
+    "log-freight-rate-per-mt": "Ставка фрахта / МТ",
+    "log-freight-rate-mt-placeholder": "Ставка фрахта за метрическую тонну",
+    "log-vessel-fields-hint": "Используйте поля «Порт погрузки и доставки» ниже для портов погрузки/выгрузки. Вместимость судна и ставка за МТ носят справочный характер — добавьте их как строку ФРАХТ.",
+    "log-chargeable-weight": "Оплачиваемый вес (кг)",
+    "log-chargeable-weight-placeholder": "Большее из брутто или объёмного веса",
+    "log-air-fields-hint": "Авиаперевозки используют IATA AWB. Используйте поля «Порт погрузки и доставки» для аэропортов отправления / назначения.",
+
+    // ── Trade Calculator — ports ──
+    "log-loading-port": "Порт погрузки",
+    "log-delivery-port": "Порт доставки",
+    "log-port-autocomplete-placeholder": "Начните вводить название порта…",
   },
 };

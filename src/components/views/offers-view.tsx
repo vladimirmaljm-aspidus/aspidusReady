@@ -64,21 +64,23 @@ import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
 import { BulkActionBar, useRowSelection } from "@/components/common/bulk-action-bar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useT } from "@/lib/i18n/store";
 
-const STATUS_LABELS: Record<OfferStatus, string> = {
-  draft: "Draft",
-  sent: "Sent",
-  accepted: "Accepted",
-  rejected: "Rejected",
-  expired: "Expired",
+const STATUS_LABEL_KEYS: Record<OfferStatus, string> = {
+  draft: "crm-draft-status",
+  sent: "crm-sent-status",
+  accepted: "crm-accepted",
+  rejected: "crm-rejected",
+  expired: "crm-expired",
 };
 
 function StatusBadge({ status }: { status: OfferStatus }) {
-  if (status === "draft") return <Badge variant="secondary">{STATUS_LABELS[status]}</Badge>;
-  if (status === "rejected") return <Badge variant="destructive">{STATUS_LABELS[status]}</Badge>;
-  if (status === "accepted") return <Badge className="border-transparent bg-emerald-600 text-white">{STATUS_LABELS[status]}</Badge>;
-  if (status === "sent") return <Badge className="border-transparent bg-primary text-primary-foreground">{STATUS_LABELS[status]}</Badge>;
-  return <Badge className="border-transparent bg-muted text-muted-foreground">{STATUS_LABELS[status]}</Badge>;
+  const t = useT();
+  if (status === "draft") return <Badge variant="secondary">{t(STATUS_LABEL_KEYS[status])}</Badge>;
+  if (status === "rejected") return <Badge variant="destructive">{t(STATUS_LABEL_KEYS[status])}</Badge>;
+  if (status === "accepted") return <Badge className="border-transparent bg-emerald-600 text-white">{t(STATUS_LABEL_KEYS[status])}</Badge>;
+  if (status === "sent") return <Badge className="border-transparent bg-primary text-primary-foreground">{t(STATUS_LABEL_KEYS[status])}</Badge>;
+  return <Badge className="border-transparent bg-muted text-muted-foreground">{t(STATUS_LABEL_KEYS[status])}</Badge>;
 }
 
 function lineTotal(it: OfferLineItem): number {
@@ -115,6 +117,7 @@ function MissingFieldWrap({
   children: ReactNode;
   tooltip?: string;
 }) {
+  const t = useT();
   if (!missing) return <>{children}</>;
   return (
     <Tooltip>
@@ -122,7 +125,7 @@ function MissingFieldWrap({
         <div className="w-full">{children}</div>
       </TooltipTrigger>
       <TooltipContent>
-        {tooltip || "This field was not filled from trade calculation"}
+        {tooltip || t("crm-this-field-not-filled")}
       </TooltipContent>
     </Tooltip>
   );
@@ -469,6 +472,7 @@ function ProductContextPreview({
 }
 
 export function OffersView() {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
   const pendingOfferData = useAppStore((s) => s.pendingOfferData);
@@ -554,12 +558,12 @@ export function OffersView() {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Status updated.");
+      toast.success(t("crm-status-updated"));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       if (detailId) qc.invalidateQueries({ queryKey: ["offer", tenantKey, detailId] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
-    onError: () => toast.error("Status change failed."),
+    onError: () => toast.error(t("crm-status-change-failed")),
   });
 
   const deleteMut = useMutation({
@@ -568,12 +572,12 @@ export function OffersView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Offer deleted.");
+      toast.success(t("crm-offer-deleted"));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("crm-delete-failed")),
   });
 
   // ─── Send offer to portal ───
@@ -591,7 +595,7 @@ export function OffersView() {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Offer sent to portal");
+      toast.success(t("crm-offer-sent-to-portal"));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       if (detailId) qc.invalidateQueries({ queryKey: ["offer", tenantKey, detailId] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
@@ -614,7 +618,7 @@ export function OffersView() {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Offer created from deal successfully!");
+      toast.success(t("crm-offer-created-from-deal-success"));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setShowDealPicker(false);
@@ -637,7 +641,7 @@ export function OffersView() {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Invoice created from offer!");
+      toast.success(t("crm-invoice-created-from-offer"));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
@@ -659,7 +663,7 @@ export function OffersView() {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Proforma created from offer!");
+      toast.success(t("crm-proforma-created-from-offer"));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
@@ -686,12 +690,12 @@ export function OffersView() {
       return { ok, fail };
     },
     onSuccess: ({ ok, fail }) => {
-      if (fail === 0) toast.success(`${ok} offers sent.`);
-      else toast.warning(`${ok} sent · ${fail} failed.`);
+      if (fail === 0) toast.success(t("crm-bulk-send-success").replace("${n}", String(ok)));
+      else toast.warning(t("crm-bulk-send-partial").replace("${ok}", String(ok)).replace("${fail}", String(fail)));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       rowSel.clear();
     },
-    onError: () => toast.error("Bulk send failed."),
+    onError: () => toast.error(t("crm-bulk-send-failed")),
   });
 
   // Bulk download — trigger PDF download for each selected offer.
@@ -708,10 +712,10 @@ export function OffersView() {
       return { ok };
     },
     onSuccess: ({ ok }) => {
-      toast.success(`${ok} PDFs queued for download.`);
+      toast.success(t("crm-bulk-download-success").replace("${n}", String(ok)));
       rowSel.clear();
     },
-    onError: () => toast.error("Bulk download failed."),
+    onError: () => toast.error(t("crm-bulk-download-failed")),
   });
 
   const bulkDeleteMut = useMutation({
@@ -726,29 +730,29 @@ export function OffersView() {
       return { ok, fail };
     },
     onSuccess: ({ ok, fail }) => {
-      if (fail === 0) toast.success(`${ok} offers deleted.`);
-      else toast.warning(`${ok} deleted · ${fail} failed.`);
+      if (fail === 0) toast.success(t("crm-bulk-delete-success").replace("${n}", String(ok)));
+      else toast.warning(t("crm-bulk-delete-partial").replace("${ok}", String(ok)).replace("${fail}", String(fail)));
       qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
       rowSel.clear();
     },
-    onError: () => toast.error("Bulk delete failed."),
+    onError: () => toast.error(t("crm-bulk-delete-failed")),
   });
 
   return (
     <div>
       <PageHeader
-        title="Offers"
-        description={`${total} total`}
+        title={t("offers")}
+        description={t("crm-total-count").replace("${n}", String(total))}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => window.open("/api/offers/export?format=csv", "_blank")}>
-              <Download className="size-4 mr-1" /> Export CSV
+              <Download className="size-4 mr-1" /> {t("crm-export-csv")}
             </Button>
             <Button variant="outline" onClick={() => setShowDealPicker(true)}>
-              <Handshake className="size-4 mr-1" /> From Deal
+              <Handshake className="size-4 mr-1" /> {t("crm-from-deal")}
             </Button>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New offer
+              <Plus className="size-4 mr-1" /> {t("crm-new-offer")}
             </Button>
           </div>
         }
@@ -759,27 +763,27 @@ export function OffersView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by number, subject…"
+              placeholder={t("crm-search-by-number-subject")}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               className="pl-9"
             />
           </div>
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("status")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="sent">Sent</SelectItem>
-              <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="expired">Expired</SelectItem>
+              <SelectItem value="all">{t("crm-all-statuses")}</SelectItem>
+              <SelectItem value="draft">{t("crm-draft-status")}</SelectItem>
+              <SelectItem value="sent">{t("crm-sent-status")}</SelectItem>
+              <SelectItem value="accepted">{t("crm-accepted")}</SelectItem>
+              <SelectItem value="rejected">{t("crm-rejected")}</SelectItem>
+              <SelectItem value="expired">{t("crm-expired")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={partnerFilter} onValueChange={(v) => { setPartnerFilter(v); setPage(0); }}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Partner" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t("crm-partner")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All partners</SelectItem>
+              <SelectItem value="all">{t("crm-all-partners")}</SelectItem>
               {partnerList.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name} <span className="text-muted-foreground ml-1 text-xs">({p.type})</span></SelectItem>
               ))}
@@ -797,9 +801,9 @@ export function OffersView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<FileText className="size-6" />}
-              title="No offers"
-              description="Create your first offer to get started."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New offer</Button>}
+              title={t("crm-no-offers")}
+              description={t("crm-no-offers-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("crm-new-offer")}</Button>}
             />
           ) : (
             <>
@@ -811,16 +815,16 @@ export function OffersView() {
                         <Checkbox
                           checked={rowSel.allOnPageSelected}
                           onCheckedChange={rowSel.toggleAllOnPage}
-                          aria-label="Select all on page"
+                          aria-label={t("crm-select-all-on-page-label")}
                         />
                       </TableHead>
-                      <TableHead>Number</TableHead>
-                      <TableHead className="hidden md:table-cell">Subject</TableHead>
-                      <TableHead className="hidden lg:table-cell">Partner</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="hidden xl:table-cell">Valid Until</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t("crm-number")}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t("crm-subject")}</TableHead>
+                      <TableHead className="hidden lg:table-cell">{t("crm-partner")}</TableHead>
+                      <TableHead>{t("status")}</TableHead>
+                      <TableHead className="text-right">{t("crm-total-detail")}</TableHead>
+                      <TableHead className="hidden xl:table-cell">{t("crm-valid-until-label")}</TableHead>
+                      <TableHead className="text-right">{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -835,7 +839,7 @@ export function OffersView() {
                           <Checkbox
                             checked={rowSel.isSelected(o.id)}
                             onCheckedChange={() => rowSel.toggle(o.id)}
-                            aria-label={`Select ${o.number}`}
+                            aria-label={t("fin-select-offer-aria").replace("${number}", o.number)}
                           />
                         </TableCell>
                         <TableCell className="font-mono text-xs tabular">{o.number}</TableCell>
@@ -848,13 +852,13 @@ export function OffersView() {
                         <TableCell className="hidden xl:table-cell">{fmtDate(o.valid_until)}</TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(o.id)} title="View">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(o.id)} title={t("view")}>
                               <Eye className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(o); setShowForm(true); }} title="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(o); setShowForm(true); }} title={t("edit")}>
                               <Pencil className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(o.id)} title="Delete">
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(o.id)} title={t("delete")}>
                               <Trash2 className="size-4" />
                             </Button>
                           </div>
@@ -869,19 +873,19 @@ export function OffersView() {
               <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 gap-3 flex-wrap">
                 <p className="text-sm text-muted-foreground">
                   {total > 0
-                    ? <>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</>
-                    : <>No results</>}
+                    ? <>{t("crm-showing-range").replace("${from}", String(page * PAGE_SIZE + 1)).replace("${to}", String(Math.min((page + 1) * PAGE_SIZE, total))).replace("${total}", String(total))}</>
+                    : <>{t("crm-no-results")}</>}
                 </p>
                 <div className="flex items-center gap-3">
                   <PageSizeSelector value={PAGE_SIZE} onChange={setPageSize} options={pageSizeOptions} />
                   {totalPages > 1 && (
                     <div className="flex items-center gap-1">
                       <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                        Previous
+                        {t("crm-previous")}
                       </Button>
                       <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
                       <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                        Next
+                        {t("crm-next")}
                       </Button>
                     </div>
                   )}
@@ -923,9 +927,9 @@ export function OffersView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <FileText className="size-5" />
-              <span className="font-mono text-base">{detail.data?.number || "Offer"}</span>
+              <span className="font-mono text-base">{detail.data?.number || t("crm-offer")}</span>
             </SheetTitle>
-            <SheetDescription>{detail.data?.subject || "Offer details"}</SheetDescription>
+            <SheetDescription>{detail.data?.subject || t("crm-offer-details")}</SheetDescription>
           </SheetHeader>
           {detail.isLoading ? (
             <div className="p-4 space-y-3">
@@ -952,18 +956,18 @@ export function OffersView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete offer?</AlertDialogTitle>
+            <AlertDialogTitle>{t("crm-delete-offer-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The offer and its line items will be permanently deleted.
+              {t("crm-delete-offer-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -980,20 +984,20 @@ export function OffersView() {
       <BulkActionBar
         count={rowSel.count}
         onClear={rowSel.clear}
-        label={rowSel.count === 1 ? "offer selected" : "offers selected"}
+        label={rowSel.count === 1 ? t("crm-offer-selected") : t("crm-offers-selected")}
         actions={[
           {
             key: "send",
-            label: "Send all",
+            label: t("crm-send-all"),
             icon: <Send className="size-4" />,
             variant: "default",
             disabled: bulkSendMut.isPending,
-            confirm: `Send ${rowSel.count} offer(s) to their partners?`,
+            confirm: t("fin-bulk-send-confirm").replace("${n}", String(rowSel.count)),
             onClick: () => bulkSendMut.mutate(rowSel.ids),
           },
           {
             key: "download",
-            label: "Download PDFs",
+            label: t("crm-download-pdfs"),
             icon: <Download className="size-4" />,
             variant: "outline",
             disabled: bulkDownloadMut.isPending,
@@ -1001,11 +1005,11 @@ export function OffersView() {
           },
           {
             key: "delete",
-            label: "Delete",
+            label: t("delete"),
             icon: <Trash2 className="size-4" />,
             variant: "destructive",
             disabled: bulkDeleteMut.isPending,
-            confirm: `Delete ${rowSel.count} offer(s)? This cannot be undone.`,
+            confirm: t("fin-bulk-delete-confirm").replace("${n}", String(rowSel.count)),
             onClick: () => bulkDeleteMut.mutate(rowSel.ids),
           },
         ]}
@@ -1023,6 +1027,7 @@ function DealPickerDialog({
   onSelect: (dealId: string) => void;
   isCreating: boolean;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -1052,16 +1057,16 @@ function DealPickerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-5 text-amber-500" />
-            Create Offer from Deal
+            {t("crm-create-offer-from-deal-dialog")}
           </DialogTitle>
-          <DialogDescription>Select a deal to automatically create an offer with all partner and product data pre-filled.</DialogDescription>
+          <DialogDescription>{t("crm-create-offer-from-deal-desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="py-2">
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search deals…"
+              placeholder={t("crm-search-deals")}
               value={dealSearch}
               onChange={(e) => setDealSearch(e.target.value)}
               className="pl-9"
@@ -1073,7 +1078,7 @@ function DealPickerDialog({
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No deals found.</p>
+            <p className="text-sm text-muted-foreground text-center py-6">{t("crm-no-deals-found")}</p>
           ) : (
             <div className="max-h-72 overflow-y-auto custom-scroll space-y-2">
               {filtered.map((d) => (
@@ -1098,7 +1103,7 @@ function DealPickerDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>{t("cancel")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1119,6 +1124,7 @@ function OfferDetail({
   isCreatingInvoice: boolean;
   isCreatingProforma: boolean;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -1174,7 +1180,7 @@ function OfferDetail({
 
   async function handleSaveVersion() {
     if (!changeNote.trim()) {
-      toast.error("Please enter a change note.");
+      toast.error(t("crm-change-note-required"));
       return;
     }
     setSavingVersion(true);
@@ -1209,7 +1215,7 @@ function OfferDetail({
         version: nextVersion,
         reference_id: offer.id,
         partner_id: offer.partner_id,
-        title: offer.subject || `Offer ${offer.number}`,
+        title: offer.subject || t("fin-offer-title-with-number").replace("${number}", offer.number || ""),
         status: "current",
         metadata: {
           total: offer.total,
@@ -1225,7 +1231,7 @@ function OfferDetail({
       });
       if (!regRes2.ok) {
         const e = await regRes2.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to create document register entry");
+        throw new Error(e.error || t("fin-failed-create-document-register-entry"));
       }
       const regEntry = await regRes2.json();
 
@@ -1241,16 +1247,16 @@ function OfferDetail({
       });
       if (!revRes.ok) {
         const e = await revRes.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to create revision");
+        throw new Error(e.error || t("fin-failed-create-revision"));
       }
 
-      toast.success("Version saved!", { description: `Version ${nextVersion} saved successfully.` });
+      toast.success(t("crm-version-saved"), { description: t("crm-version-saved-desc").replace("${n}", String(nextVersion)) });
       setChangeNote("");
       setShowVersionDialog(false);
       qc.invalidateQueries({ queryKey: ["document-revisions", tenantKey, offer.id] });
       qc.invalidateQueries({ queryKey: ["document-revisions-auto", tenantKey, offer.id] });
     } catch (e: any) {
-      toast.error(e.message || "Failed to save version.");
+      toast.error(e.message || t("crm-failed-save-version"));
     } finally {
       setSavingVersion(false);
     }
@@ -1269,11 +1275,11 @@ function OfferDetail({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
-              Change status <ChevronDown className="size-4 ml-1" />
+              {t("crm-change-status")} <ChevronDown className="size-4 ml-1" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuLabel>Move to</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("crm-move-to")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {statuses.map((s) => (
               <DropdownMenuItem
@@ -1281,7 +1287,7 @@ function OfferDetail({
                 disabled={s === offer.status}
                 onClick={() => onStatusChange(s)}
               >
-                {STATUS_LABELS[s]}
+                {t(STATUS_LABEL_KEYS[s])}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -1299,13 +1305,11 @@ function OfferDetail({
               disabled={isSending || offer.status !== "draft"}
             >
               {isSending ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Send className="size-4 mr-1" />}
-              Send
+              {t("send")}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {offer.status !== "draft"
-              ? "Only draft offers can be sent"
-              : "Send this offer to the partner portal (and email if configured)"}
+            {offer.status !== "draft" ? t("crm-only-draft-can-be-sent") : t("crm-send-offer-tooltip")}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -1315,10 +1319,10 @@ function OfferDetail({
               size="sm"
               onClick={() => setShowVersionDialog(true)}
             >
-              <Save className="size-4 mr-1" /> Save Version
+              <Save className="size-4 mr-1" /> {t("crm-save-version")}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Save a new version of this offer with a change note</TooltipContent>
+          <TooltipContent>{t("crm-save-version-tooltip")}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1329,13 +1333,11 @@ function OfferDetail({
               disabled={isCreatingInvoice || (offer.status !== "accepted" && offer.status !== "sent")}
             >
               {isCreatingInvoice ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Receipt className="size-4 mr-1" />}
-              Create Invoice
+              {t("crm-create-invoice")}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {offer.status !== "accepted" && offer.status !== "sent"
-              ? "Offer must be accepted or sent to create an invoice"
-              : "Auto-create an invoice from this offer"}
+            {offer.status !== "accepted" && offer.status !== "sent" ? t("crm-must-be-accepted-or-sent") : t("crm-auto-create-invoice-tooltip")}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -1347,29 +1349,29 @@ function OfferDetail({
               disabled={isCreatingProforma}
             >
               {isCreatingProforma ? <Loader2 className="size-4 mr-1 animate-spin" /> : <FileSpreadsheet className="size-4 mr-1" />}
-              Create Proforma
+              {t("crm-create-proforma")}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Auto-create a proforma invoice from this offer</TooltipContent>
+          <TooltipContent>{t("crm-auto-create-proforma-tooltip")}</TooltipContent>
         </Tooltip>
       </div>
 
       {/* Key dates */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> Valid until</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> {t("crm-valid-until-detail")}</p>
           <p className="text-sm font-medium">{fmtDate(offer.valid_until)}</p>
         </div>
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><Send className="size-3" /> Sent</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><Send className="size-3" /> {t("crm-sent-detail")}</p>
           <p className="text-sm font-medium">{fmtDateTime(offer.sent_at)}</p>
         </div>
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Responded</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> {t("crm-responded")}</p>
           <p className="text-sm font-medium">{fmtDateTime(offer.responded_at)}</p>
         </div>
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> Created</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> {t("crm-created-label")}</p>
           <p className="text-sm font-medium">{fmtDate(offer.created_at)}</p>
         </div>
       </div>
@@ -1378,78 +1380,78 @@ function OfferDetail({
       {hasTradeData && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <Ship className="size-4" /> Trade Details
+            <Ship className="size-4" /> {t("crm-trade-details")}
           </h4>
           <div className="grid grid-cols-2 gap-2">
             {offer.offer_no && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Hash className="size-3" /> Supplier Ref</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Hash className="size-3" /> {t("crm-supplier-ref")}</p>
                 <p className="text-sm font-medium">{offer.offer_no}</p>
               </div>
             )}
             {offer.incoterm && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="size-3" /> Incoterm</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="size-3" /> {t("crm-incoterm-detail")}</p>
                 <p className="text-sm font-medium">{offer.incoterm}</p>
               </div>
             )}
             {offer.payment_terms && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><CreditCard className="size-3" /> Payment Terms</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><CreditCard className="size-3" /> {t("crm-payment-terms-detail")}</p>
                 <p className="text-sm font-medium">{offer.payment_terms}</p>
               </div>
             )}
             {offer.pol && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> Port of Loading</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {t("crm-port-of-loading")}</p>
                 <p className="text-sm font-medium">{offer.pol}</p>
               </div>
             )}
             {offer.pod && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> Port of Discharge</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {t("crm-port-of-discharge")}</p>
                 <p className="text-sm font-medium">{offer.pod}</p>
               </div>
             )}
             {offer.vessel && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Ship className="size-3" /> Vessel</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Ship className="size-3" /> {t("crm-vessel")}</p>
                 <p className="text-sm font-medium">{offer.vessel}</p>
               </div>
             )}
             {offer.container_no && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Container className="size-3" /> Container No.</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Container className="size-3" /> {t("crm-container-no")}</p>
                 <p className="text-sm font-medium">{offer.container_no}</p>
               </div>
             )}
             {offer.lead_time && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Timer className="size-3" /> Lead Time</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Timer className="size-3" /> {t("crm-lead-time-detail")}</p>
                 <p className="text-sm font-medium">{offer.lead_time}</p>
               </div>
             )}
             {offer.packaging && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Package className="size-3" /> Packaging</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Package className="size-3" /> {t("crm-packaging-detail")}</p>
                 <p className="text-sm font-medium">{offer.packaging}</p>
               </div>
             )}
             {offer.bank_details && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="size-3" /> Bank Details</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="size-3" /> {t("crm-bank-details")}</p>
                 <p className="text-sm font-medium whitespace-pre-wrap">{offer.bank_details}</p>
               </div>
             )}
             {offer.tax_clause && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><FileCheck className="size-3" /> Tax Clause</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><FileCheck className="size-3" /> {t("crm-tax-clause")}</p>
                 <p className="text-sm font-medium">{offer.tax_clause}</p>
               </div>
             )}
             {offer.selling_price != null && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Landmark className="size-3" /> Selling Price</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Landmark className="size-3" /> {t("crm-selling-price-detail")}</p>
                 <p className="text-sm font-medium">{fmtMoney(offer.selling_price, offer.currency)}</p>
               </div>
             )}
@@ -1462,23 +1464,23 @@ function OfferDetail({
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead className="hidden sm:table-cell">SKU</TableHead>
-              <TableHead className="text-right">Quantity</TableHead>
-              <TableHead className="hidden sm:table-cell">Unit</TableHead>
-              <TableHead className="text-right">Unit price</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">Discount %</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">Tax %</TableHead>
-              <TableHead className="text-right hidden md:table-cell">Cost</TableHead>
-              <TableHead className="text-right hidden md:table-cell">Margin</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              <TableHead>{t("crm-product")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("crm-sku-detail")}</TableHead>
+              <TableHead className="text-right">{t("crm-quantity-detail")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("crm-unit-detail")}</TableHead>
+              <TableHead className="text-right">{t("crm-unit-price-detail")}</TableHead>
+              <TableHead className="text-right hidden sm:table-cell">{t("crm-discount-pct")}</TableHead>
+              <TableHead className="text-right hidden sm:table-cell">{t("crm-tax-pct")}</TableHead>
+              <TableHead className="text-right hidden md:table-cell">{t("crm-cost")}</TableHead>
+              <TableHead className="text-right hidden md:table-cell">{t("crm-margin-detail")}</TableHead>
+              <TableHead className="text-right">{t("crm-total-detail")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {(offer.items || []).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-6">
-                  No line items.
+                  {t("crm-no-items")}
                 </TableCell>
               </TableRow>
             ) : (offer.items || []).map((it, i) => {
@@ -1517,7 +1519,7 @@ function OfferDetail({
             {(offer.items || []).some((it) => Number(it.cost) > 0) && (
               <TableRow className="font-semibold bg-muted/40">
                 <TableCell colSpan={9} className="text-right text-xs text-muted-foreground">
-                  Total Margin
+                  {t("crm-total-margin")}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular">
                   {(() => {
@@ -1545,32 +1547,32 @@ function OfferDetail({
       {/* Totals */}
       <div className="ml-auto w-full sm:w-72 space-y-1 mb-4 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Subtotal</span>
+          <span className="text-muted-foreground">{t("crm-subtotal")}</span>
           <span className="font-mono tabular">{fmtMoney(offer.subtotal ?? totals.subtotal, offer.currency)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Discount</span>
+          <span className="text-muted-foreground">{t("crm-discount")}</span>
           <span className="font-mono tabular">- {fmtMoney(offer.discount_total ?? totals.discount_total, offer.currency)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Tax</span>
+          <span className="text-muted-foreground">{t("crm-tax")}</span>
           <span className="font-mono tabular">{fmtMoney(offer.tax_total ?? totals.tax_total, offer.currency)}</span>
         </div>
         <div className="flex justify-between border-t pt-1 mt-1 text-base font-semibold">
-          <span>Total</span>
+          <span>{t("crm-total-detail")}</span>
           <span className="font-mono tabular">{fmtMoney(offer.total ?? totals.total, offer.currency)}</span>
         </div>
       </div>
 
       {offer.notes && (
         <div className="mb-3">
-          <p className="text-xs text-muted-foreground mb-1">Notes</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("crm-notes-label")}</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/40">{offer.notes}</p>
         </div>
       )}
       {offer.terms && typeof offer.terms === "string" && (
         <div className="mb-3">
-          <p className="text-xs text-muted-foreground mb-1">Terms</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("crm-terms")}</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/40">{offer.terms}</p>
         </div>
       )}
@@ -1586,16 +1588,16 @@ function OfferDetail({
               setDownloading(true);
               const filename = `Offer_${offer.number || offer.id}.pdf`;
               await downloadPdf(api(`/api/offers/${offer.id}/pdf`), filename);
-              toast.success("PDF downloaded");
+              toast.success(t("crm-pdf-downloaded"));
             } catch (e: any) {
-              toast.error(e?.message || "Failed to download PDF");
+              toast.error(e?.message || t("crm-failed-download-pdf"));
             } finally {
               setDownloading(false);
             }
           }}
         >
           {downloading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Download className="size-4 mr-1" />}
-          Download PDF
+          {t("crm-download-pdf")}
         </Button>
       </div>
 
@@ -1603,10 +1605,10 @@ function OfferDetail({
       <div className="pt-4 mt-4 border-t">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-sm font-semibold flex items-center gap-1.5">
-            <History className="size-4" /> Version History
+            <History className="size-4" /> {t("crm-version-history")}
           </h4>
           <Button variant="outline" size="sm" onClick={() => setShowVersionDialog(true)}>
-            <GitBranch className="size-4 mr-1" /> Save New Version
+            <GitBranch className="size-4 mr-1" /> {t("crm-save-new-version")}
           </Button>
         </div>
 
@@ -1618,18 +1620,18 @@ function OfferDetail({
         ) : revisionList.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
             <GitBranch className="size-6 text-muted-foreground/40 mx-auto mb-1" />
-            <p className="text-sm text-muted-foreground">No versions saved yet</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Click &ldquo;Save New Version&rdquo; to create the first version</p>
+            <p className="text-sm text-muted-foreground">{t("crm-no-versions-saved")}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t("crm-click-save-new-version")}</p>
           </div>
         ) : (
           <div className="rounded-lg border border-border/60 overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="w-20">Version</TableHead>
-                  <TableHead>Change Note</TableHead>
-                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
-                  <TableHead className="w-36">Date</TableHead>
+                  <TableHead className="w-20">{t("crm-version")}</TableHead>
+                  <TableHead>{t("crm-change-note")}</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">{t("crm-author")}</TableHead>
+                  <TableHead className="w-36">{t("crm-date")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1653,7 +1655,7 @@ function OfferDetail({
       <div className="pt-4 mt-4 border-t">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-sm font-semibold flex items-center gap-1.5">
-            <History className="size-4" /> Auto-Saved Revisions
+            <History className="size-4" /> {t("crm-auto-saved-revisions")}
             <Badge variant="outline" className="ml-1 font-mono text-xs">
               v{(offer as any).version || 1}
             </Badge>
@@ -1668,9 +1670,9 @@ function OfferDetail({
         ) : autoRevisionList.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
             <History className="size-6 text-muted-foreground/40 mx-auto mb-1" />
-            <p className="text-sm text-muted-foreground">No auto-saved revisions yet</p>
+            <p className="text-sm text-muted-foreground">{t("crm-no-auto-saved-revisions")}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Every edit to this offer is automatically saved as a version with a per-field diff.
+              {t("crm-auto-saved-desc")}
             </p>
           </div>
         ) : (
@@ -1678,10 +1680,10 @@ function OfferDetail({
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="w-20">Version</TableHead>
-                  <TableHead>Changes</TableHead>
-                  <TableHead className="hidden sm:table-cell w-32">Author</TableHead>
-                  <TableHead className="w-36">Date</TableHead>
+                  <TableHead className="w-20">{t("crm-version")}</TableHead>
+                  <TableHead>{t("crm-changes")}</TableHead>
+                  <TableHead className="hidden sm:table-cell w-32">{t("crm-author")}</TableHead>
+                  <TableHead className="w-36">{t("crm-date")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1712,7 +1714,7 @@ function OfferDetail({
                             ))}
                             {fields.length > 4 ? (
                               <div className="text-xs text-muted-foreground">
-                                +{fields.length - 4} more field{fields.length - 4 === 1 ? "" : "s"}
+                                {(fields.length - 4) === 1 ? t("crm-more-fields").replace("${n}", String(fields.length - 4)) : t("crm-more-fields-plural").replace("${n}", String(fields.length - 4))}
                               </div>
                             ) : null}
                           </div>
@@ -1740,55 +1742,55 @@ function OfferDetail({
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <GitBranch className="size-5" /> Save New Version
+              <GitBranch className="size-5" /> {t("crm-save-new-version")}
             </DialogTitle>
             <DialogDescription>
-              Save a snapshot of this offer as a new version. Previous versions will be marked as superseded.
+              {t("crm-save-new-version-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Change Note *</Label>
+              <Label>{t("crm-change-note")} *</Label>
               <Textarea
                 value={changeNote}
                 onChange={(e) => setChangeNote(e.target.value)}
-                placeholder="Describe what changed in this version…"
+                placeholder={t("crm-change-note-placeholder")}
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                A brief description of the changes made, e.g. &ldquo;Updated pricing for Q3&rdquo; or &ldquo;Added shipping details&rdquo;.
+                {t("crm-change-note-desc")}
               </p>
             </div>
             <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
-              <p className="font-medium text-foreground text-sm">Offer Summary</p>
+              <p className="font-medium text-foreground text-sm">{t("crm-offer-summary")}</p>
               <div className="flex justify-between">
-                <span>Number</span>
+                <span>{t("crm-number")}</span>
                 <span className="font-mono">{offer.number}</span>
               </div>
               <div className="flex justify-between">
-                <span>Status</span>
+                <span>{t("status")}</span>
                 <span>{offer.status}</span>
               </div>
               <div className="flex justify-between">
-                <span>Total</span>
+                <span>{t("crm-total-detail")}</span>
                 <span className="font-mono">{fmtMoney(offer.total, offer.currency)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Items</span>
+                <span>{t("crm-items-label")}</span>
                 <span>{offer.items?.length || 0}</span>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowVersionDialog(false)} disabled={savingVersion}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowVersionDialog(false)} disabled={savingVersion}>{t("cancel")}</Button>
             <Button onClick={handleSaveVersion} disabled={savingVersion || !changeNote.trim()}>
               {savingVersion ? (
                 <>
-                  <Loader2 className="size-4 mr-1 animate-spin" /> Saving…
+                  <Loader2 className="size-4 mr-1 animate-spin" /> {t("crm-saving-ellipsis")}
                 </>
               ) : (
                 <>
-                  <Save className="size-4 mr-1" /> Save Version
+                  <Save className="size-4 mr-1" /> {t("crm-save-version")}
                 </>
               )}
             </Button>
@@ -1818,6 +1820,7 @@ function OfferFormDialog({
   partners: Partner[];
   onSaved: (offerNumber?: string) => void;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -2014,12 +2017,12 @@ function OfferFormDialog({
 
     if (convertedPrice != null && currentPrice > 0) {
       setItem(idx, { unit: newUnit, unit_price: convertedPrice });
-      toast.info(`Price auto-converted: ${currentPrice} ${oldUnit} → ${convertedPrice.toFixed(2)} ${newUnit}`);
+      toast.info(t("fin-price-auto-converted").replace("${old}", String(currentPrice)).replace("${oldUnit}", oldUnit).replace("${new}", convertedPrice.toFixed(2)).replace("${newUnit}", newUnit));
     } else {
       // Can't convert (different categories) — just change unit, keep price
       setItem(idx, { unit: newUnit });
       if (currentPrice > 0) {
-        toast.warning(`Cannot auto-convert price from ${oldUnit} to ${newUnit} (different unit categories). Please enter price manually.`);
+        toast.warning(t("fin-cannot-convert-price").replace("${oldUnit}", oldUnit).replace("${newUnit}", newUnit));
       }
     }
   }
@@ -2045,14 +2048,14 @@ function OfferFormDialog({
         terms: p.preferred_payment_terms || f.terms || "",
       }));
 
-      toast.success(`Partner data loaded: ${p.name}`, { description: "Currency, terms & preferences auto-filled." });
+      toast.success(`${t("fin-partner-data-loaded")} ${p.name}`, { description: t("fin-currency-autofilled-desc") });
     } catch {
-      toast.error("Failed to load partner context.");
+      toast.error(t("fin-failed-load-partner"));
       setPartnerContext(null);
     } finally {
       setLoadingPartner(false);
     }
-  }, []);
+  }, [t]);
 
   // ─── Product auto-fill ───
   // Called when the user picks a product from the ProductPicker. We:
@@ -2192,23 +2195,23 @@ function OfferFormDialog({
           }));
         }
 
-        toast.success(`Product loaded: ${p.name}`, {
-          description: `Supplier price: ${fmtMoney(latestOffer.unit_price, latestOffer.currency || p.currency)}${latestOffer.offer_number ? ` · ${latestOffer.offer_number}` : ""} · SKU ${p.sku}`,
+        toast.success(t("fin-product-loaded").replace("${name}", p.name), {
+          description: t("fin-product-loaded-with-supplier").replace("${price}", fmtMoney(latestOffer.unit_price, latestOffer.currency || p.currency)).replace("${number}", latestOffer.offer_number ? ` · ${latestOffer.offer_number}` : "").replace("${sku}", p.sku),
         });
       } else {
-        toast.success(`Product loaded: ${p.name}`, {
-          description: `Price: ${fmtMoney(p.price, p.currency)} | SKU: ${p.sku}`,
+        toast.success(t("fin-product-loaded").replace("${name}", p.name), {
+          description: t("fin-product-loaded-with-price").replace("${price}", fmtMoney(p.price, p.currency)).replace("${sku}", p.sku),
         });
       }
     } catch {
       // Context is optional — basic info already filled above.
-      toast.success(`Product loaded: ${p.name}`, {
-        description: `Price: ${fmtMoney(p.price, p.currency)} | SKU: ${p.sku}`,
+      toast.success(t("fin-product-loaded").replace("${name}", p.name), {
+        description: t("fin-product-loaded-with-price").replace("${price}", fmtMoney(p.price, p.currency)).replace("${sku}", p.sku),
       });
     } finally {
       setLoadingProductIdx(null);
     }
-  }, [api]);
+  }, [api, t]);
 
   function addItem() {
     setForm((f) => ({
@@ -2235,7 +2238,7 @@ function OfferFormDialog({
   const totals = computeTotals(form.items || []);
 
   async function save() {
-    if (!form.partner_id) { toast.error("Select a partner."); return; }
+    if (!form.partner_id) { toast.error(t("fin-select-partner-toast")); return; }
     setSaving(true);
     try {
       const method = offer ? "PUT" : "POST";
@@ -2297,18 +2300,18 @@ function OfferFormDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Request failed");
+        throw new Error(e.error || t("fin-request-failed"));
       }
       const result = await r.json().catch(() => ({}));
       const offerNumber = result.number || result.id || "";
       if (offer) {
-        toast.success("Offer updated.", { description: offerNumber ? `Reference: ${offerNumber}` : undefined });
+        toast.success(t("crm-offer-updated"), { description: offerNumber ? t("crm-offer-updated-desc").replace("${number}", offerNumber) : undefined });
       } else {
-        toast.success("Offer created!", { description: offerNumber ? `Reference: ${offerNumber}` : "Your new offer has been saved as draft." });
+        toast.success(t("crm-offer-created-toast"), { description: offerNumber ? t("crm-offer-updated-desc").replace("${number}", offerNumber) : t("crm-offer-created-toast-desc") });
       }
       onSaved(offerNumber);
     } catch (e: any) {
-      toast.error(e.message || "Saving failed.");
+      toast.error(e.message || t("crm-saving-failed-toast"));
     } finally {
       setSaving(false);
     }
@@ -2384,13 +2387,11 @@ function OfferFormDialog({
       <DialogContent size="full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {offer ? "Edit offer" : "New offer"}
+            {offer ? t("crm-edit-offer") : t("crm-new-offer")}
             <Sparkles className="size-4 text-amber-500" />
           </DialogTitle>
           <DialogDescription>
-            {offer
-              ? "Update the offer details below."
-              : "Fill in the essentials, add your line items, and you're done."}
+            {offer ? t("crm-update-offer-details") : t("crm-create-offer-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -2402,12 +2403,9 @@ function OfferFormDialog({
           <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 p-3 flex items-start gap-3">
             <Info className="size-4 text-orange-600 dark:text-orange-400 shrink-0 mt-0.5" />
             <div className="text-xs text-orange-900 dark:text-orange-200">
-              <div className="font-semibold mb-0.5">Review pre-filled offer</div>
+              <div className="font-semibold mb-0.5">{t("crm-review-prefilled-offer")}</div>
               <div>
-                This offer was pre-filled from a trade calculation. Fields
-                highlighted in <span className="font-semibold">orange</span>
-                {" "}couldn't be auto-filled — please review and complete them
-                before saving. Hover an orange field for details.
+                {t("crm-review-prefilled-desc")}
               </div>
             </div>
           </div>
@@ -2416,10 +2414,9 @@ function OfferFormDialog({
           <div className="rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-3 flex items-start gap-3">
             <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div className="text-xs text-emerald-900 dark:text-emerald-200">
-              <div className="font-semibold mb-0.5">Pre-filled from trade calculation</div>
+              <div className="font-semibold mb-0.5">{t("crm-prefilled-from-trade-calc")}</div>
               <div>
-                All fields were auto-filled from the trade calculation. Review
-                the data and save when ready.
+                {t("crm-prefilled-success-desc")}
               </div>
             </div>
           </div>
@@ -2430,10 +2427,10 @@ function OfferFormDialog({
           {/* ─── Partner Selection (top — auto-fill partner details) ─── */}
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Building2 className="h-4 w-4" /> Partner
+              <Building2 className="h-4 w-4" /> {t("crm-partner-section")}
               {partnerContext && !loadingPartner && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5 ml-1">
-                  <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                  <Sparkles className="size-2.5 text-amber-500" /> {t("crm-auto-filled")}
                 </Badge>
               )}
             </h3>
@@ -2441,7 +2438,7 @@ function OfferFormDialog({
               {/* Partner select */}
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
-                  Partner *
+                  {t("crm-partner-required-label")}
                   {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
                 </Label>
                 <MissingFieldWrap missing={isMissingField("partner_id")}>
@@ -2453,7 +2450,7 @@ function OfferFormDialog({
                     }}
                   >
                     <SelectTrigger className={cn(isMissingField("partner_id") && MISSING_FIELD_CLS)}>
-                      <SelectValue placeholder="Select a partner" />
+                      <SelectValue placeholder={t("crm-select-a-partner")} />
                     </SelectTrigger>
                     <SelectContent>
                       {partners.map((p) => (
@@ -2471,11 +2468,11 @@ function OfferFormDialog({
 
               {/* Currency */}
               <div className="space-y-1.5">
-                <Label>Currency</Label>
+                <Label>{t("currency")}</Label>
                 <MissingFieldWrap missing={isMissingField("currency")}>
                   <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
                     <SelectTrigger className={cn(isMissingField("currency") && MISSING_FIELD_CLS)}>
-                      <SelectValue placeholder="Select currency" />
+                      <SelectValue placeholder={t("crm-select-currency")} />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
                       {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -2503,13 +2500,13 @@ function OfferFormDialog({
                   {selectedPartner.tax_id && (
                     <div className="flex items-center gap-1.5">
                       <Hash className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">Tax ID: {selectedPartner.tax_id}</span>
+                      <span className="text-muted-foreground">{t("crm-tax-id-prefix").replace("${value}", selectedPartner.tax_id)}</span>
                     </div>
                   )}
                   {selectedPartner.vat_number && (
                     <div className="flex items-center gap-1.5">
                       <Hash className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">VAT: {selectedPartner.vat_number}</span>
+                      <span className="text-muted-foreground">{t("crm-vat-prefix").replace("${value}", selectedPartner.vat_number)}</span>
                     </div>
                   )}
                   {selectedPartner.bank_name && (
@@ -2521,19 +2518,19 @@ function OfferFormDialog({
                   {selectedPartner.preferred_currency && (
                     <div className="flex items-center gap-1.5">
                       <Globe className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">Currency: {selectedPartner.preferred_currency}</span>
+                      <span className="text-muted-foreground">{t("crm-currency-prefix").replace("${value}", selectedPartner.preferred_currency)}</span>
                     </div>
                   )}
                   {selectedPartner.preferred_incoterm && (
                     <div className="flex items-center gap-1.5">
                       <CreditCard className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">Incoterm: {selectedPartner.preferred_incoterm}</span>
+                      <span className="text-muted-foreground">{t("crm-incoterm-prefix").replace("${value}", selectedPartner.preferred_incoterm)}</span>
                     </div>
                   )}
                   {selectedPartner.preferred_payment_terms && (
                     <div className="flex items-center gap-1.5">
                       <CreditCard className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">Terms: {selectedPartner.preferred_payment_terms}</span>
+                      <span className="text-muted-foreground">{t("crm-terms-prefix").replace("${value}", selectedPartner.preferred_payment_terms)}</span>
                     </div>
                   )}
                 </div>
@@ -2544,13 +2541,13 @@ function OfferFormDialog({
                     <Tabs defaultValue="offers" className="w-full">
                       <TabsList className="h-7">
                         <TabsTrigger value="offers" className="text-xs h-5 px-2">
-                          Offers ({partnerContext.offers?.length || 0})
+                          {t("fin-tabs-offers")} ({partnerContext.offers?.length || 0})
                         </TabsTrigger>
                         <TabsTrigger value="deals" className="text-xs h-5 px-2">
-                          Deals ({partnerContext.deals?.length || 0})
+                          {t("fin-tabs-deals")} ({partnerContext.deals?.length || 0})
                         </TabsTrigger>
                         <TabsTrigger value="invoices" className="text-xs h-5 px-2">
-                          Invoices ({partnerContext.invoices?.length || 0})
+                          {t("fin-tabs-invoices")} ({partnerContext.invoices?.length || 0})
                         </TabsTrigger>
                       </TabsList>
                       <TabsContent value="offers" className="mt-1">
@@ -2600,23 +2597,23 @@ function OfferFormDialog({
               supplier offer when the user adds the first line item. */}
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Truck className="h-4 w-4" /> Trade Terms
-              <span className="text-xs text-muted-foreground font-normal">Incoterm · POL · POD · Payment · Validity · Lead time</span>
+              <Truck className="h-4 w-4" /> {t("crm-trade-terms-section")}
+              <span className="text-xs text-muted-foreground font-normal">{t("crm-trade-terms-desc")}</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Incoterm */}
               <div className="space-y-1.5">
-                <Label>Incoterm *</Label>
+                <Label>{t("crm-incoterm-required")}</Label>
                 <MissingFieldWrap missing={isMissingField("incoterm")}>
                   <Select
                     value={form.incoterm || "__none__"}
                     onValueChange={(v) => set("incoterm", v === "__none__" ? null : v)}
                   >
                     <SelectTrigger className={cn(isMissingField("incoterm") && MISSING_FIELD_CLS)}>
-                      <SelectValue placeholder="Select incoterm" />
+                      <SelectValue placeholder={t("crm-select-incoterm")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">— None —</SelectItem>
+                      <SelectItem value="__none__">{t("crm-none-option")}</SelectItem>
                       {INCOTERM_CODES.map((code) => (
                         <SelectItem key={code} value={code}>{code}</SelectItem>
                       ))}
@@ -2627,11 +2624,11 @@ function OfferFormDialog({
 
               {/* Payment Terms */}
               <div className="space-y-1.5">
-                <Label>Payment Terms *</Label>
+                <Label>{t("crm-payment-terms-required")}</Label>
                 <MissingFieldWrap missing={isMissingField("payment_terms")}>
                   <Select value={form.payment_terms || "net30"} onValueChange={(v) => set("payment_terms", v)}>
                     <SelectTrigger className={cn(isMissingField("payment_terms") && MISSING_FIELD_CLS)}>
-                      <SelectValue placeholder="Select payment terms" />
+                      <SelectValue placeholder={t("crm-select-payment-terms")} />
                     </SelectTrigger>
                     <SelectContent>
                       {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -2642,7 +2639,7 @@ function OfferFormDialog({
 
               {/* Valid Until */}
               <div className="space-y-1.5">
-                <Label>Valid Until *</Label>
+                <Label>{t("crm-valid-until-required")}</Label>
                 <Input
                   type="date"
                   value={form.valid_until ? form.valid_until.slice(0, 10) : ""}
@@ -2652,12 +2649,12 @@ function OfferFormDialog({
 
               {/* Loading Port (POL) */}
               <div className="space-y-1.5">
-                <Label>Loading Port (POL)</Label>
+                <Label>{t("crm-loading-port-pol")}</Label>
                 <MissingFieldWrap missing={isMissingField("pol")}>
                   <PortAutocomplete
                     value={form.pol || ""}
                     onChange={(v) => set("pol", v)}
-                    placeholder="e.g., Hamburg"
+                    placeholder={t("fin-placeholder-pol")}
                     className={cn(isMissingField("pol") && MISSING_FIELD_CLS)}
                   />
                 </MissingFieldWrap>
@@ -2665,12 +2662,12 @@ function OfferFormDialog({
 
               {/* Discharge Port (POD) */}
               <div className="space-y-1.5">
-                <Label>Discharge Port (POD)</Label>
+                <Label>{t("crm-discharge-port-pod")}</Label>
                 <MissingFieldWrap missing={isMissingField("pod")}>
                   <PortAutocomplete
                     value={form.pod || ""}
                     onChange={(v) => set("pod", v)}
-                    placeholder="e.g., Jebel Ali"
+                    placeholder={t("fin-placeholder-pod")}
                     className={cn(isMissingField("pod") && MISSING_FIELD_CLS)}
                   />
                 </MissingFieldWrap>
@@ -2678,32 +2675,32 @@ function OfferFormDialog({
 
               {/* Lead Time */}
               <div className="space-y-1.5">
-                <Label>Lead Time</Label>
+                <Label>{t("crm-lead-time-label")}</Label>
                 <Input
                   value={form.lead_time || ""}
                   onChange={(e) => set("lead_time", e.target.value)}
-                  placeholder="e.g., 14 days"
+                  placeholder={t("fin-placeholder-lead-time")}
                 />
               </div>
 
               {/* Packaging */}
               <div className="space-y-1.5">
-                <Label>Packaging</Label>
+                <Label>{t("crm-packaging-label")}</Label>
                 <Input
                   value={form.packaging || ""}
                   onChange={(e) => set("packaging", e.target.value)}
-                  placeholder="e.g., 50kg PP bags"
+                  placeholder={t("fin-placeholder-packaging")}
                 />
               </div>
 
               {/* Origin Country */}
               <div className="space-y-1.5">
-                <Label>Origin Country</Label>
+                <Label>{t("crm-origin-country-label")}</Label>
                 <MissingFieldWrap missing={isMissingField("origin_country")}>
                   <CountrySelect
                     value={(form as any).origin_country ?? null}
                     onChange={(v) => setExtra("origin_country", v || null)}
-                    placeholder="Select origin country"
+                    placeholder={t("crm-select-origin-country")}
                     className={cn(isMissingField("origin_country") && MISSING_FIELD_CLS)}
                   />
                 </MissingFieldWrap>
@@ -2711,30 +2708,30 @@ function OfferFormDialog({
 
               {/* Inspection */}
               <div className="space-y-1.5">
-                <Label>Inspection</Label>
+                <Label>{t("crm-inspection-label")}</Label>
                 <Select
                   value={(form as any).inspection || "__none__"}
                   onValueChange={(v) => setExtra("inspection", v === "__none__" ? null : v)}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select inspection" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("crm-select-inspection")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">— None —</SelectItem>
+                    <SelectItem value="__none__">{t("fin-none-dash-option")}</SelectItem>
                     <SelectItem value="SGS">SGS</SelectItem>
                     <SelectItem value="Intertek">Intertek</SelectItem>
                     <SelectItem value="Bureau Veritas">Bureau Veritas</SelectItem>
                     <SelectItem value="Cotecna">Cotecna</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="other">{t("crm-other")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Certificate */}
               <div className="space-y-1.5">
-                <Label>Certificate</Label>
+                <Label>{t("crm-certificate-label")}</Label>
                 <Input
                   value={(form as any).certificate || ""}
                   onChange={(e) => setExtra("certificate", e.target.value || null)}
-                  placeholder="e.g., Phytosanitary, ISO 22000, Halal"
+                  placeholder={t("fin-placeholder-certificate")}
                 />
               </div>
             </div>
@@ -2744,34 +2741,34 @@ function OfferFormDialog({
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Package className="h-4 w-4" /> Line Items
+                <Package className="h-4 w-4" /> {t("crm-line-items")}
                 <Sparkles className="size-3.5 text-amber-500" />
-                <span className="text-xs text-muted-foreground font-normal">Auto-fill from catalog & supplier offers</span>
+                <span className="text-xs text-muted-foreground font-normal">{t("crm-auto-fill-catalog-supplier")}</span>
               </h3>
               <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                <Plus className="size-4 mr-1" /> Add item
+                <Plus className="size-4 mr-1" /> {t("crm-add-item")}
               </Button>
             </div>
 
             {(form.items || []).length === 0 ? (
               <div className="border rounded-md border-dashed border-border/60 p-6 text-center bg-card">
                 <Package className="size-8 text-muted-foreground/40 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No line items yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Click &ldquo;Add item&rdquo; to add products or services</p>
+                <p className="text-sm text-muted-foreground">{t("crm-no-line-items")}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t("crm-click-add-item")}</p>
               </div>
             ) : (
               <div className="rounded-md border border-border/60 overflow-x-auto bg-card">
                 <Table>
                   <TableHeader className="bg-muted/30">
                     <TableRow>
-                      <TableHead className="min-w-[200px]">Product</TableHead>
-                      <TableHead className="w-24 hidden md:table-cell">HS Code</TableHead>
-                      <TableHead className="w-20 text-right">Qty</TableHead>
-                      <TableHead className="w-24">Unit</TableHead>
-                      <TableHead className="w-32 text-right">Unit Price</TableHead>
-                      <TableHead className="w-16 text-right hidden sm:table-cell">Disc%</TableHead>
-                      <TableHead className="w-16 text-right hidden sm:table-cell">Tax%</TableHead>
-                      <TableHead className="w-28 text-right">Line Total</TableHead>
+                      <TableHead className="min-w-[200px]">{t("crm-product")}</TableHead>
+                      <TableHead className="w-24 hidden md:table-cell">{t("crm-hs-code")}</TableHead>
+                      <TableHead className="w-20 text-right">{t("crm-qty")}</TableHead>
+                      <TableHead className="w-24">{t("crm-unit-detail")}</TableHead>
+                      <TableHead className="w-32 text-right">{t("crm-unit-price-detail")}</TableHead>
+                      <TableHead className="w-16 text-right hidden sm:table-cell">{t("crm-disc-pct")}</TableHead>
+                      <TableHead className="w-16 text-right hidden sm:table-cell">{t("crm-tax-pct-form")}</TableHead>
+                      <TableHead className="w-28 text-right">{t("crm-line-total")}</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2786,7 +2783,7 @@ function OfferFormDialog({
                               value={it.product_id || ""}
                               fallbackName={it.product_name || ""}
                               fallbackSku={it.sku || ""}
-                              placeholder="Search products by name, SKU, HS code…"
+                              placeholder={t("fin-search-products-placeholder")}
                               onSelect={(product) => {
                                 if (product) {
                                   selectProduct(idx, product);
@@ -2813,7 +2810,7 @@ function OfferFormDialog({
                             />
                             <Input
                               className="h-7 text-xs"
-                              placeholder="Product name (override)"
+                              placeholder={t("crm-product-name-override")}
                               value={it.product_name || ""}
                               onChange={(e) => setItem(idx, { product_name: e.target.value })}
                             />
@@ -2917,7 +2914,7 @@ function OfferFormDialog({
                                             it.unit!,
                                           )}`
                                         : "";
-                                    return `Supplier offer: ${soPrice}/${soUnit} (SO-${soRef})${conv}`;
+                                    return t("fin-supplier-offer-tooltip").replace("${price}", soPrice).replace("${unit}", soUnit).replace("${ref}", soRef).replace("${conv}", conv);
                                   })()
                                 : undefined
                             }
@@ -2929,9 +2926,9 @@ function OfferFormDialog({
                             <Badge
                               variant="outline"
                               className="mt-0.5 text-[10px] h-4 px-1 font-mono border-blue-500/30 bg-blue-50/60 text-blue-700 dark:bg-blue-950/20 dark:text-blue-300"
-                              title={`Auto-filled from supplier offer${productContextMap[idx].latestSupplierOffer!.offer_number ? ` ${productContextMap[idx].latestSupplierOffer!.offer_number}` : ""}`}
+                              title={t("fin-auto-filled-from-supplier-offer").replace("${number}", productContextMap[idx].latestSupplierOffer!.offer_number ? ` ${productContextMap[idx].latestSupplierOffer!.offer_number}` : "")}
                             >
-                              Supplier: {fmtMoney(
+                              {t("fin-supplier-prefix")} {fmtMoney(
                                 productContextMap[idx].latestSupplierOffer!.unit_price,
                                 productContextMap[idx].latestSupplierOffer!.currency || form.currency || "USD",
                               )}/{productContextMap[idx].product?.unit || "unit"}
@@ -2956,7 +2953,7 @@ function OfferFormDialog({
                         </TableCell>
                         <TableCell
                           className="text-right font-mono tabular text-sm font-medium"
-                          title={`Line total: ${fmtMoney(lineRevenue, form.currency || "USD")}`}
+                          title={t("fin-line-total-prefix").replace("${money}", fmtMoney(lineRevenue, form.currency || "USD"))}
                         >
                           {fmtMoney(lineRevenue, form.currency || "USD")}
                         </TableCell>
@@ -2967,7 +2964,7 @@ function OfferFormDialog({
                             variant="ghost"
                             className="size-8 text-destructive"
                             onClick={() => removeItem(idx)}
-                            title="Remove"
+                            title={t("remove")}
                           >
                             <X className="size-4" />
                           </Button>
@@ -2989,19 +2986,19 @@ function OfferFormDialog({
               textarea below flips the picker to "custom" (no highlight). */}
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Landmark className="h-4 w-4" /> Bank Account for Payment
+              <Landmark className="h-4 w-4" /> {t("crm-bank-account-payment")}
             </h3>
             {tenantBankAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground bg-card">
-                No bank accounts are configured on this tenant. Add them in the tenant settings to enable quick bank-account selection.
+                {t("crm-no-bank-accounts")}
               </div>
             ) : (
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
-                  Bank Account
+                  {t("crm-bank-account")}
                   {selectedBankAccountIdx !== null && !manualBankOverride && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                      <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                      <Sparkles className="size-2.5 text-amber-500" /> {t("fin-auto-filled")}
                     </Badge>
                   )}
                 </Label>
@@ -3021,20 +3018,20 @@ function OfferFormDialog({
                       if (acct) {
                         const formatted = formatBankDetailsForOffer(acct);
                         setForm((f) => ({ ...f, bank_details: formatted }));
-                        toast.success("Bank details auto-filled", {
-                          description: acct.bankName || acct.bank_name || "Selected account",
+                        toast.success(t("crm-bank-details-auto-filled"), {
+                          description: acct.bankName || acct.bank_name || t("fin-selected-account"),
                         });
                       }
                     }
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a bank account (or use custom text below)…" />
+                    <SelectValue placeholder={t("crm-select-bank-account")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">— No selection (use text below) —</SelectItem>
+                    <SelectItem value="__none__">{t("crm-no-selection")}</SelectItem>
                     {tenantBankAccounts.map((acct, idx) => {
-                      const bankName = acct.bankName || acct.bank_name || "Bank";
+                      const bankName = acct.bankName || acct.bank_name || t("fin-bank-default-name");
                       const accountNumber = acct.accountNumber || acct.account_number || acct.iban || "—";
                       const currency = acct.currency || "";
                       const swift = acct.swiftCode || acct.swift_code || "";
@@ -3059,7 +3056,7 @@ function OfferFormDialog({
             )}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">
-                Bank Details (editable — shown verbatim on the offer PDF)
+                {t("crm-bank-details-editable")}
               </Label>
               <Textarea
                 rows={3}
@@ -3072,11 +3069,11 @@ function OfferFormDialog({
                   // from the dropdown to re-fill from a tenant account.
                   setManualBankOverride(true);
                 }}
-                placeholder="Bank name, account number, IBAN, SWIFT/BIC…"
+                placeholder={t("crm-bank-details-placeholder")}
               />
               {manualBankOverride && selectedBankAccountIdx !== null && (
                 <p className="text-[11px] text-muted-foreground italic">
-                  Customized — changes here won&rsquo;t affect the saved tenant bank account.
+                  {t("crm-customized-note")}
                 </p>
               )}
             </div>
@@ -3085,20 +3082,20 @@ function OfferFormDialog({
           {/* ─── Offer Text / Notes / Terms (template builder) ─── */}
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Offer Text
-              <span className="text-xs text-muted-foreground font-normal">Template builder + free-form notes</span>
+              <FileText className="h-4 w-4" /> {t("crm-offer-text")}
+              <span className="text-xs text-muted-foreground font-normal">{t("crm-template-builder")}</span>
             </h3>
             <div className="space-y-1.5">
-              <Label>Notes</Label>
+              <Label>{t("crm-notes-label")}</Label>
               <Textarea
                 rows={2}
                 value={form.notes || ""}
                 onChange={(e) => set("notes", e.target.value)}
-                placeholder="Additional notes visible to the partner…"
+                placeholder={t("crm-notes-placeholder")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Offer Text / Terms &amp; Conditions</Label>
+              <Label>{t("crm-offer-text-terms")}</Label>
               <OfferTextBuilder
                 value={typeof form.terms === "string" ? form.terms : ""}
                 onChange={(text) => set("terms", text)}
@@ -3119,14 +3116,14 @@ function OfferFormDialog({
           {/* ─── Totals (auto-calculated, read-only) ─── */}
           <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Receipt className="h-4 w-4" /> Totals
-              <span className="text-xs text-muted-foreground font-normal">Auto-calculated from line items</span>
+              <Receipt className="h-4 w-4" /> {t("crm-totals")}
+              <span className="text-xs text-muted-foreground font-normal">{t("crm-totals-auto-calc")}</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
               {/* Amount in words */}
               <div className="rounded-md border border-border/60 bg-card p-3">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-                  Amount in Words
+                  {t("crm-amount-in-words")}
                 </p>
                 <p className="text-xs font-medium leading-snug">
                   {amountInWords(totals.total, form.currency || "USD")}
@@ -3136,22 +3133,22 @@ function OfferFormDialog({
               <div className="space-y-1 text-sm ml-auto w-full sm:w-72">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Sparkles className="size-3 text-amber-500" />
-                  <span className="text-xs text-muted-foreground">Auto-calculated</span>
+                  <span className="text-xs text-muted-foreground">{t("crm-auto-calculated")}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">{t("crm-subtotal")}</span>
                   <span className="font-mono tabular">{fmtMoney(totals.subtotal, form.currency || "USD")}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Discount</span>
+                  <span className="text-muted-foreground">{t("crm-discount")}</span>
                   <span className="font-mono tabular">- {fmtMoney(totals.discount_total, form.currency || "USD")}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
+                  <span className="text-muted-foreground">{t("crm-tax")}</span>
                   <span className="font-mono tabular">{fmtMoney(totals.tax_total, form.currency || "USD")}</span>
                 </div>
                 <div className="flex justify-between border-t pt-1.5 mt-1 text-base font-bold">
-                  <span>Grand Total</span>
+                  <span>{t("crm-grand-total")}</span>
                   <span className="font-mono tabular">{fmtMoney(totals.total, form.currency || "USD")}</span>
                 </div>
               </div>
@@ -3177,7 +3174,7 @@ function OfferFormDialog({
                   <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 )}
                 <CheckCircle2 className="size-4 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium">Data Completeness</span>
+                <span className="text-sm font-medium">{t("crm-data-completeness")}</span>
                 <Badge
                   variant={
                     completenessReport.criticalCount > 0
@@ -3192,18 +3189,18 @@ function OfferFormDialog({
                 </Badge>
                 {completenessReport.criticalCount > 0 && (
                   <span className="text-xs text-destructive">
-                    {completenessReport.criticalCount} critical
+                    {completenessReport.criticalCount} {t("crm-critical")}
                   </span>
                 )}
                 {completenessReport.criticalCount === 0 &&
                   completenessReport.warningCount > 0 && (
                     <span className="text-xs text-muted-foreground">
-                      {completenessReport.warningCount} to review
+                      {completenessReport.warningCount} {t("crm-to-review")}
                     </span>
                   )}
                 {completenessReport.criticalCount === 0 &&
                   completenessReport.warningCount === 0 && (
-                    <span className="text-xs text-emerald-600">All complete</span>
+                    <span className="text-xs text-emerald-600">{t("crm-all-complete")}</span>
                   )}
               </button>
             </CollapsibleTrigger>
@@ -3226,8 +3223,8 @@ function OfferFormDialog({
                 ) : (
                   <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 )}
-                <span className="text-sm font-medium">More Details</span>
-                <span className="text-xs text-muted-foreground">Subject, deal, vessel, container, tax clause…</span>
+                <span className="text-sm font-medium">{t("crm-more-details")}</span>
+                <span className="text-xs text-muted-foreground">{t("crm-subject-deal-etc")}</span>
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -3235,22 +3232,22 @@ function OfferFormDialog({
                 {/* Subject + Deal */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Subject</Label>
+                    <Label>{t("crm-subject-label")}</Label>
                     <Input
                       value={form.subject || ""}
                       onChange={(e) => set("subject", e.target.value)}
-                      placeholder="Equipment supply 2026"
+                      placeholder={t("crm-equipment-inquiry-ph")}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Linked Deal</Label>
+                    <Label>{t("crm-linked-deal")}</Label>
                     <Select
                       value={form.deal_id || "__none__"}
                       onValueChange={(v) => set("deal_id", v === "__none__" ? null : v)}
                     >
-                      <SelectTrigger><SelectValue placeholder="No deal" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("crm-no-deal")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">— No deal —</SelectItem>
+                        <SelectItem value="__none__">{t("crm-no-deal-option")}</SelectItem>
                         {dealList.map((d) => (
                           <SelectItem key={d.id} value={d.id}>{d.title}</SelectItem>
                         ))}
@@ -3262,15 +3259,15 @@ function OfferFormDialog({
                 {/* Supplier ref + Selling price */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Supplier Ref (offer_no)</Label>
+                    <Label>{t("crm-supplier-ref-label")}</Label>
                     <Input value={form.offer_no || ""} onChange={(e) => set("offer_no", e.target.value)} placeholder="SUP-2026-001" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Selling Price</Label>
-                    <Input type="number" value={form.selling_price ?? ""} onChange={(e) => set("selling_price", e.target.value === "" ? null : Number(e.target.value))} placeholder="Per unit" />
+                    <Label>{t("crm-selling-price-label")}</Label>
+                    <Input type="number" value={form.selling_price ?? ""} onChange={(e) => set("selling_price", e.target.value === "" ? null : Number(e.target.value))} placeholder={t("crm-per-unit")} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Tax Clause</Label>
+                    <Label>{t("crm-tax-clause-label")}</Label>
                     <Input value={form.tax_clause || ""} onChange={(e) => set("tax_clause", e.target.value)} placeholder="VAT reverse charge" />
                   </div>
                 </div>
@@ -3278,11 +3275,11 @@ function OfferFormDialog({
                 {/* Shipping specifics — vessel + container */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Vessel</Label>
+                    <Label>{t("crm-vessel-label")}</Label>
                     <Input value={form.vessel || ""} onChange={(e) => set("vessel", e.target.value)} placeholder="MV Ever Given" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Container No.</Label>
+                    <Label>{t("crm-container-no-label")}</Label>
                     <Input value={form.container_no || ""} onChange={(e) => set("container_no", e.target.value)} placeholder="MSKU-1234567" />
                   </div>
                 </div>
@@ -3302,19 +3299,19 @@ function OfferFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
             {saving ? (
               <>
                 <Loader2 className="size-4 mr-1 animate-spin" />
-                Saving…
+                {t("crm-saving-ellipsis")}
               </>
             ) : offer ? (
-              "Save changes"
+              t("crm-save-changes")
             ) : (
               <>
                 <Plus className="size-4 mr-1" />
-                Create offer
+                {t("crm-create-offer")}
               </>
             )}
           </Button>

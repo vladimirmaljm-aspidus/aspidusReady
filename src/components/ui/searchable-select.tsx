@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/lib/i18n/store";
 
 export interface SearchableOption {
   value: string;
@@ -60,13 +61,17 @@ export function SearchableSelect({
   options,
   value,
   onChange,
-  placeholder = "Select…",
-  searchPlaceholder = "Search…",
-  emptyText = "No results found.",
+  placeholder,
+  searchPlaceholder,
+  emptyText,
   disabled,
   className,
   clearable,
 }: SearchableSelectProps) {
+  const t = useT();
+  const effectivePlaceholder = placeholder ?? t("no_results");
+  const effectiveSearchPlaceholder = searchPlaceholder ?? t("search");
+  const effectiveEmptyText = emptyText ?? t("no_results");
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -116,7 +121,7 @@ export function SearchableSelect({
               <span className="truncate">{selected.label}</span>
             </span>
           ) : (
-            placeholder
+            effectivePlaceholder
           )}
           <span className="flex items-center gap-1 shrink-0">
             {clearable && selected && (
@@ -149,14 +154,14 @@ export function SearchableSelect({
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={searchPlaceholder}
+            placeholder={effectiveSearchPlaceholder}
             className="border-0 shadow-none focus-visible:ring-0 px-0 h-9"
             onKeyDown={handleKeyDown}
           />
         </div>
         <div className="max-h-64 overflow-y-auto p-1">
           {filtered.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">{emptyText}</div>
+            <div className="py-6 text-center text-sm text-muted-foreground">{effectiveEmptyText}</div>
           ) : (
             filtered.map((option) => (
               <button
@@ -186,7 +191,7 @@ export function SearchableSelect({
         </div>
         {filtered.length > 0 && (
           <div className="border-t px-3 py-1.5 text-xs text-muted-foreground">
-            {filtered.length} option{filtered.length === 1 ? "" : "s"}
+            {t("misc-ss-options-count").replace("{n}", String(filtered.length))}
           </div>
         )}
       </PopoverContent>

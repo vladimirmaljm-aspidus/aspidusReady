@@ -14,6 +14,7 @@ import type {
   CompletenessReport,
   CompletenessIssue,
 } from "@/lib/utils/completeness-checker";
+import { useT } from "@/lib/i18n/store";
 
 interface CompletenessCheckerProps {
   report: CompletenessReport;
@@ -36,6 +37,7 @@ export function CompletenessChecker({
   report,
   className,
 }: CompletenessCheckerProps) {
+  const t = useT();
   const {
     issues,
     criticalCount,
@@ -82,7 +84,7 @@ export function CompletenessChecker({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4" />
-          Data Completeness
+          {t("misc-data-completeness")}
         </h3>
         <Badge
           variant={
@@ -93,7 +95,7 @@ export function CompletenessChecker({
                 : "default"
           }
         >
-          {completenessScore}% Complete
+          {t("misc-pct-complete").replace("{n}", String(completenessScore))}
         </Badge>
       </div>
 
@@ -104,12 +106,12 @@ export function CompletenessChecker({
         />
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>
-            {filledFields} of {totalFields} fields filled
+            {t("misc-fields-filled").replace("{filled}", String(filledFields)).replace("{total}", String(totalFields))}
           </span>
           <span className={scoreColor}>
-            {criticalCount > 0 && `${criticalCount} critical · `}
-            {warningCount > 0 && `${warningCount} warnings`}
-            {criticalCount === 0 && warningCount === 0 && "All fields complete!"}
+            {criticalCount > 0 && t("misc-critical-count").replace("{n}", String(criticalCount))}
+            {warningCount > 0 && t("misc-warnings-count").replace("{n}", String(warningCount))}
+            {criticalCount === 0 && warningCount === 0 && t("misc-all-fields-complete")}
           </span>
         </div>
       </div>
@@ -121,13 +123,13 @@ export function CompletenessChecker({
               <div key={group} className="space-y-1">
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   {group === "offer"
-                    ? "Offer Details"
+                    ? t("misc-completeness-offer")
                     : group === "partner"
-                      ? "Buyer Details"
+                      ? t("misc-completeness-partner")
                       : group === "tenant"
-                        ? "Company Details"
+                        ? t("misc-completeness-tenant")
                         : group.startsWith("item")
-                          ? `Line Item ${group.split(" ")[1]}`
+                          ? t("misc-completeness-line-item").replace("{n}", group.split(" ")[1])
                           : group}
                 </div>
                 {groupIssues.map((issue, i) => (

@@ -15,6 +15,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import dynamic from "next/dynamic";
+import { useT } from "@/lib/i18n/store";
 
 /* -------------------------------------------------------------------------- */
 /*  Dynamic view imports (unchanged)                                          */
@@ -136,11 +137,12 @@ function ViewContent({ view }: { view: string }) {
 /* -------------------------------------------------------------------------- */
 
 function MobileSidebar({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const t = useT();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-72 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
         {/* Visually-hidden title for accessibility */}
-        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SheetTitle className="sr-only">{t("misc-navigation-sr")}</SheetTitle>
         <div className="h-full overflow-hidden">
           <Sidebar hideCollapseToggle forceExpanded />
         </div>
@@ -158,6 +160,7 @@ export function AppShell() {
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const t = useT();
 
   /* Close mobile menu when view changes */
   React.useEffect(() => {
@@ -203,7 +206,7 @@ export function AppShell() {
               type="button"
               className="lg:hidden inline-flex items-center justify-center size-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 smooth shrink-0"
               onClick={() => setMobileMenuOpen(true)}
-              aria-label="Open menu"
+              aria-label={t("misc-open-menu-aria")}
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M3 6h14M3 10h14M3 14h14" />

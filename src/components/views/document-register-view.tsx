@@ -39,11 +39,17 @@ import {
 } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 type DocStatus = "current" | "superseded" | "archived";
 
-const TYPE_LABELS: Record<DocumentType, string> = {
-  offer: "Offer", invoice: "Invoice", proforma: "Proforma", contract: "Contract", spec: "Spec", other: "Other",
+const TYPE_LABEL_KEY: Record<DocumentType, string> = {
+  offer: "fin-doc-type-offer",
+  invoice: "fin-doc-type-invoice",
+  proforma: "fin-doc-type-proforma",
+  contract: "fin-doc-type-contract",
+  spec: "fin-doc-type-spec",
+  other: "fin-doc-type-other",
 };
 
 const TYPE_PREFIX: Record<DocumentType, string> = {
@@ -55,6 +61,7 @@ const TYPE_ICON: Record<DocumentType, typeof FileText> = {
 };
 
 function TypeBadge({ type }: { type: DocumentType }) {
+  const t = useT();
   const cls: Record<DocumentType, string> = {
     offer: "border-transparent bg-[var(--chart-1)] text-white",
     invoice: "border-transparent bg-[var(--chart-4)] text-white",
@@ -66,15 +73,16 @@ function TypeBadge({ type }: { type: DocumentType }) {
   const Icon = TYPE_ICON[type];
   return (
     <Badge className={`gap-1 ${cls[type]}`}>
-      <Icon className="size-3" /> {TYPE_LABELS[type]}
+      <Icon className="size-3" /> {t(TYPE_LABEL_KEY[type])}
     </Badge>
   );
 }
 
 function StatusBadge({ status }: { status: DocStatus }) {
-  if (status === "current") return <Badge className="border-transparent bg-emerald-600 text-white">Current</Badge>;
-  if (status === "superseded") return <Badge className="border-transparent bg-muted text-muted-foreground">Superseded</Badge>;
-  return <Badge variant="secondary">Archived</Badge>;
+  const t = useT();
+  if (status === "current") return <Badge className="border-transparent bg-emerald-600 text-white">{t("doc-status-current")}</Badge>;
+  if (status === "superseded") return <Badge className="border-transparent bg-muted text-muted-foreground">{t("doc-status-superseded")}</Badge>;
+  return <Badge variant="secondary">{t("doc-status-archived")}</Badge>;
 }
 
 function VersionBadge({ status, version }: { status: DocStatus; version: number }) {
@@ -110,6 +118,7 @@ function nextSeqForType(entries: DocumentRegisterEntry[], type: DocumentType): s
 export function DocumentRegisterView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -159,12 +168,12 @@ export function DocumentRegisterView() {
       if (!r.ok) throw new Error("Failed to delete entry");
     },
     onSuccess: () => {
-      toast.success("Document entry deleted.");
+      toast.success(t("fin-document-entry-deleted"));
       qc.invalidateQueries({ queryKey: ["document-register", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("fin-delete-failed")),
   });
 
   const items = data?.items || [];
@@ -184,11 +193,11 @@ export function DocumentRegisterView() {
   return (
     <div>
       <PageHeader
-        title="Document Register"
-        description={`${data?.total ?? 0} entries`}
+        title={t("doc-document-register-title")}
+        description={`${data?.total ?? 0} ${t("fin-entries-suffix")}`}
         actions={
           <Button onClick={openNew}>
-            <Plus className="size-4 mr-1" /> New entry
+            <Plus className="size-4 mr-1" /> {t("doc-new-entry")}
           </Button>
         }
       />
@@ -198,31 +207,31 @@ export function DocumentRegisterView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by number or title…"
+              placeholder={t("fin-search-number-title")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Type" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("type")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="offer">Offer</SelectItem>
-              <SelectItem value="invoice">Invoice</SelectItem>
-              <SelectItem value="proforma">Proforma</SelectItem>
-              <SelectItem value="contract">Contract</SelectItem>
-              <SelectItem value="spec">Spec</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              <SelectItem value="all">{t("doc-all-types")}</SelectItem>
+              <SelectItem value="offer">{t("fin-doc-type-offer")}</SelectItem>
+              <SelectItem value="invoice">{t("fin-doc-type-invoice")}</SelectItem>
+              <SelectItem value="proforma">{t("fin-doc-type-proforma")}</SelectItem>
+              <SelectItem value="contract">{t("fin-doc-type-contract")}</SelectItem>
+              <SelectItem value="spec">{t("fin-doc-type-spec")}</SelectItem>
+              <SelectItem value="other">{t("fin-doc-type-other")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("status")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="current">Current</SelectItem>
-              <SelectItem value="superseded">Superseded</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
+              <SelectItem value="all">{t("fin-all-statuses")}</SelectItem>
+              <SelectItem value="current">{t("doc-status-current")}</SelectItem>
+              <SelectItem value="superseded">{t("doc-status-superseded")}</SelectItem>
+              <SelectItem value="archived">{t("doc-status-archived")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -237,23 +246,23 @@ export function DocumentRegisterView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<FileText className="size-6" />}
-              title="No documents"
-              description="Register your first document to start tracking versions."
-              action={<Button onClick={openNew}><Plus className="size-4 mr-1" /> New entry</Button>}
+              title={t("fin-no-documents")}
+              description={t("fin-no-documents-desc")}
+              action={<Button onClick={openNew}><Plus className="size-4 mr-1" /> {t("doc-new-entry")}</Button>}
             />
           ) : (
             <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Number</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="hidden md:table-cell">Title</TableHead>
-                    <TableHead>Version</TableHead>
-                    <TableHead className="hidden lg:table-cell">Partner</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden xl:table-cell">Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("fin-number")}</TableHead>
+                    <TableHead>{t("type")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("fin-title-col")}</TableHead>
+                    <TableHead>{t("doc-version")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("fin-partner")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t("fin-created-col")}</TableHead>
+                    <TableHead className="text-right">{t("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -270,7 +279,7 @@ export function DocumentRegisterView() {
                       <TableCell className="hidden xl:table-cell">{fmtDate(e.created_at)}</TableCell>
                       <TableCell className="text-right" onClick={(ev) => ev.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(e.id)} title="View" aria-label="View">
+                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(e.id)} title={t("view")} aria-label={t("view")}>
                             <Eye className="size-4" />
                           </Button>
                           <Button
@@ -278,11 +287,11 @@ export function DocumentRegisterView() {
                             variant="ghost"
                             className="size-8"
                             onClick={() => openVersion(e)}
-                            title="New version" aria-label="New version"
+                            title={t("fin-new-version")} aria-label={t("fin-new-version")}
                           >
                             <GitBranch className="size-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(e.id)} title="Delete" aria-label="Delete">
+                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(e.id)} title={t("delete")} aria-label={t("delete")}>
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
@@ -318,11 +327,11 @@ export function DocumentRegisterView() {
             <SheetTitle className="flex items-center gap-2">
               <History className="size-5" />
               <span className="font-mono text-base">
-                {items.find((x) => x.id === detailId)?.number || "Document"}
+                {items.find((x) => x.id === detailId)?.number || t("doc-document-singular")}
               </span>
             </SheetTitle>
             <SheetDescription>
-              {items.find((x) => x.id === detailId)?.title || "Document details"}
+              {items.find((x) => x.id === detailId)?.title || t("doc-details")}
             </SheetDescription>
           </SheetHeader>
           {detail.isLoading ? (
@@ -344,18 +353,18 @@ export function DocumentRegisterView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document entry?</AlertDialogTitle>
+            <AlertDialogTitle>{t("fin-delete-document-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The register entry will be permanently removed.
+              {t("fin-delete-document-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -372,8 +381,9 @@ function DocumentDetail({
   revisions: DocumentRevision[];
   partnerName: (id: string | null) => string;
 }) {
+  const t = useT();
   if (!entry) {
-    return <div className="p-4 text-sm text-muted-foreground">Document not found.</div>;
+    return <div className="p-4 text-sm text-muted-foreground">{t("fin-document-not-found")}</div>;
   }
   const initialNote =
     entry.metadata && typeof entry.metadata === "object" && "change_note" in entry.metadata
@@ -400,19 +410,19 @@ function DocumentDetail({
 
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="p-3 rounded-md bg-muted/40">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><FileText className="size-3" /> Title</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><FileText className="size-3" /> {t("fin-title-col")}</p>
           <p className="text-sm font-medium truncate">{entry.title || "—"}</p>
         </div>
         <div className="p-3 rounded-md bg-muted/40">
-          <p className="text-xs text-muted-foreground">Partner</p>
+          <p className="text-xs text-muted-foreground">{t("fin-partner")}</p>
           <p className="text-sm font-medium truncate">{partnerName(entry.partner_id)}</p>
         </div>
         <div className="p-3 rounded-md bg-muted/40">
-          <p className="text-xs text-muted-foreground">Reference</p>
+          <p className="text-xs text-muted-foreground">{t("fin-reference-col")}</p>
           <p className="text-sm font-mono truncate">{entry.reference_id || "—"}</p>
         </div>
         <div className="p-3 rounded-md bg-muted/40">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> Created</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> {t("fin-created-col")}</p>
           <p className="text-sm font-medium">{fmtDateTime(entry.created_at)}</p>
         </div>
       </div>
@@ -420,11 +430,11 @@ function DocumentDetail({
       {/* Revisions timeline */}
       <div className="border-t pt-4">
         <p className="text-sm font-medium mb-3 flex items-center gap-2">
-          <GitBranch className="size-4" /> Revisions
+          <GitBranch className="size-4" /> {t("fin-revisions-label")}
         </p>
         {timeline.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6 border rounded-md">
-            No revisions recorded.
+            {t("fin-no-revisions-recorded")}
           </p>
         ) : (
           <ol className="relative border-l border-border ml-2 space-y-4">
@@ -439,7 +449,7 @@ function DocumentDetail({
                 </div>
                 <p className="text-sm text-foreground whitespace-pre-wrap">{r.note || "—"}</p>
                 {r.created_by && (
-                  <p className="text-xs text-muted-foreground mt-1">by {r.created_by}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("fin-by-prefix")} {r.created_by}</p>
                 )}
               </li>
             ))}
@@ -463,6 +473,7 @@ function DocumentFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const isVersion = !!parent;
   const [form, setForm] = useState<{
@@ -516,7 +527,7 @@ function DocumentFormDialog({
   }, [form.type, form.version, parent, existing]);
 
   async function save() {
-    if (!form.title.trim()) { toast.error("Enter a title."); return; }
+    if (!form.title.trim()) { toast.error(t("fin-enter-title-toast")); return; }
     setSaving(true);
     try {
       const basePayload = {
@@ -538,7 +549,7 @@ function DocumentFormDialog({
       });
       if (!createR.ok) {
         const e = await createR.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to create entry");
+        throw new Error(e.error || t("fin-failed-create-entry"));
       }
 
       // 2) If new version, mark parent as superseded
@@ -552,14 +563,14 @@ function DocumentFormDialog({
           }),
         });
         if (!supR.ok) {
-          toast.warning("New version created, but failed to supersede the previous one.");
+          toast.warning(t("fin-supersede-warning"));
         }
       }
 
-      toast.success(parent ? "New version created." : "Document entry created.");
+      toast.success(parent ? t("fin-new-version-created") : t("fin-document-entry-created"));
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Save failed.");
+      toast.error(e.message || t("fin-save-failed"));
     } finally {
       setSaving(false);
     }
@@ -569,11 +580,11 @@ function DocumentFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>{parent ? `New version of ${parent.number}` : "New document entry"}</DialogTitle>
+          <DialogTitle>{parent ? `${t("fin-new-version-of")} ${parent.number}` : t("fin-new-document-entry")}</DialogTitle>
           <DialogDescription>
             {parent
-              ? "Auto-increments the version and marks the previous one as superseded."
-              : "Register a new document with an auto-generated version number."}
+              ? t("fin-auto-increments-desc")
+              : t("fin-register-new-doc-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -581,7 +592,7 @@ function DocumentFormDialog({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
           <div className="space-y-1.5">
-            <Label>Type *</Label>
+            <Label>{t("type")} *</Label>
             <Select
               value={form.type}
               onValueChange={(v) => set("type", v as DocumentType)}
@@ -589,18 +600,18 @@ function DocumentFormDialog({
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="offer">Offer</SelectItem>
-                <SelectItem value="invoice">Invoice</SelectItem>
-                <SelectItem value="proforma">Proforma</SelectItem>
-                <SelectItem value="contract">Contract</SelectItem>
-                <SelectItem value="spec">Spec</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                <SelectItem value="offer">{t("fin-doc-type-offer")}</SelectItem>
+                <SelectItem value="invoice">{t("fin-doc-type-invoice")}</SelectItem>
+                <SelectItem value="proforma">{t("fin-doc-type-proforma")}</SelectItem>
+                <SelectItem value="contract">{t("fin-doc-type-contract")}</SelectItem>
+                <SelectItem value="spec">{t("fin-doc-type-spec")}</SelectItem>
+                <SelectItem value="other">{t("fin-doc-type-other")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Version</Label>
+            <Label>{t("doc-version")}</Label>
             <Input
               type="number"
               min={1}
@@ -610,25 +621,25 @@ function DocumentFormDialog({
           </div>
 
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Title *</Label>
+            <Label>{t("fin-title-required-label")} *</Label>
             <Input
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
-              placeholder="Supply agreement — 2026 frame contract"
+              placeholder={t("fin-title-placeholder")}
               disabled={isVersion}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Partner</Label>
+            <Label>{t("fin-partner")}</Label>
             <Select
               value={form.partner_id || "__none__"}
               onValueChange={(v) => set("partner_id", v === "__none__" ? "" : v)}
               disabled={isVersion}
             >
-              <SelectTrigger><SelectValue placeholder="No partner" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("fin-no-partner-option")} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">— No partner —</SelectItem>
+                <SelectItem value="__none__">{t("fin-no-partner-option")}</SelectItem>
                 {partners.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}
@@ -637,36 +648,36 @@ function DocumentFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Reference ID</Label>
+            <Label>{t("fin-reference-id-label")}</Label>
             <Input
               value={form.reference_id}
               onChange={(e) => set("reference_id", e.target.value)}
-              placeholder="Optional external reference"
+              placeholder={t("fin-reference-id-placeholder")}
               disabled={isVersion}
             />
           </div>
 
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Generated number</Label>
+            <Label>{t("fin-generated-number")}</Label>
             <Input value={number} readOnly className="font-mono text-xs bg-muted/40" />
           </div>
 
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Change note</Label>
+            <Label>{t("fin-change-note")}</Label>
             <Textarea
               rows={3}
               value={form.change_note}
               onChange={(e) => set("change_note", e.target.value)}
-              placeholder={parent ? "What changed in this version?" : "Initial note (optional)"}
+              placeholder={parent ? t("fin-what-changed-placeholder") : t("fin-initial-note-placeholder")}
             />
           </div>
         </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : parent ? "Create version" : "Create entry"}
+            {saving ? t("fin-saving") : parent ? t("fin-create-version-btn") : t("fin-create-entry-btn")}
           </Button>
         </DialogFooter>
       </DialogContent>

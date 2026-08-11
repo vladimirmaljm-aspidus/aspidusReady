@@ -35,27 +35,29 @@ import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { VaultSecret } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 type SecretCategory = VaultSecret["category"];
 type SafeSecret = Omit<VaultSecret, "encrypted_value">;
 
-const CATEGORY_META: Record<SecretCategory, { label: string; icon: typeof KeyRound; className: string }> = {
-  api: { label: "API", icon: KeyRound, className: "bg-[var(--chart-1)] text-white" },
-  smtp: { label: "SMTP", icon: Mail, className: "bg-[var(--chart-4)] text-black" },
-  database: { label: "Database", icon: Database, className: "bg-[var(--chart-3)] text-black" },
-  payment: { label: "Payment", icon: CreditCard, className: "bg-emerald-600 text-white" },
-  other: { label: "Other", icon: Box, className: "bg-secondary text-secondary-foreground" },
+const CATEGORY_META: Record<SecretCategory, { labelKey: string; icon: typeof KeyRound; className: string }> = {
+  api: { labelKey: "admin-vault-cat-api", icon: KeyRound, className: "bg-[var(--chart-1)] text-white" },
+  smtp: { labelKey: "admin-vault-cat-smtp", icon: Mail, className: "bg-[var(--chart-4)] text-black" },
+  database: { labelKey: "admin-vault-cat-database", icon: Database, className: "bg-[var(--chart-3)] text-black" },
+  payment: { labelKey: "admin-vault-cat-payment", icon: CreditCard, className: "bg-emerald-600 text-white" },
+  other: { labelKey: "admin-vault-cat-other", icon: Box, className: "bg-secondary text-secondary-foreground" },
 };
 
 function AdminRequired() {
+  const t = useT();
   return (
     <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10">
       <CardContent className="p-6 flex items-start gap-3">
         <Lock className="size-5 text-amber-600 mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Admin access required</p>
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-access-required")}</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            The encrypted vault is only available to administrators.
+            {t("admin-vault-admin-only-desc")}
           </p>
         </div>
       </CardContent>
@@ -66,6 +68,7 @@ function AdminRequired() {
 export function VaultView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
@@ -93,35 +96,36 @@ export function VaultView() {
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
       const r = await fetch(api(`/api/vault/${id}`), { method: "DELETE" });
-      if (!r.ok) throw new Error("Failed to delete secret");
+      if (!r.ok) throw new Error(t("admin-vault-delete-failed-toast"));
     },
     onSuccess: () => {
-      toast.success("Secret deleted.");
+      toast.success(t("admin-vault-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["vault", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Failed to delete secret."),
+    onError: () => toast.error(t("admin-vault-delete-failed-toast")),
   });
 
   if (!admin) {
     return (
       <div>
-        <PageHeader title="Vault" description="Encrypted secrets store." />
+        <PageHeader title={t("admin-vault-title")} description={t("admin-vault-desc")} />
         <AdminRequired />
       </div>
     );
   }
 
   const items = data?.items || [];
+  const total = data?.total ?? 0;
 
   return (
     <div>
       <PageHeader
-        title="Vault"
-        description={`${data?.total ?? 0} encrypted secret${(data?.total ?? 0) === 1 ? "" : "s"}`}
+        title={t("admin-vault-title")}
+        description={`${total} ${t("admin-vault-count-suffix")}`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New secret
+            <Plus className="size-4 mr-1" /> {t("admin-vault-new-secret")}
           </Button>
         }
       />
@@ -130,9 +134,9 @@ export function VaultView() {
         <CardContent className="p-4 flex items-start gap-3">
           <ShieldCheck className="size-5 text-amber-600 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Encrypted at rest</p>
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-vault-encrypted-at-rest")}</p>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-              Vault secrets are encrypted and never displayed after creation. Store them in your password manager.
+              {t("admin-vault-encrypted-desc")}
             </p>
           </div>
         </CardContent>
@@ -143,21 +147,21 @@ export function VaultView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by key or description…"
+              placeholder={t("admin-vault-search-placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("admin-vault-category")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              <SelectItem value="api">API</SelectItem>
-              <SelectItem value="smtp">SMTP</SelectItem>
-              <SelectItem value="database">Database</SelectItem>
-              <SelectItem value="payment">Payment</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              <SelectItem value="all">{t("admin-vault-all-categories")}</SelectItem>
+              <SelectItem value="api">{t("admin-vault-cat-api")}</SelectItem>
+              <SelectItem value="smtp">{t("admin-vault-cat-smtp")}</SelectItem>
+              <SelectItem value="database">{t("admin-vault-cat-database")}</SelectItem>
+              <SelectItem value="payment">{t("admin-vault-cat-payment")}</SelectItem>
+              <SelectItem value="other">{t("admin-vault-cat-other")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -172,11 +176,11 @@ export function VaultView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<KeyRound className="size-6" />}
-              title="No secrets yet"
-              description="Store API keys, SMTP passwords, database credentials and other secrets here."
+              title={t("admin-vault-empty-title")}
+              description={t("admin-vault-empty-desc")}
               action={
                 <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-                  <Plus className="size-4 mr-1" /> New secret
+                  <Plus className="size-4 mr-1" /> {t("admin-vault-new-secret")}
                 </Button>
               }
             />
@@ -185,12 +189,12 @@ export function VaultView() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Key</TableHead>
-                    <TableHead className="hidden md:table-cell">Description</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="hidden lg:table-cell">Last accessed</TableHead>
-                    <TableHead className="hidden md:table-cell">Updated</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("admin-col-key")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("description")}</TableHead>
+                    <TableHead>{t("admin-vault-category")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-vault-col-last-accessed")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("admin-vault-col-updated")}</TableHead>
+                    <TableHead className="text-right">{t("admin-col-actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -210,17 +214,17 @@ export function VaultView() {
                         </TableCell>
                         <TableCell>
                           <Badge className={meta.className + " gap-1"}>
-                            <Icon className="size-3" /> {meta.label}
+                            <Icon className="size-3" /> {t(meta.labelKey)}
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-xs">{fmtRelative(s.last_accessed_at)}</TableCell>
                         <TableCell className="hidden md:table-cell text-xs">{fmtRelative(s.updated_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(s); setShowForm(true); }} title="Edit" aria-label="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(s); setShowForm(true); }} title={t("edit")} aria-label={t("edit")}>
                               <Pencil className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(s.id)} title="Delete" aria-label="Delete">
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(s.id)} title={t("delete")} aria-label={t("delete")}>
                               <Trash2 className="size-4" />
                             </Button>
                           </div>
@@ -248,18 +252,18 @@ export function VaultView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this secret?</AlertDialogTitle>
+            <AlertDialogTitle>{t("admin-vault-delete-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action is irreversible. Any system using this secret will immediately lose access. Consider rotating the secret before deleting it.
+              {t("admin-vault-delete-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -279,6 +283,7 @@ function VaultFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [key, setKey] = useState("");
   const [description, setDescription] = useState("");
@@ -302,8 +307,8 @@ function VaultFormDialog({
   }, [open, secret]);
 
   async function save() {
-    if (!key.trim()) { toast.error("Key is required."); return; }
-    if (!secret && !value) { toast.error("Value is required for new secrets."); return; }
+    if (!key.trim()) { toast.error(t("admin-vault-key-required")); return; }
+    if (!secret && !value) { toast.error(t("admin-vault-value-required")); return; }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -320,12 +325,12 @@ function VaultFormDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to save secret");
+        throw new Error(e.error || t("admin-vault-save-failed"));
       }
-      toast.success(secret ? "Secret updated." : "Secret created.");
+      toast.success(secret ? t("admin-vault-updated-toast") : t("admin-vault-created-toast"));
       onSaved();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to save secret";
+      const msg = e instanceof Error ? e.message : t("admin-vault-save-failed");
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -336,29 +341,29 @@ function VaultFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>{secret ? "Edit secret" : "New secret"}</DialogTitle>
+          <DialogTitle>{secret ? t("admin-vault-edit-title") : t("admin-vault-new-secret")}</DialogTitle>
           <DialogDescription>
             {secret
-              ? "Update the description, category, or replace the value."
-              : "Store a new encrypted secret."}
+              ? t("admin-vault-edit-desc")
+              : t("admin-vault-new-desc")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
         <div className="grid gap-3 py-2">
           <div className="space-y-1.5">
-            <Label>Key *</Label>
+            <Label>{t("admin-col-key")} *</Label>
             <Input
               value={key}
               onChange={(e) => setKey(e.target.value)}
               placeholder="STRIPE_SECRET_KEY"
               className="font-mono"
             />
-            <p className="text-xs text-muted-foreground">A unique identifier for this secret.</p>
+            <p className="text-xs text-muted-foreground">{t("admin-vault-form-key-help")}</p>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Description</Label>
+            <Label>{t("description")}</Label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -367,21 +372,21 @@ function VaultFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Category</Label>
+            <Label>{t("admin-vault-category")}</Label>
             <Select value={cat} onValueChange={(v) => setCat(v as SecretCategory)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="api">API</SelectItem>
-                <SelectItem value="smtp">SMTP</SelectItem>
-                <SelectItem value="database">Database</SelectItem>
-                <SelectItem value="payment">Payment</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                <SelectItem value="api">{t("admin-vault-cat-api")}</SelectItem>
+                <SelectItem value="smtp">{t("admin-vault-cat-smtp")}</SelectItem>
+                <SelectItem value="database">{t("admin-vault-cat-database")}</SelectItem>
+                <SelectItem value="payment">{t("admin-vault-cat-payment")}</SelectItem>
+                <SelectItem value="other">{t("admin-vault-cat-other")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1.5">
-            <Label>{secret ? "New value (optional)" : "Value *"}</Label>
+            <Label>{secret ? t("admin-vault-form-new-value") : `${t("admin-vault-form-value")} *`}</Label>
             <Textarea
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -391,16 +396,16 @@ function VaultFormDialog({
             />
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Lock className="size-3" />
-              Value is encrypted at rest. You won&apos;t be able to view it after saving.
+              {t("admin-vault-form-value-help")}
             </p>
           </div>
         </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("admin-saving") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>

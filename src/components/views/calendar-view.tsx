@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { cn } from "@/lib/utils";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { fmtNumber, fmtMoney } from "@/lib/utils/format";
+import { useT } from "@/lib/i18n/store";
 
 interface CalendarEvent {
   id: string;
@@ -44,6 +45,7 @@ const TYPE_LABEL = {
 export function CalendarView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -116,8 +118,8 @@ export function CalendarView() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Calendar"
-        description="Tasks, invoices, deals, and offers — all on one calendar."
+        title={t("calendar")}
+        description={t("misc-calendar-desc")}
       />
 
       {/* Stats */}
@@ -129,7 +131,7 @@ export function CalendarView() {
             </div>
             <div>
               <p className="text-2xl font-bold tabular">{fmtNumber(stats.task)}</p>
-              <p className="text-xs text-muted-foreground">Tasks due</p>
+              <p className="text-xs text-muted-foreground">{t("misc-tasks-due")}</p>
             </div>
           </CardContent>
         </Card>
@@ -140,7 +142,7 @@ export function CalendarView() {
             </div>
             <div>
               <p className="text-2xl font-bold tabular">{fmtNumber(stats.invoice)}</p>
-              <p className="text-xs text-muted-foreground">Invoices due</p>
+              <p className="text-xs text-muted-foreground">{t("misc-invoices-due")}</p>
             </div>
           </CardContent>
         </Card>
@@ -151,7 +153,7 @@ export function CalendarView() {
             </div>
             <div>
               <p className="text-2xl font-bold tabular">{fmtNumber(stats.deal)}</p>
-              <p className="text-xs text-muted-foreground">Deal closes</p>
+              <p className="text-xs text-muted-foreground">{t("misc-deal-closes")}</p>
             </div>
           </CardContent>
         </Card>
@@ -162,7 +164,7 @@ export function CalendarView() {
             </div>
             <div>
               <p className="text-2xl font-bold tabular">{fmtNumber(stats.offer)}</p>
-              <p className="text-xs text-muted-foreground">Offers expire</p>
+              <p className="text-xs text-muted-foreground">{t("misc-offers-expire")}</p>
             </div>
           </CardContent>
         </Card>
@@ -179,7 +181,7 @@ export function CalendarView() {
               <ChevronLeft className="size-4" />
             </Button>
             <Button variant="outline" size="sm" onClick={goToday}>
-              Today
+              {t("misc-today")}
             </Button>
             <Button variant="outline" size="sm" onClick={nextMonth}>
               <ChevronRight className="size-4" />
@@ -197,9 +199,9 @@ export function CalendarView() {
             <>
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-2 mb-2">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                  <div key={d} className="text-center text-xs font-semibold text-muted-foreground py-2">
-                    {d}
+                {["misc-day-sun", "misc-day-mon", "misc-day-tue", "misc-day-wed", "misc-day-thu", "misc-day-fri", "misc-day-sat"].map((k) => (
+                  <div key={k} className="text-center text-xs font-semibold text-muted-foreground py-2">
+                    {t(k)}
                   </div>
                 ))}
               </div>
@@ -259,7 +261,7 @@ export function CalendarView() {
       {!isLoading && events.length > 0 && (
         <Card className="border-border/60 shadow-soft">
           <CardHeader>
-            <CardTitle className="text-base">Upcoming this month</CardTitle>
+            <CardTitle className="text-base">{t("misc-upcoming-this-month")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">

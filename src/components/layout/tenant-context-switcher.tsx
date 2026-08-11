@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, ChevronsUpDown, Check, Search, Globe, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useT } from "@/lib/i18n/store";
 
 interface Tenant {
   id: string;
@@ -39,6 +40,7 @@ export function TenantContextSwitcher() {
   const setActiveTenant = useAppStore((s) => s.setActiveTenant);
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
+  const t = useT();
 
   // Hydrate active tenant from localStorage on mount (avoids SSR mismatch)
   useHydrateActiveTenant();
@@ -74,16 +76,16 @@ export function TenantContextSwitcher() {
   // pixel of topbar width is needed for the view title and action icons;
   // visible from sm (tablet) up.
   if (!isSuperAdmin(user)) {
-    const t = myTenantQ.data;
+    const tt = myTenantQ.data;
     return (
       <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/60">
         <Building2 className="size-3.5 text-muted-foreground shrink-0" />
         <span className="text-sm font-medium truncate max-w-[140px]">
-          {t?.name || "My Company"}
+          {tt?.name || t("pf-tenant")}
         </span>
-        {t?.plan && (
+        {tt?.plan && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 capitalize shrink-0">
-            {t.plan}
+            {tt.plan}
           </Badge>
         )}
       </div>
@@ -92,15 +94,15 @@ export function TenantContextSwitcher() {
 
   // ── Super-admin: show tenant switcher ──
   const tenants = tenantsQ.data || [];
-  const activeTenant = tenants.find((t) => t.id === activeTenantId);
+  const activeTenant = tenants.find((tt) => tt.id === activeTenantId);
 
-  function handleSelect(t: Tenant) {
-    setActiveTenant(t.id, t.name);
+  function handleSelect(tnt: Tenant) {
+    setActiveTenant(tnt.id, tnt.name);
     setOpen(false);
     // Invalidate ALL queries so every view refetches with the new tenant context
     qc.clear();
-    toast.success(`Tenant context: ${t.name}`, {
-      description: "All data is now scoped to this tenant.",
+    toast.success(t("misc-tenant-context-toast").replace("{name}", tnt.name), {
+      description: t("misc-tenant-context-toast-desc"),
     });
   }
 
@@ -108,7 +110,7 @@ export function TenantContextSwitcher() {
     setActiveTenant(null, null);
     setOpen(false);
     qc.clear();
-    toast.info("Showing platform-wide view");
+    toast.info(t("misc-tenant-showing-platform-wide"));
   }
 
   return (
@@ -119,7 +121,7 @@ export function TenantContextSwitcher() {
           role="combobox"
           aria-expanded={open}
           className="h-9 gap-0 sm:gap-2 px-2 sm:px-3 bg-card border-border/60 hover:bg-accent/50 max-w-[44px] sm:max-w-[260px]"
-          title={activeTenant ? activeTenant.name : "All tenants"}
+          title={activeTenant ? activeTenant.name : t("pf-all-tenants")}
         >
           <div className="flex items-center gap-2 min-w-0">
             {activeTenant ? (
@@ -129,7 +131,7 @@ export function TenantContextSwitcher() {
                 </div>
                 {/* Two-line label — desktop/tablet only; mobile shows just the icon + chevron above */}
                 <div className="hidden sm:block min-w-0 text-left">
-                  <div className="text-xs text-muted-foreground leading-tight">Tenant context</div>
+                  <div className="text-xs text-muted-foreground leading-tight">{t("misc-tenant-context-label")}</div>
                   <div className="text-sm font-semibold truncate leading-tight">
                     {activeTenant.name}
                   </div>
@@ -141,8 +143,8 @@ export function TenantContextSwitcher() {
                   <Globe className="size-3.5" />
                 </div>
                 <div className="hidden sm:block min-w-0 text-left">
-                  <div className="text-xs text-muted-foreground leading-tight">Viewing</div>
-                  <div className="text-sm font-semibold truncate leading-tight">All tenants</div>
+                  <div className="text-xs text-muted-foreground leading-tight">{t("misc-tenant-viewing-label")}</div>
+                  <div className="text-sm font-semibold truncate leading-tight">{t("pf-all-tenants")}</div>
                 </div>
               </>
             )}
@@ -152,10 +154,10 @@ export function TenantContextSwitcher() {
       </PopoverTrigger>
       <PopoverContent className="w-[360px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search tenants..." />
+          <CommandInput placeholder={t("misc-tenant-search-placeholder")} />
           <CommandList>
-            <CommandEmpty>No tenant found.</CommandEmpty>
-            <CommandGroup heading="Platform">
+            <CommandEmpty>{t("no_results")}</CommandEmpty>
+            <CommandGroup heading={t("platform")}>
               <CommandItem
                 onSelect={() => handleClear()}
                 className="cursor-pointer"
@@ -165,19 +167,19 @@ export function TenantContextSwitcher() {
                     <Globe className="size-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">All tenants</div>
-                    <div className="text-xs text-muted-foreground">Platform-wide view (super-admin)</div>
+                    <div className="text-sm font-medium">{t("pf-all-tenants")}</div>
+                    <div className="text-xs text-muted-foreground">{t("misc-tenant-platform-wide-desc")}</div>
                   </div>
                   {!activeTenantId && <Check className="size-4 text-primary" />}
                 </div>
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />
-            <CommandGroup heading="Tenants">
-              {tenants.map((t) => (
+            <CommandGroup heading={t("tenants")}>
+              {tenants.map((tnt) => (
                 <CommandItem
-                  key={t.id}
-                  onSelect={() => handleSelect(t)}
+                  key={tnt.id}
+                  onSelect={() => handleSelect(tnt)}
                   className="cursor-pointer"
                 >
                   <div className="flex items-center gap-2 w-full">
@@ -185,14 +187,14 @@ export function TenantContextSwitcher() {
                       <Building2 className="size-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{t.name}</div>
+                      <div className="text-sm font-medium truncate">{tnt.name}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        {t.country && <span>{t.country}</span>}
-                        {t.currency && <span>· {t.currency}</span>}
-                        {t.plan && <span>· <span className="capitalize">{t.plan}</span></span>}
+                        {tnt.country && <span>{tnt.country}</span>}
+                        {tnt.currency && <span>· {tnt.currency}</span>}
+                        {tnt.plan && <span>· <span className="capitalize">{tnt.plan}</span></span>}
                       </div>
                     </div>
-                    {activeTenantId === t.id && <Check className="size-4 text-primary shrink-0" />}
+                    {activeTenantId === tnt.id && <Check className="size-4 text-primary shrink-0" />}
                   </div>
                 </CommandItem>
               ))}
@@ -202,7 +204,7 @@ export function TenantContextSwitcher() {
         <div className="border-t border-border/60 px-3 py-2 bg-muted/30">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="size-3.5 text-primary" />
-            <span>Super-admin mode — data scoped per selection</span>
+            <span>{t("misc-tenant-superadmin-mode")}</span>
           </div>
         </div>
       </PopoverContent>

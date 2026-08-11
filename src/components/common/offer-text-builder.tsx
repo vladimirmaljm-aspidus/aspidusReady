@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/lib/i18n/store";
 
 interface OfferTextBuilderProps {
   value: string;
@@ -145,6 +146,7 @@ export function OfferTextBuilder({
   packaging,
 }: OfferTextBuilderProps) {
   const [selectedTemplate, setSelectedTemplate] = React.useState<string>("");
+  const t = useT();
 
   const applyTemplate = (templateId: string) => {
     const tpl = TEXT_TEMPLATES.find((t) => t.id === templateId);
@@ -172,25 +174,25 @@ export function OfferTextBuilder({
   return (
     <div className="space-y-3">
       <div>
-        <Label className="text-xs">Quick Templates</Label>
+        <Label className="text-xs">{t("misc-otb-quick-templates")}</Label>
         <Select value={selectedTemplate} onValueChange={(v) => applyTemplate(v)}>
           <SelectTrigger className="mt-1">
-            <SelectValue placeholder="Choose a template to start..." />
+            <SelectValue placeholder={t("misc-otb-choose-template")} />
           </SelectTrigger>
           <SelectContent>
-            {TEXT_TEMPLATES.map((t) => (
-              <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+            {TEXT_TEMPLATES.map((tpl) => (
+              <SelectItem key={tpl.id} value={tpl.id}>{tpl.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
       <div>
-        <Label className="text-xs">Offer Text / Cover Letter</Label>
+        <Label className="text-xs">{t("misc-otb-offer-text")}</Label>
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Write or select a template above to start your offer text..."
+          placeholder={t("misc-otb-write-placeholder")}
           rows={8}
           className="mt-1 font-mono text-sm"
         />
@@ -203,7 +205,7 @@ export function OfferTextBuilder({
           size="sm"
           onClick={() => appendText("Documentation: Commercial Invoice, Packing List, Bill of Lading, Certificate of Origin, Certificate of Analysis.")}
         >
-          <Plus className="h-3 w-3 mr-1" /> Add Documentation Clause
+          <Plus className="h-3 w-3 mr-1" /> {t("misc-otb-add-doc-clause")}
         </Button>
         <Button
           type="button"
@@ -211,7 +213,7 @@ export function OfferTextBuilder({
           size="sm"
           onClick={() => appendText("Inspection: Quality and quantity to be final at loading port by SGS or equivalent independent surveyor.")}
         >
-          <Plus className="h-3 w-3 mr-1" /> Add Inspection Clause
+          <Plus className="h-3 w-3 mr-1" /> {t("misc-otb-add-inspection-clause")}
         </Button>
         <Button
           type="button"
@@ -219,7 +221,7 @@ export function OfferTextBuilder({
           size="sm"
           onClick={() => appendText("Force Majeure: Seller shall not be liable for failure to perform due to causes beyond reasonable control including natural disasters, war, strikes, government actions.")}
         >
-          <Plus className="h-3 w-3 mr-1" /> Add Force Majeure
+          <Plus className="h-3 w-3 mr-1" /> {t("misc-otb-add-force-majeure")}
         </Button>
         <Button
           type="button"
@@ -227,7 +229,7 @@ export function OfferTextBuilder({
           size="sm"
           onClick={() => appendText("Arbitration: Any dispute arising from this contract shall be settled amicably. Failing agreement, the case shall be referred to arbitration per ICC rules.")}
         >
-          <Plus className="h-3 w-3 mr-1" /> Add Arbitration
+          <Plus className="h-3 w-3 mr-1" /> {t("misc-otb-add-arbitration")}
         </Button>
       </div>
     </div>

@@ -67,6 +67,7 @@ import {
   STARTER_TEMPLATES,
   type StarterTemplate,
 } from "@/lib/data/starter-templates";
+import { useT } from "@/lib/i18n/store";
 
 // ============================================================
 // Constants
@@ -74,8 +75,13 @@ import {
 
 type TemplateType = DocumentTemplate["type"];
 
-const TYPE_LABELS: Record<TemplateType, string> = {
-  offer: "Offer", invoice: "Invoice", proforma: "Proforma", contract: "Contract", generic: "Generic",
+// Translation keys (resolved via `t()` at render time) — see TYPE_LABEL_KEYS.
+const TYPE_LABEL_KEYS: Record<TemplateType, string> = {
+  offer: "doc-type-offer",
+  invoice: "doc-type-invoice",
+  proforma: "doc-type-proforma",
+  contract: "doc-type-contract",
+  generic: "doc-type-generic",
 };
 
 const TYPE_BADGE: Record<TemplateType, string> = {
@@ -86,51 +92,54 @@ const TYPE_BADGE: Record<TemplateType, string> = {
   generic: "bg-muted text-muted-foreground border-border",
 };
 
+// AVAILABLE_VARIABLES labels are translation keys (resolved via `t()`).
 const AVAILABLE_VARIABLES: { token: string; label: string }[] = [
-  { token: "{{company_name}}", label: "Company name" },
-  { token: "{{company_legal_name}}", label: "Legal name" },
-  { token: "{{company_address}}", label: "Address" },
-  { token: "{{company_email}}", label: "Email" },
-  { token: "{{company_phone}}", label: "Phone" },
-  { token: "{{company_vat}}", label: "VAT" },
-  { token: "{{company_bank}}", label: "Bank" },
-  { token: "{{company_iban}}", label: "IBAN" },
-  { token: "{{company_swift}}", label: "SWIFT" },
-  { token: "{{payment_terms}}", label: "Payment terms" },
-  { token: "{{page_number}}", label: "Page #" },
-  { token: "{{doc_number}}", label: "Doc #" },
+  { token: "{{company_name}}", label: "doc-var-company-name" },
+  { token: "{{company_legal_name}}", label: "doc-var-legal-name" },
+  { token: "{{company_address}}", label: "doc-var-address" },
+  { token: "{{company_email}}", label: "doc-var-email" },
+  { token: "{{company_phone}}", label: "doc-var-phone" },
+  { token: "{{company_vat}}", label: "doc-var-vat" },
+  { token: "{{company_bank}}", label: "doc-var-bank" },
+  { token: "{{company_iban}}", label: "doc-var-iban" },
+  { token: "{{company_swift}}", label: "doc-var-swift" },
+  { token: "{{payment_terms}}", label: "doc-var-payment-terms" },
+  { token: "{{page_number}}", label: "doc-var-page-num" },
+  { token: "{{doc_number}}", label: "doc-var-doc-num" },
 ];
 
+// HEADER_LAYOUTS / FOOTER_LAYOUTS / SEAL_POSITIONS / SEAL_DOC_TYPES labels are
+// translation keys (resolved via `t()` at render time).
 const HEADER_LAYOUTS = [
-  { value: "logo-left-info-right", label: "Logo left · info right" },
-  { value: "logo-right-info-left", label: "Logo right · info left" },
-  { value: "logo-center", label: "Logo centered" },
-  { value: "text-only", label: "Text only (no logo)" },
-  { value: "two-column", label: "Two columns" },
+  { value: "logo-left-info-right", label: "doc-header-layout-logo-left" },
+  { value: "logo-right-info-left", label: "doc-header-layout-logo-right" },
+  { value: "logo-center", label: "doc-header-layout-logo-center" },
+  { value: "text-only", label: "doc-header-layout-text-only" },
+  { value: "two-column", label: "doc-header-layout-two-column" },
 ];
 
 const FOOTER_LAYOUTS = [
-  { value: "bank-contact-tax", label: "Bank · contact · tax" },
-  { value: "bank-only", label: "Bank only" },
-  { value: "contact-only", label: "Contact only" },
-  { value: "tax-id-only", label: "Tax ID only" },
-  { value: "custom", label: "Custom footer text" },
+  { value: "bank-contact-tax", label: "doc-footer-layout-bank-contact-tax" },
+  { value: "bank-only", label: "doc-footer-layout-bank-only" },
+  { value: "contact-only", label: "doc-footer-layout-contact-only" },
+  { value: "tax-id-only", label: "doc-footer-layout-tax-id-only" },
+  { value: "custom", label: "doc-footer-layout-custom" },
 ];
 
 const SEAL_POSITIONS: { value: TenantSeal["position"]; label: string }[] = [
-  { value: "bottom-right", label: "Bottom right" },
-  { value: "bottom-left", label: "Bottom left" },
-  { value: "bottom-center", label: "Bottom center" },
-  { value: "top-right", label: "Top right" },
-  { value: "top-left", label: "Top left" },
-  { value: "top-center", label: "Top center" },
+  { value: "bottom-right", label: "doc-pos-bottom-right" },
+  { value: "bottom-left", label: "doc-pos-bottom-left" },
+  { value: "bottom-center", label: "doc-pos-bottom-center" },
+  { value: "top-right", label: "doc-pos-top-right" },
+  { value: "top-left", label: "doc-pos-top-left" },
+  { value: "top-center", label: "doc-pos-top-center" },
 ];
 
 const SEAL_DOC_TYPES: { value: string; label: string }[] = [
-  { value: "offer", label: "Offers" },
-  { value: "invoice", label: "Invoices" },
-  { value: "proforma", label: "Proformas" },
-  { value: "contract", label: "Contracts" },
+  { value: "offer", label: "doc-type-offer-plural" },
+  { value: "invoice", label: "doc-type-invoice-plural" },
+  { value: "proforma", label: "doc-type-proforma-plural" },
+  { value: "contract", label: "doc-type-contract-plural" },
 ];
 
 // ============================================================
@@ -440,6 +449,7 @@ function writeQrConfig(
 export function DocumentTemplatesView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
@@ -472,16 +482,16 @@ export function DocumentTemplatesView() {
   if (!admin) {
     return (
       <div>
-        <PageHeader title="Document Templates" description="Manage branded letterheads, company seals, and document templates." />
+        <PageHeader title={t("doc-templates-title")} description={t("doc-templates-noaccess-desc")} />
         <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
           <CardContent className="p-6 flex items-start gap-3">
             <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
               <Lock className="size-5" />
             </div>
             <div>
-              <p className="font-medium">Administrator access required.</p>
+              <p className="font-medium">{t("doc-admin-access-required")}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Only admin and super-admin users can manage document templates, letterheads, and seals.
+                {t("doc-admin-only-desc")}
               </p>
             </div>
           </CardContent>
@@ -493,8 +503,8 @@ export function DocumentTemplatesView() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Document Templates"
-        description="Configure branded letterheads (memorandum firme), company seals (zigled), and per-document templates."
+        title={t("doc-templates-title")}
+        description={t("doc-templates-desc")}
       />
 
       {superAdmin && (
@@ -502,24 +512,24 @@ export function DocumentTemplatesView() {
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex items-center gap-2 text-sm font-medium shrink-0">
               <Building2 className="size-4 text-primary" />
-              Managing tenant
+              {t("doc-managing-tenant")}
             </div>
             {tenantsQ.isLoading ? (
               <Skeleton className="h-9 w-full sm:w-72" />
             ) : tenants.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No tenants found.</p>
+              <p className="text-sm text-muted-foreground">{t("doc-no-tenants")}</p>
             ) : (
               <Select value={selectedTenantId ?? undefined} onValueChange={(v) => setSelectedTenantId(v)}>
                 <SelectTrigger className="w-full sm:w-72 h-9">
-                  <SelectValue placeholder="Choose a tenant…" />
+                  <SelectValue placeholder={t("doc-choose-tenant")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {tenants.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
+                  {tenants.map((tn) => (
+                    <SelectItem key={tn.id} value={tn.id}>
                       <span className="flex items-center gap-2">
                         <Building2 className="size-3.5 text-muted-foreground" />
-                        <span className="truncate">{t.name}</span>
-                        <Badge variant="outline" className="ml-1 text-[10px] capitalize">{t.plan}</Badge>
+                        <span className="truncate">{tn.name}</span>
+                        <Badge variant="outline" className="ml-1 text-[10px] capitalize">{tn.plan}</Badge>
                       </span>
                     </SelectItem>
                   ))}
@@ -527,7 +537,7 @@ export function DocumentTemplatesView() {
               </Select>
             )}
             <div className="hidden sm:block text-xs text-muted-foreground ml-auto">
-              Super-admin can manage templates for any tenant.
+              {t("doc-super-admin-hint")}
             </div>
           </CardContent>
         </Card>
@@ -536,13 +546,13 @@ export function DocumentTemplatesView() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-fit">
           <TabsTrigger value="letterheads">
-            <Building2 className="size-3.5 mr-1" /> Memorandum
+            <Building2 className="size-3.5 mr-1" /> {t("doc-tab-memorandum")}
           </TabsTrigger>
           <TabsTrigger value="seals">
-            <Stamp className="size-3.5 mr-1" /> Zigled
+            <Stamp className="size-3.5 mr-1" /> {t("doc-tab-zigled")}
           </TabsTrigger>
           <TabsTrigger value="templates">
-            <LayoutTemplate className="size-3.5 mr-1" /> Templates
+            <LayoutTemplate className="size-3.5 mr-1" /> {t("doc-tab-templates")}
           </TabsTrigger>
         </TabsList>
 
@@ -567,6 +577,7 @@ export function DocumentTemplatesView() {
 function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
   // Super-admins must explicitly pick a tenant before we can list letterheads
   // (the backend requires ?tenant_id= for super-admin — otherwise it returns
   // 400, which previously surfaced as an empty result + console error).
@@ -595,11 +606,11 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Letterhead deleted.");
+      toast.success(t("doc-letterhead-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["letterheads", tenantKey, tenantQuery] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("doc-delete-failed-toast")),
   });
 
   const duplicateMut = useMutation({
@@ -615,11 +626,11 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Letterhead duplicated.");
+      toast.success(t("doc-letterhead-duplicated-toast"));
       qc.invalidateQueries({ queryKey: ["letterheads", tenantKey, tenantQuery] });
       setDuplicating(null);
     },
-    onError: () => toast.error("Duplicate failed."),
+    onError: () => toast.error(t("doc-duplicate-failed-toast")),
   });
 
   const items = data?.items || [];
@@ -628,13 +639,13 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
     <>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">Memorandum firme</h2>
+          <h2 className="text-base font-semibold tracking-tight">{t("doc-memorandum-firme")}</h2>
           <p className="text-sm text-muted-foreground">
-            {items.length} letterhead{items.length === 1 ? "" : "s"} configured
+            {items.length} {t(items.length === 1 ? "doc-letterhead-singular" : "doc-letterhead-plural")} {t("doc-configured-suffix")}
           </p>
         </div>
         <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-          <Plus className="size-4 mr-1" /> New Letterhead
+          <Plus className="size-4 mr-1" /> {t("doc-new-letterhead")}
         </Button>
       </div>
 
@@ -647,11 +658,11 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Building2 className="size-6" />}
-          title="No letterheads"
-          description="Create your first company letterhead (memorandum firme) to brand all your documents."
+          title={t("doc-no-letterheads")}
+          description={t("doc-create-first-letterhead")}
           action={
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New Letterhead
+              <Plus className="size-4 mr-1" /> {t("doc-new-letterhead")}
             </Button>
           }
         />
@@ -666,7 +677,7 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
                       <CardTitle className="text-base truncate">{l.name}</CardTitle>
                       {l.is_default && (
                         <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
-                          <Star className="size-3 fill-amber-400 text-amber-500" /> Default
+                          <Star className="size-3 fill-amber-400 text-amber-500" /> {t("doc-default-badge")}
                         </Badge>
                       )}
                     </div>
@@ -684,17 +695,17 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
               </CardHeader>
               <CardContent className="flex-1 flex flex-col justify-end gap-3">
                 <div className="text-xs text-muted-foreground">
-                  Updated <span className="tabular">{fmtDate(l.updated_at)}</span>
+                  {t("doc-updated-label")} <span className="tabular">{fmtDate(l.updated_at)}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center gap-1 flex-wrap">
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditing(l); setShowForm(true); }} title="Edit">
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditing(l); setShowForm(true); }} title={t("edit")}>
                     <Pencil className="size-3.5" />
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setDuplicating(l)} title="Duplicate">
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setDuplicating(l)} title={t("doc-duplicate-action")}>
                     <Copy className="size-3.5" />
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => setDeleteId(l.id)} title="Delete">
+                  <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => setDeleteId(l.id)} title={t("delete")}>
                     <Trash2 className="size-3.5" />
                   </Button>
                 </div>
@@ -718,18 +729,18 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete letterhead?</AlertDialogTitle>
+            <AlertDialogTitle>{t("doc-delete-letterhead-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Templates linked to this letterhead will be unlinked automatically.
+              {t("doc-delete-letterhead-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -738,15 +749,15 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
       <AlertDialog open={!!duplicating} onOpenChange={(o) => !o && setDuplicating(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Duplicate letterhead?</AlertDialogTitle>
+            <AlertDialogTitle>{t("doc-duplicate-letterhead-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Create a copy of <span className="font-medium">{duplicating?.name}</span> with the same settings.
+              {t("doc-duplicate-letterhead-desc-prefix")} <span className="font-medium">{duplicating?.name}</span> {t("doc-duplicate-letterhead-desc-suffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => duplicating && duplicateMut.mutate(duplicating)}>
-              Duplicate
+              {t("doc-duplicate-action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -762,6 +773,7 @@ function LetterheadsTab({ tenantQuery }: { tenantQuery: string }) {
 function SealsTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
   // Super-admins must explicitly pick a tenant before we can list seals
   // (same reason as LetterheadsTab — backend requires ?tenant_id=).
   const isSuperAdminUser = isSuperAdmin(useAppStore((s) => s.user));
@@ -789,11 +801,11 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Seal deleted.");
+      toast.success(t("doc-seal-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["seals", tenantKey, tenantQuery] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("doc-delete-failed-toast")),
   });
 
   const duplicateMut = useMutation({
@@ -809,11 +821,11 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Seal duplicated.");
+      toast.success(t("doc-seal-duplicated-toast"));
       qc.invalidateQueries({ queryKey: ["seals", tenantKey, tenantQuery] });
       setDuplicating(null);
     },
-    onError: () => toast.error("Duplicate failed."),
+    onError: () => toast.error(t("doc-duplicate-failed-toast")),
   });
 
   const items = data?.items || [];
@@ -822,13 +834,13 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
     <>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">Zigled (company seals)</h2>
+          <h2 className="text-base font-semibold tracking-tight">{t("doc-seals-title")}</h2>
           <p className="text-sm text-muted-foreground">
-            {items.length} seal{items.length === 1 ? "" : "s"} configured
+            {items.length} {t(items.length === 1 ? "doc-seal-singular" : "doc-seal-plural")} {t("doc-configured-suffix")}
           </p>
         </div>
         <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-          <Plus className="size-4 mr-1" /> New Seal
+          <Plus className="size-4 mr-1" /> {t("doc-new-seal")}
         </Button>
       </div>
 
@@ -841,11 +853,11 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Stamp className="size-6" />}
-          title="No seals configured"
-          description="Upload a company seal (PNG with transparency preferred) and configure its placement on documents."
+          title={t("doc-no-seals")}
+          description={t("doc-create-first-seal")}
           action={
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New Seal
+              <Plus className="size-4 mr-1" /> {t("doc-new-seal")}
             </Button>
           }
         />
@@ -862,7 +874,7 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
                         <CardTitle className="text-base truncate">{s.name}</CardTitle>
                         {s.is_default && (
                           <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
-                            <Star className="size-3 fill-amber-400 text-amber-500" /> Default
+                            <Star className="size-3 fill-amber-400 text-amber-500" /> {t("doc-default-badge")}
                           </Badge>
                         )}
                       </div>
@@ -882,25 +894,25 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
                 <CardContent className="flex-1 flex flex-col justify-end gap-3">
                   {appliesTo.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {appliesTo.map((t) => (
-                        <Badge key={t} variant="outline" className="text-[10px] capitalize">{TYPE_LABELS[t as TemplateType] || t}</Badge>
+                      {appliesTo.map((tp) => (
+                        <Badge key={tp} variant="outline" className="text-[10px] capitalize">{t(TYPE_LABEL_KEYS[tp as TemplateType] || tp)}</Badge>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-xs text-muted-foreground">Applies to all document types</div>
+                    <div className="text-xs text-muted-foreground">{t("doc-applies-to-all-types")}</div>
                   )}
                   <div className="text-xs text-muted-foreground">
-                    Updated <span className="tabular">{fmtDate(s.updated_at)}</span>
+                    {t("doc-updated-label")} <span className="tabular">{fmtDate(s.updated_at)}</span>
                   </div>
                   <Separator />
                   <div className="flex items-center gap-1 flex-wrap">
-                    <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditing(s); setShowForm(true); }} title="Edit">
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditing(s); setShowForm(true); }} title={t("edit")}>
                       <Pencil className="size-3.5" />
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setDuplicating(s)} title="Duplicate">
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setDuplicating(s)} title={t("doc-duplicate-action")}>
                       <Copy className="size-3.5" />
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => setDeleteId(s.id)} title="Delete">
+                    <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => setDeleteId(s.id)} title={t("delete")}>
                       <Trash2 className="size-3.5" />
                     </Button>
                   </div>
@@ -925,18 +937,18 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete seal?</AlertDialogTitle>
+            <AlertDialogTitle>{t("doc-delete-seal-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Templates linked to this seal will be unlinked automatically.
+              {t("doc-delete-seal-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -945,15 +957,15 @@ function SealsTab({ tenantQuery }: { tenantQuery: string }) {
       <AlertDialog open={!!duplicating} onOpenChange={(o) => !o && setDuplicating(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Duplicate seal?</AlertDialogTitle>
+            <AlertDialogTitle>{t("doc-duplicate-seal-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Create a copy of <span className="font-medium">{duplicating?.name}</span> with the same image and placement.
+              {t("doc-duplicate-seal-desc-prefix")} <span className="font-medium">{duplicating?.name}</span> {t("doc-duplicate-seal-desc-suffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => duplicating && duplicateMut.mutate(duplicating)}>
-              Duplicate
+              {t("doc-duplicate-action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -979,22 +991,23 @@ function NewTemplateDropdown({
   onBlank: () => void;
   onStarter: (starter: StarterTemplate) => void;
 }) {
+  const t = useT();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button>
-          <Plus className="size-4 mr-1" /> New Template
+          <Plus className="size-4 mr-1" /> {t("doc-new-template")}
           <ChevronDown className="size-4 ml-1" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuItem onClick={onBlank}>
           <FileText className="size-4 mr-2" />
-          <span>Blank template</span>
+          <span>{t("doc-blank-template")}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs text-muted-foreground">
-          Start from a starter
+          {t("doc-start-from-starter")}
         </DropdownMenuLabel>
         {STARTER_TEMPLATES.map((starter) => (
           <DropdownMenuItem
@@ -1019,6 +1032,7 @@ function NewTemplateDropdown({
 function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
   // Super-admins must explicitly pick a tenant before we can list templates
   // (same reason as LetterheadsTab — backend requires ?tenant_id= for the
   // templates/letterheads/seals list endpoints).
@@ -1112,34 +1126,34 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Template deleted.");
+      toast.success(t("doc-template-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("doc-delete-failed-toast")),
   });
 
   const setDefaultMut = useMutation({
-    mutationFn: async (t: DocumentTemplate) => {
-      const r = await fetch(api(`/api/document-templates/${t.id}`), {
+    mutationFn: async (tpl: DocumentTemplate) => {
+      const r = await fetch(api(`/api/document-templates/${tpl.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...t, is_default: true }),
+        body: JSON.stringify({ ...tpl, is_default: true }),
       });
       if (!r.ok) throw new Error("Update failed");
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Default template updated.");
+      toast.success(t("doc-default-template-updated-toast"));
       qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
     },
-    onError: () => toast.error("Failed to set default."),
+    onError: () => toast.error(t("doc-failed-set-default-toast")),
   });
 
   const duplicateMut = useMutation({
-    mutationFn: async (t: DocumentTemplate) => {
-      const { id, tenant_id, created_by, created_at, updated_at, letterhead, seal, ...rest } = t;
-      const copy = { ...rest, name: t.name + " (copy)", is_default: false };
+    mutationFn: async (tpl: DocumentTemplate) => {
+      const { id, tenant_id, created_by, created_at, updated_at, letterhead, seal, ...rest } = tpl;
+      const copy = { ...rest, name: tpl.name + " (copy)", is_default: false };
       const r = await fetch(api(`/api/document-templates${tenantQuery}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1149,11 +1163,11 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Template duplicated.");
+      toast.success(t("doc-template-duplicated-toast"));
       qc.invalidateQueries({ queryKey: ["document-templates", tenantKey, tenantQuery] });
       setDuplicating(null);
     },
-    onError: () => toast.error("Duplicate failed."),
+    onError: () => toast.error(t("doc-duplicate-failed-toast")),
   });
 
   const items = data?.items || [];
@@ -1162,9 +1176,9 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
     <>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">Document templates</h2>
+          <h2 className="text-base font-semibold tracking-tight">{t("doc-document-templates-title")}</h2>
           <p className="text-sm text-muted-foreground">
-            {items.length} template{items.length === 1 ? "" : "s"} configured
+            {items.length} {t(items.length === 1 ? "doc-template-singular" : "doc-template-plural")} {t("doc-configured-suffix")}
           </p>
         </div>
         <NewTemplateDropdown onBlank={handleNewBlank} onStarter={handleNewFromStarter} />
@@ -1179,38 +1193,38 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<FileText className="size-6" />}
-          title="No document templates"
-          description="Create your first template to start generating branded PDFs for offers, invoices, and proformas."
+          title={t("doc-no-templates")}
+          description={t("doc-create-first-template")}
           action={
             <NewTemplateDropdown onBlank={handleNewBlank} onStarter={handleNewFromStarter} />
           }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((t) => {
-            const linkedLetterhead = t.letterhead || letterheads.find((l) => l.id === t.letterhead_id);
-            const linkedSeal = t.seal || seals.find((s) => s.id === t.seal_id);
+          {items.map((tpl) => {
+            const linkedLetterhead = tpl.letterhead || letterheads.find((l) => l.id === tpl.letterhead_id);
+            const linkedSeal = tpl.seal || seals.find((s) => s.id === tpl.seal_id);
             return (
-              <Card key={t.id} className="border-border/60 shadow-soft hover:shadow-soft-md transition-shadow duration-200 flex flex-col">
+              <Card key={tpl.id} className="border-border/60 shadow-soft hover:shadow-soft-md transition-shadow duration-200 flex flex-col">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-base truncate">{t.name}</CardTitle>
-                        {t.is_default && (
+                        <CardTitle className="text-base truncate">{tpl.name}</CardTitle>
+                        {tpl.is_default && (
                           <Star className="size-4 fill-amber-400 text-amber-500 shrink-0" />
                         )}
                       </div>
                       <CardDescription className="mt-1 flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className={TYPE_BADGE[t.type]}>{TYPE_LABELS[t.type]}</Badge>
-                        <span className="text-xs">{t.page_size}</span>
+                        <Badge variant="outline" className={TYPE_BADGE[tpl.type]}>{t(TYPE_LABEL_KEYS[tpl.type])}</Badge>
+                        <span className="text-xs">{tpl.page_size}</span>
                       </CardDescription>
                     </div>
                     <div
                       className="size-9 rounded-lg border border-border/60 flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: t.primary_color + "15" }}
+                      style={{ backgroundColor: tpl.primary_color + "15" }}
                     >
-                      <div className="size-3 rounded-full" style={{ backgroundColor: t.primary_color }} />
+                      <div className="size-3 rounded-full" style={{ backgroundColor: tpl.primary_color }} />
                     </div>
                   </div>
                 </CardHeader>
@@ -1222,36 +1236,36 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 italic">
-                        <Building2 className="size-3" /> No letterhead
+                        <Building2 className="size-3" /> {t("doc-no-letterhead")}
                       </div>
                     )}
-                    {linkedSeal && t.seal_enabled ? (
+                    {linkedSeal && tpl.seal_enabled ? (
                       <div className="flex items-center gap-1.5">
                         <Stamp className="size-3" /> <span className="truncate">{linkedSeal.name}</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 italic">
-                        <Stamp className="size-3" /> No seal
+                        <Stamp className="size-3" /> {t("doc-no-seal")}
                       </div>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Updated <span className="tabular">{fmtDate(t.updated_at)}</span>
+                    {t("doc-updated-label")} <span className="tabular">{fmtDate(tpl.updated_at)}</span>
                   </div>
                   <Separator />
                   <div className="flex items-center gap-1 flex-wrap">
-                    {!t.is_default && (
-                      <Button size="sm" variant="outline" className="h-8" onClick={() => setDefaultMut.mutate(t)} disabled={setDefaultMut.isPending}>
-                        <Star className="size-3.5 mr-1" /> Set default
+                    {!tpl.is_default && (
+                      <Button size="sm" variant="outline" className="h-8" onClick={() => setDefaultMut.mutate(tpl)} disabled={setDefaultMut.isPending}>
+                        <Star className="size-3.5 mr-1" /> {t("doc-set-default")}
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditing(t); setShowForm(true); }} title="Edit">
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditing(tpl); setShowForm(true); }} title={t("edit")}>
                       <Pencil className="size-3.5" />
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setDuplicating(t)} title="Duplicate">
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setDuplicating(tpl)} title={t("doc-duplicate-action")}>
                       <Copy className="size-3.5" />
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => setDeleteId(t.id)} title="Delete">
+                    <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => setDeleteId(tpl.id)} title={t("delete")}>
                       <Trash2 className="size-3.5" />
                     </Button>
                   </div>
@@ -1284,18 +1298,18 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete template?</AlertDialogTitle>
+            <AlertDialogTitle>{t("doc-delete-template-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Documents already generated with this template will not be affected.
+              {t("doc-delete-template-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1304,15 +1318,15 @@ function TemplatesTab({ tenantQuery }: { tenantQuery: string }) {
       <AlertDialog open={!!duplicating} onOpenChange={(o) => !o && setDuplicating(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Duplicate template?</AlertDialogTitle>
+            <AlertDialogTitle>{t("doc-duplicate-template-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Create a copy of <span className="font-medium">{duplicating?.name}</span> with the same settings. The copy will not be marked as default.
+              {t("doc-duplicate-template-desc-prefix")} <span className="font-medium">{duplicating?.name}</span> {t("doc-duplicate-template-desc-suffix")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => duplicating && duplicateMut.mutate(duplicating)}>
-              Duplicate
+              {t("doc-duplicate-action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1336,6 +1350,7 @@ function LetterheadEditorDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [form, setForm] = useState<LetterheadFormState>(defaultLetterhead());
   const [saving, setSaving] = useState(false);
@@ -1353,21 +1368,21 @@ function LetterheadEditorDialog({
 
   async function handleLogoUpload(file: File) {
     if (file.size > 1_500_000) {
-      toast.error("Logo too large (max ~1.5MB).");
+      toast.error(t("doc-logo-too-large-toast"));
       return;
     }
     try {
       const dataUrl = await fileToDataUrl(file);
       set("logo_url", dataUrl);
-      toast.success("Logo uploaded.");
+      toast.success(t("doc-logo-uploaded-toast"));
     } catch {
-      toast.error("Failed to read image.");
+      toast.error(t("doc-failed-read-image-toast"));
     }
   }
 
   async function handleSave() {
     if (!form.name?.trim()) {
-      toast.error("Letterhead name is required.");
+      toast.error(t("doc-letterhead-name-required-toast"));
       return;
     }
     setSaving(true);
@@ -1380,10 +1395,10 @@ function LetterheadEditorDialog({
         body: JSON.stringify(form),
       });
       if (!r.ok) throw new Error("Save failed");
-      toast.success(letterhead ? "Letterhead updated." : "Letterhead created.");
+      toast.success(letterhead ? t("doc-letterhead-updated-toast") : t("doc-letterhead-created-toast"));
       onSaved();
     } catch {
-      toast.error("Failed to save letterhead.");
+      toast.error(t("doc-failed-save-letterhead-toast"));
     } finally {
       setSaving(false);
     }
@@ -1395,10 +1410,10 @@ function LetterheadEditorDialog({
         <DialogHeader className="px-5 py-4 border-b border-border/60">
           <DialogTitle className="flex items-center gap-2">
             <Building2 className="size-5 text-primary" />
-            {letterhead ? "Edit letterhead" : "New letterhead"}
+            {letterhead ? t("doc-edit-letterhead-title") : t("doc-new-letterhead-title")}
           </DialogTitle>
           <DialogDescription>
-            Configure company identity, branding, header/footer layout, watermark, and typography. Changes preview live.
+            {t("doc-letterhead-editor-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1409,38 +1424,38 @@ function LetterheadEditorDialog({
               <div className="p-5">
                 <Accordion type="multiple" defaultValue={["basics", "logo", "colors"]} className="w-full">
                   <AccordionItem value="basics">
-                    <AccordionTrigger><SectionLabel icon={FileText} label="Basics & company identity" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={FileText} label={t("doc-section-basics-identity")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Letterhead name">
-                          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Official 2026 Letterhead" />
+                        <Field label={t("doc-letterhead-name")}>
+                          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={t("doc-letterhead-name-placeholder")} />
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Company name"><Input value={form.company_name ?? ""} onChange={(e) => set("company_name", e.target.value)} /></Field>
-                          <Field label="Legal name"><Input value={form.company_legal_name ?? ""} onChange={(e) => set("company_legal_name", e.target.value)} /></Field>
+                          <Field label={t("doc-company-name")}><Input value={form.company_name ?? ""} onChange={(e) => set("company_name", e.target.value)} /></Field>
+                          <Field label={t("doc-legal-name")}><Input value={form.company_legal_name ?? ""} onChange={(e) => set("company_legal_name", e.target.value)} /></Field>
                         </div>
-                        <Field label="Address line"><Input value={form.company_address_line ?? ""} onChange={(e) => set("company_address_line", e.target.value)} /></Field>
+                        <Field label={t("doc-address-line")}><Input value={form.company_address_line ?? ""} onChange={(e) => set("company_address_line", e.target.value)} /></Field>
                         <div className="grid grid-cols-3 gap-3">
-                          <Field label="City"><Input value={form.company_city ?? ""} onChange={(e) => set("company_city", e.target.value)} /></Field>
-                          <Field label="Postal code"><Input value={form.company_postal_code ?? ""} onChange={(e) => set("company_postal_code", e.target.value)} /></Field>
-                          <Field label="Country"><Input value={form.company_country ?? ""} onChange={(e) => set("company_country", e.target.value)} placeholder="RS" /></Field>
+                          <Field label={t("doc-city")}><Input value={form.company_city ?? ""} onChange={(e) => set("company_city", e.target.value)} /></Field>
+                          <Field label={t("doc-postal-code")}><Input value={form.company_postal_code ?? ""} onChange={(e) => set("company_postal_code", e.target.value)} /></Field>
+                          <Field label={t("doc-country")}><Input value={form.company_country ?? ""} onChange={(e) => set("company_country", e.target.value)} placeholder="RS" /></Field>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Email"><Input value={form.company_email ?? ""} onChange={(e) => set("company_email", e.target.value)} /></Field>
-                          <Field label="Phone"><Input value={form.company_phone ?? ""} onChange={(e) => set("company_phone", e.target.value)} /></Field>
+                          <Field label={t("email")}><Input value={form.company_email ?? ""} onChange={(e) => set("company_email", e.target.value)} /></Field>
+                          <Field label={t("doc-phone")}><Input value={form.company_phone ?? ""} onChange={(e) => set("company_phone", e.target.value)} /></Field>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Website"><Input value={form.company_website ?? ""} onChange={(e) => set("company_website", e.target.value)} /></Field>
-                          <Field label="VAT number"><Input value={form.company_vat_number ?? ""} onChange={(e) => set("company_vat_number", e.target.value)} /></Field>
+                          <Field label={t("doc-website")}><Input value={form.company_website ?? ""} onChange={(e) => set("company_website", e.target.value)} /></Field>
+                          <Field label={t("doc-vat-number")}><Input value={form.company_vat_number ?? ""} onChange={(e) => set("company_vat_number", e.target.value)} /></Field>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Tax ID"><Input value={form.company_tax_id ?? ""} onChange={(e) => set("company_tax_id", e.target.value)} /></Field>
-                          <Field label="Registration #"><Input value={form.company_registration_number ?? ""} onChange={(e) => set("company_registration_number", e.target.value)} /></Field>
+                          <Field label={t("doc-tax-id")}><Input value={form.company_tax_id ?? ""} onChange={(e) => set("company_tax_id", e.target.value)} /></Field>
+                          <Field label={t("doc-registration-num")}><Input value={form.company_registration_number ?? ""} onChange={(e) => set("company_registration_number", e.target.value)} /></Field>
                         </div>
-                        <Field label="Default letterhead">
+                        <Field label={t("doc-default-letterhead")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} />
-                            <span className="text-sm text-muted-foreground">Use as the default for this tenant</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-use-default-for-tenant")}</span>
                           </div>
                         </Field>
                       </div>
@@ -1448,26 +1463,26 @@ function LetterheadEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="bank">
-                    <AccordionTrigger><SectionLabel icon={Layers} label="Bank details" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Layers} label={t("doc-section-bank-details")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Bank name"><Input value={form.bank_name ?? ""} onChange={(e) => set("bank_name", e.target.value)} /></Field>
-                          <Field label="Account holder"><Input value={form.bank_account_holder ?? ""} onChange={(e) => set("bank_account_holder", e.target.value)} /></Field>
+                          <Field label={t("doc-bank-name")}><Input value={form.bank_name ?? ""} onChange={(e) => set("bank_name", e.target.value)} /></Field>
+                          <Field label={t("doc-account-holder")}><Input value={form.bank_account_holder ?? ""} onChange={(e) => set("bank_account_holder", e.target.value)} /></Field>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="IBAN"><Input value={form.bank_iban ?? ""} onChange={(e) => set("bank_iban", e.target.value)} className="font-mono text-xs" /></Field>
-                          <Field label="SWIFT/BIC"><Input value={form.bank_swift ?? ""} onChange={(e) => set("bank_swift", e.target.value)} className="font-mono text-xs" /></Field>
+                          <Field label={t("doc-iban")}><Input value={form.bank_iban ?? ""} onChange={(e) => set("bank_iban", e.target.value)} className="font-mono text-xs" /></Field>
+                          <Field label={t("doc-swift-bic")}><Input value={form.bank_swift ?? ""} onChange={(e) => set("bank_swift", e.target.value)} className="font-mono text-xs" /></Field>
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="logo">
-                    <AccordionTrigger><SectionLabel icon={ImageIcon} label="Logo" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={ImageIcon} label={t("doc-section-logo")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Logo image">
+                        <Field label={t("doc-logo-image")}>
                           <div className="flex items-center gap-3">
                             <div className="size-16 rounded-lg border border-border/60 bg-card flex items-center justify-center overflow-hidden shrink-0">
                               {form.logo_url ? (
@@ -1489,104 +1504,104 @@ function LetterheadEditorDialog({
                             />
                             <div className="flex flex-col gap-1">
                               <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                                <Upload className="size-3.5 mr-1" /> Upload
+                                <Upload className="size-3.5 mr-1" /> {t("upload")}
                               </Button>
                               {form.logo_url && (
                                 <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => set("logo_url", null)}>
-                                  <X className="size-3.5 mr-1" /> Remove
+                                  <X className="size-3.5 mr-1" /> {t("remove")}
                                 </Button>
                               )}
                             </div>
                           </div>
                         </Field>
-                        <Field label="Logo position">
+                        <Field label={t("doc-logo-position")}>
                           <Select value={form.logo_position} onValueChange={(v) => set("logo_position", v as "left" | "center" | "right")}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="left">Left</SelectItem>
-                              <SelectItem value="center">Center</SelectItem>
-                              <SelectItem value="right">Right</SelectItem>
+                              <SelectItem value="left">{t("doc-pos-left")}</SelectItem>
+                              <SelectItem value="center">{t("doc-pos-center")}</SelectItem>
+                              <SelectItem value="right">{t("doc-pos-right")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Width (mm)"><NumberInput value={form.logo_width_mm} onChange={(v) => set("logo_width_mm", v)} min={5} max={150} /></Field>
-                          <Field label="Height (mm)"><NumberInput value={form.logo_height_mm} onChange={(v) => set("logo_height_mm", v)} min={5} max={80} /></Field>
+                          <Field label={t("doc-width-mm")}><NumberInput value={form.logo_width_mm} onChange={(v) => set("logo_width_mm", v)} min={5} max={150} /></Field>
+                          <Field label={t("doc-height-mm")}><NumberInput value={form.logo_height_mm} onChange={(v) => set("logo_height_mm", v)} min={5} max={80} /></Field>
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="colors">
-                    <AccordionTrigger><SectionLabel icon={Palette} label="Branding colors" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Palette} label={t("doc-section-branding-colors")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-3">
-                        <ColorField label="Primary color" value={form.primary_color} onChange={(v) => set("primary_color", v)} />
-                        <ColorField label="Accent color" value={form.accent_color} onChange={(v) => set("accent_color", v)} />
-                        <ColorField label="Body text color" value={form.text_color} onChange={(v) => set("text_color", v)} />
-                        <ColorField label="Muted text color" value={form.muted_text_color} onChange={(v) => set("muted_text_color", v)} />
+                        <ColorField label={t("doc-primary-color")} value={form.primary_color} onChange={(v) => set("primary_color", v)} />
+                        <ColorField label={t("doc-accent-color")} value={form.accent_color} onChange={(v) => set("accent_color", v)} />
+                        <ColorField label={t("doc-body-text-color")} value={form.text_color} onChange={(v) => set("text_color", v)} />
+                        <ColorField label={t("doc-muted-text-color")} value={form.muted_text_color} onChange={(v) => set("muted_text_color", v)} />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="page">
-                    <AccordionTrigger><SectionLabel icon={LayoutTemplate} label="Page layout" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={LayoutTemplate} label={t("doc-section-page-layout")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Page size">
+                        <Field label={t("doc-page-size")}>
                           <Select value={form.page_size} onValueChange={(v) => set("page_size", v as "A4" | "Letter")}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="A4">A4 (210 × 297 mm)</SelectItem>
-                              <SelectItem value="Letter">Letter (8.5 × 11 in)</SelectItem>
+                              <SelectItem value="A4">{t("doc-page-size-a4")}</SelectItem>
+                              <SelectItem value="Letter">{t("doc-page-size-letter")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field label="Margins (mm)">
+                        <Field label={t("doc-margins-mm")}>
                           <div className="grid grid-cols-4 gap-2">
-                            <MarginInput label="Top" value={form.margin_top_mm} onChange={(v) => set("margin_top_mm", v)} />
-                            <MarginInput label="Bottom" value={form.margin_bottom_mm} onChange={(v) => set("margin_bottom_mm", v)} />
-                            <MarginInput label="Left" value={form.margin_left_mm} onChange={(v) => set("margin_left_mm", v)} />
-                            <MarginInput label="Right" value={form.margin_right_mm} onChange={(v) => set("margin_right_mm", v)} />
+                            <MarginInput label={t("doc-margin-top")} value={form.margin_top_mm} onChange={(v) => set("margin_top_mm", v)} />
+                            <MarginInput label={t("doc-margin-bottom")} value={form.margin_bottom_mm} onChange={(v) => set("margin_bottom_mm", v)} />
+                            <MarginInput label={t("doc-margin-left")} value={form.margin_left_mm} onChange={(v) => set("margin_left_mm", v)} />
+                            <MarginInput label={t("doc-margin-right")} value={form.margin_right_mm} onChange={(v) => set("margin_right_mm", v)} />
                           </div>
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Header height (mm)"><NumberInput value={form.header_height_mm} onChange={(v) => set("header_height_mm", v)} min={5} max={80} /></Field>
-                          <Field label="Footer height (mm)"><NumberInput value={form.footer_height_mm} onChange={(v) => set("footer_height_mm", v)} min={5} max={60} /></Field>
+                          <Field label={t("doc-header-height-mm")}><NumberInput value={form.header_height_mm} onChange={(v) => set("header_height_mm", v)} min={5} max={80} /></Field>
+                          <Field label={t("doc-footer-height-mm")}><NumberInput value={form.footer_height_mm} onChange={(v) => set("footer_height_mm", v)} min={5} max={60} /></Field>
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="header">
-                    <AccordionTrigger><SectionLabel icon={AlignCenter} label="Header layout" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={AlignCenter} label={t("doc-section-header-layout")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Header layout">
+                        <Field label={t("doc-section-header-layout")}>
                           <Select value={form.header_layout} onValueChange={(v) => set("header_layout", v)}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {HEADER_LAYOUTS.map((h) => (
-                                <SelectItem key={h.value} value={h.value}>{h.label}</SelectItem>
+                                <SelectItem key={h.value} value={h.value}>{t(h.label)}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </Field>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <ToggleField label="Logo" checked={form.header_show_logo} onChange={(v) => set("header_show_logo", v)} />
-                          <ToggleField label="Name" checked={form.header_show_company_name} onChange={(v) => set("header_show_company_name", v)} />
-                          <ToggleField label="Contact" checked={form.header_show_contact} onChange={(v) => set("header_show_contact", v)} />
-                          <ToggleField label="VAT" checked={form.header_show_vat} onChange={(v) => set("header_show_vat", v)} />
+                          <ToggleField label={t("doc-toggle-logo")} checked={form.header_show_logo} onChange={(v) => set("header_show_logo", v)} />
+                          <ToggleField label={t("doc-toggle-name")} checked={form.header_show_company_name} onChange={(v) => set("header_show_company_name", v)} />
+                          <ToggleField label={t("doc-toggle-contact")} checked={form.header_show_contact} onChange={(v) => set("header_show_contact", v)} />
+                          <ToggleField label={t("doc-toggle-vat")} checked={form.header_show_vat} onChange={(v) => set("header_show_vat", v)} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Divider">
+                          <Field label={t("doc-divider")}>
                             <div className="flex items-center gap-2">
                               <Switch checked={form.header_divider} onCheckedChange={(v) => set("header_divider", v)} />
-                              <span className="text-sm text-muted-foreground">Show below header</span>
+                              <span className="text-sm text-muted-foreground">{t("doc-show-below-header")}</span>
                             </div>
                           </Field>
                           {form.header_divider && (
-                            <ColorField label="Divider color" value={form.header_divider_color} onChange={(v) => set("header_divider_color", v)} />
+                            <ColorField label={t("doc-divider-color")} value={form.header_divider_color} onChange={(v) => set("header_divider_color", v)} />
                           )}
                         </div>
                       </div>
@@ -1594,59 +1609,59 @@ function LetterheadEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="footer">
-                    <AccordionTrigger><SectionLabel icon={AlignJustify} label="Footer layout" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={AlignJustify} label={t("doc-section-footer-layout")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Footer layout">
+                        <Field label={t("doc-section-footer-layout")}>
                           <Select value={form.footer_layout} onValueChange={(v) => set("footer_layout", v)}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {FOOTER_LAYOUTS.map((f) => (
-                                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                <SelectItem key={f.value} value={f.value}>{t(f.label)}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </Field>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <ToggleField label="Bank" checked={form.footer_show_bank_details} onChange={(v) => set("footer_show_bank_details", v)} />
-                          <ToggleField label="Contact" checked={form.footer_show_contact} onChange={(v) => set("footer_show_contact", v)} />
-                          <ToggleField label="Tax ID" checked={form.footer_show_tax_id} onChange={(v) => set("footer_show_tax_id", v)} />
-                          <ToggleField label="Page #" checked={form.footer_show_page_number} onChange={(v) => set("footer_show_page_number", v)} />
+                          <ToggleField label={t("doc-toggle-bank")} checked={form.footer_show_bank_details} onChange={(v) => set("footer_show_bank_details", v)} />
+                          <ToggleField label={t("doc-toggle-contact")} checked={form.footer_show_contact} onChange={(v) => set("footer_show_contact", v)} />
+                          <ToggleField label={t("doc-toggle-tax-id")} checked={form.footer_show_tax_id} onChange={(v) => set("footer_show_tax_id", v)} />
+                          <ToggleField label={t("doc-toggle-page-num")} checked={form.footer_show_page_number} onChange={(v) => set("footer_show_page_number", v)} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Divider">
+                          <Field label={t("doc-divider")}>
                             <div className="flex items-center gap-2">
                               <Switch checked={form.footer_divider} onCheckedChange={(v) => set("footer_divider", v)} />
-                              <span className="text-sm text-muted-foreground">Show above footer</span>
+                              <span className="text-sm text-muted-foreground">{t("doc-show-above-footer")}</span>
                             </div>
                           </Field>
                           {form.footer_divider && (
-                            <ColorField label="Divider color" value={form.footer_divider_color} onChange={(v) => set("footer_divider_color", v)} />
+                            <ColorField label={t("doc-divider-color")} value={form.footer_divider_color} onChange={(v) => set("footer_divider_color", v)} />
                           )}
                         </div>
-                        <Field label="Footer custom text">
-                          <Input value={form.footer_text ?? ""} onChange={(e) => set("footer_text", e.target.value)} placeholder="Small-print line (optional)" />
+                        <Field label={t("doc-footer-custom-text")}>
+                          <Input value={form.footer_text ?? ""} onChange={(e) => set("footer_text", e.target.value)} placeholder={t("doc-footer-text-placeholder")} />
                         </Field>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="watermark">
-                    <AccordionTrigger><SectionLabel icon={Waves} label="Watermark" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Waves} label={t("doc-section-watermark")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Enabled">
+                        <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.watermark_enabled} onCheckedChange={(v) => set("watermark_enabled", v)} />
-                            <span className="text-sm text-muted-foreground">Overlay a watermark on every page</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-watermark-overlay-desc")}</span>
                           </div>
                         </Field>
                         {form.watermark_enabled && (
                           <>
-                            <Field label="Watermark text"><Input value={form.watermark_text ?? ""} onChange={(e) => set("watermark_text", e.target.value)} placeholder="DRAFT" /></Field>
+                            <Field label={t("doc-watermark-text")}><Input value={form.watermark_text ?? ""} onChange={(e) => set("watermark_text", e.target.value)} placeholder="DRAFT" /></Field>
                             <div className="grid grid-cols-2 gap-3">
-                              <ColorField label="Color" value={form.watermark_color} onChange={(v) => set("watermark_color", v)} />
-                              <Field label={`Opacity (${Math.round(form.watermark_opacity * 100)}%)`}>
+                              <ColorField label={t("doc-color")} value={form.watermark_color} onChange={(v) => set("watermark_color", v)} />
+                              <Field label={t("doc-opacity-pct").replace("{n}", String(Math.round(form.watermark_opacity * 100)))}>
                                 <Slider
                                   value={[form.watermark_opacity]}
                                   min={0.02} max={0.5} step={0.02}
@@ -1654,7 +1669,7 @@ function LetterheadEditorDialog({
                                 />
                               </Field>
                             </div>
-                            <Field label={`Rotation (${form.watermark_rotation}°)`}>
+                            <Field label={t("doc-rotation-deg").replace("{n}", String(form.watermark_rotation))}>
                               <Slider
                                 value={[form.watermark_rotation]}
                                 min={-180} max={180} step={1}
@@ -1668,15 +1683,15 @@ function LetterheadEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="typography">
-                    <AccordionTrigger><SectionLabel icon={Type} label="Typography" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Type} label={t("doc-section-typography")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Body font family"><Input value={form.body_font_family} onChange={(e) => set("body_font_family", e.target.value)} className="font-mono text-xs" /></Field>
+                        <Field label={t("doc-body-font-family")}><Input value={form.body_font_family} onChange={(e) => set("body_font_family", e.target.value)} className="font-mono text-xs" /></Field>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Body size (pt)"><NumberInput value={form.body_font_size_pt} onChange={(v) => set("body_font_size_pt", v)} min={7} max={24} /></Field>
-                          <Field label="Heading size (pt)"><NumberInput value={form.heading_font_size_pt} onChange={(v) => set("heading_font_size_pt", v)} min={10} max={48} /></Field>
+                          <Field label={t("doc-body-size-pt")}><NumberInput value={form.body_font_size_pt} onChange={(v) => set("body_font_size_pt", v)} min={7} max={24} /></Field>
+                          <Field label={t("doc-heading-size-pt")}><NumberInput value={form.heading_font_size_pt} onChange={(v) => set("heading_font_size_pt", v)} min={10} max={48} /></Field>
                         </div>
-                        <Field label="Heading font family"><Input value={form.heading_font_family} onChange={(e) => set("heading_font_family", e.target.value)} className="font-mono text-xs" /></Field>
+                        <Field label={t("doc-heading-font-family")}><Input value={form.heading_font_family} onChange={(e) => set("heading_font_family", e.target.value)} className="font-mono text-xs" /></Field>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
@@ -1690,7 +1705,7 @@ function LetterheadEditorDialog({
             <div className="px-5 py-3 border-b border-border/60 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Eye className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Live preview</span>
+                <span className="text-sm font-medium">{t("doc-live-preview")}</span>
               </div>
               <Badge variant="outline" className="text-xs">{form.page_size}</Badge>
             </div>
@@ -1703,9 +1718,9 @@ function LetterheadEditorDialog({
         </div>
 
         <DialogFooter className="px-5 py-4 border-t border-border/60 bg-card">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
-            <Save className="size-4 mr-1" /> Save letterhead
+            <Save className="size-4 mr-1" /> {t("doc-save-letterhead")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1905,6 +1920,7 @@ function SealEditorDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [form, setForm] = useState<SealFormState>(defaultSeal());
   const [saving, setSaving] = useState(false);
@@ -1922,7 +1938,7 @@ function SealEditorDialog({
 
   async function handleImageUpload(file: File) {
     if (file.size > 1_500_000) {
-      toast.error("Image too large (max ~1.5MB).");
+      toast.error(t("doc-image-too-large-toast"));
       return;
     }
     try {
@@ -1930,19 +1946,19 @@ function SealEditorDialog({
       const format = file.type.includes("png") ? "png" : file.type.includes("svg") ? "svg" : "jpg";
       set("image_url", dataUrl);
       set("image_format", format as TenantSeal["image_format"]);
-      toast.success("Seal image uploaded.");
+      toast.success(t("doc-seal-image-uploaded-toast"));
     } catch {
-      toast.error("Failed to read image.");
+      toast.error(t("doc-failed-read-image-toast"));
     }
   }
 
   async function handleSave() {
     if (!form.name?.trim()) {
-      toast.error("Seal name is required.");
+      toast.error(t("doc-seal-name-required-toast"));
       return;
     }
     if (!form.image_url) {
-      toast.error("Please upload a seal image.");
+      toast.error(t("doc-upload-seal-image-toast"));
       return;
     }
     setSaving(true);
@@ -1955,10 +1971,10 @@ function SealEditorDialog({
         body: JSON.stringify(form),
       });
       if (!r.ok) throw new Error("Save failed");
-      toast.success(seal ? "Seal updated." : "Seal created.");
+      toast.success(seal ? t("doc-seal-updated-toast") : t("doc-seal-created-toast"));
       onSaved();
     } catch {
-      toast.error("Failed to save seal.");
+      toast.error(t("doc-failed-save-seal-toast"));
     } finally {
       setSaving(false);
     }
@@ -1967,7 +1983,7 @@ function SealEditorDialog({
   const applyToTypes = parseApplyToTypes(form.apply_to_types);
   function toggleApplyTo(type: string) {
     const next = applyToTypes.includes(type)
-      ? applyToTypes.filter((t) => t !== type)
+      ? applyToTypes.filter((tp) => tp !== type)
       : [...applyToTypes, type];
     set("apply_to_types", serializeApplyToTypes(next));
   }
@@ -1978,10 +1994,10 @@ function SealEditorDialog({
         <DialogHeader className="px-5 py-4 border-b border-border/60">
           <DialogTitle className="flex items-center gap-2">
             <Stamp className="size-5 text-primary" />
-            {seal ? "Edit seal" : "New seal"}
+            {seal ? t("doc-edit-seal-title") : t("doc-new-seal-title")}
           </DialogTitle>
           <DialogDescription>
-            Upload a seal image (PNG with transparency recommended) and configure placement, opacity, rotation, and which document types it applies to.
+            {t("doc-seal-editor-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1992,16 +2008,16 @@ function SealEditorDialog({
               <div className="p-5">
                 <Accordion type="multiple" defaultValue={["basics", "image"]} className="w-full">
                   <AccordionItem value="basics">
-                    <AccordionTrigger><SectionLabel icon={FileText} label="Basics" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={FileText} label={t("doc-section-basics")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Seal name">
-                          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Official Round Seal" />
+                        <Field label={t("doc-seal-name")}>
+                          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={t("doc-seal-name-placeholder")} />
                         </Field>
-                        <Field label="Default seal">
+                        <Field label={t("doc-default-seal")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} />
-                            <span className="text-sm text-muted-foreground">Use as the default seal for this tenant</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-use-default-seal")}</span>
                           </div>
                         </Field>
                       </div>
@@ -2009,10 +2025,10 @@ function SealEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="image">
-                    <AccordionTrigger><SectionLabel icon={ImageIcon} label="Seal image" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={ImageIcon} label={t("doc-section-seal-image")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Seal image">
+                        <Field label={t("doc-section-seal-image")}>
                           <div className="flex items-center gap-3">
                             <div className="size-24 rounded-lg border border-border/60 bg-card flex items-center justify-center overflow-hidden shrink-0">
                               {form.image_url ? (
@@ -2034,85 +2050,85 @@ function SealEditorDialog({
                             />
                             <div className="flex flex-col gap-1">
                               <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                                <Upload className="size-3.5 mr-1" /> Upload
+                                <Upload className="size-3.5 mr-1" /> {t("upload")}
                               </Button>
                               {form.image_url && (
                                 <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => set("image_url", "")}>
-                                  <X className="size-3.5 mr-1" /> Remove
+                                  <X className="size-3.5 mr-1" /> {t("remove")}
                                 </Button>
                               )}
                               <p className="text-[11px] text-muted-foreground max-w-[180px]">
-                                PNG with transparency recommended. Max ~1.5MB.
+                                {t("doc-png-transparency-hint")}
                               </p>
                             </div>
                           </div>
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Width (mm)"><NumberInput value={form.image_width_mm} onChange={(v) => set("image_width_mm", v)} min={5} max={120} /></Field>
-                          <Field label="Height (mm)"><NumberInput value={form.image_height_mm} onChange={(v) => set("image_height_mm", v)} min={5} max={120} /></Field>
+                          <Field label={t("doc-width-mm")}><NumberInput value={form.image_width_mm} onChange={(v) => set("image_width_mm", v)} min={5} max={120} /></Field>
+                          <Field label={t("doc-height-mm")}><NumberInput value={form.image_height_mm} onChange={(v) => set("image_height_mm", v)} min={5} max={120} /></Field>
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="placement">
-                    <AccordionTrigger><SectionLabel icon={MapPin} label="Placement" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={MapPin} label={t("doc-section-placement")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Position on page">
+                        <Field label={t("doc-position-on-page")}>
                           <Select value={form.position} onValueChange={(v) => set("position", v as TenantSeal["position"])}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {SEAL_POSITIONS.map((p) => (
-                                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                                <SelectItem key={p.value} value={p.value}>{t(p.label)}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Offset X (mm)"><NumberInput value={form.offset_x_mm} onChange={(v) => set("offset_x_mm", v)} min={-100} max={100} /></Field>
-                          <Field label="Offset Y (mm)"><NumberInput value={form.offset_y_mm} onChange={(v) => set("offset_y_mm", v)} min={-100} max={100} /></Field>
+                          <Field label={t("doc-offset-x-mm")}><NumberInput value={form.offset_x_mm} onChange={(v) => set("offset_x_mm", v)} min={-100} max={100} /></Field>
+                          <Field label={t("doc-offset-y-mm")}><NumberInput value={form.offset_y_mm} onChange={(v) => set("offset_y_mm", v)} min={-100} max={100} /></Field>
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="appearance">
-                    <AccordionTrigger><SectionLabel icon={Droplet} label="Appearance" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Droplet} label={t("doc-section-appearance")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label={`Opacity (${Math.round(form.opacity * 100)}%)`}>
+                        <Field label={t("doc-opacity-pct").replace("{n}", String(Math.round(form.opacity * 100)))}>
                           <Slider value={[form.opacity]} min={0.05} max={1} step={0.05} onValueChange={(v) => set("opacity", v[0])} />
                         </Field>
-                        <Field label={`Rotation (${form.rotation_deg}°)`}>
+                        <Field label={t("doc-rotation-deg").replace("{n}", String(form.rotation_deg))}>
                           <Slider value={[form.rotation_deg]} min={-180} max={180} step={1} onValueChange={(v) => set("rotation_deg", v[0])} />
                         </Field>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <RotateCw className="size-3.5" />
-                          Rotation: <span className="tabular">{form.rotation_deg}°</span>
+                          {t("doc-rotation-label")} <span className="tabular">{form.rotation_deg}°</span>
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="apply">
-                    <AccordionTrigger><SectionLabel icon={ShieldCheck} label="Apply to document types" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={ShieldCheck} label={t("doc-section-apply-types")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
                         <p className="text-xs text-muted-foreground">
-                          Select which document types this seal should be stamped on. Leave empty to apply to all types.
+                          {t("doc-apply-types-desc")}
                         </p>
                         <div className="grid grid-cols-2 gap-2">
-                          {SEAL_DOC_TYPES.map((t) => (
+                          {SEAL_DOC_TYPES.map((dt) => (
                             <label
-                              key={t.value}
+                              key={dt.value}
                               className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 cursor-pointer hover:bg-accent/40 transition-colors"
                             >
                               <Checkbox
-                                checked={applyToTypes.includes(t.value)}
-                                onCheckedChange={() => toggleApplyTo(t.value)}
+                                checked={applyToTypes.includes(dt.value)}
+                                onCheckedChange={() => toggleApplyTo(dt.value)}
                               />
-                              <span className="text-sm">{t.label}</span>
+                              <span className="text-sm">{t(dt.label)}</span>
                             </label>
                           ))}
                         </div>
@@ -2121,19 +2137,19 @@ function SealEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="signature">
-                    <AccordionTrigger><SectionLabel icon={Pen} label="Signature line" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Pen} label={t("doc-section-signature-line")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Enabled">
+                        <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.signature_enabled} onCheckedChange={(v) => set("signature_enabled", v)} />
-                            <span className="text-sm text-muted-foreground">Show a signature line beside the seal</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-signature-line-desc")}</span>
                           </div>
                         </Field>
                         {form.signature_enabled && (
                           <div className="grid grid-cols-2 gap-3">
-                            <Field label="Label"><Input value={form.signature_label ?? ""} onChange={(e) => set("signature_label", e.target.value)} placeholder="Authorized signature" /></Field>
-                            <Field label="Name"><Input value={form.signature_name ?? ""} onChange={(e) => set("signature_name", e.target.value)} placeholder="Vladimir, Director" /></Field>
+                            <Field label={t("doc-label")}><Input value={form.signature_label ?? ""} onChange={(e) => set("signature_label", e.target.value)} placeholder={t("doc-authorized-signature")} /></Field>
+                            <Field label={t("doc-name")}><Input value={form.signature_name ?? ""} onChange={(e) => set("signature_name", e.target.value)} placeholder="Vladimir, Director" /></Field>
                           </div>
                         )}
                       </div>
@@ -2149,7 +2165,7 @@ function SealEditorDialog({
             <div className="px-5 py-3 border-b border-border/60 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Eye className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Placement preview</span>
+                <span className="text-sm font-medium">{t("doc-placement-preview")}</span>
               </div>
               <Badge variant="outline" className="text-xs capitalize">{form.position.replace(/-/g, " ")}</Badge>
             </div>
@@ -2162,9 +2178,9 @@ function SealEditorDialog({
         </div>
 
         <DialogFooter className="px-5 py-4 border-t border-border/60 bg-card">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
-            <Save className="size-4 mr-1" /> Save seal
+            <Save className="size-4 mr-1" /> {t("doc-save-seal")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2288,6 +2304,7 @@ function TemplateEditorDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [form, setForm] = useState<TemplateFormState>(defaultTemplate());
   const [saving, setSaving] = useState(false);
@@ -2314,7 +2331,7 @@ function TemplateEditorDialog({
 
   async function handleSave() {
     if (!form.name?.trim()) {
-      toast.error("Template name is required.");
+      toast.error(t("doc-template-name-required-toast"));
       return;
     }
     setSaving(true);
@@ -2363,11 +2380,11 @@ function TemplateEditorDialog({
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${r.status}`);
       }
-      toast.success(template ? "Template updated." : "Template created.");
+      toast.success(template ? t("doc-template-updated-toast") : t("doc-template-created-toast"));
       onSaved();
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Failed to save template.";
-      toast.error(message || "Failed to save template.");
+      const message = e instanceof Error ? e.message : t("doc-failed-save-template-toast");
+      toast.error(message || t("doc-failed-save-template-toast"));
     } finally {
       setSaving(false);
     }
@@ -2382,10 +2399,10 @@ function TemplateEditorDialog({
         <DialogHeader className="px-5 py-4 border-b border-border/60">
           <DialogTitle className="flex items-center gap-2">
             <LayoutTemplate className="size-5 text-primary" />
-            {template ? "Edit template" : "New template"}
+            {template ? t("doc-edit-template") : t("doc-new-template-title")}
           </DialogTitle>
           <DialogDescription>
-            Configure page layout, header/footer content, fonts, colors, table styling, and link a letterhead + seal.
+            {t("doc-template-editor-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -2393,10 +2410,10 @@ function TemplateEditorDialog({
           <div className="px-5 pt-3">
             <TabsList className="w-fit">
               <TabsTrigger value="form">
-                <FileText className="size-4" /> Form editor
+                <FileText className="size-4" /> {t("doc-tab-form-editor")}
               </TabsTrigger>
               <TabsTrigger value="visual">
-                <LayoutTemplate className="size-4" /> Visual editor
+                <LayoutTemplate className="size-4" /> {t("doc-tab-visual-editor")}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -2408,28 +2425,28 @@ function TemplateEditorDialog({
               <div className="p-5">
                 <Accordion type="multiple" defaultValue={["basics", "links"]} className="w-full">
                   <AccordionItem value="basics">
-                    <AccordionTrigger><SectionLabel icon={FileText} label="Basics" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={FileText} label={t("doc-section-basics")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Template name">
-                          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Default offer template" />
+                        <Field label={t("doc-template-name")}>
+                          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={t("doc-template-name-placeholder")} />
                         </Field>
-                        <Field label="Type">
+                        <Field label={t("type")}>
                           <Select value={form.type} onValueChange={(v) => set("type", v as TemplateType)}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="offer">Offer</SelectItem>
-                              <SelectItem value="invoice">Invoice</SelectItem>
-                              <SelectItem value="proforma">Proforma</SelectItem>
-                              <SelectItem value="contract">Contract</SelectItem>
-                              <SelectItem value="generic">Generic</SelectItem>
+                              <SelectItem value="offer">{t("doc-type-offer")}</SelectItem>
+                              <SelectItem value="invoice">{t("doc-type-invoice")}</SelectItem>
+                              <SelectItem value="proforma">{t("doc-type-proforma")}</SelectItem>
+                              <SelectItem value="contract">{t("doc-type-contract")}</SelectItem>
+                              <SelectItem value="generic">{t("doc-type-generic")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field label="Default template">
+                        <Field label={t("doc-default-template")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} />
-                            <span className="text-sm text-muted-foreground">Use as the default for this document type</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-use-default-for-type")}</span>
                           </div>
                         </Field>
                       </div>
@@ -2437,46 +2454,46 @@ function TemplateEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="links">
-                    <AccordionTrigger><SectionLabel icon={Layers} label="Linked memorandum & seal" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Layers} label={t("doc-section-linked-memorandum-seal")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Letterhead (memorandum firme)">
+                        <Field label={t("doc-letterhead-memorandum")}>
                           <Select
                             value={form.letterhead_id ?? "__none__"}
                             onValueChange={(v) => set("letterhead_id", v === "__none__" ? null : v)}
                           >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="__none__">— Use tenant default —</SelectItem>
+                              <SelectItem value="__none__">{t("doc-use-tenant-default")}</SelectItem>
                               {letterheads.map((l) => (
                                 <SelectItem key={l.id} value={l.id}>
-                                  {l.name}{l.is_default ? " (default)" : ""}
+                                  {l.name}{l.is_default ? ` ${t("doc-default-suffix")}` : ""}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field label="Seal (zigled)">
+                        <Field label={t("doc-seal-zigled")}>
                           <Select
                             value={form.seal_id ?? "__none__"}
                             onValueChange={(v) => set("seal_id", v === "__none__" ? null : v)}
                           >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="__none__">— No seal —</SelectItem>
+                              <SelectItem value="__none__">{t("doc-no-seal-option")}</SelectItem>
                               {seals.map((s) => (
                                 <SelectItem key={s.id} value={s.id}>
-                                  {s.name}{s.is_default ? " (default)" : ""}
+                                  {s.name}{s.is_default ? ` ${t("doc-default-suffix")}` : ""}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field label="Stamp seal on this template">
+                        <Field label={t("doc-stamp-seal-template")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.seal_enabled} onCheckedChange={(v) => set("seal_enabled", v)} />
                             <span className="text-sm text-muted-foreground">
-                              {form.seal_id ? "Apply the selected seal to generated PDFs" : "Select a seal first"}
+                              {form.seal_id ? t("doc-apply-selected-seal") : t("doc-select-seal-first")}
                             </span>
                           </div>
                         </Field>
@@ -2485,24 +2502,24 @@ function TemplateEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="page">
-                    <AccordionTrigger><SectionLabel icon={LayoutTemplate} label="Page layout" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={LayoutTemplate} label={t("doc-section-page-layout")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Page size">
+                        <Field label={t("doc-page-size")}>
                           <Select value={form.page_size} onValueChange={(v) => set("page_size", v as "A4" | "Letter")}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="A4">A4 (210 × 297 mm)</SelectItem>
-                              <SelectItem value="Letter">Letter (8.5 × 11 in)</SelectItem>
+                              <SelectItem value="A4">{t("doc-page-size-a4")}</SelectItem>
+                              <SelectItem value="Letter">{t("doc-page-size-letter")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field label="Margins (mm)">
+                        <Field label={t("doc-margins-mm")}>
                           <div className="grid grid-cols-4 gap-2">
-                            <MarginInput label="Top" value={form.page_margin_top} onChange={(v) => set("page_margin_top", v)} />
-                            <MarginInput label="Bottom" value={form.page_margin_bottom} onChange={(v) => set("page_margin_bottom", v)} />
-                            <MarginInput label="Left" value={form.page_margin_left} onChange={(v) => set("page_margin_left", v)} />
-                            <MarginInput label="Right" value={form.page_margin_right} onChange={(v) => set("page_margin_right", v)} />
+                            <MarginInput label={t("doc-margin-top")} value={form.page_margin_top} onChange={(v) => set("page_margin_top", v)} />
+                            <MarginInput label={t("doc-margin-bottom")} value={form.page_margin_bottom} onChange={(v) => set("page_margin_bottom", v)} />
+                            <MarginInput label={t("doc-margin-left")} value={form.page_margin_left} onChange={(v) => set("page_margin_left", v)} />
+                            <MarginInput label={t("doc-margin-right")} value={form.page_margin_right} onChange={(v) => set("page_margin_right", v)} />
                           </div>
                         </Field>
                       </div>
@@ -2510,22 +2527,22 @@ function TemplateEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="header">
-                    <AccordionTrigger><SectionLabel icon={AlignCenter} label="Header" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={AlignCenter} label={t("doc-section-header")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Enabled">
+                        <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.header_enabled} onCheckedChange={(v) => set("header_enabled", v)} />
-                            <span className="text-sm text-muted-foreground">Show header on every page</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-show-header-every-page")}</span>
                           </div>
                         </Field>
                         {form.header_enabled && (
                           <>
-                            <Field label="Height (mm)"><NumberInput value={form.header_height} onChange={(v) => set("header_height", v)} min={5} max={80} /></Field>
+                            <Field label={t("doc-height-mm")}><NumberInput value={form.header_height} onChange={(v) => set("header_height", v)} min={5} max={80} /></Field>
                             <div className="space-y-1.5">
-                              <Label className="text-xs text-muted-foreground">Header content</Label>
+                              <Label className="text-xs text-muted-foreground">{t("doc-header-content")}</Label>
                               <p className="text-xs text-muted-foreground">
-                                Define what text appears in the document header. Use placeholders to auto-fill company data.
+                                {t("doc-header-content-hint")}
                               </p>
                               <TemplateContentEditor
                                 value={form.header_content || DEFAULT_HEADER_CONTENT_JSON}
@@ -2534,9 +2551,9 @@ function TemplateEditorDialog({
                               />
                             </div>
                             <div className="grid grid-cols-3 gap-2">
-                              <ToggleField label="Logo" checked={form.header_show_logo} onChange={(v) => set("header_show_logo", v)} />
-                              <ToggleField label="Name" checked={form.header_show_company_name} onChange={(v) => set("header_show_company_name", v)} />
-                              <ToggleField label="Contact" checked={form.header_show_contact} onChange={(v) => set("header_show_contact", v)} />
+                              <ToggleField label={t("doc-toggle-logo")} checked={form.header_show_logo} onChange={(v) => set("header_show_logo", v)} />
+                              <ToggleField label={t("doc-toggle-name")} checked={form.header_show_company_name} onChange={(v) => set("header_show_company_name", v)} />
+                              <ToggleField label={t("doc-toggle-contact")} checked={form.header_show_contact} onChange={(v) => set("header_show_contact", v)} />
                             </div>
                           </>
                         )}
@@ -2545,22 +2562,22 @@ function TemplateEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="footer">
-                    <AccordionTrigger><SectionLabel icon={AlignJustify} label="Footer" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={AlignJustify} label={t("doc-section-footer")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Enabled">
+                        <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.footer_enabled} onCheckedChange={(v) => set("footer_enabled", v)} />
-                            <span className="text-sm text-muted-foreground">Show footer on every page</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-show-footer-every-page")}</span>
                           </div>
                         </Field>
                         {form.footer_enabled && (
                           <>
-                            <Field label="Height (mm)"><NumberInput value={form.footer_height} onChange={(v) => set("footer_height", v)} min={5} max={60} /></Field>
+                            <Field label={t("doc-height-mm")}><NumberInput value={form.footer_height} onChange={(v) => set("footer_height", v)} min={5} max={60} /></Field>
                             <div className="space-y-1.5">
-                              <Label className="text-xs text-muted-foreground">Footer content</Label>
+                              <Label className="text-xs text-muted-foreground">{t("doc-footer-content")}</Label>
                               <p className="text-xs text-muted-foreground">
-                                Define what text appears in the document footer. Use placeholders to auto-fill company data.
+                                {t("doc-footer-content-hint")}
                               </p>
                               <TemplateContentEditor
                                 value={form.footer_content || DEFAULT_FOOTER_CONTENT_JSON}
@@ -2569,9 +2586,9 @@ function TemplateEditorDialog({
                               />
                             </div>
                             <div className="grid grid-cols-3 gap-2">
-                              <ToggleField label="Page #" checked={form.footer_show_page_number} onChange={(v) => set("footer_show_page_number", v)} />
-                              <ToggleField label="Bank" checked={form.footer_show_bank_details} onChange={(v) => set("footer_show_bank_details", v)} />
-                              <ToggleField label="Tax ID" checked={form.footer_show_tax_id} onChange={(v) => set("footer_show_tax_id", v)} />
+                              <ToggleField label={t("doc-toggle-page-num")} checked={form.footer_show_page_number} onChange={(v) => set("footer_show_page_number", v)} />
+                              <ToggleField label={t("doc-toggle-bank")} checked={form.footer_show_bank_details} onChange={(v) => set("footer_show_bank_details", v)} />
+                              <ToggleField label={t("doc-toggle-tax-id")} checked={form.footer_show_tax_id} onChange={(v) => set("footer_show_tax_id", v)} />
                             </div>
 
                             {/* ── QR code placement ──
@@ -2579,22 +2596,22 @@ function TemplateEditorDialog({
                                 DB column) — see writeQrConfig / parseQrConfig. */}
                             <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-3">
                               <div>
-                                <Label className="text-xs font-medium">QR code placement</Label>
+                                <Label className="text-xs font-medium">{t("doc-qr-placement")}</Label>
                                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                                  Where the verification QR code appears on each page.
+                                  {t("doc-qr-placement-desc")}
                                 </p>
                               </div>
-                              <Field label="Position">
+                              <Field label={t("doc-position")}>
                                 <Select
                                   value={form.qr_position ?? "footer-right"}
                                   onValueChange={(v) => set("qr_position", v)}
                                 >
                                   <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="footer-right">Footer right (default)</SelectItem>
-                                    <SelectItem value="footer-left">Footer left</SelectItem>
-                                    <SelectItem value="footer-center">Footer center</SelectItem>
-                                    <SelectItem value="none">Don&apos;t show QR</SelectItem>
+                                    <SelectItem value="footer-right">{t("doc-qr-footer-right")}</SelectItem>
+                                    <SelectItem value="footer-left">{t("doc-qr-footer-left")}</SelectItem>
+                                    <SelectItem value="footer-center">{t("doc-qr-footer-center")}</SelectItem>
+                                    <SelectItem value="none">{t("doc-qr-none")}</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </Field>
@@ -2602,7 +2619,7 @@ function TemplateEditorDialog({
                                 <>
                                   <div>
                                     <div className="flex items-center justify-between mb-1">
-                                      <Label className="text-xs">QR size (mm)</Label>
+                                      <Label className="text-xs">{t("doc-qr-size-mm")}</Label>
                                       <span className="text-[10px] tabular text-muted-foreground">
                                         {form.qr_size_mm ?? 15} mm
                                       </span>
@@ -2617,7 +2634,7 @@ function TemplateEditorDialog({
                                   </div>
                                   <div>
                                     <div className="flex items-center justify-between mb-1">
-                                      <Label className="text-xs">QR opacity</Label>
+                                      <Label className="text-xs">{t("doc-qr-opacity")}</Label>
                                       <span className="text-[10px] tabular text-muted-foreground">
                                         {Math.round((form.qr_opacity ?? 1) * 100)}%
                                       </span>
@@ -2640,12 +2657,11 @@ function TemplateEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="bank-accounts">
-                    <AccordionTrigger><SectionLabel icon={Building2} label="Bank accounts" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Building2} label={t("doc-section-bank-accounts")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">
-                          Select which of your bank accounts should appear in PDFs generated with this template.
-                          Leave empty to show all accounts.
+                          {t("doc-bank-accounts-desc")}
                         </p>
                         <BankAccountSelector
                           accounts={tenant?.bank_accounts ?? null}
@@ -2657,33 +2673,33 @@ function TemplateEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="body">
-                    <AccordionTrigger><SectionLabel icon={Type} label="Body styling" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Type} label={t("doc-section-body-styling")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <Field label="Font family"><Input value={form.body_font_family} onChange={(e) => set("body_font_family", e.target.value)} placeholder="Inter, system-ui, sans-serif" className="font-mono text-xs" /></Field>
+                        <Field label={t("doc-font-family")}><Input value={form.body_font_family} onChange={(e) => set("body_font_family", e.target.value)} placeholder="Inter, system-ui, sans-serif" className="font-mono text-xs" /></Field>
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Font size (px)"><NumberInput value={form.body_font_size} onChange={(v) => set("body_font_size", v)} min={7} max={24} /></Field>
-                          <Field label="Line height"><NumberInput value={form.body_line_height} onChange={(v) => set("body_line_height", v)} min={1} max={2.5} step={0.1} /></Field>
+                          <Field label={t("doc-font-size-px")}><NumberInput value={form.body_font_size} onChange={(v) => set("body_font_size", v)} min={7} max={24} /></Field>
+                          <Field label={t("doc-line-height")}><NumberInput value={form.body_line_height} onChange={(v) => set("body_line_height", v)} min={1} max={2.5} step={0.1} /></Field>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <ColorField label="Primary color" value={form.primary_color} onChange={(v) => set("primary_color", v)} />
-                          <ColorField label="Accent color" value={form.accent_color} onChange={(v) => set("accent_color", v)} />
+                          <ColorField label={t("doc-primary-color")} value={form.primary_color} onChange={(v) => set("primary_color", v)} />
+                          <ColorField label={t("doc-accent-color")} value={form.accent_color} onChange={(v) => set("accent_color", v)} />
                         </div>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
                   <AccordionItem value="table">
-                    <AccordionTrigger><SectionLabel icon={TableIcon} label="Table styling" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={TableIcon} label={t("doc-section-table-styling")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3">
-                        <ColorField label="Header background" value={form.table_header_bg} onChange={(v) => set("table_header_bg", v)} />
-                        <ColorField label="Header text color" value={form.table_header_color} onChange={(v) => set("table_header_color", v)} />
-                        <ColorField label="Border color" value={form.table_border_color} onChange={(v) => set("table_border_color", v)} />
-                        <Field label="Striped rows">
+                        <ColorField label={t("doc-header-background")} value={form.table_header_bg} onChange={(v) => set("table_header_bg", v)} />
+                        <ColorField label={t("doc-header-text-color")} value={form.table_header_color} onChange={(v) => set("table_header_color", v)} />
+                        <ColorField label={t("doc-border-color")} value={form.table_border_color} onChange={(v) => set("table_border_color", v)} />
+                        <Field label={t("doc-striped-rows")}>
                           <div className="flex items-center gap-2">
                             <Switch checked={form.table_stripe} onCheckedChange={(v) => set("table_stripe", v)} />
-                            <span className="text-sm text-muted-foreground">Alternate row background</span>
+                            <span className="text-sm text-muted-foreground">{t("doc-alternate-row-bg")}</span>
                           </div>
                         </Field>
                       </div>
@@ -2691,18 +2707,18 @@ function TemplateEditorDialog({
                   </AccordionItem>
 
                   <AccordionItem value="variables">
-                    <AccordionTrigger><SectionLabel icon={Type} label="Available variables" /></AccordionTrigger>
+                    <AccordionTrigger><SectionLabel icon={Type} label={t("doc-section-available-variables")} /></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">
-                          Use these tokens in header and footer content. They are replaced with company data at render time.
+                          {t("doc-variables-hint")}
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {AVAILABLE_VARIABLES.map((v) => (
                             <code
                               key={v.token}
                               className="text-[10px] px-1.5 py-0.5 rounded bg-card border border-border/60 font-mono"
-                              title={v.label}
+                              title={t(v.label)}
                             >
                               {v.token}
                             </code>
@@ -2721,7 +2737,7 @@ function TemplateEditorDialog({
             <div className="px-5 py-3 border-b border-border/60 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Eye className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Live preview</span>
+                <span className="text-sm font-medium">{t("doc-live-preview")}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {linkedLetterhead && <Badge variant="outline" className="text-[10px]"><Building2 className="size-3" /> {linkedLetterhead.name}</Badge>}
@@ -2733,10 +2749,9 @@ function TemplateEditorDialog({
               <div className="p-6 flex items-center justify-center min-h-full">
                 <div className="text-center text-muted-foreground max-w-sm">
                   <Eye className="size-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm font-medium">Switch to "Visual Editor" tab to see the live layout</p>
+                  <p className="text-sm font-medium">{t("doc-switch-to-visual")}</p>
                   <p className="text-xs mt-1.5">
-                    This tab is for form-based settings (page size, colors, fonts, toggles).
-                    The visual editor renders the actual field positions.
+                    {t("doc-form-tab-hint")}
                   </p>
                 </div>
               </div>
@@ -2755,9 +2770,9 @@ function TemplateEditorDialog({
         </Tabs>
 
         <DialogFooter className="px-5 py-4 border-t border-border/60 bg-card">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
-            <Save className="size-4 mr-1" /> Save template
+            <Save className="size-4 mr-1" /> {t("doc-save-template")}
           </Button>
         </DialogFooter>
       </DialogContent>

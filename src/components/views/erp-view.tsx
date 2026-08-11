@@ -48,148 +48,156 @@ import type {
   GeneralLedgerEntry,
 } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 /* ─── i18n helpers ─────────────────────────────────────────────────────── */
 
-const ERP_LABELS: Record<string, string> = {
-    title: "ERP / Accounting",
-    description: "Manage your chart of accounts, journal entries, and financial reports",
-    dashboard: "Dashboard",
-    "chart-of-accounts": "Chart of Accounts",
-    "journal-entries": "Journal Entries",
-    "general-ledger": "General Ledger",
-    "bank-accounts": "Bank Accounts",
-    reports: "Reports",
-    settings: "ERP Settings",
-    "total-assets": "Total Assets",
-    "total-revenue": "Total Revenue",
-    "total-expenses": "Total Expenses",
-    "net-profit": "Net Profit",
-    "recent-journal-entries": "Recent Journal Entries",
-    "quick-actions": "Quick Actions",
-    "new-journal-entry": "New Journal Entry",
-    "initialize-chart": "Initialize Chart of Accounts",
-    "view-reports": "View Reports",
-    code: "Code",
-    name: "Name",
-    type: "Type",
-    category: "Category",
-    standard: "Standard",
-    active: "Active",
-    actions: "Actions",
-    "add-account": "Add Account",
-    "edit-account": "Edit Account",
-    "delete-account": "Delete Account",
-    "delete-account-confirm": "Are you sure you want to delete this account? This action cannot be undone.",
-    "account-code": "Account Code",
-    "account-name": "Account Name",
-    "name-en": "Name (English)",
-    "account-type": "Account Type",
-    "account-category": "Account Category",
-    "parent-account": "Parent Account",
-    "tax-code": "Tax Code",
-    "description-label": "Description",
-    "is-active": "Active",
-    "initialize-eu": "Initialize EU Standard",
-    "initialize-uae": "Initialize UAE Standard",
-    "initialize-desc": "Initialize the chart of accounts with a standard template. This will create default accounts and settings.",
-    "entry-number": "Entry #",
-    date: "Date",
-    reference: "Reference",
-    status: "Status",
-    "debit-total": "Debit Total",
-    "credit-total": "Credit Total",
-    "add-entry": "New Journal Entry",
-    "edit-entry": "Edit Journal Entry",
-    "post-entry": "Post",
-    "reverse-entry": "Reverse",
-    "entry-date": "Date",
-    "entry-description": "Description",
-    "reference-type": "Reference Type",
-    "reference-id": "Reference ID",
-    currency: "Currency",
-    notes: "Notes",
-    lines: "Lines",
-    account: "Account",
-    debit: "Debit",
-    credit: "Credit",
-    "line-description": "Line Description",
-    "add-line": "Add Line",
-    "remove-line": "Remove Line",
-    "balance-validation": "Total debits must equal total credits",
-    "balanced": "Balanced",
-    "not-balanced": "Not Balanced",
-    draft: "Draft",
-    posted: "Posted",
-    reversed: "Reversed",
-    cancelled: "Cancelled",
-    "select-account": "Select Account",
-    "date-from": "Date From",
-    "date-to": "Date To",
-    "running-balance": "Running Balance",
-    "bank-name": "Bank Name",
-    "account-number": "Account Number",
-    iban: "IBAN",
-    "swift-bic": "SWIFT/BIC",
-    balance: "Balance",
-    "add-bank-account": "Add Bank Account",
-    "edit-bank-account": "Edit Bank Account",
-    "linked-account": "Linked Account",
-    transactions: "Transactions",
-    amount: "Amount",
-    "transaction-type": "Transaction Type",
-    counterparty: "Counterparty",
-    reconciled: "Reconciled",
-    "add-transaction": "Add Transaction",
-    "trial-balance": "Trial Balance",
-    "balance-sheet": "Balance Sheet",
-    "profit-and-loss": "Profit & Loss",
-    "as-of-date": "As of Date",
-    "period-start": "Period Start",
-    "period-end": "Period End",
-    "generate-report": "Generate Report",
-    "export-report": "Export Report",
-    "total-debit": "Total Debit",
-    "total-credit": "Total Credit",
-    assets: "Assets",
-    liabilities: "Liabilities",
-    equity: "Equity",
-    revenue: "Revenue",
-    expenses: "Expenses",
-    "net-profit-loss": "Net Profit / Loss",
-    "accounting-standard": "Accounting Standard",
-    "fiscal-year-start": "Fiscal Year Start",
-    "fiscal-year-end": "Fiscal Year End",
-    "default-currency": "Default Currency",
-    "vat-enabled": "VAT Enabled",
-    "vat-rate": "VAT Rate (%)",
-    "vat-return-period": "VAT Return Period",
-    "auto-post-journal": "Auto Post Journal",
-    "default-accounts": "Default Accounts",
-    "revenue-account": "Revenue Account",
-    "expense-account": "Expense Account",
-    "receivable-account": "Receivable Account",
-    "payable-account": "Payable Account",
-    "vat-account": "VAT Account",
-    "bank-charges-account": "Bank Charges Account",
-    "cash-account": "Cash Account",
-    "retention-account": "Retention Account",
-    "round-off-account": "Round Off Account",
-    "save-settings": "Save Settings",
-    "no-accounts": "No accounts found. Initialize the chart of accounts to get started.",
-    "no-entries": "No journal entries found. Create your first entry to get started.",
-    "no-bank-accounts": "No bank accounts found. Add a bank account to get started.",
-    "no-transactions": "No transactions found for this account.",
-    "no-report-data": "No data available for the selected criteria.",
-    "no-ledger-data": "No ledger entries found for the selected account.",
-    "view-entry": "View Entry",
-    "gl-account": "Account",
-    "entry-detail": "Entry Detail",
-
+// Maps the internal label keys used throughout this view to the i18n keys
+// (mix of `fin-*` finance-domain keys, `fin-erp-*` keys added for this view,
+// and shared `erp-*` keys from the UI dictionary). Any key not present here
+// falls through to `t(key)` so callers can also pass i18n keys directly.
+const ERP_LABEL_KEYS: Record<string, string> = {
+  title: "fin-erp-title",
+  description: "fin-erp-description",
+  dashboard: "erp-dashboard",
+  "chart-of-accounts": "erp-chart-of-accounts",
+  "journal-entries": "fin-erp-journal-entries",
+  "general-ledger": "erp-general-ledger",
+  "bank-accounts": "erp-bank-accounts",
+  "bank-transactions": "fin-erp-bank-transactions",
+  "cost-centers": "fin-erp-cost-centers",
+  "fiscal-periods": "fin-erp-fiscal-periods",
+  reports: "fin-erp-reports",
+  settings: "erp-settings",
+  "total-assets": "erp-total-assets",
+  "total-revenue": "erp-total-revenue",
+  "total-expenses": "erp-total-expenses",
+  "net-profit": "erp-net-profit",
+  "recent-journal-entries": "fin-erp-recent-entries",
+  "quick-actions": "fin-quick-actions-label",
+  "new-journal-entry": "erp-quick-new-entry",
+  "initialize-chart": "erp-initialize",
+  "view-reports": "erp-quick-view-reports",
+  code: "fin-code",
+  name: "name",
+  type: "type",
+  category: "fin-category",
+  standard: "fin-standard",
+  active: "active",
+  actions: "actions",
+  "add-account": "fin-add-account",
+  "edit-account": "fin-edit-account",
+  "delete-account": "fin-delete-account",
+  "delete-account-confirm": "fin-delete-account-confirm",
+  "account-code": "erp-account-code",
+  "account-name": "erp-account-name",
+  "name-en": "fin-name-en",
+  "account-type": "erp-account-type",
+  "account-category": "erp-account-category",
+  "parent-account": "erp-account-parent",
+  "tax-code": "fin-tax-code",
+  "description-label": "description",
+  "is-active": "active",
+  "initialize-eu": "fin-erp-initialize-eu",
+  "initialize-uae": "fin-erp-initialize-uae",
+  "initialize-desc": "erp-initialize-desc",
+  "entry-number": "erp-entry-number",
+  date: "date",
+  reference: "erp-reference",
+  status: "status",
+  "debit-total": "erp-debit-total",
+  "credit-total": "erp-credit-total",
+  "add-entry": "erp-quick-new-entry",
+  "edit-entry": "fin-edit-entry",
+  "post-entry": "erp-post",
+  "reverse-entry": "erp-reverse",
+  "entry-date": "date",
+  "entry-description": "description",
+  "reference-type": "fin-reference-type",
+  "reference-id": "fin-reference-id-field",
+  currency: "fin-currency",
+  notes: "fin-notes",
+  lines: "fin-lines",
+  account: "fin-account",
+  debit: "erp-debit",
+  credit: "erp-credit",
+  "line-description": "fin-line-description",
+  "add-line": "fin-add-line",
+  "remove-line": "fin-remove-line",
+  "balance-validation": "erp-lines-must-balance",
+  "balanced": "fin-balanced",
+  "not-balanced": "fin-not-balanced",
+  draft: "erp-draft",
+  posted: "erp-posted",
+  reversed: "erp-reversed",
+  cancelled: "erp-cancelled",
+  "select-account": "fin-select-account",
+  "date-from": "fin-date-from",
+  "date-to": "fin-date-to",
+  "running-balance": "fin-running-balance",
+  "bank-name": "erp-bank-name",
+  "account-number": "erp-account-number",
+  iban: "erp-iban",
+  "swift-bic": "erp-swift",
+  balance: "erp-bank-balance",
+  "add-bank-account": "fin-add-bank-account",
+  "edit-bank-account": "fin-edit-bank-account",
+  "linked-account": "fin-linked-account",
+  transactions: "fin-transactions",
+  amount: "amount",
+  "transaction-type": "fin-transaction-type",
+  counterparty: "fin-counterparty",
+  reconciled: "erp-reconciled",
+  "add-transaction": "fin-add-transaction",
+  "trial-balance": "erp-trial-balance",
+  "balance-sheet": "erp-balance-sheet",
+  "profit-and-loss": "erp-profit-loss",
+  "as-of-date": "erp-as-of-date",
+  "period-start": "erp-period-start",
+  "period-end": "erp-period-end",
+  "generate-report": "fin-erp-generate-report",
+  "export-report": "fin-export-report",
+  "total-debit": "fin-total-debit-inline",
+  "total-credit": "fin-total-credit-inline",
+  assets: "fin-assets",
+  liabilities: "fin-liabilities",
+  equity: "erp-equity",
+  revenue: "erp-revenue",
+  expenses: "fin-expenses",
+  "net-profit-loss": "fin-net-profit-loss",
+  "accounting-standard": "erp-accounting-standard",
+  "fiscal-year-start": "erp-fiscal-year-start",
+  "fiscal-year-end": "erp-fiscal-year-end",
+  "default-currency": "erp-default-currency",
+  "vat-enabled": "erp-vat-enabled",
+  "vat-rate": "fin-erp-vat-rate-percent",
+  "vat-return-period": "erp-vat-return-period",
+  "auto-post-journal": "fin-erp-auto-post-journal",
+  "default-accounts": "erp-default-accounts",
+  "revenue-account": "erp-revenue-account",
+  "expense-account": "erp-expense-account",
+  "receivable-account": "erp-receivable-account",
+  "payable-account": "erp-payable-account",
+  "vat-account": "erp-vat-account",
+  "bank-charges-account": "erp-bank-charges-account",
+  "cash-account": "erp-cash-account",
+  "retention-account": "erp-retention-account",
+  "round-off-account": "erp-round-off-account",
+  "save-settings": "fin-save-settings",
+  "no-accounts": "fin-no-accounts",
+  "no-entries": "fin-no-entries",
+  "no-bank-accounts": "fin-no-bank-accounts",
+  "no-transactions": "fin-no-transactions",
+  "no-report-data": "fin-no-report-data",
+  "no-ledger-data": "fin-no-ledger-data",
+  "view-entry": "fin-erp-view-entry",
+  "gl-account": "fin-gl-account",
+  "entry-detail": "fin-entry-detail",
 };
 
 function useErpLabel() {
-  return useCallback((key: string) => ERP_LABELS[key] ?? key, []);
+  const t = useT();
+  return useCallback((key: string) => t(ERP_LABEL_KEYS[key] ?? key), [t]);
 }
 
 /* ─── Constants ─────────────────────────────────────────────────────────── */
@@ -221,11 +229,11 @@ const ACCOUNT_TYPE_COLOR: Record<string, string> = {
   expense: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
-const STATUS_BADGE: Record<string, { className: string; label: string }> = {
-  draft: { className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300", label: "Draft" },
-  posted: { className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300", label: "Posted" },
-  reversed: { className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300", label: "Reversed" },
-  cancelled: { className: "bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-300", label: "Cancelled" },
+const STATUS_BADGE: Record<string, { className: string; key: string }> = {
+  draft: { className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300", key: "erp-draft" },
+  posted: { className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300", key: "erp-posted" },
+  reversed: { className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300", key: "erp-reversed" },
+  cancelled: { className: "bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-300", key: "erp-cancelled" },
 };
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -409,11 +417,11 @@ function ErpDashboard() {
         body: JSON.stringify({ standard }),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Chart of accounts initialized");
+      toast.success(lbl("fin-chart-initialized"));
       qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
       qc.invalidateQueries({ queryKey: ["erp-settings", tenantKey] });
     },
-    onError: () => toast.error("Failed to initialize chart of accounts"),
+    onError: () => toast.error(lbl("fin-failed-initialize")),
   });
 
   const accounts: ErpAccount[] = accountsQ.data?.items ?? accountsQ.data ?? [];
@@ -508,7 +516,7 @@ function ErpDashboard() {
                       <TableCell className="max-w-[200px]">{entry.description}</TableCell>
                       <TableCell>
                         <Badge className={STATUS_BADGE[entry.status]?.className ?? ""}>
-                          {STATUS_BADGE[entry.status]?.label ?? entry.status}
+                          {lbl(STATUS_BADGE[entry.status]?.key ?? "")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono">{fmtMoney(entry.debit_total, entry.currency)}</TableCell>
@@ -593,24 +601,24 @@ function ChartOfAccounts() {
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success(editAccount ? "Account updated" : "Account created");
+      toast.success(lbl(editAccount ? "fin-account-updated" : "fin-account-created"));
       qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
       setShowAddDialog(false);
       setEditAccount(null);
       setForm(emptyAccount);
     },
-    onError: () => toast.error("Failed to save account"),
+    onError: () => toast.error(lbl("fin-failed-save-account")),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
       fetch(api(`/api/erp/accounts/${id}`), { method: "DELETE" }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Account deleted");
+      toast.success(lbl("fin-account-deleted"));
       qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
       setDeleteTarget(null);
     },
-    onError: () => toast.error("Failed to delete account"),
+    onError: () => toast.error(lbl("fin-failed-delete-account")),
   });
 
   const initMutation = useMutation({
@@ -621,11 +629,11 @@ function ChartOfAccounts() {
         body: JSON.stringify({ standard }),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Chart of accounts initialized");
+      toast.success(lbl("fin-chart-initialized"));
       qc.invalidateQueries({ queryKey: ["erp-accounts", tenantKey] });
       setShowInitDialog(false);
     },
-    onError: () => toast.error("Failed to initialize"),
+    onError: () => toast.error(lbl("fin-failed-initialize-short")),
   });
 
   function openEdit(account: ErpAccount) {
@@ -659,7 +667,7 @@ function ChartOfAccounts() {
           <div className="relative">
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search accounts..."
+              placeholder={lbl("fin-search-accounts-placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 w-64"
@@ -668,7 +676,7 @@ function ChartOfAccounts() {
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="all">{lbl("fin-all-types")}</SelectItem>
               {ACCOUNT_TYPES.map((t) => (
                 <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
               ))}
@@ -737,16 +745,16 @@ function ChartOfAccounts() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={account.is_active ? "default" : "secondary"}>
-                      {account.is_active ? "Active" : "Inactive"}
+                      {account.is_active ? lbl("active") : lbl("inactive")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(account)} title="Edit" aria-label="Edit">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(account)} title={lbl("edit")} aria-label={lbl("edit")}>
                         <Pencil className="size-4" />
                       </Button>
                       {!account.is_system && (
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(account)} title="Delete" aria-label="Delete">
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(account)} title={lbl("delete")} aria-label={lbl("delete")}>
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
                       )}
@@ -765,21 +773,21 @@ function ChartOfAccounts() {
           <DialogHeader>
             <DialogTitle>{editAccount ? lbl("edit-account") : lbl("add-account")}</DialogTitle>
             <DialogDescription>
-              {editAccount ? "Update account details" : "Create a new account in the chart of accounts"}
+              {editAccount ? lbl("fin-update-account-desc") : lbl("fin-create-account-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             <div className="space-y-2">
               <Label>{lbl("account-code")}</Label>
-              <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="e.g. 2000" />
+              <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder={lbl("fin-erp-account-code-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("account-name")}</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Account name" />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={lbl("fin-erp-account-name-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("name-en")}</Label>
-              <Input value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} placeholder="English name" />
+              <Input value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} placeholder={lbl("fin-erp-english-name-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("account-type")}</Label>
@@ -795,7 +803,7 @@ function ChartOfAccounts() {
             <div className="space-y-2">
               <Label>{lbl("account-category")}</Label>
               <Select value={form.account_category} onValueChange={(v) => setForm({ ...form, account_category: v })}>
-                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={lbl("fin-select-category")} /></SelectTrigger>
                 <SelectContent>
                   {ACCOUNT_CATEGORIES.map((c) => (
                     <SelectItem key={c} value={c}>{c.replace(/_/g, " ")}</SelectItem>
@@ -806,9 +814,9 @@ function ChartOfAccounts() {
             <div className="space-y-2">
               <Label>{lbl("parent-account")}</Label>
               <Select value={form.parent_id} onValueChange={(v) => setForm({ ...form, parent_id: v })}>
-                <SelectTrigger><SelectValue placeholder="None (top-level)" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={lbl("fin-none-top-level")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None (top-level)</SelectItem>
+                  <SelectItem value="none">{lbl("fin-none-top-level")}</SelectItem>
                   {accounts.filter((a) => a.id !== editAccount?.id).map((a) => (
                     <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
                   ))}
@@ -817,7 +825,7 @@ function ChartOfAccounts() {
             </div>
             <div className="space-y-2">
               <Label>{lbl("tax-code")}</Label>
-              <Input value={form.tax_code} onChange={(e) => setForm({ ...form, tax_code: e.target.value })} placeholder="Tax code" />
+              <Input value={form.tax_code} onChange={(e) => setForm({ ...form, tax_code: e.target.value })} placeholder={lbl("fin-erp-tax-code-placeholder")} />
             </div>
             <div className="space-y-2 flex items-center gap-3 pt-6">
               <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
@@ -825,13 +833,13 @@ function ChartOfAccounts() {
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label>{lbl("description")}</Label>
-              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" rows={3} />
+              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={lbl("fin-erp-optional-description-placeholder")} rows={3} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>{lbl("cancelled")}</Button>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>{lbl("cancel")}</Button>
             <Button onClick={() => saveMutation.mutate({ ...form, parent_id: form.parent_id === "none" ? "" : form.parent_id })} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Saving..." : "Save"}
+              {saveMutation.isPending ? lbl("fin-saving") : lbl("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -847,9 +855,9 @@ function ChartOfAccounts() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{lbl("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}>
-              Delete
+              {lbl("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -864,14 +872,14 @@ function ChartOfAccounts() {
           </DialogHeader>
           <div className="flex gap-4 py-4">
             <Button className="flex-1" onClick={() => initMutation.mutate("eu")} disabled={initMutation.isPending}>
-              EU Standard (IFRS)
+              {lbl("fin-erp-initialize-eu")}
             </Button>
             <Button className="flex-1" variant="outline" onClick={() => initMutation.mutate("uae")} disabled={initMutation.isPending}>
-              UAE Standard
+              {lbl("fin-erp-initialize-uae")}
             </Button>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowInitDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowInitDialog(false)}>{lbl("cancel")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -925,13 +933,13 @@ function JournalEntries() {
         return r.json();
       }),
     onSuccess: () => {
-      toast.success(editEntry ? "Entry updated" : "Entry created");
+      toast.success(lbl(editEntry ? "fin-entry-updated" : "fin-entry-created"));
       qc.invalidateQueries({ queryKey: ["erp-journal-entries", tenantKey] });
       setShowAddDialog(false);
       setEditEntry(null);
       setForm(emptyJournalEntry);
     },
-    onError: (e: any) => toast.error(e.message || "Failed to save entry"),
+    onError: (e: any) => toast.error(e.message || lbl("fin-failed-save-entry")),
   });
 
   const postMutation = useMutation({
@@ -942,10 +950,10 @@ function JournalEntries() {
         body: JSON.stringify({}),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Entry posted");
+      toast.success(lbl("fin-entry-posted"));
       qc.invalidateQueries({ queryKey: ["erp-journal-entries", tenantKey] });
     },
-    onError: () => toast.error("Failed to post entry"),
+    onError: () => toast.error(lbl("fin-failed-post-entry")),
   });
 
   const reverseMutation = useMutation({
@@ -956,10 +964,10 @@ function JournalEntries() {
         body: JSON.stringify({}),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Entry reversed");
+      toast.success(lbl("fin-entry-reversed"));
       qc.invalidateQueries({ queryKey: ["erp-journal-entries", tenantKey] });
     },
-    onError: () => toast.error("Failed to reverse entry"),
+    onError: () => toast.error(lbl("fin-failed-reverse-entry")),
   });
 
   const totalDebit = form.lines.reduce((s, l) => s + (l.debit || 0), 0);
@@ -1019,16 +1027,16 @@ function JournalEntries() {
         <div className="flex flex-wrap gap-2 items-center">
           <div className="relative">
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search entries..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-64" />
+            <Input placeholder={lbl("fin-search-entries-placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-64" />
           </div>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="posted">Posted</SelectItem>
-              <SelectItem value="reversed">Reversed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="all">{lbl("fin-all-statuses")}</SelectItem>
+              <SelectItem value="draft">{lbl("erp-draft")}</SelectItem>
+              <SelectItem value="posted">{lbl("erp-posted")}</SelectItem>
+              <SelectItem value="reversed">{lbl("erp-reversed")}</SelectItem>
+              <SelectItem value="cancelled">{lbl("erp-cancelled")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1070,28 +1078,28 @@ function JournalEntries() {
                   </TableCell>
                   <TableCell>
                     <Badge className={STATUS_BADGE[entry.status]?.className ?? ""}>
-                      {STATUS_BADGE[entry.status]?.label ?? entry.status}
+                      {lbl(STATUS_BADGE[entry.status]?.key ?? "")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-mono">{fmtMoney(entry.debit_total, entry.currency)}</TableCell>
                   <TableCell className="text-right font-mono">{fmtMoney(entry.credit_total, entry.currency)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => setViewEntry(entry)} title="View" aria-label="View">
+                      <Button variant="ghost" size="icon" onClick={() => setViewEntry(entry)} title={lbl("view")} aria-label={lbl("view")}>
                         <Eye className="size-4" />
                       </Button>
                       {entry.status === "draft" && (
                         <>
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} title="Edit" aria-label="Edit">
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} title={lbl("edit")} aria-label={lbl("edit")}>
                             <Pencil className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => postMutation.mutate(entry.id)} title="Post" aria-label="Post">
+                          <Button variant="ghost" size="icon" onClick={() => postMutation.mutate(entry.id)} title={lbl("erp-post")} aria-label={lbl("erp-post")}>
                             <CheckCircle2 className="size-4 text-emerald-600" />
                           </Button>
                         </>
                       )}
                       {entry.status === "posted" && (
-                        <Button variant="ghost" size="icon" onClick={() => reverseMutation.mutate(entry.id)} title="Reverse" aria-label="Reverse">
+                        <Button variant="ghost" size="icon" onClick={() => reverseMutation.mutate(entry.id)} title={lbl("erp-reverse")} aria-label={lbl("erp-reverse")}>
                           <RotateCcw className="size-4 text-red-600" />
                         </Button>
                       )}
@@ -1110,7 +1118,7 @@ function JournalEntries() {
           <DialogHeader>
             <DialogTitle>{editEntry ? lbl("edit-entry") : lbl("add-entry")}</DialogTitle>
             <DialogDescription>
-              {editEntry ? "Update journal entry details" : "Create a new journal entry with balanced debit and credit lines"}
+              {editEntry ? lbl("fin-update-entry-desc") : lbl("fin-create-entry-desc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
@@ -1142,16 +1150,16 @@ function JournalEntries() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{lbl("entry-description")}</Label>
-                <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Entry description" />
+                <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={lbl("fin-erp-entry-description-placeholder")} />
               </div>
               <div className="space-y-2">
                 <Label>{lbl("reference-id")}</Label>
-                <Input value={form.reference_id} onChange={(e) => setForm({ ...form, reference_id: e.target.value })} placeholder="Reference ID" />
+                <Input value={form.reference_id} onChange={(e) => setForm({ ...form, reference_id: e.target.value })} placeholder={lbl("fin-reference-id-placeholder")} />
               </div>
             </div>
             <div className="space-y-2">
               <Label>{lbl("notes")}</Label>
-              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" rows={2} />
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={lbl("fin-erp-optional-notes-placeholder")} rows={2} />
             </div>
 
             {/* Lines */}
@@ -1190,7 +1198,7 @@ function JournalEntries() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="Description" />
+                          <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder={lbl("description")} />
                         </TableCell>
                         <TableCell>
                           <Input type="number" step="0.01" value={line.debit || ""} onChange={(e) => updateLine(idx, "debit", parseFloat(e.target.value) || 0)} className="text-right" />
@@ -1200,7 +1208,7 @@ function JournalEntries() {
                         </TableCell>
                         <TableCell>
                           {form.lines.length > 1 && (
-                            <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} title="Remove" aria-label="Remove">
+                            <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} title={lbl("remove")} aria-label={lbl("remove")}>
                               <XCircle className="size-4 text-destructive" />
                             </Button>
                           )}
@@ -1218,9 +1226,9 @@ function JournalEntries() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>{lbl("cancel")}</Button>
             <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending || !isBalanced}>
-              {saveMutation.isPending ? "Saving..." : "Save"}
+              {saveMutation.isPending ? lbl("fin-saving") : lbl("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1238,7 +1246,7 @@ function JournalEntries() {
           {viewEntry && (
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div><span className="text-xs text-muted-foreground">{lbl("status")}</span><div><Badge className={STATUS_BADGE[viewEntry.status]?.className ?? ""}>{STATUS_BADGE[viewEntry.status]?.label}</Badge></div></div>
+                <div><span className="text-xs text-muted-foreground">{lbl("status")}</span><div><Badge className={STATUS_BADGE[viewEntry.status]?.className ?? ""}>{lbl(STATUS_BADGE[viewEntry.status]?.key ?? "")}</Badge></div></div>
                 <div><span className="text-xs text-muted-foreground">{lbl("currency")}</span><div className="font-mono">{viewEntry.currency}</div></div>
                 <div><span className="text-xs text-muted-foreground">{lbl("reference")}</span><div>{viewEntry.reference_type ?? "—"}{viewEntry.reference_id ? `: ${viewEntry.reference_id.slice(0, 8)}...` : ""}</div></div>
                 <div><span className="text-xs text-muted-foreground">{lbl("notes")}</span><div>{viewEntry.notes ?? "—"}</div></div>
@@ -1275,7 +1283,7 @@ function JournalEntries() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewEntry(null)}>Close</Button>
+            <Button variant="outline" onClick={() => setViewEntry(null)}>{lbl("close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1343,7 +1351,7 @@ function GeneralLedger() {
             </div>
             <div className="flex items-end">
               <Button variant="outline" onClick={() => { setDateFrom(""); setDateTo(""); }} className="w-full">
-                Clear Filters
+                {lbl("fin-clear-filters")}
               </Button>
             </div>
           </div>
@@ -1352,7 +1360,7 @@ function GeneralLedger() {
 
       {/* Ledger */}
       {!selectedAccountId ? (
-        <EmptyState icon={<PieChart />} title={lbl("select-account")} description="Select an account to view its ledger entries" />
+        <EmptyState icon={<PieChart />} title={lbl("select-account")} description={lbl("fin-select-account-view-ledger")} />
       ) : ledgerQ.isLoading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
       ) : !ledger?.entries?.length ? (
@@ -1364,10 +1372,10 @@ function GeneralLedger() {
               {ledger.account_code} — {ledger.account_name}
             </CardTitle>
             <div className="flex gap-6 text-sm text-muted-foreground">
-              <span>Opening: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.opening_balance, "EUR")}</span></span>
-              <span>Closing: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.closing_balance, "EUR")}</span></span>
-              <span>Total Debit: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.total_debit, "EUR")}</span></span>
-              <span>Total Credit: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.total_credit, "EUR")}</span></span>
+              <span>{lbl("fin-opening-label")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.opening_balance, "EUR")}</span></span>
+              <span>{lbl("fin-closing-label")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.closing_balance, "EUR")}</span></span>
+              <span>{lbl("fin-total-debit-inline")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.total_debit, "EUR")}</span></span>
+              <span>{lbl("fin-total-credit-inline")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.total_credit, "EUR")}</span></span>
             </div>
           </CardHeader>
           <CardContent>
@@ -1453,25 +1461,25 @@ function BankAccounts() {
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Bank account saved");
+      toast.success(lbl("fin-bank-account-saved"));
       qc.invalidateQueries({ queryKey: ["erp-bank-accounts", tenantKey] });
       setShowAddDialog(false);
       setEditBankAccount(null);
       setForm(emptyBankAccount);
     },
-    onError: () => toast.error("Failed to save bank account"),
+    onError: () => toast.error(lbl("fin-failed-save-bank-account")),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
       fetch(api(`/api/erp/bank-accounts/${id}`), { method: "DELETE" }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Bank account deleted");
+      toast.success(lbl("fin-bank-account-deleted"));
       qc.invalidateQueries({ queryKey: ["erp-bank-accounts", tenantKey] });
       setDeleteTarget(null);
       if (selectedBankAccount?.id === deleteTarget?.id) setSelectedBankAccount(null);
     },
-    onError: () => toast.error("Failed to delete bank account"),
+    onError: () => toast.error(lbl("fin-failed-delete-bank-account")),
   });
 
   const saveTxMutation = useMutation({
@@ -1482,12 +1490,12 @@ function BankAccounts() {
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Transaction created");
+      toast.success(lbl("fin-transaction-created"));
       qc.invalidateQueries({ queryKey: ["erp-bank-transactions", tenantKey] });
       setShowTransactionDialog(false);
       setTxForm(emptyBankTransaction);
     },
-    onError: () => toast.error("Failed to create transaction"),
+    onError: () => toast.error(lbl("fin-failed-create-transaction")),
   });
 
   function openEdit(ba: ErpBankAccount) {
@@ -1543,8 +1551,8 @@ function BankAccounts() {
                       <span className="font-semibold text-lg">{ba.bank_name}</span>
                     </div>
                     <div className="text-sm text-muted-foreground">{ba.account_number}</div>
-                    {ba.iban && <div className="text-xs text-muted-foreground font-mono">IBAN: {ba.iban}</div>}
-                    {ba.swift_bic && <div className="text-xs text-muted-foreground font-mono">SWIFT: {ba.swift_bic}</div>}
+                    {ba.iban && <div className="text-xs text-muted-foreground font-mono">{lbl("erp-iban")}: {ba.iban}</div>}
+                    {ba.swift_bic && <div className="text-xs text-muted-foreground font-mono">{lbl("erp-swift")}: {ba.swift_bic}</div>}
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold">{fmtMoney(ba.balance, ba.currency)}</div>
@@ -1553,10 +1561,10 @@ function BankAccounts() {
                 </div>
                 <div className="flex gap-2 mt-4 pt-3 border-t">
                   <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(ba); }}>
-                    <Pencil className="size-3 mr-1" />Edit
+                    <Pencil className="size-3 mr-1" />{lbl("edit")}
                   </Button>
                   <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openAddTx(ba); }}>
-                    <Plus className="size-3 mr-1" />Transaction
+                    <Plus className="size-3 mr-1" />{lbl("fin-add-transaction")}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setDeleteTarget(ba); }}>
                     <Trash2 className="size-3 text-destructive" />
@@ -1630,24 +1638,24 @@ function BankAccounts() {
         <DialogContent size="full">
           <DialogHeader>
             <DialogTitle>{editBankAccount ? lbl("edit-bank-account") : lbl("add-bank-account")}</DialogTitle>
-            <DialogDescription>Enter bank account details</DialogDescription>
+            <DialogDescription>{lbl("fin-enter-bank-details-desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             <div className="space-y-2">
               <Label>{lbl("bank-name")}</Label>
-              <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} placeholder="e.g. National Bank" />
+              <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} placeholder={lbl("fin-erp-bank-name-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("account-number")}</Label>
-              <Input value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} placeholder="Account number" />
+              <Input value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} placeholder={lbl("fin-erp-account-number-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("iban")}</Label>
-              <Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="IBAN" />
+              <Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder={lbl("fin-erp-iban-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("swift-bic")}</Label>
-              <Input value={form.swift_bic} onChange={(e) => setForm({ ...form, swift_bic: e.target.value })} placeholder="SWIFT/BIC" />
+              <Input value={form.swift_bic} onChange={(e) => setForm({ ...form, swift_bic: e.target.value })} placeholder={lbl("fin-erp-swift-bic-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("currency")}</Label>
@@ -1677,9 +1685,9 @@ function BankAccounts() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>{lbl("cancel")}</Button>
             <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Saving..." : "Save"}
+              {saveMutation.isPending ? lbl("fin-saving") : lbl("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1689,12 +1697,12 @@ function BankAccounts() {
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Bank Account</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to delete this bank account?</AlertDialogDescription>
+            <AlertDialogTitle>{lbl("fin-delete-bank-account-title")}</AlertDialogTitle>
+            <AlertDialogDescription>{lbl("fin-delete-bank-account-confirm")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}>Delete</AlertDialogAction>
+            <AlertDialogCancel>{lbl("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}>{lbl("delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1704,7 +1712,7 @@ function BankAccounts() {
         <DialogContent size="full">
           <DialogHeader>
             <DialogTitle>{lbl("add-transaction")}</DialogTitle>
-            <DialogDescription>Add a new bank transaction</DialogDescription>
+            <DialogDescription>{lbl("fin-enter-transaction-desc")}</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             <div className="space-y-2">
@@ -1720,28 +1728,28 @@ function BankAccounts() {
               <Select value={txForm.transaction_type} onValueChange={(v) => setTxForm({ ...txForm, transaction_type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="credit">Credit (In)</SelectItem>
-                  <SelectItem value="debit">Debit (Out)</SelectItem>
+                  <SelectItem value="credit">{lbl("fin-credit-in")}</SelectItem>
+                  <SelectItem value="debit">{lbl("fin-debit-out")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>{lbl("counterparty")}</Label>
-              <Input value={txForm.counterparty} onChange={(e) => setTxForm({ ...txForm, counterparty: e.target.value })} placeholder="Counterparty name" />
+              <Input value={txForm.counterparty} onChange={(e) => setTxForm({ ...txForm, counterparty: e.target.value })} placeholder={lbl("fin-erp-counterparty-name-placeholder")} />
             </div>
             <div className="space-y-2">
               <Label>{lbl("description")}</Label>
-              <Input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Description" />
+              <Input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder={lbl("description")} />
             </div>
             <div className="space-y-2">
-              <Label>Reference</Label>
-              <Input value={txForm.reference} onChange={(e) => setTxForm({ ...txForm, reference: e.target.value })} placeholder="Reference" />
+              <Label>{lbl("reference")}</Label>
+              <Input value={txForm.reference} onChange={(e) => setTxForm({ ...txForm, reference: e.target.value })} placeholder={lbl("fin-erp-reference-placeholder")} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowTransactionDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowTransactionDialog(false)}>{lbl("cancel")}</Button>
             <Button onClick={() => saveTxMutation.mutate(txForm)} disabled={saveTxMutation.isPending}>
-              {saveTxMutation.isPending ? "Saving..." : "Save"}
+              {saveTxMutation.isPending ? lbl("fin-saving") : lbl("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1843,7 +1851,7 @@ function ErpReports() {
                       ))}
                       {/* Totals */}
                       <TableRow className="font-bold border-t-2">
-                        <TableCell colSpan={3}>Total</TableCell>
+                        <TableCell colSpan={3}>{lbl("fin-total-col")}</TableCell>
                         <TableCell className="text-right font-mono">{fmtMoney(trialBalance.total_debit, "EUR")}</TableCell>
                         <TableCell className="text-right font-mono">{fmtMoney(trialBalance.total_credit, "EUR")}</TableCell>
                         <TableCell></TableCell>
@@ -1882,19 +1890,19 @@ function ErpReports() {
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-sky-700 dark:text-sky-400">{lbl("assets")}</h3>
                     <BalanceSheetTable items={balanceSheet.assets} />
-                    <div className="text-right mt-2 font-bold text-sm">Total Assets: {fmtMoney(balanceSheet.total_assets, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-assets-inline")}: {fmtMoney(balanceSheet.total_assets, "EUR")}</div>
                   </div>
                   {/* Liabilities */}
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-red-700 dark:text-red-400">{lbl("liabilities")}</h3>
                     <BalanceSheetTable items={balanceSheet.liabilities} />
-                    <div className="text-right mt-2 font-bold text-sm">Total Liabilities: {fmtMoney(balanceSheet.total_liabilities, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-liabilities-inline")}: {fmtMoney(balanceSheet.total_liabilities, "EUR")}</div>
                   </div>
                   {/* Equity */}
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-purple-700 dark:text-purple-400">{lbl("equity")}</h3>
                     <BalanceSheetTable items={balanceSheet.equity} />
-                    <div className="text-right mt-2 font-bold text-sm">Total Equity: {fmtMoney(balanceSheet.total_equity, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-equity-inline")}: {fmtMoney(balanceSheet.total_equity, "EUR")}</div>
                   </div>
                 </div>
               )}
@@ -1930,13 +1938,13 @@ function ErpReports() {
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-emerald-700 dark:text-emerald-400">{lbl("revenue")}</h3>
                     <BalanceSheetTable items={profitAndLoss.revenue} />
-                    <div className="text-right mt-2 font-bold text-sm">Total Revenue: {fmtMoney(profitAndLoss.total_revenue, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-revenue-inline")}: {fmtMoney(profitAndLoss.total_revenue, "EUR")}</div>
                   </div>
                   {/* Expenses */}
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-amber-700 dark:text-amber-400">{lbl("expenses")}</h3>
                     <BalanceSheetTable items={profitAndLoss.expenses} />
-                    <div className="text-right mt-2 font-bold text-sm">Total Expenses: {fmtMoney(profitAndLoss.total_expenses, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-expenses-inline")}: {fmtMoney(profitAndLoss.total_expenses, "EUR")}</div>
                   </div>
                   {/* Net Profit */}
                   <div className="border-t-2 pt-4">
@@ -1957,17 +1965,18 @@ function ErpReports() {
 /* ─── Helper: Balance Sheet Table ─────────────────────────────────────── */
 
 function BalanceSheetTable({ items }: { items: BalanceSheetItem[] }) {
+  const t = useT();
   if (!items || items.length === 0) {
-    return <div className="text-sm text-muted-foreground py-2">No data</div>;
+    return <div className="text-sm text-muted-foreground py-2">{t("fin-no-data")}</div>;
   }
   return (
     <div className={scrollbarStyle}>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{ERP_LABELS.code}</TableHead>
-            <TableHead>{ERP_LABELS.name}</TableHead>
-            <TableHead className="text-right">{ERP_LABELS.amount}</TableHead>
+            <TableHead>{t("fin-code")}</TableHead>
+            <TableHead>{t("name")}</TableHead>
+            <TableHead className="text-right">{t("amount")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -2043,10 +2052,10 @@ function ErpSettings() {
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
-      toast.success("Settings saved");
+      toast.success(lbl("fin-settings-saved"));
       qc.invalidateQueries({ queryKey: ["erp-settings", tenantKey] });
     },
-    onError: () => toast.error("Failed to save settings"),
+    onError: () => toast.error(lbl("fin-failed-save-settings")),
   });
 
   function updateField<K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) {
@@ -2070,8 +2079,8 @@ function ErpSettings() {
               <Select value={form.accounting_standard} onValueChange={(v) => updateField("accounting_standard", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="eu">EU (IFRS)</SelectItem>
-                  <SelectItem value="uae">UAE (IFRS)</SelectItem>
+                  <SelectItem value="eu">{lbl("fin-eu-ifrs")}</SelectItem>
+                  <SelectItem value="uae">{lbl("fin-uae-ifrs")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2098,7 +2107,7 @@ function ErpSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">VAT / Tax</CardTitle>
+          <CardTitle className="text-lg">{lbl("fin-vat-tax")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2148,7 +2157,7 @@ function ErpSettings() {
 
       <div className="flex justify-end">
         <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="min-w-[160px]">
-          {saveMutation.isPending ? "Saving..." : lbl("save-settings")}
+          {saveMutation.isPending ? lbl("fin-saving") : lbl("save-settings")}
         </Button>
       </div>
     </div>
@@ -2163,13 +2172,14 @@ function AccountSelect({ label, value, onChange, accounts }: {
   onChange: (v: string) => void;
   accounts: ErpAccount[];
 }) {
+  const t = useT();
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+        <SelectTrigger><SelectValue placeholder={t("fin-select-account-placeholder")} /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">None</SelectItem>
+          <SelectItem value="none">{t("fin-none-option")}</SelectItem>
           {accounts.map((a) => (
             <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
           ))}

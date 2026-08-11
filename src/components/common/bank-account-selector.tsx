@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useT } from "@/lib/i18n/store";
 
 interface BankAccount {
   bankName?: string;
@@ -29,6 +30,7 @@ interface BankAccountSelectorProps {
 
 export function BankAccountSelector({ accounts, selected, onChange, className }: BankAccountSelectorProps) {
   const [open, setOpen] = React.useState(false);
+  const t = useT();
 
   // Parse accounts (can be array, JSON string, or null)
   const accountList: BankAccount[] = React.useMemo(() => {
@@ -43,7 +45,7 @@ export function BankAccountSelector({ accounts, selected, onChange, className }:
   if (accountList.length === 0) {
     return (
       <div className="text-sm text-muted-foreground p-2 border rounded">
-        No bank accounts configured. Add bank accounts in the tenant settings.
+        {t("fin-bank-accounts-missing")}
       </div>
     );
   }
@@ -60,8 +62,8 @@ export function BankAccountSelector({ accounts, selected, onChange, className }:
 
   const selectedCount = selected?.length ?? 0;
   const label = selectedCount === 0
-    ? "All accounts"
-    : `${selectedCount} account${selectedCount !== 1 ? "s" : ""} selected`;
+    ? t("fin-all-accounts")
+    : t("fin-accounts-selected").replace("{n}", String(selectedCount));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -78,10 +80,10 @@ export function BankAccountSelector({ accounts, selected, onChange, className }:
         <ScrollArea className="max-h-64">
           <div className="p-2 space-y-1">
             <div className="text-xs font-medium text-muted-foreground px-2 py-1">
-              Select which bank accounts to show in PDF
+              {t("fin-select-bank-accounts")}
             </div>
             {accountList.map((acct, idx) => {
-              const bankName = acct.bankName || acct.bank_name || "Bank";
+              const bankName = acct.bankName || acct.bank_name || t("fin-bank-default");
               const currency = acct.currency || "";
               const accountNumber = acct.accountNumber || acct.account_number || "—";
               const swift = acct.swiftCode || acct.swift_code || "—";
@@ -98,10 +100,10 @@ export function BankAccountSelector({ accounts, selected, onChange, className }:
                       {currency && <Badge variant="secondary" className="text-xs">{currency}</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      Account: {accountNumber}
+                      {t("fin-account-label")}{accountNumber}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      SWIFT: {swift}
+                      {t("fin-bank-swift-label")}{swift}
                     </div>
                   </div>
                 </div>
@@ -110,8 +112,8 @@ export function BankAccountSelector({ accounts, selected, onChange, className }:
           </div>
         </ScrollArea>
         <div className="border-t p-2 flex justify-between">
-          <Button size="sm" variant="ghost" onClick={() => onChange(null)}>Show all</Button>
-          <Button size="sm" variant="ghost" onClick={() => onChange([])}>Show none</Button>
+          <Button size="sm" variant="ghost" onClick={() => onChange(null)}>{t("fin-show-all")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => onChange([])}>{t("fin-show-none")}</Button>
         </div>
       </PopoverContent>
     </Popover>

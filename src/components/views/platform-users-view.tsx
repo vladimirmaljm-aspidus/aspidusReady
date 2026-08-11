@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserCheck, KeyRound, ShieldOff, Search, Loader2, Users, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { ALL_PERMISSIONS, PLATFORM_PERMISSIONS, PORTAL_CLIENT_PERMISSIONS } from "@/lib/permissions/catalog";
+import { useT } from "@/lib/i18n/store";
 
 interface PlatformUser {
   id: string; tenant_id: string | null; username: string; email: string;
@@ -39,6 +40,7 @@ const GROUPED = groupPerms(TENANT_PERMS);
 
 export function PlatformUsersView() {
   const qc = useQueryClient();
+  const t = useT();
   const [search, setSearch] = React.useState("");
   const [tenantFilter, setTenantFilter] = React.useState<string>("all");
   const [roleFilter, setRoleFilter] = React.useState<string>("all");
@@ -48,7 +50,7 @@ export function PlatformUsersView() {
     queryKey: ["platform-users"],
     queryFn: async () => {
       const r = await fetch("/api/super-admin/users");
-      if (!r.ok) throw new Error("Failed to load users");
+      if (!r.ok) throw new Error(t("pf-failed-load-users"));
       return r.json() as Promise<{ items: PlatformUser[] }>;
     },
   });
@@ -81,9 +83,9 @@ export function PlatformUsersView() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: u.id, tenant_id: u.tenant_id, duration_minutes: 60 }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Failed to impersonate");
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t("pf-failed-impersonate"));
     },
-    onSuccess: () => { toast.success("Impersonation started."); setTimeout(() => window.location.reload(), 400); },
+    onSuccess: () => { toast.success(t("pf-impersonation-started")); setTimeout(() => window.location.reload(), 400); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -92,28 +94,28 @@ export function PlatformUsersView() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div><CardTitle className="flex items-center gap-2 text-base"><Users className="size-4 text-primary" /> All users</CardTitle><CardDescription className="text-xs">Cross-tenant user manager. Edit permissions, reset password, impersonate.</CardDescription></div>
-            <Badge variant="outline">{filtered.length} of {items.length}</Badge>
+            <div><CardTitle className="flex items-center gap-2 text-base"><Users className="size-4 text-primary" /> {t("pf-all-users")}</CardTitle><CardDescription className="text-xs">{t("pf-users-desc")}</CardDescription></div>
+            <Badge variant="outline">{filtered.length} {t("pf-of")} {items.length}</Badge>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
           <div className="flex flex-wrap gap-2 items-center">
-            <div className="relative flex-1 min-w-[200px]"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input placeholder="Search username / email / name…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" /></div>
+            <div className="relative flex-1 min-w-[200px]"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input placeholder={t("pf-users-search-placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" /></div>
             <Select value={tenantFilter} onValueChange={setTenantFilter}>
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All tenants</SelectItem>
-                <SelectItem value="__platform__">Platform (super_admin)</SelectItem>
-                {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                <SelectItem value="all">{t("pf-all-tenants")}</SelectItem>
+                <SelectItem value="__platform__">{t("pf-platform-super-admin")}</SelectItem>
+                {tenants.map((tn) => <SelectItem key={tn.id} value={tn.id}>{tn.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All roles</SelectItem>
-                <SelectItem value="super_admin">Super Admin</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="all">{t("pf-all-roles")}</SelectItem>
+                <SelectItem value="super_admin">{t("pf-role-super-admin")}</SelectItem>
+                <SelectItem value="admin">{t("pf-role-admin")}</SelectItem>
+                <SelectItem value="user">{t("pf-role-user")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -121,33 +123,33 @@ export function PlatformUsersView() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Perms</TableHead>
-                  <TableHead>Active</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("pf-user")}</TableHead>
+                  <TableHead>{t("pf-tenant")}</TableHead>
+                  <TableHead>{t("pf-role")}</TableHead>
+                  <TableHead className="text-right">{t("pf-perms")}</TableHead>
+                  <TableHead>{t("active")}</TableHead>
+                  <TableHead className="text-right">{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {usersQ.isLoading && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>}
-                {!usersQ.isLoading && filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No users match.</TableCell></TableRow>}
+                {usersQ.isLoading && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">{t("loading")}</TableCell></TableRow>}
+                {!usersQ.isLoading && filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">{t("pf-no-users-match")}</TableCell></TableRow>}
                 {filtered.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell><div className="min-w-0"><p className="text-sm font-medium">{u.username}</p><p className="text-xs text-muted-foreground truncate max-w-[200px]">{u.email}</p></div></TableCell>
-                    <TableCell className="text-sm">{u.tenant_id ? tenantName.get(u.tenant_id) || u.tenant_id.slice(0, 8) : <span className="text-primary font-semibold">Platform</span>}</TableCell>
+                    <TableCell className="text-sm">{u.tenant_id ? tenantName.get(u.tenant_id) || u.tenant_id.slice(0, 8) : <span className="text-primary font-semibold">{t("pf-platform-badge")}</span>}</TableCell>
                     <TableCell><Badge variant={u.role === "super_admin" ? "destructive" : "outline"}>{u.role}</Badge></TableCell>
                     <TableCell className="text-right tabular text-sm">{(u.permissions?.length) ?? 0}</TableCell>
-                    <TableCell>{u.active ? <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30">Active</Badge> : <Badge variant="secondary">Off</Badge>}</TableCell>
+                    <TableCell>{u.active ? <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30">{t("active")}</Badge> : <Badge variant="secondary">{t("pf-off")}</Badge>}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         {u.role !== "super_admin" && u.active && (
-                          <Button size="icon" variant="ghost" className="size-8 text-amber-600" title="Impersonate" onClick={() => { if (confirm(`Impersonate ${u.username}?`)) impersonateMut.mutate(u); }}>
+                          <Button size="icon" variant="ghost" className="size-8 text-amber-600" title={t("pf-impersonate")} onClick={() => { if (confirm(t("pf-impersonate-confirm").replace("{username}", u.username))) impersonateMut.mutate(u); }}>
                             <UserCheck className="size-4" />
                           </Button>
                         )}
                         {u.role !== "super_admin" && (
-                          <Button size="icon" variant="ghost" className="size-8" title="Edit permissions" onClick={() => setEditing(u)}>
+                          <Button size="icon" variant="ghost" className="size-8" title={t("pf-edit-permissions")} onClick={() => setEditing(u)}>
                             <KeyRound className="size-4" />
                           </Button>
                         )}
@@ -161,7 +163,7 @@ export function PlatformUsersView() {
         </CardContent>
       </Card>
 
-      {editing && <PermissionEditor user={editing} tenantName={editing.tenant_id ? tenantName.get(editing.tenant_id) || editing.tenant_id : "Platform"} onClose={() => setEditing(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["platform-users"] }); setEditing(null); }} />}
+      {editing && <PermissionEditor user={editing} tenantName={editing.tenant_id ? tenantName.get(editing.tenant_id) || editing.tenant_id : t("pf-platform-badge")} onClose={() => setEditing(null)} onSaved={() => { qc.invalidateQueries({ queryKey: ["platform-users"] }); setEditing(null); }} />}
     </div>
   );
 }
@@ -169,6 +171,7 @@ export function PlatformUsersView() {
 function PermissionEditor({ user, tenantName, onClose, onSaved }: {
   user: PlatformUser; tenantName: string; onClose: () => void; onSaved: () => void;
 }) {
+  const t = useT();
   const [perms, setPerms] = React.useState<string[]>(user.permissions || []);
   const [saving, setSaving] = React.useState(false);
   const [wildcard, setWildcard] = React.useState(user.permissions?.includes("*") || false);
@@ -192,11 +195,11 @@ function PermissionEditor({ user, tenantName, onClose, onSaved }: {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ permissions: final }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Failed to save (HTTP ${r.status})`);
-      toast.success(`Permissions updated for ${user.username}.`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t("pf-failed-save-http").replace("{status}", String(r.status)));
+      toast.success(t("pf-permissions-updated").replace("{username}", user.username));
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Failed to save");
+      toast.error(e.message || t("pf-save-failed"));
     } finally { setSaving(false); }
   }
 
@@ -207,17 +210,17 @@ function PermissionEditor({ user, tenantName, onClose, onSaved }: {
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto custom-scroll">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2"><KeyRound className="size-5 text-primary" /> {user.username}</SheetTitle>
-          <SheetDescription>{tenantName} · role: <Badge variant="outline">{user.role}</Badge></SheetDescription>
+          <SheetDescription>{tenantName} · {t("pf-role-label")} <Badge variant="outline">{user.role}</Badge></SheetDescription>
         </SheetHeader>
         <div className="py-4 space-y-4">
           {isAdmin && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
-              Admin role implicitly holds every non-platform permission. Entries below act as a record only.
+              {t("pf-admin-implicit")}
             </div>
           )}
           <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/40">
             <Checkbox checked={wildcard} onCheckedChange={(v) => setWildcard(v === true)} />
-            <div><p className="text-sm font-medium">Grant everything (wildcard *)</p><p className="text-xs text-muted-foreground">Overrides individual permissions. Rare — for trusted internal users only.</p></div>
+            <div><p className="text-sm font-medium">{t("pf-grant-everything")}</p><p className="text-xs text-muted-foreground">{t("pf-grant-everything-desc")}</p></div>
           </label>
           {!wildcard && (
             <div className="space-y-3">
@@ -230,7 +233,7 @@ function PermissionEditor({ user, tenantName, onClose, onSaved }: {
                       <label className="flex items-center gap-2 cursor-pointer">
                         <Checkbox checked={allChecked} onCheckedChange={(v) => toggleResource(res, list, v === true)} />
                         <span className="text-sm font-semibold capitalize">{res.replace(/-/g, " ")}</span>
-                        {someChecked && !allChecked && <span className="text-xs text-muted-foreground">(partial)</span>}
+                        {someChecked && !allChecked && <span className="text-xs text-muted-foreground">{t("pf-partial")}</span>}
                       </label>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pl-6">
@@ -248,10 +251,10 @@ function PermissionEditor({ user, tenantName, onClose, onSaved }: {
           )}
         </div>
         <SheetFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
             {saving ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
-            Save permissions
+            {t("pf-save-permissions")}
           </Button>
         </SheetFooter>
       </SheetContent>

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/lib/i18n/store";
 
 interface TradeAdvisorProps {
   /** ISO alpha-2 code of the destination country (where goods are going) */
@@ -65,6 +66,7 @@ interface AdvisorData {
  */
 export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisorProps) {
   const [expanded, setExpanded] = React.useState(true);
+  const t = useT();
 
   const { data, isLoading } = useQuery<AdvisorData>({
     queryKey: ["trade-advisor", reporterCode, partnerCode, hsCode],
@@ -94,16 +96,16 @@ export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisor
       >
         <div className="flex items-center gap-2">
           <Globe className="size-4 text-primary" />
-          <span className="text-sm font-semibold">Trade Advisor</span>
+          <span className="text-sm font-semibold">{t("misc-ta-title")}</span>
           {isLoading ? (
             <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
           ) : hasFTA ? (
             <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]">
-              <CheckCircle2 className="size-3 mr-1" /> FTA applies
+              <CheckCircle2 className="size-3 mr-1" /> {t("misc-ta-fta-applies")}
             </Badge>
           ) : (
             <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
-              <AlertTriangle className="size-3 mr-1" /> MFN tariff
+              <AlertTriangle className="size-3 mr-1" /> {t("misc-ta-mfn-tariff")}
             </Badge>
           )}
         </div>
@@ -125,7 +127,7 @@ export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisor
           {data.freeTradeAgreements.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                Free Trade Agreements ({data.freeTradeAgreements.length})
+                {t("misc-ta-fta-section").replace("{n}", String(data.freeTradeAgreements.length))}
               </p>
               {data.freeTradeAgreements.map((fta, i) => (
                 <div key={i} className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
@@ -140,10 +142,10 @@ export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisor
           {/* Tariff section */}
           {data.tariff && (
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold">Tariff & Tax Summary</p>
+              <p className="text-xs font-semibold">{t("misc-ta-tariff-summary")}</p>
               <div className="rounded-md bg-card border border-border/40 p-2 space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Customs Duty:</span>
+                  <span className="text-muted-foreground">{t("misc-ta-customs-duty")}</span>
                   <span className="font-medium">{data.tariff.estimatedDuty}</span>
                 </div>
                 <div className="flex justify-between text-xs">
@@ -151,13 +153,13 @@ export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisor
                   <span className="font-medium">{data.tariff.vat}%</span>
                 </div>
                 <div className="flex justify-between text-xs pt-1 border-t border-border/30">
-                  <span className="text-muted-foreground">Est. total tax:</span>
+                  <span className="text-muted-foreground">{t("misc-ta-total-tax")}</span>
                   <span className="font-bold text-primary">{data.tariff.estimatedTotalTax}</span>
                 </div>
               </div>
               {data.tariff.foodExemptions && (
                 <p className="text-[11px] text-muted-foreground">
-                  <span className="font-medium">🥗 Food exemptions:</span> {data.tariff.foodExemptions}
+                  <span className="font-medium">🥗 {t("misc-ta-food-exemptions")}</span> {data.tariff.foodExemptions}
                 </p>
               )}
             </div>
@@ -166,7 +168,7 @@ export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisor
           {/* Recommendations */}
           {data.recommendations.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs font-semibold">Recommendations</p>
+              <p className="text-xs font-semibold">{t("misc-ta-recommendations")}</p>
               {data.recommendations.map((rec, i) => (
                 <p key={i} className="text-[11px] text-muted-foreground leading-relaxed">{rec}</p>
               ))}
@@ -177,7 +179,7 @@ export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisor
           {data.requiredDocuments.length > 0 && (
             <div className="space-y-1">
               <p className="text-xs font-semibold flex items-center gap-1">
-                <FileText className="size-3" /> Required Documents
+                <FileText className="size-3" /> {t("misc-ta-required-docs")}
               </p>
               <div className="flex flex-wrap gap-1">
                 {data.requiredDocuments.map((doc, i) => (
@@ -191,7 +193,7 @@ export function TradeAdvisor({ reporterCode, partnerCode, hsCode }: TradeAdvisor
           {data.glossary.length > 0 && (
             <details className="group">
               <summary className="text-xs font-semibold cursor-pointer flex items-center gap-1 text-muted-foreground hover:text-foreground">
-                <Info className="size-3" /> Trade Terms Glossary ({data.glossary.length})
+                <Info className="size-3" /> {t("misc-ta-glossary").replace("{n}", String(data.glossary.length))}
                 <ChevronRight className="size-3 group-open:hidden" />
                 <ChevronDown className="size-3 hidden group-open:block" />
               </summary>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Database, Building2, Users, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
 import { fmtDateTime } from "@/lib/utils/format";
+import { useT } from "@/lib/i18n/store";
 
 interface Health {
   db_status: "ok" | "error";
@@ -20,6 +21,7 @@ interface Health {
 }
 
 export function PlatformHealthView() {
+  const t = useT();
   const healthQ = useQuery({
     queryKey: ["platform-health"],
     queryFn: async () => {
@@ -38,51 +40,51 @@ export function PlatformHealthView() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <CardTitle className="flex items-center gap-2 text-base"><Heart className="size-4 text-primary" /> Platform health</CardTitle>
-              <CardDescription className="text-xs">Live snapshot of core platform metrics. Auto-refreshes every 30 seconds.</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-base"><Heart className="size-4 text-primary" /> {t("pf-health-title")}</CardTitle>
+              <CardDescription className="text-xs">{t("pf-health-desc")}</CardDescription>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {generated && <span>Updated {generated}</span>}
-              <Button size="sm" variant="outline" onClick={() => healthQ.refetch()}><RefreshCw className={`size-3.5 mr-1 ${healthQ.isFetching ? "animate-spin" : ""}`} /> Refresh</Button>
+              {generated && <span>{t("pf-health-updated").replace("{when}", generated)}</span>}
+              <Button size="sm" variant="outline" onClick={() => healthQ.refetch()}><RefreshCw className={`size-3.5 mr-1 ${healthQ.isFetching ? "animate-spin" : ""}`} /> {t("refresh")}</Button>
             </div>
           </div>
         </CardHeader>
       </Card>
 
-      {healthQ.isLoading && <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading health snapshot…</CardContent></Card>}
-      {healthQ.error && <Card><CardContent className="p-6 text-sm text-destructive">Failed to load health.</CardContent></Card>}
+      {healthQ.isLoading && <Card><CardContent className="p-6 text-sm text-muted-foreground">{t("pf-health-loading")}</CardContent></Card>}
+      {healthQ.error && <Card><CardContent className="p-6 text-sm text-destructive">{t("pf-health-load-failed")}</CardContent></Card>}
 
       {h && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <Tile
               icon={Database}
-              label="Database"
+              label={t("pf-health-col-database")}
               value={h.db_status === "ok" ? "OK" : "ERROR"}
               tone={h.db_status === "ok" ? "ok" : "critical"}
-              hint={h.db_status === "ok" ? "Connected" : "Store connection failed"}
+              hint={h.db_status === "ok" ? t("pf-health-hint-db-ok") : t("pf-health-hint-db-fail")}
             />
-            <Tile icon={Building2} label="Tenants" value={h.tenant_count} tone="info" hint="Registered companies" />
-            <Tile icon={Users} label="Users" value={h.user_count} tone="info" hint="Across all tenants" />
-            <Tile icon={TrendingUp} label="Active subscriptions" value={h.active_subscriptions} tone={h.active_subscriptions > 0 ? "ok" : "warn"} hint="Status = active" />
-            <Tile icon={Clock} label="Expiring ≤7d" value={h.expiring_within_7d} tone={h.expiring_within_7d > 0 ? "warn" : "ok"} hint="Subscriptions about to lapse" />
-            <Tile icon={AlertTriangle} label="Suspended" value={h.suspended_tenants} tone={h.suspended_tenants > 0 ? "critical" : "ok"} hint="Tenants blocked from login" />
-            <Tile icon={AlertTriangle} label="Perm inconsistencies" value={h.permission_consistency_issues} tone={h.permission_consistency_issues > 0 ? "warn" : "ok"} hint="Users with perms on suspended tenants" />
+            <Tile icon={Building2} label={t("pf-health-col-tenants")} value={h.tenant_count} tone="info" hint={t("pf-health-hint-tenants")} />
+            <Tile icon={Users} label={t("pf-health-col-users")} value={h.user_count} tone="info" hint={t("pf-health-hint-users")} />
+            <Tile icon={TrendingUp} label={t("pf-health-col-active-subs")} value={h.active_subscriptions} tone={h.active_subscriptions > 0 ? "ok" : "warn"} hint={t("pf-health-hint-active-subs")} />
+            <Tile icon={Clock} label={t("pf-health-col-expiring")} value={h.expiring_within_7d} tone={h.expiring_within_7d > 0 ? "warn" : "ok"} hint={t("pf-health-hint-expiring")} />
+            <Tile icon={AlertTriangle} label={t("pf-health-col-suspended")} value={h.suspended_tenants} tone={h.suspended_tenants > 0 ? "critical" : "ok"} hint={t("pf-health-hint-suspended")} />
+            <Tile icon={AlertTriangle} label={t("pf-health-col-perm-issues")} value={h.permission_consistency_issues} tone={h.permission_consistency_issues > 0 ? "warn" : "ok"} hint={t("pf-health-hint-perm-issues")} />
           </div>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Signals</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">{t("pf-health-signals-title")}</CardTitle></CardHeader>
             <CardContent className="p-4 space-y-2 text-sm">
-              {h.db_status === "ok" ? <Signal ok label="Database connection is healthy." /> : <Signal error label="Database connection failed." />}
+              {h.db_status === "ok" ? <Signal ok label={t("pf-health-signal-db-ok")} /> : <Signal error label={t("pf-health-signal-db-fail")} />}
               {h.suspended_tenants > 0
-                ? <Signal warn label={`${h.suspended_tenants} tenant(s) are suspended — their users cannot log in.`} />
-                : <Signal ok label="No suspended tenants." />}
+                ? <Signal warn label={t("pf-health-signal-suspended").replace("{n}", String(h.suspended_tenants))} />
+                : <Signal ok label={t("pf-health-signal-no-suspended")} />}
               {h.expiring_within_7d > 0
-                ? <Signal warn label={`${h.expiring_within_7d} subscription(s) expiring within 7 days — contact tenants to renew.`} />
-                : <Signal ok label="No subscriptions expiring in the next 7 days." />}
+                ? <Signal warn label={t("pf-health-signal-expiring").replace("{n}", String(h.expiring_within_7d))} />
+                : <Signal ok label={t("pf-health-signal-no-expiring")} />}
               {h.permission_consistency_issues > 0
-                ? <Signal warn label={`${h.permission_consistency_issues} user(s) still hold permissions while their tenant is suspended.`} />
-                : <Signal ok label="No permission-consistency issues detected." />}
+                ? <Signal warn label={t("pf-health-signal-perm-issues").replace("{n}", String(h.permission_consistency_issues))} />
+                : <Signal ok label={t("pf-health-signal-no-perm-issues")} />}
             </CardContent>
           </Card>
         </>

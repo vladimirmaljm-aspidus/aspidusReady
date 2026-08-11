@@ -12,6 +12,7 @@ import { ScrollText, Search, ChevronLeft, ChevronRight, RefreshCw } from "lucide
 import { fmtDateTime } from "@/lib/utils/format";
 import { MapLink } from "@/components/common/map-link";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 interface AuditRow {
   id: string; tenant_id: string | null; user_id: string | null; username: string | null;
@@ -31,6 +32,7 @@ export function PlatformAuditView() {
   const [user, setUser] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [expanded, setExpanded] = React.useState<string | null>(null);
+  const t = useT();
 
   const tenantsQ = useQuery({
     queryKey: ["platform-audit-tenants"],
@@ -68,46 +70,46 @@ export function PlatformAuditView() {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div><CardTitle className="flex items-center gap-2 text-base"><ScrollText className="size-4 text-primary" /> Cross-tenant audit</CardTitle><CardDescription className="text-xs">Every action logged, across every tenant.</CardDescription></div>
-          <Button size="sm" variant="outline" onClick={() => auditQ.refetch()}><RefreshCw className={`size-3.5 mr-1 ${auditQ.isFetching ? "animate-spin" : ""}`} /> Refresh</Button>
+          <div><CardTitle className="flex items-center gap-2 text-base"><ScrollText className="size-4 text-primary" /> {t("pf-audit-title")}</CardTitle><CardDescription className="text-xs">{t("pf-audit-desc")}</CardDescription></div>
+          <Button size="sm" variant="outline" onClick={() => auditQ.refetch()}><RefreshCw className={`size-3.5 mr-1 ${auditQ.isFetching ? "animate-spin" : ""}`} /> {t("refresh")}</Button>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[180px]"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input placeholder="Search…" value={search} onChange={(e) => { setPage(0); setSearch(e.target.value); }} className="pl-8" /></div>
+          <div className="relative flex-1 min-w-[180px]"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input placeholder={t("pf-audit-search-placeholder")} value={search} onChange={(e) => { setPage(0); setSearch(e.target.value); }} className="pl-8" /></div>
           <Select value={tenantId || "all"} onValueChange={(v) => { setPage(0); setTenantId(v === "all" ? "" : v); }}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Tenant" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">All tenants</SelectItem>{tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder={t("pf-tenant")} /></SelectTrigger>
+            <SelectContent><SelectItem value="all">{t("pf-all-tenants")}</SelectItem>{tenants.map((tn) => <SelectItem key={tn.id} value={tn.id}>{tn.name}</SelectItem>)}</SelectContent>
           </Select>
-          <Input placeholder="Action contains…" value={action} onChange={(e) => { setPage(0); setAction(e.target.value); }} className="w-[160px]" />
-          <Input placeholder="Username…" value={user} onChange={(e) => { setPage(0); setUser(e.target.value); }} className="w-[140px]" />
+          <Input placeholder={t("pf-audit-action-contains")} value={action} onChange={(e) => { setPage(0); setAction(e.target.value); }} className="w-[160px]" />
+          <Input placeholder={t("pf-audit-username")} value={user} onChange={(e) => { setPage(0); setUser(e.target.value); }} className="w-[140px]" />
         </div>
         <div className="border rounded-lg overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[160px]">When</TableHead>
-                <TableHead>Tenant</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead className="text-right">Details</TableHead>
+                <TableHead className="w-[160px]">{t("pf-audit-col-when")}</TableHead>
+                <TableHead>{t("pf-audit-col-tenant")}</TableHead>
+                <TableHead>{t("pf-audit-col-user")}</TableHead>
+                <TableHead>{t("pf-audit-col-action")}</TableHead>
+                <TableHead>{t("pf-audit-col-entity")}</TableHead>
+                <TableHead>{t("pf-audit-col-ip")}</TableHead>
+                <TableHead className="text-right">{t("pf-audit-col-details")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {auditQ.isLoading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>}
-              {!auditQ.isLoading && items.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">No entries.</TableCell></TableRow>}
+              {auditQ.isLoading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">{t("pf-audit-loading")}</TableCell></TableRow>}
+              {!auditQ.isLoading && items.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">{t("pf-audit-no-entries")}</TableCell></TableRow>}
               {items.map((row) => (
                 <React.Fragment key={row.id}>
                   <TableRow className="cursor-pointer" onClick={() => setExpanded((e) => e === row.id ? null : row.id)}>
                     <TableCell className="text-xs tabular text-muted-foreground">{fmtDateTime(row.created_at)}</TableCell>
-                    <TableCell className="text-sm">{row.tenant_id ? tenantName.get(row.tenant_id) || row.tenant_id.slice(0, 8) : <span className="text-primary font-semibold">Platform</span>}</TableCell>
+                    <TableCell className="text-sm">{row.tenant_id ? tenantName.get(row.tenant_id) || row.tenant_id.slice(0, 8) : <span className="text-primary font-semibold">{t("pf-platform-badge")}</span>}</TableCell>
                     <TableCell className="text-sm">{row.username || "—"}</TableCell>
                     <TableCell><Badge variant="outline" className="font-mono text-[10px]">{row.action}</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{row.entity_type ? `${row.entity_type}${row.entity_id ? "#" + row.entity_id.slice(0, 8) : ""}` : "—"}</TableCell>
                     <TableCell className="text-xs tabular"><span className="inline-flex items-center gap-1.5">{row.ip || "—"}{row.ip && <MapLink ip={row.ip} />}</span></TableCell>
-                    <TableCell className="text-right text-xs text-muted-foreground">{expanded === row.id ? "Hide" : "Show"}</TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">{expanded === row.id ? t("pf-audit-hide") : t("pf-audit-show")}</TableCell>
                   </TableRow>
                   {expanded === row.id && (
                     <TableRow>
@@ -122,10 +124,10 @@ export function PlatformAuditView() {
           </Table>
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div>{total.toLocaleString()} entries · page {page + 1} of {totalPages}</div>
+          <div>{t("pf-audit-entries-page").replace("{total}", total.toLocaleString()).replace("{page}", String(page + 1)).replace("{pages}", String(totalPages))}</div>
           <div className="flex items-center gap-1">
-            <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}><ChevronLeft className="size-3.5" /> Prev</Button>
-            <Button size="sm" variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>Next <ChevronRight className="size-3.5" /></Button>
+            <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}><ChevronLeft className="size-3.5" /> {t("pf-audit-prev")}</Button>
+            <Button size="sm" variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>{t("pf-audit-next")} <ChevronRight className="size-3.5" /></Button>
           </div>
         </div>
       </CardContent>

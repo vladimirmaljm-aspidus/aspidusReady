@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useT } from "@/lib/i18n/store";
 
 const DISPLAY_CURRENCIES = [
   "USD", "EUR", "GBP", "CHF", "AED", "SAR", "CNY", "INR", "RUB",
@@ -163,6 +164,7 @@ function commissionTypeLabel(type: string, rate: number): string {
 }
 
 export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
+  const t = useT();
   const {
     quantity,
     unit,
@@ -298,7 +300,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Calculator className="size-4" />
-          Live Cost Breakdown
+          {t("misc-live-cost-breakdown")}
           <span className="ml-auto flex items-center gap-1.5">
             <Globe2 className="size-3.5 text-muted-foreground" />
             <Select value={displayCurrency} onValueChange={setDisplayCurrency}>
@@ -319,7 +321,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
           <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-1">
             <span className="font-medium">1 {sellCurrency} = {displayRate.toFixed(4)} {displayCurrency}</span>
             <span className="opacity-50">·</span>
-            <span>{rateMapLoading ? "fetching live…" : (rateMapAt ? `updated ${new Date(rateMapAt).toLocaleTimeString()}` : "no rate available")}</span>
+            <span>{rateMapLoading ? t("misc-fetching-live") : (rateMapAt ? t("misc-updated-time").replace("${time}", new Date(rateMapAt).toLocaleTimeString()) : t("misc-no-rate-available"))}</span>
           </p>
         )}
       </CardHeader>
@@ -327,27 +329,27 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
         {/* BUY SIDE */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-            <DollarSign className="size-3" /> Buy Side
+            <DollarSign className="size-3" /> {t("misc-buy-side")}
           </div>
           <div className="flex justify-between">
-            <span>Buy Price × Qty:</span>
+            <span>{t("misc-buy-price-qty")}</span>
             <span className="font-mono">
               {fmtMoney(buyPricePerUnit, buyCurrency)} × {quantity} {unit}
             </span>
           </div>
           <div className="flex justify-between font-semibold">
-            <span>Buy Total:</span>
+            <span>{t("misc-buy-total-colon")}</span>
             <span className="font-mono">{fmtMoney(buyTotal, buyCurrency)}</span>
           </div>
           {displayCurrency !== (buyCurrency || "USD").toUpperCase() && (
             <div className="flex justify-between text-xs text-muted-foreground italic">
-              <span>In {displayCurrency}:</span>
+              <span>{t("misc-in-currency").replace("${currency}", displayCurrency)}</span>
               <span className="font-mono">{fmtMoney(buyToDisplay(buyTotal), displayCurrency)}</span>
             </div>
           )}
           {currenciesDiffer && (
             <div className="flex justify-between text-xs text-blue-600">
-              <span>FX Rate:</span>
+              <span>{t("misc-fx-rate")}</span>
               <span className="font-mono">
                 1 {buyCurrency} = {exchangeRate.toFixed(4)} {sellCurrency}
               </span>
@@ -355,7 +357,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
           )}
           {currenciesDiffer && (
             <div className="flex justify-between text-xs text-blue-600">
-              <span>Buy Total in {sellCurrency}:</span>
+              <span>{t("misc-buy-total-in-cur").replace("${currency}", sellCurrency)}</span>
               <span className="font-mono">
                 {fmtMoney(buyTotalInSellCurrency, sellCurrency)}
               </span>
@@ -368,11 +370,11 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
         {/* COST LINES */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-            <Ship className="size-3" /> Costs & Freight
+            <Ship className="size-3" /> {t("misc-costs-freight")}
           </div>
           {!hasCosts ? (
             <p className="text-xs text-muted-foreground italic">
-              No cost lines added
+              {t("misc-no-cost-lines-added")}
             </p>
           ) : (
             <div className="space-y-1">
@@ -404,12 +406,12 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                 );
               })}
               <div className="flex justify-between font-medium pt-1 border-t">
-                <span>Total Costs:</span>
+                <span>{t("misc-total-costs")}</span>
                 <span className="font-mono">{fmtMoney(totalCosts, buyCurrency)}</span>
               </div>
               {currenciesDiffer && (
                 <div className="flex justify-between text-xs text-blue-600">
-                  <span>In {sellCurrency}:</span>
+                  <span>{t("misc-in-currency").replace("${currency}", sellCurrency)}</span>
                   <span className="font-mono">
                     {fmtMoney(totalCostsInSellCurrency, sellCurrency)}
                   </span>
@@ -422,19 +424,19 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
         {/* LANDED COST */}
         <div className="bg-muted/30 rounded-lg p-3 space-y-1">
           <div className="flex justify-between font-semibold">
-            <span>Landed Cost (total):</span>
+            <span>{t("misc-landed-cost-total")}</span>
             <span className="font-mono">
               {fmtMoney(landedCostInSellCurrency, sellCurrency)}
             </span>
           </div>
           {displayCurrency !== (sellCurrency || "USD").toUpperCase() && (
             <div className="flex justify-between text-xs text-muted-foreground italic">
-              <span>In {displayCurrency}:</span>
+              <span>{t("misc-in-currency").replace("${currency}", displayCurrency)}</span>
               <span className="font-mono">{fmtMoney(toDisplay(landedCostInSellCurrency), displayCurrency)}</span>
             </div>
           )}
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Per {unit}:</span>
+            <span>{t("misc-per-unit").replace("${unit}", unit)}</span>
             <span className="font-mono">
               {fmtMoney(landedCostPerUnit, sellCurrency)}
             </span>
@@ -444,21 +446,21 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
         {/* SELL SIDE */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-            <TrendingUp className="size-3" /> Sell Side
+            <TrendingUp className="size-3" /> {t("misc-sell-side")}
           </div>
           <div className="flex justify-between">
-            <span>Sell Price × Qty:</span>
+            <span>{t("misc-sell-price-qty")}</span>
             <span className="font-mono">
               {fmtMoney(sellPricePerUnit, sellCurrency)} × {quantity} {unit}
             </span>
           </div>
           <div className="flex justify-between font-semibold">
-            <span>Sell Total:</span>
+            <span>{t("misc-sell-total-colon")}</span>
             <span className="font-mono">{fmtMoney(sellTotal, sellCurrency)}</span>
           </div>
           {displayCurrency !== (sellCurrency || "USD").toUpperCase() && (
             <div className="flex justify-between text-xs text-muted-foreground italic">
-              <span>In {displayCurrency}:</span>
+              <span>{t("misc-in-currency").replace("${currency}", displayCurrency)}</span>
               <span className="font-mono">{fmtMoney(toDisplay(sellTotal), displayCurrency)}</span>
             </div>
           )}
@@ -470,7 +472,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <Separator />
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-                <Banknote className="size-3" /> Bank / Trade Finance
+                <Banknote className="size-3" /> {t("misc-bank-trade-finance")}
               </div>
               <div className="space-y-1">
                 {bankCosts.map((bc) => (
@@ -482,7 +484,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                   </div>
                 ))}
                 <div className="flex justify-between font-medium pt-1 border-t">
-                  <span>Total Bank Costs:</span>
+                  <span>{t("misc-total-bank-costs")}:</span>
                   <span className="font-mono">
                     {fmtMoney(totalBankCosts, sellCurrency)}
                   </span>
@@ -498,7 +500,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <Separator />
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-                <Send className="size-3" /> International Transfers
+                <Send className="size-3" /> {t("misc-international-transfers")}
               </div>
               <div className="space-y-1">
                 {transferFees.map((tf) => (
@@ -512,7 +514,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                   </div>
                 ))}
                 <div className="flex justify-between font-medium pt-1 border-t">
-                  <span>Total Transfer Fees:</span>
+                  <span>{t("misc-total-transfer-fees")}:</span>
                   <span className="font-mono">
                     {fmtMoney(totalTransferFees, sellCurrency)}
                   </span>
@@ -528,7 +530,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <Separator />
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-                <FileCheck className="size-3" /> Documentation
+                <FileCheck className="size-3" /> {t("misc-documentation-label")}
               </div>
               <div className="space-y-1">
                 {documentationCosts.map((dc) => (
@@ -542,7 +544,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                   </div>
                 ))}
                 <div className="flex justify-between font-medium pt-1 border-t">
-                  <span>Total Documentation:</span>
+                  <span>{t("misc-total-documentation")}:</span>
                   <span className="font-mono">
                     {fmtMoney(totalDocumentationCosts, sellCurrency)}
                   </span>
@@ -558,11 +560,11 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <Separator />
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-                <Percent className="size-3" /> Commission
+                <Percent className="size-3" /> {t("misc-commission-label")}
               </div>
               <div className="flex justify-between text-xs">
                 <span>
-                  Commission ({commissionTypeLabel(commissionType, commissionRate)}):
+                  {t("misc-commission-label")} ({commissionTypeLabel(commissionType, commissionRate)}):
                 </span>
                 <span className="font-mono text-amber-600">
                   -{fmtMoney(commissionAmount, sellCurrency)}
@@ -576,12 +578,12 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
         <Separator />
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-            <TrendingUp className="size-3" /> Profit Summary
+            <TrendingUp className="size-3" /> {t("misc-profit-summary")}
           </div>
 
           {/* Gross profit */}
           <div className="flex justify-between">
-            <span>Gross Profit:</span>
+            <span>{t("misc-gross-profit-colon")}</span>
             <span
               className={cn(
                 "font-mono font-semibold",
@@ -592,7 +594,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             </span>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Gross Margin:</span>
+            <span>{t("misc-gross-margin-colon")}</span>
             <span className={marginColor}>{fmtPct(grossMarginPct)}</span>
           </div>
 
@@ -600,7 +602,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <div className="space-y-0.5">
               {hasBankCosts && (
                 <div className="flex justify-between text-xs text-amber-600">
-                  <span>Bank Costs:</span>
+                  <span>{t("misc-bank-costs-colon")}</span>
                   <span className="font-mono">
                     -{fmtMoney(totalBankCosts, sellCurrency)}
                   </span>
@@ -608,7 +610,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
               )}
               {hasTransferFees && (
                 <div className="flex justify-between text-xs text-amber-600">
-                  <span>Transfer Fees:</span>
+                  <span>{t("misc-transfer-fees-colon")}</span>
                   <span className="font-mono">
                     -{fmtMoney(totalTransferFees, sellCurrency)}
                   </span>
@@ -616,7 +618,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
               )}
               {hasDocCosts && (
                 <div className="flex justify-between text-xs text-amber-600">
-                  <span>Documentation:</span>
+                  <span>{t("misc-documentation-colon")}</span>
                   <span className="font-mono">
                     -{fmtMoney(totalDocumentationCosts, sellCurrency)}
                   </span>
@@ -629,7 +631,9 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
           {(hasBankCosts || hasTransferFees || hasDocCosts) && (
             <div className="flex justify-between text-xs border-t pt-1">
               <span className="text-muted-foreground">
-                Profit before commission{commissionType === "percent_profit" ? " (base)" : ""}:
+                {commissionType === "percent_profit"
+                  ? t("misc-profit-before-commission-base")
+                  : `${t("misc-profit-before-commission")}:`}
               </span>
               <span
                 className={cn(
@@ -644,7 +648,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
 
           {hasCommission && (
             <div className="flex justify-between text-xs text-amber-600">
-              <span>Commission:</span>
+              <span>{t("misc-commission-colon")}:</span>
               <span className="font-mono">
                 -{fmtMoney(commissionAmount, sellCurrency)}
               </span>
@@ -654,7 +658,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
           {/* Net profit (THE BIG NUMBER) */}
           <div className="bg-primary/5 rounded-lg p-3 space-y-2">
             <div className="flex justify-between items-center">
-              <span className="font-bold text-base">NET PROFIT:</span>
+              <span className="font-bold text-base">{t("misc-net-profit-bold")}</span>
               <span
                 className={cn(
                   "font-mono font-bold text-lg",
@@ -666,12 +670,12 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             </div>
             {displayCurrency !== (sellCurrency || "USD").toUpperCase() && (
               <div className="flex justify-between text-xs text-muted-foreground italic">
-                <span>In {displayCurrency}:</span>
+                <span>{t("misc-in-currency").replace("${currency}", displayCurrency)}</span>
                 <span className="font-mono">{fmtMoney(toDisplay(netProfit), displayCurrency)}</span>
               </div>
             )}
             <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Net Margin:</span>
+              <span className="text-xs text-muted-foreground">{t("misc-net-margin-colon")}</span>
               <span className={cn("font-mono font-semibold", marginColor)}>
                 {fmtPct(netMarginPct)}
               </span>
@@ -684,7 +688,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
 
           {/* Per unit */}
           <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Profit per {unit}:</span>
+            <span className="text-muted-foreground">{t("misc-profit-per-unit").replace("${unit}", unit)}</span>
             <span className="font-mono">
               {fmtMoney(profitPerUnit, sellCurrency)}
             </span>
@@ -695,15 +699,15 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
         <Separator />
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
-            <Gauge className="size-3" /> Scenario Analysis (±10%)
+            <Gauge className="size-3" /> {t("misc-scenario-analysis")}
           </div>
           <p className="text-[10px] text-muted-foreground">
-            Best/worst case based on ±10% variance in bank + transfer + documentation costs.
+            {t("misc-scenario-desc")}
           </p>
           <div className="grid grid-cols-3 gap-2">
             {/* Best case */}
             <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded p-2 text-center">
-              <div className="text-[10px] text-muted-foreground">Best Case</div>
+              <div className="text-[10px] text-muted-foreground">{t("misc-best-case")}</div>
               <div
                 className={cn(
                   "font-mono font-semibold text-xs",
@@ -715,7 +719,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             </div>
             {/* Expected */}
             <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded p-2 text-center">
-              <div className="text-[10px] text-muted-foreground">Expected</div>
+              <div className="text-[10px] text-muted-foreground">{t("misc-expected")}</div>
               <div
                 className={cn(
                   "font-mono font-semibold text-xs",
@@ -727,7 +731,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             </div>
             {/* Worst case */}
             <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded p-2 text-center">
-              <div className="text-[10px] text-muted-foreground">Worst Case</div>
+              <div className="text-[10px] text-muted-foreground">{t("misc-worst-case")}</div>
               <div
                 className={cn(
                   "font-mono font-semibold text-xs",
@@ -739,7 +743,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             </div>
           </div>
           <div className="flex justify-between text-[10px] text-muted-foreground pt-1">
-            <span>Variance spread:</span>
+            <span>{t("misc-variance-spread")}</span>
             <span className="font-mono">
               ±{fmtMoney(halfSpread, sellCurrency)}
             </span>
@@ -752,7 +756,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
             <Separator />
             <div className="space-y-2">
               <div className="text-xs font-semibold uppercase text-muted-foreground">
-                Cost Structure
+                {t("misc-cost-structure")}
               </div>
               <div className="h-4 rounded-full overflow-hidden flex bg-muted/40">
                 {/* Buy price */}
@@ -808,29 +812,29 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
               </div>
               <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" /> Buy
+                  <span className="w-2 h-2 rounded-full bg-blue-500" /> {t("misc-legend-buy")}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-orange-500" /> Costs
+                  <span className="w-2 h-2 rounded-full bg-orange-500" /> {t("misc-legend-costs")}
                 </span>
                 {hasBankCosts && (
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-purple-500" /> Bank
+                    <span className="w-2 h-2 rounded-full bg-purple-500" /> {t("misc-legend-bank")}
                   </span>
                 )}
                 {hasTransferFees && (
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-cyan-500" /> Transfers
+                    <span className="w-2 h-2 rounded-full bg-cyan-500" /> {t("misc-legend-transfers")}
                   </span>
                 )}
                 {hasDocCosts && (
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500" /> Docs
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" /> {t("misc-legend-docs")}
                   </span>
                 )}
                 {hasCommission && (
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" /> Commission
+                    <span className="w-2 h-2 rounded-full bg-amber-500" /> {t("misc-legend-commission")}
                   </span>
                 )}
                 <span className="flex items-center gap-1">
@@ -840,7 +844,7 @@ export function CostBreakdownPanel(props: CostBreakdownPanelProps) {
                       netProfit >= 0 ? "bg-green-500" : "bg-red-500",
                     )}
                   />{" "}
-                  Profit
+                  {t("misc-legend-profit")}
                 </span>
               </div>
             </div>

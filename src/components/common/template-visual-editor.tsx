@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { DocumentTemplate, TenantLetterhead } from "@/lib/supabase/types";
+import { useT } from "@/lib/i18n/store";
 
 // ============================================================
 // Types
@@ -131,22 +132,23 @@ const BASE_SCALE = 2;
 const SNAP_THRESHOLD = 3;
 
 // Default field layout (positions in mm on A4). Logo is its own draggable element.
+// `label` is a translation key (resolved via `t()` at render time).
 const DEFAULT_FIELDS: FieldElement[] = [
-  { id: "logo", type: "logo", label: "Logo", x: 15, y: 8, width: 40, height: 15, visible: true, locked: false, props: { logoWidth: 40, logoHeight: 15 } },
-  { id: "header", type: "header", label: "Header (Memorandum)", x: 60, y: 8, width: 135, height: 15, visible: true, locked: false },
-  { id: "doc_title", type: "doc_title", label: "Document Title", x: 15, y: 40, width: 180, height: 12, visible: true, locked: false },
-  { id: "doc_meta", type: "doc_meta", label: "Doc # + Date", x: 15, y: 54, width: 180, height: 14, visible: true, locked: false },
-  { id: "from_box", type: "from_box", label: "FROM (Seller)", x: 15, y: 74, width: 87, height: 40, visible: true, locked: false },
-  { id: "to_box", type: "to_box", label: "TO (Buyer)", x: 108, y: 74, width: 87, height: 40, visible: true, locked: false },
-  { id: "trade_terms", type: "trade_terms", label: "Trade Terms", x: 15, y: 118, width: 180, height: 22, visible: true, locked: false },
-  { id: "line_items_table", type: "line_items_table", label: "Line Items Table", x: 15, y: 145, width: 180, height: 50, visible: true, locked: false },
-  { id: "specifications", type: "specifications", label: "Specifications", x: 15, y: 200, width: 180, height: 30, visible: true, locked: false },
-  { id: "totals", type: "totals", label: "Totals", x: 120, y: 235, width: 75, height: 25, visible: true, locked: false },
-  { id: "amount_in_words", type: "amount_in_words", label: "Amount in Words", x: 15, y: 235, width: 100, height: 20, visible: true, locked: false },
-  { id: "offer_text", type: "offer_text", label: "Offer Text / Terms", x: 15, y: 255, width: 180, height: 18, visible: true, locked: false },
-  { id: "bank_details", type: "bank_details", label: "Bank Details", x: 15, y: 263, width: 180, height: 12, visible: true, locked: false },
-  { id: "signatures", type: "signatures", label: "Signatures", x: 15, y: 277, width: 180, height: 14, visible: true, locked: false },
-  { id: "footer", type: "footer", label: "Footer", x: 15, y: 286, width: 180, height: 8, visible: true, locked: false },
+  { id: "logo", type: "logo", label: "misc-tve-logo", x: 15, y: 8, width: 40, height: 15, visible: true, locked: false, props: { logoWidth: 40, logoHeight: 15 } },
+  { id: "header", type: "header", label: "misc-tve-header-memorandum", x: 60, y: 8, width: 135, height: 15, visible: true, locked: false },
+  { id: "doc_title", type: "doc_title", label: "misc-tve-doc-title", x: 15, y: 40, width: 180, height: 12, visible: true, locked: false },
+  { id: "doc_meta", type: "doc_meta", label: "misc-tve-doc-meta", x: 15, y: 54, width: 180, height: 14, visible: true, locked: false },
+  { id: "from_box", type: "from_box", label: "misc-tve-from-box", x: 15, y: 74, width: 87, height: 40, visible: true, locked: false },
+  { id: "to_box", type: "to_box", label: "misc-tve-to-box", x: 108, y: 74, width: 87, height: 40, visible: true, locked: false },
+  { id: "trade_terms", type: "trade_terms", label: "misc-tve-trade-terms", x: 15, y: 118, width: 180, height: 22, visible: true, locked: false },
+  { id: "line_items_table", type: "line_items_table", label: "misc-tve-line-items", x: 15, y: 145, width: 180, height: 50, visible: true, locked: false },
+  { id: "specifications", type: "specifications", label: "misc-tve-specifications", x: 15, y: 200, width: 180, height: 30, visible: true, locked: false },
+  { id: "totals", type: "totals", label: "misc-tve-totals", x: 120, y: 235, width: 75, height: 25, visible: true, locked: false },
+  { id: "amount_in_words", type: "amount_in_words", label: "misc-tve-amount-words", x: 15, y: 235, width: 100, height: 20, visible: true, locked: false },
+  { id: "offer_text", type: "offer_text", label: "misc-tve-offer-text", x: 15, y: 255, width: 180, height: 18, visible: true, locked: false },
+  { id: "bank_details", type: "bank_details", label: "misc-tve-bank-details", x: 15, y: 263, width: 180, height: 12, visible: true, locked: false },
+  { id: "signatures", type: "signatures", label: "misc-tve-signatures", x: 15, y: 277, width: 180, height: 14, visible: true, locked: false },
+  { id: "footer", type: "footer", label: "misc-tve-footer", x: 15, y: 286, width: 180, height: 8, visible: true, locked: false },
 ];
 
 // ============================================================
@@ -289,16 +291,16 @@ function resolveFieldContent(
 // Live field content renderer
 // ============================================================
 
-function MiniLineItemsTable({ rows }: { rows: SampleRow[] }) {
+function MiniLineItemsTable({ rows, t }: { rows: SampleRow[]; t: (k: string) => string }) {
   return (
     <table className="w-full border-collapse text-[6px] leading-tight">
       <thead>
         <tr className="bg-slate-700 text-white">
-          <th className="border border-slate-400 px-0.5 py-0.5 text-left font-semibold">SKU</th>
-          <th className="border border-slate-400 px-0.5 py-0.5 text-left font-semibold">Product</th>
-          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">Qty</th>
-          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">Price</th>
-          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">Total</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-left font-semibold">{t("misc-tve-sku")}</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-left font-semibold">{t("misc-product")}</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">{t("misc-qty") || "Qty"}</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">{t("misc-price")}</th>
+          <th className="border border-slate-400 px-0.5 py-0.5 text-right font-semibold">{t("misc-total")}</th>
         </tr>
       </thead>
       <tbody>
@@ -319,7 +321,8 @@ function MiniLineItemsTable({ rows }: { rows: SampleRow[] }) {
 function renderFieldContent(
   field: FieldElement,
   template: Partial<DocumentTemplate>,
-  letterhead: TenantLetterhead | null
+  letterhead: TenantLetterhead | null,
+  t: (k: string) => string
 ): React.ReactNode {
   const companyName = getCompanyName(letterhead);
   const logoUrl = getLogoUrl(letterhead);
@@ -345,7 +348,7 @@ function renderFieldContent(
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-teal-700/10 text-[7px] font-semibold text-teal-700">
-          [ LOGO ]
+          {t("misc-tve-logo-placeholder")}
         </div>
       );
 
@@ -400,8 +403,8 @@ function renderFieldContent(
     case "doc_meta":
       return (
         <div className="flex h-full w-full items-center justify-between text-[6.5px] text-slate-600">
-          <span>No: <span className="font-semibold text-slate-800">OF-2026-0014</span></span>
-          <span>Date: <span className="font-semibold text-slate-800">14 Mar 2026</span></span>
+          <span>{t("misc-number")}: <span className="font-semibold text-slate-800">OF-2026-0014</span></span>
+          <span>{t("misc-date")}: <span className="font-semibold text-slate-800">14 Mar 2026</span></span>
           <span>Valid: <span className="font-semibold text-slate-800">14 Apr 2026</span></span>
         </div>
       );
@@ -409,10 +412,10 @@ function renderFieldContent(
     case "from_box":
       return (
         <div className="h-full w-full text-[6px] leading-tight">
-          <div className="text-[6px] font-bold uppercase tracking-wide text-slate-400">From</div>
+          <div className="text-[6px] font-bold uppercase tracking-wide text-slate-400">{t("misc-tve-from-label")}</div>
           <div className="text-[7px] font-bold" style={{ color: primaryColor }}>{companyName}</div>
           <div className="text-slate-500">{address}</div>
-          {vat && <div className="text-slate-500">VAT: {vat}</div>}
+          {vat && <div className="text-slate-500">{t("misc-tve-vat-label")}: {vat}</div>}
           {letterhead?.company_email && <div className="text-slate-500">{letterhead.company_email}</div>}
         </div>
       );
@@ -420,29 +423,29 @@ function renderFieldContent(
     case "to_box":
       return (
         <div className="h-full w-full text-[6px] leading-tight">
-          <div className="text-[6px] font-bold uppercase tracking-wide text-slate-400">Bill to</div>
+          <div className="text-[6px] font-bold uppercase tracking-wide text-slate-400">{t("misc-bill-to")}</div>
           <div className="text-[7px] font-bold text-slate-800">Mediterra Exports GmbH</div>
           <div className="text-slate-500">Hafenstraße 4, 20457 Hamburg</div>
           <div className="text-slate-500">Germany</div>
-          <div className="text-slate-500">VAT: DE876543210</div>
+          <div className="text-slate-500">{t("misc-tve-vat-label")}: DE876543210</div>
         </div>
       );
 
     case "trade_terms":
       return (
         <div className="flex h-full w-full items-center justify-between text-[6.5px]">
-          <span className="font-semibold text-slate-800">Incoterm: <span style={{ color: primaryColor }}>EXW · Hamburg</span></span>
-          <span className="text-slate-500">Payment: <span className="font-semibold">Net 30</span></span>
+          <span className="font-semibold text-slate-800">{t("misc-tve-incoterm")}: <span style={{ color: primaryColor }}>EXW · Hamburg</span></span>
+          <span className="text-slate-500">{t("misc-tve-payment")}: <span className="font-semibold">Net 30</span></span>
         </div>
       );
 
     case "line_items_table":
-      return <MiniLineItemsTable rows={SAMPLE_LINE_ITEMS.slice(0, 2)} />;
+      return <MiniLineItemsTable rows={SAMPLE_LINE_ITEMS.slice(0, 2)} t={t} />;
 
     case "specifications":
       return (
         <div className="h-full w-full text-[6px] leading-tight">
-          <div className="text-[7px] font-bold text-slate-800">Specifications</div>
+          <div className="text-[7px] font-bold text-slate-800">{t("misc-tve-specifications")}</div>
           <div className="text-slate-600">Moisture: ≤14% · Foreign matter: ≤2% · Broken: ≤5%</div>
           <div className="text-slate-600">Packing: 50kg PP bags · Origin: EU</div>
           <div className="text-slate-600">Inspection: SGS at loading port</div>
@@ -455,10 +458,10 @@ function renderFieldContent(
       const total = subtotal + vat10;
       return (
         <div className="h-full w-full text-right text-[6.5px] leading-tight">
-          <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>${subtotal.toLocaleString()}.00</span></div>
-          <div className="flex justify-between text-slate-500"><span>VAT (10%)</span><span>${vat10.toLocaleString()}.00</span></div>
+          <div className="flex justify-between text-slate-600"><span>{t("misc-subtotal")}</span><span>${subtotal.toLocaleString()}.00</span></div>
+          <div className="flex justify-between text-slate-500"><span>{t("misc-tax")} (10%)</span><span>${vat10.toLocaleString()}.00</span></div>
           <div className="mt-0.5 flex justify-between border-t pt-0.5 font-bold" style={{ borderColor: primaryColor, color: primaryColor }}>
-            <span>TOTAL</span><span>${total.toLocaleString()}.00</span>
+            <span>{t("misc-total")}</span><span>${total.toLocaleString()}.00</span>
           </div>
         </div>
       );
@@ -467,14 +470,14 @@ function renderFieldContent(
     case "amount_in_words":
       return (
         <div className="h-full w-full text-[6px] italic leading-tight text-slate-600">
-          <span className="font-semibold not-italic">Amount in words:</span> Forty-two thousand one hundred ninety-six US dollars only.
+          <span className="font-semibold not-italic">{t("misc-tve-amount-words")}:</span> Forty-two thousand one hundred ninety-six US dollars only.
         </div>
       );
 
     case "offer_text":
       return (
         <div className="h-full w-full text-[6px] leading-tight text-slate-600">
-          <span className="font-semibold" style={{ color: accentColor }}>Payment terms: </span>
+          <span className="font-semibold" style={{ color: accentColor }}>{t("misc-terms")}: </span>
           30% advance, 70% before shipment. Delivery CIF Hamburg port. Inspection by SGS at loading.
         </div>
       );
@@ -482,10 +485,10 @@ function renderFieldContent(
     case "bank_details":
       return (
         <div className="h-full w-full text-[6px] leading-tight">
-          <span className="font-semibold text-slate-800">Bank: </span>
+          <span className="font-semibold text-slate-800">{t("misc-tve-bank-label")}: </span>
           <span className="text-slate-700">{bankName}</span>
-          <span className="text-slate-500"> · IBAN: {iban}</span>
-          {letterhead?.bank_swift && <span className="text-slate-500"> · SWIFT: {letterhead.bank_swift}</span>}
+          <span className="text-slate-500"> · {t("misc-tve-iban-label")}: {iban}</span>
+          {letterhead?.bank_swift && <span className="text-slate-500"> · {t("misc-tve-swift-label")}: {letterhead.bank_swift}</span>}
         </div>
       );
 
@@ -494,11 +497,11 @@ function renderFieldContent(
         <div className="flex h-full w-full items-end justify-between text-[6px] text-slate-600">
           <div className="flex flex-col items-center">
             <div className="border-t border-slate-500" style={{ width: 50 }} />
-            <div className="mt-0.5">Seller signature</div>
+            <div className="mt-0.5">{t("misc-tve-seller-signature")}</div>
           </div>
           <div className="flex flex-col items-center">
             <div className="border-t border-slate-500" style={{ width: 50 }} />
-            <div className="mt-0.5">Buyer signature</div>
+            <div className="mt-0.5">{t("misc-tve-buyer-signature")}</div>
           </div>
         </div>
       );
@@ -506,7 +509,7 @@ function renderFieldContent(
     case "seal":
       return (
         <div className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-slate-300 text-[6px] text-slate-400">
-          [ SEAL ]
+          {t("misc-tve-seal-placeholder")}
         </div>
       );
 
@@ -514,7 +517,7 @@ function renderFieldContent(
       const rawContent = resolveFieldContent(field, template);
       const text = rawContent.trim()
         ? substitutePlaceholders(rawContent, template, letterhead)
-        : `${companyName} · Reg#${reg}${vat ? ` · VAT: ${vat}` : ""} · Page 1 of 5`;
+        : `${companyName} · Reg#${reg}${vat ? ` · ${t("misc-tve-vat-label")}: ${vat}` : ""} · ${t("misc-tve-page-n-of-m").replace("{n}", "1").replace("{m}", "5")}`;
       return (
         <div className="h-full w-full truncate text-[6px] text-slate-500">
           {text}
@@ -526,7 +529,7 @@ function renderFieldContent(
       const text = (field.props?.content as string) || "";
       return (
         <div className="h-full w-full whitespace-pre-line text-[7px] leading-tight text-slate-700">
-          {text || <span className="text-slate-400">{field.label}</span>}
+          {text || <span className="text-slate-400">{t(field.label)}</span>}
         </div>
       );
     }
@@ -538,13 +541,13 @@ function renderFieldContent(
         <img src={url} alt={field.label} className="h-full w-full object-contain" draggable={false} />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-[7px] text-slate-400">
-          [ IMAGE ]
+          {t("misc-tve-image-placeholder")}
         </div>
       );
     }
 
     default:
-      return <span className="text-slate-700">{field.label}</span>;
+      return <span className="text-slate-700">{t(field.label)}</span>;
   }
 }
 
@@ -712,6 +715,7 @@ function ContinuationPage({
   letterhead,
   page,
   scale,
+  t,
 }: {
   pageIdx: number;
   pageCount: number;
@@ -719,6 +723,7 @@ function ContinuationPage({
   letterhead: TenantLetterhead | null;
   page: { width: number; height: number };
   scale: number;
+  t: (k: string) => string;
 }) {
   const companyName = getCompanyName(letterhead);
   const logoUrl = getLogoUrl(letterhead);
@@ -743,13 +748,13 @@ function ContinuationPage({
           <img src={logoUrl} alt="" className="shrink-0 object-contain" style={{ width: 20, height: 12 }} draggable={false} />
         )}
         <span className="text-[8px] font-bold" style={{ color: primaryColor }}>{companyName}</span>
-        <span className="ml-auto text-[6px] text-slate-500">(continued)</span>
+        <span className="ml-auto text-[6px] text-slate-500">{t("misc-tve-continued")}</span>
       </div>
 
       {/* Continued table */}
       <div className="absolute" style={{ top: 30 * scale, left: 15 * scale, right: 15 * scale }}>
-        <MiniLineItemsTable rows={[row]} />
-        <div className="mt-1 text-[6px] italic text-slate-400">…continued from previous page</div>
+        <MiniLineItemsTable rows={[row]} t={t} />
+        <div className="mt-1 text-[6px] italic text-slate-400">{t("misc-tve-continued-from")}</div>
       </div>
 
       {/* Footer */}
@@ -758,7 +763,7 @@ function ContinuationPage({
         style={{ bottom: 6 * scale, paddingLeft: 15 * scale, paddingRight: 15 * scale, paddingTop: 3 }}
       >
         <span className="truncate">{companyName} · Reg#{reg}</span>
-        <span>Page {pageIdx + 1} of {pageCount}</span>
+        <span>{t("misc-tve-page-n-of-m").replace("{n}", String(pageIdx + 1)).replace("{m}", String(pageCount))}</span>
       </div>
     </div>
   );
@@ -785,6 +790,7 @@ export function TemplateVisualEditor({
   pageSize,
   letterhead,
 }: TemplateVisualEditorProps) {
+  const t = useT();
   const [fields, setFields] = React.useState<FieldElement[]>(
     DEFAULT_FIELDS.map((f) => ({ ...f }))
   );
@@ -1131,7 +1137,7 @@ export function TemplateVisualEditor({
             >
               {/* Live content */}
               <div className="pointer-events-none flex-1 overflow-hidden p-0.5">
-                {renderFieldContent(f, template, letterhead)}
+                {renderFieldContent(f, template, letterhead, t)}
               </div>
 
               {/* Tiny label badge so users still know what each block is */}
@@ -1169,44 +1175,44 @@ export function TemplateVisualEditor({
           variant={showRuler ? "default" : "outline"}
           onClick={() => setShowRuler(!showRuler)}
         >
-          <Ruler className="size-4" /> Ruler
+          <Ruler className="size-4" /> {t("misc-tve-ruler")}
         </Button>
         <Button
           size="sm"
           variant={showGrid ? "default" : "outline"}
           onClick={() => setShowGrid(!showGrid)}
         >
-          <Grid3x3 className="size-4" /> Grid
+          <Grid3x3 className="size-4" /> {t("misc-tve-grid")}
         </Button>
         <Button
           size="sm"
           variant={snapEnabled ? "default" : "outline"}
           onClick={() => setSnapEnabled(!snapEnabled)}
         >
-          <Move className="size-4" /> Snap {snapEnabled ? "On" : "Off"}
+          <Move className="size-4" /> {snapEnabled ? t("misc-tve-snap-on") : t("misc-tve-snap-off")}
         </Button>
         <div className="h-6 w-px bg-border" />
         <Button size="sm" variant="outline" onClick={addCustomText}>
-          <Type className="size-4" /> Text
+          <Type className="size-4" /> {t("misc-tve-text")}
         </Button>
         <Button size="sm" variant="outline" onClick={addCustomImage}>
-          <ImageIcon className="size-4" /> Image
+          <ImageIcon className="size-4" /> {t("misc-tve-image")}
         </Button>
         <div className="h-6 w-px bg-border" />
         <Button size="sm" variant="outline" onClick={resetLayout}>
-          <RotateCcw className="size-4" /> Reset
+          <RotateCcw className="size-4" /> {t("misc-tve-reset")}
         </Button>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           {/* Zoom: slider + buttons */}
           <div className="flex items-center gap-1">
-            <Label className="text-xs">Zoom</Label>
+            <Label className="text-xs">{t("misc-tve-zoom")}</Label>
             <Button
               size="sm"
               variant="outline"
               className="size-8 p-0"
               onClick={() => setZoom(Math.max(0.25, Math.round((zoom - 0.25) * 100) / 100))}
-              title="Zoom out"
+              title={t("misc-tve-zoom-out")}
             >
               <ZoomOut className="size-3" />
             </Button>
@@ -1224,7 +1230,7 @@ export function TemplateVisualEditor({
               variant="outline"
               className="size-8 p-0"
               onClick={() => setZoom(Math.min(3, Math.round((zoom + 0.25) * 100) / 100))}
-              title="Zoom in"
+              title={t("misc-tve-zoom-in")}
             >
               <ZoomIn className="size-3" />
             </Button>
@@ -1233,7 +1239,7 @@ export function TemplateVisualEditor({
               variant="outline"
               className="h-8 px-2"
               onClick={() => setZoom(1)}
-              title="Reset to 100%"
+              title={t("misc-tve-reset-100")}
             >
               100%
             </Button>
@@ -1242,9 +1248,9 @@ export function TemplateVisualEditor({
               variant="outline"
               className="h-8 px-2"
               onClick={fitToWidth}
-              title="Fit page width to visible area"
+              title={t("misc-tve-fit-hint")}
             >
-              <Maximize2 className="size-3" /> Fit
+              <Maximize2 className="size-3" /> {t("misc-tve-fit")}
             </Button>
             <span className="w-10 text-right tabular-nums">
               {Math.round(zoom * 100)}%
@@ -1252,7 +1258,7 @@ export function TemplateVisualEditor({
           </div>
           {/* Pages selector */}
           <div className="flex items-center gap-1">
-            <Label className="text-xs">Pages</Label>
+            <Label className="text-xs">{t("misc-tve-pages")}</Label>
             <Select
               value={String(pageCount)}
               onValueChange={(v) => setPageCount(Number(v))}
@@ -1270,7 +1276,7 @@ export function TemplateVisualEditor({
           </div>
           {/* Page layout: stacked vs grid */}
           <div className="flex items-center gap-1">
-            <Label className="text-xs">Layout</Label>
+            <Label className="text-xs">{t("misc-tve-layout")}</Label>
             <Select
               value={pageLayout}
               onValueChange={(v) => setPageLayout(v as "vertical" | "grid")}
@@ -1279,8 +1285,8 @@ export function TemplateVisualEditor({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="vertical">Stacked</SelectItem>
-                <SelectItem value="grid">Grid 2-col</SelectItem>
+                <SelectItem value="vertical">{t("misc-tve-stacked")}</SelectItem>
+                <SelectItem value="grid">{t("misc-tve-grid-2col")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1296,7 +1302,7 @@ export function TemplateVisualEditor({
         <ScrollArea className="w-48 shrink-0 border-r">
           <div className="space-y-1 p-3">
             <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-              Fields ({fields.length})
+              {t("misc-tve-fields-count").replace("{n}", String(fields.length))}
             </h3>
             {fields.map((f) => (
               <div
@@ -1311,7 +1317,7 @@ export function TemplateVisualEditor({
               >
                 <button
                   className="shrink-0"
-                  title={f.visible ? "Hide field" : "Show field"}
+                  title={f.visible ? t("misc-tve-hide-field") : t("misc-tve-show-field")}
                   onClick={(e) => {
                     e.stopPropagation();
                     updateField(f.id, { visible: !f.visible });
@@ -1329,21 +1335,21 @@ export function TemplateVisualEditor({
                     !f.visible && "text-muted-foreground line-through"
                   )}
                 >
-                  {f.label}
+                  {t(f.label)}
                 </span>
                 {f.locked && <Lock className="size-3 text-muted-foreground" />}
               </div>
             ))}
             <div className="mt-3 border-t pt-3">
               <p className="mb-2 text-[10px] text-muted-foreground">
-                Quick add:
+                {t("misc-tve-quick-add")}
               </p>
               <div className="flex flex-col gap-1">
                 <Button size="sm" variant="outline" onClick={addCustomText}>
-                  <Type className="size-3.5" /> Text block
+                  <Type className="size-3.5" /> {t("misc-tve-text-block")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={addCustomImage}>
-                  <ImageIcon className="size-3.5" /> Image block
+                  <ImageIcon className="size-3.5" /> {t("misc-tve-image-block")}
                 </Button>
               </div>
             </div>
@@ -1383,11 +1389,11 @@ export function TemplateVisualEditor({
                   {/* Page label */}
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-[10px] font-medium text-muted-foreground">
-                      Page {pageIdx + 1} of {pageCount}
+                      {t("misc-tve-page-n-of-m").replace("{n}", String(pageIdx + 1)).replace("{m}", String(pageCount))}
                     </span>
                     {pageIdx > 0 && (
                       <span className="text-[9px] text-muted-foreground">
-                        (auto-continued)
+                        {t("misc-tve-auto-continued")}
                       </span>
                     )}
                   </div>
@@ -1412,6 +1418,7 @@ export function TemplateVisualEditor({
                         letterhead={letterhead}
                         page={page}
                         scale={renderScale}
+                        t={t}
                       />
                     )}
                   </div>
@@ -1423,23 +1430,23 @@ export function TemplateVisualEditor({
             <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span className="inline-block size-2.5 rounded-sm border border-primary bg-primary/10" />
-                Selected
+                {t("misc-tve-selected")}
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block size-2.5 rounded-sm border border-blue-300 bg-blue-50/50" />
-                Field
+                {t("misc-tve-field")}
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2 w-3 border-t border-dashed border-blue-300" />
-                Page margin
+                {t("misc-tve-page-margin")}
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2 w-3 border-t border-blue-200/60" />
-                Grid (5mm)
+                {t("misc-tve-grid-5mm")}
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2 w-3 bg-red-500/60" />
-                Active snap guide
+                {t("misc-tve-active-snap")}
               </span>
             </div>
           </div>
@@ -1452,7 +1459,7 @@ export function TemplateVisualEditor({
               <>
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-                    Properties
+                    {t("misc-tve-properties")}
                   </h3>
                   <Badge variant="outline" className="text-[10px]">
                     {selected.type}
@@ -1461,7 +1468,7 @@ export function TemplateVisualEditor({
 
                 {/* Editable label */}
                 <div>
-                  <Label className="text-xs">Label</Label>
+                  <Label className="text-xs">{t("misc-tve-label")}</Label>
                   <Input
                     value={selected.label}
                     onChange={(e) =>
@@ -1473,7 +1480,7 @@ export function TemplateVisualEditor({
                 {/* Position & size */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label className="text-xs">X (mm)</Label>
+                    <Label className="text-xs">{t("misc-tve-x-mm")}</Label>
                     <Input
                       type="number"
                       value={Math.round(selected.x)}
@@ -1485,7 +1492,7 @@ export function TemplateVisualEditor({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Y (mm)</Label>
+                    <Label className="text-xs">{t("misc-tve-y-mm")}</Label>
                     <Input
                       type="number"
                       value={Math.round(selected.y)}
@@ -1497,7 +1504,7 @@ export function TemplateVisualEditor({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Width (mm)</Label>
+                    <Label className="text-xs">{t("misc-tve-width-mm")}</Label>
                     <Input
                       type="number"
                       value={Math.round(selected.width)}
@@ -1509,7 +1516,7 @@ export function TemplateVisualEditor({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Height (mm)</Label>
+                    <Label className="text-xs">{t("misc-tve-height-mm")}</Label>
                     <Input
                       type="number"
                       value={Math.round(selected.height)}
@@ -1526,7 +1533,7 @@ export function TemplateVisualEditor({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-1 text-xs">
-                      <Eye className="size-3" /> Visible
+                      <Eye className="size-3" /> {t("misc-tve-visible")}
                     </Label>
                     <Switch
                       checked={selected.visible}
@@ -1542,7 +1549,7 @@ export function TemplateVisualEditor({
                       ) : (
                         <Unlock className="size-3" />
                       )}{" "}
-                      Locked
+                      {t("misc-tve-locked")}
                     </Label>
                     <Switch
                       checked={selected.locked}
@@ -1559,11 +1566,11 @@ export function TemplateVisualEditor({
                 {selected.type === "logo" && (
                   <div className="space-y-3">
                     <h4 className="text-xs font-semibold uppercase text-muted-foreground">
-                      Logo
+                      {t("misc-tve-logo")}
                     </h4>
                     <div>
                       <div className="mb-1 flex items-center justify-between">
-                        <Label className="text-xs">Width (mm)</Label>
+                        <Label className="text-xs">{t("misc-tve-width-mm")}</Label>
                         <span className="text-[10px] tabular text-muted-foreground">
                           {Math.round(selected.width)}mm
                         </span>
@@ -1580,7 +1587,7 @@ export function TemplateVisualEditor({
                     </div>
                     <div>
                       <div className="mb-1 flex items-center justify-between">
-                        <Label className="text-xs">Height (mm)</Label>
+                        <Label className="text-xs">{t("misc-tve-height-mm")}</Label>
                         <span className="text-[10px] tabular text-muted-foreground">
                           {Math.round(selected.height)}mm
                         </span>
@@ -1596,12 +1603,12 @@ export function TemplateVisualEditor({
                       />
                     </div>
                     <div>
-                      <Label className="mb-1 block text-xs">Alignment</Label>
+                      <Label className="mb-1 block text-xs">{t("misc-tve-alignment")}</Label>
                       <div className="grid grid-cols-3 gap-1">
                         <Button
                           size="sm"
                           variant="outline"
-                          title="Align left"
+                          title={t("misc-tve-align-left")}
                           onClick={() => alignField(selected.id, "left")}
                         >
                           <AlignLeft className="size-3" />
@@ -1609,7 +1616,7 @@ export function TemplateVisualEditor({
                         <Button
                           size="sm"
                           variant="outline"
-                          title="Center horizontally"
+                          title={t("misc-tve-align-center-h")}
                           onClick={() => alignField(selected.id, "center-h")}
                         >
                           <AlignCenter className="size-3" />
@@ -1617,7 +1624,7 @@ export function TemplateVisualEditor({
                         <Button
                           size="sm"
                           variant="outline"
-                          title="Align right"
+                          title={t("misc-tve-align-right")}
                           onClick={() => alignField(selected.id, "right")}
                         >
                           <AlignRight className="size-3" />
@@ -1626,8 +1633,8 @@ export function TemplateVisualEditor({
                     </div>
                     <div className="rounded border bg-muted/30 p-2 text-[10px] text-muted-foreground">
                       {letterhead?.logo_url
-                        ? "Source: linked letterhead logo"
-                        : "No logo uploaded — set one in the letterhead editor."}
+                        ? t("misc-tve-source-from-letterhead")
+                        : t("misc-tve-no-logo-hint")}
                     </div>
                   </div>
                 )}
@@ -1636,10 +1643,10 @@ export function TemplateVisualEditor({
                 {selected.type === "custom_image" && (
                   <div className="space-y-2">
                     <h4 className="text-xs font-semibold uppercase text-muted-foreground">
-                      Image
+                      {t("misc-tve-image")}
                     </h4>
                     <div>
-                      <Label className="text-xs">Image URL</Label>
+                      <Label className="text-xs">{t("misc-tve-image-url")}</Label>
                       <Input
                         placeholder="https://… or /uploads/…"
                         value={(selected.props?.imageUrl as string) || ""}
@@ -1653,7 +1660,7 @@ export function TemplateVisualEditor({
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <div className="mb-1 flex items-center justify-between">
-                          <Label className="text-xs">Width (mm)</Label>
+                          <Label className="text-xs">{t("misc-tve-width-mm")}</Label>
                           <span className="text-[10px] tabular text-muted-foreground">
                             {Math.round(selected.width)}
                           </span>
@@ -1670,7 +1677,7 @@ export function TemplateVisualEditor({
                       </div>
                       <div>
                         <div className="mb-1 flex items-center justify-between">
-                          <Label className="text-xs">Height (mm)</Label>
+                          <Label className="text-xs">{t("misc-tve-height-mm")}</Label>
                           <span className="text-[10px] tabular text-muted-foreground">
                             {Math.round(selected.height)}
                           </span>
@@ -1695,12 +1702,12 @@ export function TemplateVisualEditor({
                 ) && (
                   <div className="space-y-2">
                     <h4 className="text-xs font-semibold uppercase text-muted-foreground">
-                      Content
+                      {t("misc-tve-content")}
                     </h4>
                     {/* Draggable placeholder palette — drag a chip into the text area below */}
                     <div>
                       <Label className="text-[10px] text-muted-foreground">
-                        Drag placeholders into the text:
+                        {t("misc-tve-drag-placeholders")}
                       </Label>
                       <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded border bg-muted/30 p-1.5">
                         {PLACEHOLDERS.map((ph) => (
@@ -1765,7 +1772,7 @@ export function TemplateVisualEditor({
                         }
                         setDragOverContent(false);
                       }}
-                      placeholder="Enter text or drag a placeholder here…"
+                      placeholder={t("misc-tve-content-placeholder")}
                       className={cn(
                         "text-xs",
                         dragOverContent && "ring-2 ring-primary ring-offset-1"
@@ -1777,8 +1784,7 @@ export function TemplateVisualEditor({
                     </p>
                     {selected.type !== "custom_text" && (
                       <p className="text-[10px] italic text-muted-foreground">
-                        Leave empty to use the default {selected.type} text from
-                        the template.
+                        {t("misc-tve-default-text-hint").replace("{type}", selected.type)}
                       </p>
                     )}
                   </div>
@@ -1788,12 +1794,12 @@ export function TemplateVisualEditor({
 
                 {/* Alignment buttons */}
                 <div>
-                  <Label className="mb-2 block text-xs">Align to page</Label>
+                  <Label className="mb-2 block text-xs">{t("misc-tve-align-to-page")}</Label>
                   <div className="grid grid-cols-3 gap-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      title="Align left"
+                      title={t("misc-tve-align-left")}
                       onClick={() => alignField(selected.id, "left")}
                     >
                       <AlignLeft className="size-3" />
@@ -1801,7 +1807,7 @@ export function TemplateVisualEditor({
                     <Button
                       size="sm"
                       variant="outline"
-                      title="Center horizontally"
+                      title={t("misc-tve-align-center-h")}
                       onClick={() => alignField(selected.id, "center-h")}
                     >
                       <AlignCenter className="size-3" />
@@ -1809,7 +1815,7 @@ export function TemplateVisualEditor({
                     <Button
                       size="sm"
                       variant="outline"
-                      title="Align right"
+                      title={t("misc-tve-align-right")}
                       onClick={() => alignField(selected.id, "right")}
                     >
                       <AlignRight className="size-3" />
@@ -1817,7 +1823,7 @@ export function TemplateVisualEditor({
                     <Button
                       size="sm"
                       variant="outline"
-                      title="Align top"
+                      title={t("misc-tve-align-top")}
                       onClick={() => alignField(selected.id, "top")}
                     >
                       <AlignVerticalJustifyStart className="size-3" />
@@ -1825,7 +1831,7 @@ export function TemplateVisualEditor({
                     <Button
                       size="sm"
                       variant="outline"
-                      title="Center vertically"
+                      title={t("misc-tve-align-center-v")}
                       onClick={() => alignField(selected.id, "middle")}
                     >
                       <AlignVerticalJustifyCenter className="size-3" />
@@ -1833,7 +1839,7 @@ export function TemplateVisualEditor({
                     <Button
                       size="sm"
                       variant="outline"
-                      title="Align bottom"
+                      title={t("misc-tve-align-bottom")}
                       onClick={() => alignField(selected.id, "bottom")}
                     >
                       <AlignVerticalJustifyEnd className="size-3" />
@@ -1846,19 +1852,19 @@ export function TemplateVisualEditor({
                 {/* Quick geometry info + delete */}
                 <div className="rounded border bg-muted/30 p-2 text-[10px] text-muted-foreground">
                   <div className="flex justify-between">
-                    <span>Right edge:</span>
+                    <span>{t("misc-tve-right-edge")}</span>
                     <span className="font-mono">
                       {Math.round(selected.x + selected.width)} mm
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Bottom edge:</span>
+                    <span>{t("misc-tve-bottom-edge")}</span>
                     <span className="font-mono">
                       {Math.round(selected.y + selected.height)} mm
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Center:</span>
+                    <span>{t("misc-tve-center")}</span>
                     <span className="font-mono">
                       ({Math.round(selected.x + selected.width / 2)},{" "}
                       {Math.round(selected.y + selected.height / 2)})
@@ -1873,15 +1879,14 @@ export function TemplateVisualEditor({
                     className="w-full text-destructive hover:text-destructive"
                     onClick={() => deleteField(selected.id)}
                   >
-                    Delete field
+                    {t("misc-tve-delete-field")}
                   </Button>
                 )}
               </>
             ) : (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 <Move className="mx-auto mb-2 size-6 opacity-40" />
-                Select a field on the canvas or from the list to edit its
-                properties.
+                {t("misc-tve-select-field-hint")}
               </div>
             )}
 
@@ -1889,10 +1894,10 @@ export function TemplateVisualEditor({
 
             {/* Page settings */}
             <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-              Page
+              {t("misc-tve-page")}
             </h3>
             <div>
-              <Label className="text-xs">Size</Label>
+              <Label className="text-xs">{t("misc-tve-size")}</Label>
               <Select
                 value={template.page_size ?? "A4"}
                 onValueChange={(v) =>
@@ -1900,24 +1905,24 @@ export function TemplateVisualEditor({
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Page size" />
+                  <SelectValue placeholder={t("misc-tve-page-size")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="A4">A4 (210 × 297 mm)</SelectItem>
+                  <SelectItem value="A4">{t("misc-tve-page-size-a4")}</SelectItem>
                   <SelectItem value="Letter">
-                    Letter (216 × 279 mm)
+                    {t("misc-tve-page-size-letter")}
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <Label className="mb-1 block text-xs">Margins (mm)</Label>
+              <Label className="mb-1 block text-xs">{t("misc-tve-margins-mm")}</Label>
               <div className="grid grid-cols-2 gap-2">
                 {(["top", "bottom", "left", "right"] as const).map((m) => (
                   <div key={m}>
                     <Label className="text-[10px] capitalize text-muted-foreground">
-                      {m}
+                      {t(`misc-tve-margin-${m}`)}
                     </Label>
                     <Input
                       type="number"
@@ -1934,8 +1939,10 @@ export function TemplateVisualEditor({
             </div>
 
             <p className="text-[10px] text-muted-foreground">
-              Snap threshold: {SNAP_THRESHOLD} mm · Scale: 1mm = {BASE_SCALE}px ·
-              Zoom: {Math.round(zoom * 100)}%
+              {t("misc-tve-snap-threshold-hint")
+                .replace("{n}", String(SNAP_THRESHOLD))
+                .replace("{s}", String(BASE_SCALE))
+                .replace("{z}", String(Math.round(zoom * 100)))}
             </p>
           </div>
         </ScrollArea>

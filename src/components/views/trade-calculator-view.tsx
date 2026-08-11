@@ -53,6 +53,7 @@ import {
   CONTAINER_TYPES, TRANSPORT_MODES, PAYMENT_TERMS_LOCAL,
 } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 import { useAppStore } from "@/lib/store/app-store";
 import {
   calculateBankCosts, BANK_COSTS, BankCostResult,
@@ -76,22 +77,22 @@ import {
 // for sea freight and richer hints. Codes stay backward-compatible with the
 // existing 5 codes (SEA/AIR/ROAD/RAIL/MULTIMODAL); only SEA_BULK is new, so
 // saved calculations continue to render correctly.
-const ENHANCED_TRANSPORT_MODES: { code: string; name: string; hint: string; icon: typeof Ship }[] = [
-  { code: "SEA", name: "Sea Freight — Container", hint: "Containerized (20ft / 40ft / 40HC)", icon: Ship },
-  { code: "SEA_BULK", name: "Sea Freight — Bulk Vessel", hint: "Whole-ship charter, per-MT freight rate", icon: Anchor },
-  { code: "ROAD", name: "Road Transport", hint: "Truck(s) — standard, reefer, tanker, flatbed", icon: Truck },
-  { code: "RAIL", name: "Rail Freight", hint: "Wagons / containers on flatcars", icon: Train },
-  { code: "AIR", name: "Air Freight", hint: "Air Waybill (AWB) — chargeable weight", icon: Plane },
-  { code: "MULTIMODAL", name: "Multimodal", hint: "Combined sea + road + rail", icon: ArrowLeftRight },
+const ENHANCED_TRANSPORT_MODES: { code: string; nameKey: string; hintKey: string; icon: typeof Ship }[] = [
+  { code: "SEA", nameKey: "log-transport-sea-container", hintKey: "log-transport-sea-container-hint", icon: Ship },
+  { code: "SEA_BULK", nameKey: "log-transport-sea-bulk", hintKey: "log-transport-sea-bulk-hint", icon: Anchor },
+  { code: "ROAD", nameKey: "log-transport-road", hintKey: "log-transport-road-hint", icon: Truck },
+  { code: "RAIL", nameKey: "log-transport-rail", hintKey: "log-transport-rail-hint", icon: Train },
+  { code: "AIR", nameKey: "log-transport-air", hintKey: "log-transport-air-hint", icon: Plane },
+  { code: "MULTIMODAL", nameKey: "log-transport-multimodal", hintKey: "log-transport-multimodal-hint", icon: ArrowLeftRight },
 ];
 
 // Truck types for ROAD transport mode.
-const TRUCK_TYPES: { code: string; name: string }[] = [
-  { code: "standard", name: "Standard Dry Van" },
-  { code: "refrigerated", name: "Refrigerated (Reefer)" },
-  { code: "tanker", name: "Tanker" },
-  { code: "flatbed", name: "Flatbed" },
-  { code: "lowboy", name: "Lowboy / Heavy Haul" },
+const TRUCK_TYPES: { code: string; nameKey: string }[] = [
+  { code: "standard", nameKey: "log-truck-standard" },
+  { code: "refrigerated", nameKey: "log-truck-refrigerated" },
+  { code: "tanker", nameKey: "log-truck-tanker" },
+  { code: "flatbed", nameKey: "log-truck-flatbed" },
+  { code: "lowboy", nameKey: "log-truck-lowboy" },
 ];
 
 /**
@@ -130,11 +131,11 @@ type CommissionTypeLocal =
   | "fixed_per_unit"
   | "fixed_total";
 
-const COMMISSION_TYPE_OPTIONS: { value: CommissionTypeLocal; label: string }[] = [
-  { value: "percent_profit", label: "% of Profit" },
-  { value: "percent_revenue", label: "% of Revenue" },
-  { value: "fixed_per_unit", label: "Fixed per Unit" },
-  { value: "fixed_total", label: "Fixed Total" },
+const COMMISSION_TYPE_OPTIONS: { value: CommissionTypeLocal; labelKey: string }[] = [
+  { value: "percent_profit", labelKey: "misc-commission-percent-profit" },
+  { value: "percent_revenue", labelKey: "misc-commission-percent-revenue" },
+  { value: "fixed_per_unit", labelKey: "misc-commission-fixed-per-unit" },
+  { value: "fixed_total", labelKey: "misc-commission-fixed-total" },
 ];
 
 // Cost types available for the user to add (BUY_PRICE and SELL_PRICE are implicit
@@ -317,6 +318,7 @@ function computeTotals(
 export function TradeCalculatorView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
   const setView = useAppStore((s) => s.setView);
   const setPendingOfferData = useAppStore((s) => s.setPendingOfferData);
   const [creatingOffer, setCreatingOffer] = useState(false);
@@ -381,11 +383,11 @@ export function TradeCalculatorView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Calculation deleted.");
+      toast.success(t("misc-calc-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["trade-calculator", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("misc-delete-failed-toast")),
   });
 
   const items = data?.items || [];
@@ -393,11 +395,11 @@ export function TradeCalculatorView() {
   return (
     <div>
       <PageHeader
-        title="Trade Calculator"
-        description={`${data?.total ?? 0} saved calculations`}
+        title={t("misc-trade-calculator-title")}
+        description={t("misc-saved-calculations-count").replace("${n}", String(data?.total ?? 0))}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New Calculation
+            <Plus className="size-4 mr-1" /> {t("misc-new-calculation")}
           </Button>
         }
       />
@@ -409,9 +411,9 @@ export function TradeCalculatorView() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Calculator className="size-6" />}
-          title="No calculations"
-          description="Create your first landed cost calculation to analyze margins."
-          action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New Calculation</Button>}
+          title={t("misc-no-calculations")}
+          description={t("misc-no-calculations-desc")}
+          action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("misc-new-calculation")}</Button>}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[calc(100vh-220px)] overflow-y-auto custom-scroll pr-1 -mr-1">
@@ -429,26 +431,26 @@ export function TradeCalculatorView() {
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0">
                       <p className="font-medium truncate">{c.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{product?.name || "No product"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{product?.name || t("misc-no-product")}</p>
                     </div>
                     <Badge variant="outline" className="font-mono shrink-0">{c.transport_mode}</Badge>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className="text-muted-foreground">Buy / unit</p>
+                      <p className="text-muted-foreground">{t("misc-buy-per-unit")}</p>
                       <p className="font-medium tabular">{fmtMoney(c.buy_price_per_unit, c.buy_currency)}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Sell / unit</p>
+                      <p className="text-muted-foreground">{t("misc-sell-per-unit")}</p>
                       <p className="font-medium tabular">{fmtMoney(c.sell_price_per_unit, c.sell_currency)}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Quantity</p>
+                      <p className="text-muted-foreground">{t("misc-quantity")}</p>
                       <p className="font-medium tabular">{fmtNumber(c.quantity)} {c.unit}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Supplier</p>
+                      <p className="text-muted-foreground">{t("misc-supplier-label")}</p>
                       <p className="font-medium truncate">{supplier?.name || "—"}</p>
                     </div>
                   </div>
@@ -457,7 +459,7 @@ export function TradeCalculatorView() {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground">Gross margin</p>
+                      <p className="text-xs text-muted-foreground">{t("misc-gross-margin")}</p>
                       <p className={`text-lg font-semibold tabular ${marginPositive ? "text-chart-1" : "text-destructive"}`}>
                         {fmtMoney(c.gross_margin, c.sell_currency)}
                       </p>
@@ -472,13 +474,13 @@ export function TradeCalculatorView() {
                       {c.margin_percent.toFixed(1)}%
                     </Badge>
                     <div className="flex items-center gap-1 ml-1" onClick={(e) => e.stopPropagation()}>
-                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(c.id)} title="View" aria-label="View">
+                      <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(c.id)} title={t("view")} aria-label={t("view")}>
                         <Eye className="size-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(c); setShowForm(true); }} title="Edit" aria-label="Edit">
+                      <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(c); setShowForm(true); }} title={t("edit")} aria-label={t("edit")}>
                         <Pencil className="size-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(c.id)} title="Delete" aria-label="Delete">
+                      <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(c.id)} title={t("delete")} aria-label={t("delete")}>
                         <Trash2 className="size-4" />
                       </Button>
                     </div>
@@ -508,9 +510,9 @@ export function TradeCalculatorView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Calculator className="size-5" />
-              {detail.data?.name || "Trade Calculation"}
+              {detail.data?.name || t("misc-trade-calculation-singular")}
             </SheetTitle>
-            <SheetDescription>Landed cost & margin breakdown</SheetDescription>
+            <SheetDescription>{t("misc-landed-cost-margin-desc")}</SheetDescription>
           </SheetHeader>
           {detail.isLoading ? (
             <div className="p-4 space-y-3">
@@ -556,11 +558,11 @@ export function TradeCalculatorView() {
                     // Switch to the offers view — OffersView consumes
                     // pendingOfferData on mount and opens the form dialog.
                     setView("offers");
-                    toast.success("Offer form pre-filled — review and save.", {
-                      description: "Fields highlighted in orange need your attention.",
+                    toast.success(t("misc-offer-form-prefilled"), {
+                      description: t("misc-orange-fields-attention"),
                     });
                   } catch (e: any) {
-                    toast.error(e.message || "Failed to create offer");
+                    toast.error(e.message || t("misc-failed-create-offer"));
                   } finally {
                     setCreatingOffer(false);
                   }
@@ -572,7 +574,7 @@ export function TradeCalculatorView() {
                 ) : (
                   <FileText className="size-4" />
                 )}
-                Create Offer from Calculation
+                {t("misc-create-offer-from-calc")}
               </Button>
             </SheetFooter>
           )}
@@ -582,18 +584,18 @@ export function TradeCalculatorView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete calculation?</AlertDialogTitle>
+            <AlertDialogTitle>{t("misc-delete-calc-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The saved calculation will be removed.
+              {t("misc-delete-calc-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -612,6 +614,7 @@ function CalcDetail({
   supplier?: Partner;
   buyer?: Partner;
 }) {
+  const t = useT();
   const marginPositive = calc.gross_margin >= 0;
   const displayCurrency = calc.sell_currency || calc.buy_currency || "USD";
   const lines = (calc.cost_lines || []);
@@ -631,7 +634,7 @@ function CalcDetail({
   const barSegments: { label: string; amount: number; color: string }[] = [];
   // Buy price (implicit)
   barSegments.push({
-    label: "Buy Price",
+    label: t("misc-buy-price"),
     amount: calc.total_buy_cost,
     color: CHART_COLORS[0],
   });
@@ -663,7 +666,7 @@ function CalcDetail({
       <div className="grid grid-cols-2 gap-2">
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Buy Total</p>
+            <p className="text-xs text-muted-foreground">{t("misc-buy-total")}</p>
             <p className="text-lg font-semibold tabular">{fmtMoney(calc.total_buy_cost, calc.buy_currency)}</p>
             <p className="text-[11px] text-muted-foreground tabular">
               {fmtMoney(calc.buy_price_per_unit, calc.buy_currency)} × {fmtNumber(calc.quantity)} {calc.unit}
@@ -672,7 +675,7 @@ function CalcDetail({
         </Card>
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Landed Cost</p>
+            <p className="text-xs text-muted-foreground">{t("misc-landed-cost")}</p>
             <p className="text-lg font-semibold tabular">{fmtMoney(calc.total_landed_cost, calc.buy_currency)}</p>
             <p className="text-[11px] text-muted-foreground tabular">
               {fmtMoney(calc.total_landed_cost / Math.max(calc.quantity, 1), calc.buy_currency)} / {calc.unit}
@@ -686,7 +689,7 @@ function CalcDetail({
         </Card>
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Sell Revenue</p>
+            <p className="text-xs text-muted-foreground">{t("misc-sell-revenue")}</p>
             <p className="text-lg font-semibold tabular">{fmtMoney(calc.total_sell_revenue, calc.sell_currency)}</p>
             <p className="text-[11px] text-muted-foreground tabular">
               {fmtMoney(calc.sell_price_per_unit, calc.sell_currency)} × {fmtNumber(calc.quantity)} {calc.unit}
@@ -695,13 +698,13 @@ function CalcDetail({
         </Card>
         <Card className={`border-border/60 shadow-soft rounded-xl ${marginPositive ? "" : "border-destructive/30"}`}>
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Gross Margin</p>
+            <p className="text-xs text-muted-foreground">{t("misc-gross-margin-card")}</p>
             <p className={`text-lg font-semibold tabular ${marginPositive ? "text-chart-1" : "text-destructive"}`}>
               {fmtMoney(calc.gross_margin, displayCurrency)}
             </p>
             <p className={`text-[11px] tabular ${marginPositive ? "text-chart-1" : "text-destructive"}`}>
               {marginPositive ? <TrendingUp className="size-3 inline mr-0.5" /> : <TrendingDown className="size-3 inline mr-0.5" />}
-              {calc.margin_percent.toFixed(2)}% margin
+              {t("misc-margin-suffix").replace("${n}", calc.margin_percent.toFixed(2))}
             </p>
           </CardContent>
         </Card>
@@ -710,17 +713,17 @@ function CalcDetail({
       {/* Cost lines table */}
       <div>
         <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
-          <DollarSign className="size-3.5" /> Cost Lines ({lines.length})
+          <DollarSign className="size-3.5" /> {t("misc-cost-lines-count").replace("${n}", String(lines.length))}
         </p>
         <div className="border border-border/60 rounded-md overflow-hidden">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead className="h-8 text-xs">Type</TableHead>
-                <TableHead className="h-8 text-xs">Label</TableHead>
-                <TableHead className="h-8 text-xs">Basis</TableHead>
-                <TableHead className="h-8 text-xs text-right">Value</TableHead>
-                <TableHead className="h-8 text-xs text-right">Amount</TableHead>
+                <TableHead className="h-8 text-xs">{t("type")}</TableHead>
+                <TableHead className="h-8 text-xs">{t("misc-label-field")}</TableHead>
+                <TableHead className="h-8 text-xs">{t("misc-basis-label")}</TableHead>
+                <TableHead className="h-8 text-xs text-right">{t("misc-value-label")}</TableHead>
+                <TableHead className="h-8 text-xs text-right">{t("amount")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -742,7 +745,7 @@ function CalcDetail({
 
       {/* Visual breakdown bar */}
       <div>
-        <p className="text-xs text-muted-foreground mb-2">Cost Breakdown</p>
+        <p className="text-xs text-muted-foreground mb-2">{t("misc-cost-breakdown-title")}</p>
         <div className="flex h-3 w-full rounded-full overflow-hidden border border-border/60 bg-muted/30">
           {barSegments.map((s, i) => (
             <div
@@ -769,23 +772,23 @@ function CalcDetail({
       {/* Trade context */}
       <div>
         <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
-          <ArrowLeftRight className="size-3.5" /> Trade Context
+          <ArrowLeftRight className="size-3.5" /> {t("misc-trade-context")}
         </p>
         <div className="border border-border/60 rounded-md divide-y divide-border/60 bg-card text-sm">
-          <DetailRow label="Product" value={product?.name || "—"} />
-          <DetailRow label="Supplier" value={supplier?.name || "—"} />
-          <DetailRow label="Buyer" value={buyer?.name || "—"} />
-          <DetailRow label="Supplier offer" value={offer?.offer_number || "—"} mono />
-          <DetailRow label="Quantity" value={`${fmtNumber(calc.quantity)} ${unitName(calc.unit)}`} mono />
-          <DetailRow label="Containers" value={calc.num_containers ? `${calc.num_containers} × ${containerName(calc.container_type)}` : "—"} />
-          <DetailRow label="Loading port" value={calc.loading_port || "—"} />
-          <DetailRow label="Delivery port" value={calc.delivery_port || "—"} />
-          <DetailRow label="Exchange rate" value={calc.exchange_rate.toString()} mono />
+          <DetailRow label={t("misc-product")} value={product?.name || "—"} />
+          <DetailRow label={t("misc-supplier-label")} value={supplier?.name || "—"} />
+          <DetailRow label={t("misc-buyer-label")} value={buyer?.name || "—"} />
+          <DetailRow label={t("misc-supplier-offer")} value={offer?.offer_number || "—"} mono />
+          <DetailRow label={t("misc-quantity")} value={`${fmtNumber(calc.quantity)} ${unitName(calc.unit)}`} mono />
+          <DetailRow label={t("misc-containers")} value={calc.num_containers ? `${calc.num_containers} × ${containerName(calc.container_type)}` : "—"} />
+          <DetailRow label={t("log-loading-port")} value={calc.loading_port || "—"} />
+          <DetailRow label={t("log-delivery-port")} value={calc.delivery_port || "—"} />
+          <DetailRow label={t("misc-exchange-rate")} value={calc.exchange_rate.toString()} mono />
         </div>
       </div>
 
       <div className="pt-3 border-t">
-        <p className="text-xs text-muted-foreground">Created {fmtDate(calc.created_at)}</p>
+        <p className="text-xs text-muted-foreground">{t("misc-created-prefix").replace("${date}", fmtDate(calc.created_at))}</p>
       </div>
     </div>
   );
@@ -814,6 +817,7 @@ function CalcFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [form, setForm] = useState<Partial<TradeCalculation>>({});
   const [lines, setLines] = useState<TradeCostLine[]>([]);
@@ -923,7 +927,7 @@ function CalcFormDialog({
         // we still update to keep rate fresh on currency change.
         set("exchange_rate", Math.round(rate * 10000) / 10000);
         toast.info(
-          `Auto-fetched exchange rate: 1 ${from} = ${rate.toFixed(4)} ${to}`,
+          t("misc-auto-fetched-rate-toast").replace("${from}", from).replace("${rate}", rate.toFixed(4)).replace("${to}", to),
         );
       })
       .finally(() => {
@@ -1043,9 +1047,9 @@ function CalcFormDialog({
         loading_port: f.loading_port || (ctx.supplierOffers?.[0]?.loading_port) || "",
       }));
 
-      toast.success(`Supplier data loaded: ${p.name}`, { description: "Currency, incoterm & preferences auto-filled." });
+      toast.success(t("misc-supplier-data-loaded-toast").replace("${name}", p.name), { description: t("misc-currency-incoterm-autofilled") });
     } catch {
-      toast.error("Failed to load supplier context.");
+      toast.error(t("misc-failed-load-supplier-context"));
       setSupplierContext(null);
     } finally {
       setLoadingSupplier(false);
@@ -1088,10 +1092,10 @@ function CalcFormDialog({
               loading_port: f.loading_port || "",
             }));
           }
-          toast.success("Product data loaded", { description: "Price, unit & HS code auto-filled." });
+          toast.success(t("misc-product-data-loaded-toast"), { description: t("misc-price-unit-hs-autofilled") });
         })
         .catch(() => {
-          toast.error("Failed to load product context.");
+          toast.error(t("misc-failed-load-product-context"));
           setProductContext(null);
         })
         .finally(() => setLoadingProduct(false));
@@ -1163,8 +1167,8 @@ function CalcFormDialog({
     const desc = describeConversion(normOld, normNew);
     setConversionHint(desc);
     if (desc && newQty != null) {
-      toast.info(`Unit converted: ${desc}`, {
-        description: `Quantity & buy price auto-converted (${oldUnit} → ${newUnit}).`,
+      toast.info(t("misc-unit-converted-toast").replace("${desc}", desc), {
+        description: t("misc-qty-price-converted-toast").replace("${old}", oldUnit).replace("${new}", newUnit),
       });
     }
   }
@@ -1208,8 +1212,8 @@ function CalcFormDialog({
       set("transport_mode", "MULTIMODAL");
     }
 
-    toast.info(`Incoterm set to ${incoterm}`, {
-      description: "Loading & delivery locations auto-suggested based on incoterm.",
+    toast.info(t("misc-tc-incoterm-set-toast").replace("${incoterm}", incoterm), {
+      description: t("misc-tc-incoterm-set-desc"),
     });
   }
 
@@ -1276,9 +1280,9 @@ function CalcFormDialog({
     const r = await getExchangeRate(lineCur, buyCur);
     if (r && r > 0) {
       updateLine(idx, { fx_rate: Math.round(r * 10000) / 10000 });
-      toast.success(`Live rate fetched: 1 ${lineCur} = ${r.toFixed(4)} ${buyCur}`);
+      toast.success(t("misc-tc-live-rate-fetched-toast").replace("${from}", lineCur).replace("${rate}", r.toFixed(4)).replace("${to}", buyCur));
     } else {
-      toast.error(`Could not fetch rate for ${lineCur} → ${buyCur}`);
+      toast.error(t("misc-tc-could-not-fetch-rate-toast").replace("${from}", lineCur).replace("${to}", buyCur));
     }
   }
 
@@ -1287,7 +1291,7 @@ function CalcFormDialog({
     const incoterm = form.buy_incoterm || "FOB";
     const suggestions = INCOTERM_COST_SUGGESTIONS[incoterm];
     if (!suggestions || suggestions.length === 0) {
-      toast.info(`No suggestions available for ${incoterm}.`);
+      toast.info(t("misc-tc-no-suggestions-toast").replace("${incoterm}", incoterm));
       return;
     }
 
@@ -1312,11 +1316,11 @@ function CalcFormDialog({
 
     if (added > 0) {
       setLines((arr) => [...arr, ...newLines]);
-      toast.success(`Added ${added} cost line${added > 1 ? "s" : ""} for ${incoterm}`, {
-        description: "Review and adjust values as needed.",
+      toast.success(t("misc-tc-added-cost-lines-toast").replace("${n}", String(added)).replace("${incoterm}", incoterm), {
+        description: t("misc-tc-added-cost-lines-desc"),
       });
     } else {
-      toast.info("All suggested cost lines already exist.");
+      toast.info(t("misc-tc-all-suggestions-exist-toast"));
     }
   }
 
@@ -1480,7 +1484,7 @@ function CalcFormDialog({
   }
 
   async function save() {
-    if (!form.name) { toast.error("Name is required."); return; }
+    if (!form.name) { toast.error(t("misc-tc-name-required")); return; }
     setSaving(true);
     try {
       // Include commission tracking state in the payload — previously the UI
@@ -1505,10 +1509,10 @@ function CalcFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(calc ? "Calculation updated." : "Calculation created.");
+      toast.success(calc ? t("misc-tc-calculation-updated") : t("misc-tc-calculation-created"));
       onSaved();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Saving failed.");
+      toast.error(e instanceof Error ? e.message : t("misc-tc-saving-failed"));
     } finally {
       setSaving(false);
     }
@@ -1520,9 +1524,9 @@ function CalcFormDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-amber-500" />
-            {calc ? "Edit calculation" : "New calculation"}
+            {calc ? t("misc-edit-calculation") : t("misc-new-calculation")}
           </DialogTitle>
-          <DialogDescription>Build a landed cost & margin model with auto-fill and cost line suggestions.</DialogDescription>
+          <DialogDescription>{t("misc-calc-dialog-desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
@@ -1530,27 +1534,27 @@ function CalcFormDialog({
           <div className="lg:col-span-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Name *</Label>
-            <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Sugar IC45 — Brazil → Montenegro (CIF)" />
+            <Label>{t("name")} *</Label>
+            <Input value={form.name || ""} onChange={(e) => set("name", e.target.value)} placeholder={t("misc-name-placeholder-example")} />
           </div>
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Source</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t("misc-source-section")}</p></div>
 
           {/* Product select with auto-fill */}
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              Product
+              {t("misc-product")}
               {loadingProduct && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
               {productContext && !loadingProduct && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                  <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                  <Sparkles className="size-2.5 text-amber-500" /> {t("misc-auto-filled")}
                 </Badge>
               )}
             </Label>
             <ProductPicker
               value={form.product_id || ""}
               onSelect={(p) => selectProduct(p?.id || null)}
-              placeholder="Search products…"
+              placeholder={t("misc-search-products-placeholder")}
               className="h-9"
             />
           </div>
@@ -1570,16 +1574,16 @@ function CalcFormDialog({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                 {productContext.catalogEntry?.base_unit && (
-                  <div className="text-muted-foreground">Unit: {productContext.catalogEntry.base_unit}</div>
+                  <div className="text-muted-foreground">{t("misc-unit-prefix").replace("${unit}", productContext.catalogEntry.base_unit)}</div>
                 )}
                 {productContext.supplierOffers?.length > 0 && (
                   <div className="text-muted-foreground">
-                    {productContext.supplierOffers.length} supplier offer{productContext.supplierOffers.length > 1 ? "s" : ""} available
+                    {t("misc-supplier-offers-count").replace("${n}", String(productContext.supplierOffers.length))}
                   </div>
                 )}
                 {productContext.tradeCalculations?.length > 0 && (
                   <div className="text-muted-foreground">
-                    {productContext.tradeCalculations.length} prior calculation{productContext.tradeCalculations.length > 1 ? "s" : ""}
+                    {t("misc-prior-calculations-count").replace("${n}", String(productContext.tradeCalculations.length))}
                   </div>
                 )}
               </div>
@@ -1587,19 +1591,19 @@ function CalcFormDialog({
           )}
 
           <div className="space-y-1.5">
-            <Label>Supplier offer</Label>
+            <Label>{t("misc-supplier-offer")}</Label>
             <Select
               value={form.supplier_offer_id || "__none__"}
               onValueChange={(v) => selectOffer(v === "__none__" ? null : v)}
             >
-              <SelectTrigger><SelectValue placeholder="Select offer (auto-fills buy price)" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("misc-select-offer-autofill")} /></SelectTrigger>
               <SelectContent className="max-h-72">
-                <SelectItem value="__none__">No offer</SelectItem>
+                <SelectItem value="__none__">{t("misc-no-offer")}</SelectItem>
                 {availableOffers.map((o) => {
                   const sup = partners.find((p) => p.id === o.supplier_id);
                   return (
                     <SelectItem key={o.id} value={o.id}>
-                      {sup?.name || "Unknown"} — {fmtMoney(o.unit_price, o.currency)} {o.incoterm}
+                      {sup?.name || t("misc-unknown")} — {fmtMoney(o.unit_price, o.currency)} {o.incoterm}
                     </SelectItem>
                   );
                 })}
@@ -1610,11 +1614,11 @@ function CalcFormDialog({
           {/* Supplier select with auto-fill */}
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              Supplier
+              {t("misc-supplier-label")}
               {loadingSupplier && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
               {supplierContext && !loadingSupplier && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                  <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                  <Sparkles className="size-2.5 text-amber-500" /> {t("misc-auto-filled")}
                 </Badge>
               )}
             </Label>
@@ -1627,7 +1631,7 @@ function CalcFormDialog({
                 if (sid) fetchSupplierContext(sid);
                 else setSupplierContext(null);
               }}
-              placeholder="Search suppliers…"
+              placeholder={t("misc-search-suppliers-placeholder")}
             />
           </div>
 
@@ -1646,12 +1650,12 @@ function CalcFormDialog({
                 {supplierContext.partner.preferred_incoterm && (
                   <div className="flex items-center gap-1.5">
                     <Ship className="size-3 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">Incoterm: {supplierContext.partner.preferred_incoterm}</span>
+                    <span className="text-muted-foreground">{t("misc-incoterm-prefix").replace("${code}", supplierContext.partner.preferred_incoterm)}</span>
                   </div>
                 )}
                 {supplierContext.partner.preferred_currency && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground">Currency: {supplierContext.partner.preferred_currency}</span>
+                    <span className="text-muted-foreground">{t("misc-currency-prefix").replace("${code}", supplierContext.partner.preferred_currency)}</span>
                   </div>
                 )}
                 {supplierContext.partner.address_line && (
@@ -1662,12 +1666,12 @@ function CalcFormDialog({
                 )}
                 {supplierContext.supplierOffers?.length > 0 && (
                   <div className="text-muted-foreground">
-                    {supplierContext.supplierOffers.length} active offer{supplierContext.supplierOffers.length > 1 ? "s" : ""}
+                    {t("misc-active-offers-count").replace("${n}", String(supplierContext.supplierOffers.length))}
                   </div>
                 )}
                 {supplierContext.tradeCalculations?.length > 0 && (
                   <div className="text-muted-foreground">
-                    {supplierContext.tradeCalculations.length} prior calculation{supplierContext.tradeCalculations.length > 1 ? "s" : ""}
+                    {t("misc-prior-calculations-count").replace("${n}", String(supplierContext.tradeCalculations.length))}
                   </div>
                 )}
               </div>
@@ -1675,26 +1679,26 @@ function CalcFormDialog({
           )}
 
           <div className="space-y-1.5">
-            <Label>Buyer</Label>
+            <Label>{t("misc-buyer-label")}</Label>
             <PartnerPicker
               value={form.buyer_id || ""}
               filterType="buyer"
               onSelect={(p) => set("buyer_id", p?.id || null)}
-              placeholder="Search buyers…"
+              placeholder={t("misc-search-buyers-placeholder")}
             />
           </div>
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Quantity & Transport</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t("misc-quantity-transport-section")}</p></div>
           <div className="space-y-1.5">
-            <Label>Quantity</Label>
+            <Label>{t("misc-quantity")}</Label>
             <Input type="number" min={0} value={form.quantity ?? 0} onChange={(e) => set("quantity", Number(e.target.value))} className="tabular" />
           </div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              Unit
+              {t("misc-unit-label")}
               {conversionHint && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5 text-amber-600 border-amber-500/30">
-                  <ArrowLeftRight className="size-2.5" /> Auto-converted
+                  <ArrowLeftRight className="size-2.5" /> {t("misc-auto-converted")}
                 </Badge>
               )}
             </Label>
@@ -1714,7 +1718,7 @@ function CalcFormDialog({
           {/* Transport mode — drives which fields appear below */}
           <div className="space-y-1.5 md:col-span-2">
             <Label className="flex items-center gap-1.5">
-              Transport mode
+              {t("log-transport-mode")}
               {(() => {
                 const Mode = transportModeIcon(form.transport_mode);
                 return <Mode className="size-3.5 text-muted-foreground" />;
@@ -1723,15 +1727,18 @@ function CalcFormDialog({
             <Select value={form.transport_mode || "SEA"} onValueChange={(v) => set("transport_mode", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ENHANCED_TRANSPORT_MODES.map((t) => (
-                  <SelectItem key={t.code} value={t.code}>
-                    <span className="mr-2">{t.name}</span>
+                {ENHANCED_TRANSPORT_MODES.map((m) => (
+                  <SelectItem key={m.code} value={m.code}>
+                    <span className="mr-2">{t(m.nameKey)}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              {ENHANCED_TRANSPORT_MODES.find((t) => t.code === form.transport_mode)?.hint || "Select a transport mode to see applicable fields."}
+              {(() => {
+                const m = ENHANCED_TRANSPORT_MODES.find((mm) => mm.code === form.transport_mode);
+                return m ? t(m.hintKey) : t("log-select-transport-mode-hint");
+              })()}
             </p>
           </div>
 
@@ -1742,7 +1749,7 @@ function CalcFormDialog({
             !form.transport_mode) && (
             <>
               <div className="space-y-1.5">
-                <Label>Container type</Label>
+                <Label>{t("log-container-type")}</Label>
                 <Select value={form.container_type || "40HC"} onValueChange={(v) => set("container_type", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -1755,7 +1762,7 @@ function CalcFormDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>{form.transport_mode === "RAIL" ? "Num wagons / containers" : "Num containers"}</Label>
+                <Label>{form.transport_mode === "RAIL" ? t("log-num-wagons-containers") : t("log-num-containers")}</Label>
                 <Input type="number" min={0} value={form.num_containers ?? 1} onChange={(e) => set("num_containers", Number(e.target.value))} className="tabular" />
               </div>
             </>
@@ -1765,7 +1772,7 @@ function CalcFormDialog({
           {form.transport_mode === "SEA_BULK" && (
             <>
               <div className="space-y-1.5">
-                <Label>Vessel capacity (MT)</Label>
+                <Label>{t("log-vessel-capacity")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -1773,11 +1780,11 @@ function CalcFormDialog({
                   value={transportExtras.vessel_capacity_mt ?? 0}
                   onChange={(e) => setTransportExtras((s) => ({ ...s, vessel_capacity_mt: Number(e.target.value) }))}
                   className="tabular"
-                  placeholder="e.g. 30000"
+                  placeholder={t("log-vessel-capacity-placeholder")}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Freight rate / MT</Label>
+                <Label>{t("log-freight-rate-per-mt")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -1785,12 +1792,11 @@ function CalcFormDialog({
                   value={transportExtras.freight_rate_per_mt ?? 0}
                   onChange={(e) => setTransportExtras((s) => ({ ...s, freight_rate_per_mt: Number(e.target.value) }))}
                   className="tabular"
-                  placeholder="Freight rate per metric ton"
+                  placeholder={t("log-freight-rate-mt-placeholder")}
                 />
               </div>
               <p className="md:col-span-2 text-[11px] text-muted-foreground">
-                Use the Loading &amp; Delivery port fields below for port of loading / discharge.
-                Vessel capacity &amp; per-MT rate are advisory — add them as a FREIGHT cost line.
+                {t("log-vessel-fields-hint")}
               </p>
             </>
           )}
@@ -1799,21 +1805,21 @@ function CalcFormDialog({
           {form.transport_mode === "ROAD" && (
             <>
               <div className="space-y-1.5">
-                <Label>Truck type</Label>
+                <Label>{t("log-truck-type")}</Label>
                 <Select
                   value={transportExtras.truck_type || "standard"}
                   onValueChange={(v) => setTransportExtras((s) => ({ ...s, truck_type: v }))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-72">
-                    {TRUCK_TYPES.map((t) => (
-                      <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>
+                    {TRUCK_TYPES.map((tt) => (
+                      <SelectItem key={tt.code} value={tt.code}>{t(tt.nameKey)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Num trucks</Label>
+                <Label>{t("log-num-trucks")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -1823,7 +1829,7 @@ function CalcFormDialog({
                 />
               </div>
               <p className="md:col-span-2 text-[11px] text-muted-foreground">
-                Use the Loading port field below for the pickup address and the Delivery port field for the drop-off address.
+                {t("log-truck-fields-hint")}
               </p>
             </>
           )}
@@ -1832,7 +1838,7 @@ function CalcFormDialog({
           {form.transport_mode === "AIR" && (
             <>
               <div className="space-y-1.5">
-                <Label>Chargeable weight (kg)</Label>
+                <Label>{t("log-chargeable-weight")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -1840,22 +1846,22 @@ function CalcFormDialog({
                   value={transportExtras.air_chargeable_weight_kg ?? 0}
                   onChange={(e) => setTransportExtras((s) => ({ ...s, air_chargeable_weight_kg: Number(e.target.value) }))}
                   className="tabular"
-                  placeholder="Greater of gross or volumetric weight"
+                  placeholder={t("log-chargeable-weight-placeholder")}
                 />
               </div>
               <p className="md:col-span-2 text-[11px] text-muted-foreground">
-                Air freight uses IATA AWB. Use Loading &amp; Delivery port fields for origin / destination airports.
+                {t("log-air-fields-hint")}
               </p>
             </>
           )}
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Buy Side</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t("misc-buy-side")}</p></div>
           <div className="space-y-1.5">
-            <Label>Buy price / unit</Label>
+            <Label>{t("misc-buy-price-per-unit")}</Label>
             <Input type="number" min={0} step="0.01" value={form.buy_price_per_unit ?? 0} onChange={(e) => set("buy_price_per_unit", Number(e.target.value))} className="tabular" />
           </div>
           <div className="space-y-1.5">
-            <Label>Buy currency</Label>
+            <Label>{t("misc-buy-currency")}</Label>
             <Select value={form.buy_currency || "USD"} onValueChange={(v) => set("buy_currency", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
@@ -1869,9 +1875,9 @@ function CalcFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              Buy incoterm
+              {t("misc-buy-incoterm")}
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                <Sparkles className="size-2.5 text-amber-500" /> Auto-sets loading
+                <Sparkles className="size-2.5 text-amber-500" /> {t("misc-auto-sets-loading")}
               </Badge>
             </Label>
             <Select value={form.buy_incoterm || "FOB"} onValueChange={handleIncotermChange}>
@@ -1886,21 +1892,21 @@ function CalcFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Loading port</Label>
+            <Label>{t("log-loading-port")}</Label>
             <PortAutocomplete
               value={form.loading_port || ""}
               onChange={(v) => set("loading_port", v)}
-              placeholder="Start typing port name…"
+              placeholder={t("log-port-autocomplete-placeholder")}
             />
           </div>
 
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Sell Side</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t("misc-sell-side")}</p></div>
           <div className="space-y-1.5">
-            <Label>Sell price / unit</Label>
+            <Label>{t("misc-sell-price-per-unit")}</Label>
             <Input type="number" min={0} step="0.01" value={form.sell_price_per_unit ?? 0} onChange={(e) => set("sell_price_per_unit", Number(e.target.value))} className="tabular" />
           </div>
           <div className="space-y-1.5">
-            <Label>Sell currency</Label>
+            <Label>{t("misc-sell-currency")}</Label>
             <Select value={form.sell_currency || "USD"} onValueChange={(v) => set("sell_currency", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
@@ -1913,7 +1919,7 @@ function CalcFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Sell incoterm</Label>
+            <Label>{t("misc-sell-incoterm")}</Label>
             <Select value={form.sell_incoterm || "CIF"} onValueChange={(v) => set("sell_incoterm", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
@@ -1926,16 +1932,16 @@ function CalcFormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Delivery port</Label>
+            <Label>{t("log-delivery-port")}</Label>
             <PortAutocomplete
               value={form.delivery_port || ""}
               onChange={(v) => set("delivery_port", v)}
-              placeholder="Start typing port name…"
+              placeholder={t("log-port-autocomplete-placeholder")}
             />
           </div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              Exchange rate
+              {t("misc-exchange-rate")}
               {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
                   1 {form.buy_currency} = {Number(form.exchange_rate || 0).toFixed(4)} {form.sell_currency}
@@ -1970,28 +1976,28 @@ function CalcFormDialog({
                       const rate = await getExchangeRate(form.buy_currency, form.sell_currency);
                       if (rate !== null) {
                         set("exchange_rate", Math.round(rate * 10000) / 10000);
-                        toast.success(`Fetched 1 ${form.buy_currency} = ${rate.toFixed(4)} ${form.sell_currency}`);
+                        toast.success(t("misc-tc-fetched-exchange-rate-toast").replace("${from}", form.buy_currency || "").replace("${rate}", rate.toFixed(4)).replace("${to}", form.sell_currency || ""));
                       } else {
-                        toast.error("Could not fetch exchange rate. Enter manually.");
+                        toast.error(t("misc-tc-could-not-fetch-exchange-rate-toast"));
                       }
                     } finally {
                       setFetchingRate(false);
                     }
                   }}
-                  title="Fetch live rate from open.er-api.com"
+                  title={t("misc-fetch-live-rate-tooltip")}
                 >
                   {fetchingRate ? (
                     <Loader2 className="size-3.5 animate-spin" />
                   ) : (
                     <RefreshCw className="size-3.5" />
                   )}
-                  <span className="sr-only">Fetch live rate</span>
+                  <span className="sr-only">{t("misc-fetch-live-rate-sr")}</span>
                 </Button>
               )}
             </div>
             {form.buy_currency && form.sell_currency && form.buy_currency !== form.sell_currency && (
               <p className="text-[11px] text-muted-foreground">
-                Auto-fetched live when currencies change. Override manually if needed.
+                {t("misc-exchange-rate-hint")}
               </p>
             )}
           </div>
@@ -2000,19 +2006,19 @@ function CalcFormDialog({
           <div className="md:col-span-2">
             <Separator className="my-1" />
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-muted-foreground">Cost lines (freight, duties, fees…)</p>
+              <p className="text-xs text-muted-foreground">{t("misc-cost-lines-section")}</p>
               <div className="flex items-center gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={applyIncotermSuggestions} title="Auto-suggest cost lines based on selected incoterm">
-                  <Lightbulb className="size-3.5 mr-1" /> Suggest for {form.buy_incoterm || "FOB"}
+                <Button type="button" size="sm" variant="outline" onClick={applyIncotermSuggestions} title={t("misc-suggest-cost-lines-tooltip")}>
+                  <Lightbulb className="size-3.5 mr-1" /> {t("misc-suggest-for-incoterm").replace("${incoterm}", form.buy_incoterm || "FOB")}
                 </Button>
                 <Button type="button" size="sm" variant="outline" onClick={addLine}>
-                  <Plus className="size-3.5 mr-1" /> Add cost line
+                  <Plus className="size-3.5 mr-1" /> {t("misc-add-cost-line")}
                 </Button>
               </div>
             </div>
             {lines.length === 0 ? (
               <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
-                No cost lines. Click &ldquo;Suggest&rdquo; to auto-add based on incoterm, or &ldquo;Add cost line&rdquo; manually.
+                {t("misc-no-cost-lines-hint")}
               </p>
             ) : (
               <div className="space-y-2">
@@ -2048,7 +2054,7 @@ function CalcFormDialog({
                         <Input
                           value={l.label}
                           onChange={(e) => updateLine(idx, { label: e.target.value })}
-                          placeholder="Label"
+                          placeholder={t("misc-label-field")}
                           className="h-9 text-xs"
                         />
                       </div>
@@ -2062,7 +2068,7 @@ function CalcFormDialog({
                           value={l.value}
                           onChange={(e) => updateLine(idx, { value: Number(e.target.value) })}
                           className="h-9 text-xs tabular"
-                          placeholder={l.basis === "percent" ? "%" : "Amount"}
+                          placeholder={l.basis === "percent" ? "%" : t("amount")}
                         />
                       </div>
                       <div className="col-span-3 sm:col-span-1">
@@ -2086,7 +2092,7 @@ function CalcFormDialog({
                           className="h-9 text-xs tabular"
                           placeholder="FX"
                           disabled={!isForeign}
-                          title={isForeign ? `1 ${lineCur} = ${l.fx_rate ?? "—"} ${buyCur}` : "Same currency"}
+                          title={isForeign ? `1 ${lineCur} = ${l.fx_rate ?? "—"} ${buyCur}` : t("misc-same-currency")}
                         />
                         <Button
                           type="button"
@@ -2095,13 +2101,13 @@ function CalcFormDialog({
                           className="size-9 shrink-0"
                           onClick={() => resetLineFx(idx)}
                           disabled={!isForeign}
-                          title={isForeign ? "Reset to live rate" : "Same currency"}
+                          title={isForeign ? t("misc-reset-to-live-rate") : t("misc-same-currency")}
                         >
                           <RefreshCw className={`size-3.5 ${fetchingRate ? "animate-spin" : ""}`} />
                         </Button>
                       </div>
                       <div className="col-span-2 sm:col-span-1 flex justify-end">
-                        <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive" onClick={() => removeLine(idx)} title="Remove" aria-label="Remove">
+                        <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive" onClick={() => removeLine(idx)} title={t("remove")} aria-label={t("remove")}>
                           <X className="size-4" />
                         </Button>
                       </div>
@@ -2118,21 +2124,21 @@ function CalcFormDialog({
           </div>
 
           {/* Payment terms — drives the bank costs calculator below */}
-          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">Payment & Trade Finance</p></div>
+          <div className="md:col-span-2"><Separator className="my-1" /><p className="text-xs text-muted-foreground">{t("misc-payment-trade-finance-section")}</p></div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5">
-              Payment terms
+              {t("misc-payment-terms-label")}
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                <Landmark className="size-2.5" /> Drives bank costs
+                <Landmark className="size-2.5" /> {t("misc-drives-bank-costs")}
               </Badge>
             </Label>
             <Select
               value={paymentTerms || "__none__"}
               onValueChange={(v) => setPaymentTerms(v === "__none__" ? "" : v)}
             >
-              <SelectTrigger><SelectValue placeholder="Select payment terms…" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("misc-select-payment-terms-placeholder")} /></SelectTrigger>
               <SelectContent className="max-h-72">
-                <SelectItem value="__none__">— None —</SelectItem>
+                <SelectItem value="__none__">{t("misc-none-option")}</SelectItem>
                 {PAYMENT_TERMS_LOCAL.map((p) => (
                   <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                 ))}
@@ -2147,7 +2153,7 @@ function CalcFormDialog({
                 <CollapsibleTrigger asChild>
                   <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 hover:bg-muted/50">
                     <Landmark className="size-3.5" />
-                    <span className="text-xs font-medium">Bank / Trade Finance Costs</span>
+                    <span className="text-xs font-medium">{t("misc-bank-trade-finance-costs")}</span>
                     {bankCosts.length > 0 && (
                       <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{bankCosts.length}</Badge>
                     )}
@@ -2161,28 +2167,27 @@ function CalcFormDialog({
                     variant="outline"
                     onClick={() => setShowBankOverrides(true)}
                   >
-                    Edit Rates
+                    {t("misc-edit-rates")}
                   </Button>
                 )}
               </div>
               <CollapsibleContent>
                 {!paymentTerms ? (
                   <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
-                    Select a payment method above to auto-calculate applicable bank/trade finance costs
-                    (LC issuance, advising, confirmation, SWIFT, etc.).
+                    {t("misc-select-payment-method-hint")}
                   </p>
                 ) : bankCosts.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
-                    No bank costs applicable for this payment method.
+                    {t("misc-no-bank-costs-hint")}
                   </p>
                 ) : (
                   <div className="border border-border/60 rounded-md overflow-hidden">
                     <Table>
                       <TableHeader className="bg-muted/40">
                         <TableRow>
-                          <TableHead className="h-8 text-xs">Cost item</TableHead>
-                          <TableHead className="h-8 text-xs">Basis</TableHead>
-                          <TableHead className="h-8 text-xs text-right">Amount</TableHead>
+                          <TableHead className="h-8 text-xs">{t("misc-cost-item")}</TableHead>
+                          <TableHead className="h-8 text-xs">{t("misc-basis-label")}</TableHead>
+                          <TableHead className="h-8 text-xs text-right">{t("amount")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -2198,7 +2203,7 @@ function CalcFormDialog({
                                 )}
                                 {overridden && (
                                   <Badge variant="outline" className="text-[9px] mt-0.5 h-3.5 px-1 gap-0.5 text-amber-600 border-amber-500/30">
-                                    <Sparkles className="size-2" /> Custom rate
+                                    <Sparkles className="size-2" /> {t("misc-custom-rate")}
                                   </Badge>
                                 )}
                               </TableCell>
@@ -2210,7 +2215,7 @@ function CalcFormDialog({
                           );
                         })}
                         <TableRow className="font-semibold bg-muted/20">
-                          <TableCell>Total Bank Costs</TableCell>
+                          <TableCell>{t("misc-total-bank-costs")}</TableCell>
                           <TableCell />
                           <TableCell className="text-right tabular">
                             {fmtMoney(totalBankCosts, form.sell_currency || "USD")}
@@ -2221,8 +2226,7 @@ function CalcFormDialog({
                   </div>
                 )}
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  Based on ICC Banking Commission survey averages. Click &ldquo;Edit Rates&rdquo;
-                  to override per cost item for this calculation.
+                  {t("misc-icc-bank-costs-hint")}
                 </p>
               </CollapsibleContent>
             </Collapsible>
@@ -2236,34 +2240,34 @@ function CalcFormDialog({
                 <CollapsibleTrigger asChild>
                   <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 hover:bg-muted/50">
                     <Send className="size-3.5" />
-                    <span className="text-xs font-medium">International Transfer Fees</span>
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{numTransfers}× transfer{numTransfers > 1 ? "s" : ""}</Badge>
+                    <span className="text-xs font-medium">{t("misc-international-transfer-fees")}</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{t("misc-num-transfers-suffix").replace("${n}", String(numTransfers))}</Badge>
                     <ChevronDown className={`size-3.5 transition-transform ${transferFeesOpen ? "rotate-180" : ""}`} />
                   </Button>
                 </CollapsibleTrigger>
                 {transferFees.length > 0 && (
                   <span className="text-xs text-muted-foreground tabular">
-                    Total: {fmtMoney(totalTransferFees, form.sell_currency || "USD")}
+                    {t("misc-total-prefix").replace("${amount}", fmtMoney(totalTransferFees, form.sell_currency || "USD"))}
                   </span>
                 )}
               </div>
               <CollapsibleContent>
                 {preview.sellTotal <= 0 ? (
                   <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
-                    Enter a sell price &amp; quantity to calculate SWIFT/correspondent/FX-spread fees.
+                    {t("misc-enter-sell-price-hint")}
                   </p>
                 ) : transferFees.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
-                    No transfer fees calculated.
+                    {t("misc-no-transfer-fees-hint")}
                   </p>
                 ) : (
                   <div className="border border-border/60 rounded-md overflow-hidden">
                     <Table>
                       <TableHeader className="bg-muted/40">
                         <TableRow>
-                          <TableHead className="h-8 text-xs">Fee item</TableHead>
-                          <TableHead className="h-8 text-xs">Basis</TableHead>
-                          <TableHead className="h-8 text-xs text-right">Amount</TableHead>
+                          <TableHead className="h-8 text-xs">{t("misc-fee-item")}</TableHead>
+                          <TableHead className="h-8 text-xs">{t("misc-basis-label")}</TableHead>
+                          <TableHead className="h-8 text-xs text-right">{t("amount")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -2279,7 +2283,7 @@ function CalcFormDialog({
                                 )}
                                 {overridden && (
                                   <Badge variant="outline" className="text-[9px] mt-0.5 h-3.5 px-1 gap-0.5 text-amber-600 border-amber-500/30">
-                                    <Sparkles className="size-2" /> Custom
+                                    <Sparkles className="size-2" /> {t("misc-custom-badge")}
                                   </Badge>
                                 )}
                               </TableCell>
@@ -2291,7 +2295,7 @@ function CalcFormDialog({
                           );
                         })}
                         <TableRow className="font-semibold bg-muted/20">
-                          <TableCell>Total Transfer Fees</TableCell>
+                          <TableCell>{t("misc-total-transfer-fees")}</TableCell>
                           <TableCell />
                           <TableCell className="text-right tabular">
                             {fmtMoney(totalTransferFees, form.sell_currency || "USD")}
@@ -2332,7 +2336,7 @@ function CalcFormDialog({
                                     setTransferFeeOverrides(next);
                                   }}
                                 >
-                                  Reset
+                                  {t("reset")}
                                 </Button>
                               )}
                             </div>
@@ -2341,15 +2345,14 @@ function CalcFormDialog({
                       })}
                       {Object.keys(transferFeeOverrides).length > 0 && (
                         <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={resetTransferFeeOverrides}>
-                          Reset All
+                          {t("misc-reset-all")}
                         </Button>
                       )}
                     </div>
                   </div>
                 )}
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  SWIFT, correspondent bank, beneficiary bank &amp; hidden FX-spread costs.
-                  Applies to every international payment — set <strong>×</strong> transfers per payment method.
+                  {t("misc-swift-fees-hint")}
                 </p>
               </CollapsibleContent>
             </Collapsible>
@@ -2362,14 +2365,14 @@ function CalcFormDialog({
                 <CollapsibleTrigger asChild>
                   <Button type="button" variant="ghost" size="sm" className="gap-1 px-2 hover:bg-muted/50">
                     <FileCheck className="size-3.5" />
-                    <span className="text-xs font-medium">Documentation Costs</span>
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{selectedDocIds.length} docs</Badge>
+                    <span className="text-xs font-medium">{t("misc-documentation-costs")}</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{t("misc-num-docs-suffix").replace("${n}", String(selectedDocIds.length))}</Badge>
                     <ChevronDown className={`size-3.5 transition-transform ${docsOpen ? "rotate-180" : ""}`} />
                   </Button>
                 </CollapsibleTrigger>
                 {documentationCosts.length > 0 && (
                   <span className="text-xs text-muted-foreground tabular">
-                    Total: {fmtMoney(totalDocCosts, form.sell_currency || "USD")}
+                    {t("misc-total-prefix").replace("${amount}", fmtMoney(totalDocCosts, form.sell_currency || "USD"))}
                   </span>
                 )}
               </div>
@@ -2377,15 +2380,15 @@ function CalcFormDialog({
                 <div className="border border-border/60 rounded-md overflow-hidden">
                   {documentationCosts.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic py-3 text-center">
-                      No documents selected. Toggle documents below to add.
+                      {t("misc-no-docs-hint")}
                     </p>
                   ) : (
                     <Table>
                       <TableHeader className="bg-muted/40">
                         <TableRow>
-                          <TableHead className="h-8 text-xs">Document</TableHead>
-                          <TableHead className="h-8 text-xs">Category</TableHead>
-                          <TableHead className="h-8 text-xs text-right">Amount</TableHead>
+                          <TableHead className="h-8 text-xs">{t("misc-document-label")}</TableHead>
+                          <TableHead className="h-8 text-xs">{t("misc-category")}</TableHead>
+                          <TableHead className="h-8 text-xs text-right">{t("amount")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -2401,7 +2404,7 @@ function CalcFormDialog({
                                 )}
                                 {overridden && (
                                   <Badge variant="outline" className="text-[9px] mt-0.5 h-3.5 px-1 gap-0.5 text-amber-600 border-amber-500/30">
-                                    <Sparkles className="size-2" /> Custom
+                                    <Sparkles className="size-2" /> {t("misc-custom-badge")}
                                   </Badge>
                                 )}
                               </TableCell>
@@ -2413,7 +2416,7 @@ function CalcFormDialog({
                           );
                         })}
                         <TableRow className="font-semibold bg-muted/20">
-                          <TableCell>Total Documentation</TableCell>
+                          <TableCell>{t("misc-total-documentation")}</TableCell>
                           <TableCell />
                           <TableCell className="text-right tabular">
                             {fmtMoney(totalDocCosts, form.sell_currency || "USD")}
@@ -2446,7 +2449,7 @@ function CalcFormDialog({
                                 <Badge variant="outline" className="text-[9px] h-3 px-1 capitalize">{doc.category}</Badge>
                                 <Badge variant="outline" className="text-[9px] h-3 px-1 font-mono">{doc.basis}</Badge>
                                 {doc.typicallyRequired && (
-                                  <Badge variant="outline" className="text-[9px] h-3 px-1 text-emerald-600 border-emerald-500/30">Typically required</Badge>
+                                  <Badge variant="outline" className="text-[9px] h-3 px-1 text-emerald-600 border-emerald-500/30">{t("misc-typically-required")}</Badge>
                                 )}
                               </div>
                             </div>
@@ -2470,13 +2473,13 @@ function CalcFormDialog({
                     })}
                     {Object.keys(docValueOverrides).length > 0 && (
                       <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px] mt-1" onClick={resetDocOverrides}>
-                        Reset All to Defaults
+                        {t("misc-reset-all-defaults")}
                       </Button>
                     )}
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  Based on DP World / ICC / World Bank trade facilitation data. THC scales with num containers.
+                  {t("misc-doc-costs-hint")}
                 </p>
               </CollapsibleContent>
             </Collapsible>
@@ -2487,26 +2490,26 @@ function CalcFormDialog({
             <Separator className="my-1 mb-2" />
             <div className="border border-border/60 rounded-lg p-3 space-y-3 bg-muted/10">
               <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Percent className="size-3.5" /> Commission (live calculation)
+                <Percent className="size-3.5" /> {t("misc-commission-live-calc")}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 {/* Agent selector */}
                 <div className="space-y-1">
-                  <Label className="text-xs">Commission agent</Label>
+                  <Label className="text-xs">{t("misc-commission-agent-label")}</Label>
                   <Select
                     value={commissionAgentId || "__none__"}
                     onValueChange={(v) => setCommissionAgentId(v === "__none__" ? null : v)}
                   >
                     <SelectTrigger className="h-9 text-xs">
-                      <SelectValue placeholder="Select agent…" />
+                      <SelectValue placeholder={t("misc-select-agent-placeholder")} />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
-                      <SelectItem value="__none__">— None —</SelectItem>
+                      <SelectItem value="__none__">{t("misc-none-option")}</SelectItem>
                       {commissionAgents.map((a) => {
                         const partner = partners.find((p) => p.id === a.partner_id);
                         return (
                           <SelectItem key={a.id} value={a.id}>
-                            {partner?.name || "Unknown agent"} ({a.commission_type})
+                            {partner?.name || t("misc-unknown-agent")} ({a.commission_type})
                           </SelectItem>
                         );
                       })}
@@ -2516,7 +2519,7 @@ function CalcFormDialog({
 
                 {/* Commission type */}
                 <div className="space-y-1">
-                  <Label className="text-xs">Type</Label>
+                  <Label className="text-xs">{t("type")}</Label>
                   <Select
                     value={commissionType}
                     onValueChange={(v) => setCommissionType(v as CommissionTypeLocal)}
@@ -2524,7 +2527,7 @@ function CalcFormDialog({
                     <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {COMMISSION_TYPE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        <SelectItem key={opt.value} value={opt.value}>{t(opt.labelKey)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2533,7 +2536,7 @@ function CalcFormDialog({
                 {/* Rate / amount */}
                 <div className="space-y-1">
                   <Label className="text-xs">
-                    {commissionType.startsWith("percent") ? "Rate (%)" : `Amount (${form.sell_currency || "USD"})`}
+                    {commissionType.startsWith("percent") ? t("misc-rate-percent") : t("misc-amount-currency").replace("${currency}", form.sell_currency || "USD")}
                   </Label>
                   <Input
                     type="number"
@@ -2549,31 +2552,30 @@ function CalcFormDialog({
               {/* Live calculation summary */}
               <div className="bg-background rounded p-2.5 space-y-1 text-xs border border-border/40">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Gross Profit:</span>
+                  <span className="text-muted-foreground">{t("misc-gross-profit-colon")}</span>
                   <span className="font-mono">{fmtMoney(preview.margin, form.sell_currency || "USD")}</span>
                 </div>
                 {totalBankCosts > 0 && (
                   <div className="flex justify-between text-amber-600">
-                    <span>Bank Costs:</span>
+                    <span>{t("misc-bank-costs-colon")}</span>
                     <span className="font-mono">-{fmtMoney(totalBankCosts, form.sell_currency || "USD")}</span>
                   </div>
                 )}
                 {totalTransferFees > 0 && (
                   <div className="flex justify-between text-amber-600">
-                    <span>Transfer Fees:</span>
+                    <span>{t("misc-transfer-fees-colon")}</span>
                     <span className="font-mono">-{fmtMoney(totalTransferFees, form.sell_currency || "USD")}</span>
                   </div>
                 )}
                 {totalDocCosts > 0 && (
                   <div className="flex justify-between text-amber-600">
-                    <span>Documentation:</span>
+                    <span>{t("misc-documentation-colon")}</span>
                     <span className="font-mono">-{fmtMoney(totalDocCosts, form.sell_currency || "USD")}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-border/40 pt-1">
                   <span className="text-muted-foreground">
-                    Profit before commission
-                    {commissionType === "percent_profit" && " (commission base)"}:
+                    {t("misc-profit-before-commission")}{commissionType === "percent_profit" ? t("misc-commission-base-suffix") : ":"}
                   </span>
                   <span className={`font-mono ${profitBeforeCommission >= 0 ? "text-chart-1" : "text-destructive"}`}>
                     {fmtMoney(profitBeforeCommission, form.sell_currency || "USD")}
@@ -2581,49 +2583,49 @@ function CalcFormDialog({
                 </div>
                 <div className="flex justify-between text-amber-600">
                   <span>
-                    Commission
-                    {commissionType === "percent_profit" && ` (${commissionRate}% of profit)`}
-                    {commissionType === "percent_revenue" && ` (${commissionRate}% of revenue)`}
-                    {commissionType === "fixed_per_unit" && ` (${fmtMoney(commissionRate, form.sell_currency || "USD")} × ${fmtNumber(form.quantity || 0)} ${form.unit || "MT"})`}
-                    {commissionType === "fixed_total" && " (fixed)"}
+                    {t("misc-commission-colon")}
+                    {commissionType === "percent_profit" ? t("misc-of-profit").replace("${rate}", String(commissionRate)) : ""}
+                    {commissionType === "percent_revenue" ? t("misc-of-revenue").replace("${rate}", String(commissionRate)) : ""}
+                    {commissionType === "fixed_per_unit" ? ` (${fmtMoney(commissionRate, form.sell_currency || "USD")} × ${fmtNumber(form.quantity || 0)} ${form.unit || "MT"})` : ""}
+                    {commissionType === "fixed_total" ? t("misc-fixed-suffix") : ""}
                     :
                   </span>
                   <span className="font-mono">-{fmtMoney(commissionAmount, form.sell_currency || "USD")}</span>
                 </div>
                 <div className="flex justify-between font-semibold border-t border-border/40 pt-1">
-                  <span>Net Profit:</span>
+                  <span>{t("misc-net-profit-colon")}</span>
                   <span className={`font-mono ${netProfit >= 0 ? "text-chart-1" : "text-destructive"}`}>
                     {fmtMoney(netProfit, form.sell_currency || "USD")}
                   </span>
                 </div>
                 <div className="flex justify-between text-muted-foreground text-[11px]">
-                  <span>Net Margin:</span>
+                  <span>{t("misc-net-margin-colon")}</span>
                   <span>{netMarginPct.toFixed(1)}%</span>
                 </div>
 
                 {/* ±10% variance row */}
                 <div className="grid grid-cols-3 gap-1.5 pt-1.5 mt-1 border-t border-border/40">
                   <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-1.5 text-center">
-                    <div className="text-[10px] text-muted-foreground">Best Case (−10%)</div>
+                    <div className="text-[10px] text-muted-foreground">{t("misc-best-case-minus-10")}</div>
                     <div className={`font-mono font-semibold text-[11px] ${bestCaseProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {fmtMoney(bestCaseProfit, form.sell_currency || "USD")}
                     </div>
                   </div>
                   <div className="rounded border border-blue-500/30 bg-blue-500/5 p-1.5 text-center">
-                    <div className="text-[10px] text-muted-foreground">Expected</div>
+                    <div className="text-[10px] text-muted-foreground">{t("misc-expected")}</div>
                     <div className={`font-mono font-semibold text-[11px] ${netProfit >= 0 ? "text-chart-1" : "text-destructive"}`}>
                       {fmtMoney(netProfit, form.sell_currency || "USD")}
                     </div>
                   </div>
                   <div className="rounded border border-orange-500/30 bg-orange-500/5 p-1.5 text-center">
-                    <div className="text-[10px] text-muted-foreground">Worst Case (+10%)</div>
+                    <div className="text-[10px] text-muted-foreground">{t("misc-worst-case-plus-10")}</div>
                     <div className={`font-mono font-semibold text-[11px] ${worstCaseProfit >= 0 ? "text-orange-600" : "text-red-600"}`}>
                       {fmtMoney(worstCaseProfit, form.sell_currency || "USD")}
                     </div>
                   </div>
                 </div>
                 <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span className="flex items-center gap-1"><Gauge className="size-2.5" /> Variance spread (±10% on bank + transfer + docs):</span>
+                  <span className="flex items-center gap-1"><Gauge className="size-2.5" /> {t("misc-variance-spread-label")}</span>
                   <span className="font-mono">±{fmtMoney(varianceSpread / 2, form.sell_currency || "USD")}</span>
                 </div>
               </div>
@@ -2680,9 +2682,9 @@ function CalcFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("misc-saving-toast") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2692,18 +2694,16 @@ function CalcFormDialog({
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Landmark className="size-4" /> Edit Bank Cost Rates
+              <Landmark className="size-4" /> {t("misc-edit-bank-cost-rates")}
             </DialogTitle>
             <DialogDescription>
-              Override the default rates (ICC Banking Commission averages) for this calculation.
-              Values are percentages (for percent/per_period basis) or fixed amounts in sell currency
-              ({form.sell_currency || "USD"}).
+              {t("misc-edit-bank-cost-rates-desc").replace("${currency}", form.sell_currency || "USD")}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto pr-1">
             {applicableBankCostItems.length === 0 ? (
               <p className="text-sm text-muted-foreground italic py-4 text-center">
-                Select a payment method first to see editable rates.
+                {t("misc-select-payment-method-first")}
               </p>
             ) : (
               <div className="space-y-3">
@@ -2743,7 +2743,7 @@ function CalcFormDialog({
                               setBankCostOverrides(next);
                             }}
                           >
-                            Reset
+                            {t("reset")}
                           </Button>
                         )}
                       </div>
@@ -2755,9 +2755,9 @@ function CalcFormDialog({
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={resetBankCostOverrides}>
-              Reset All to Defaults
+              {t("misc-reset-all-defaults")}
             </Button>
-            <Button onClick={() => setShowBankOverrides(false)}>Done</Button>
+            <Button onClick={() => setShowBankOverrides(false)}>{t("misc-done-label")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

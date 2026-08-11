@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, LogOut, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/store";
 
 interface Impersonation {
   original_super_admin_id: string;
@@ -37,6 +38,7 @@ function useCountdown(expiresAtIso: string | null): string {
 
 export function ImpersonateBanner() {
   const qc = useQueryClient();
+  const t = useT();
   const { data } = useQuery<MeResponse>({
     queryKey: ["me"],
     queryFn: async () => {
@@ -58,12 +60,12 @@ export function ImpersonateBanner() {
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Impersonation ended. Restored super_admin session.");
+      toast.success(t("misc-impersonation-ended"));
       qc.invalidateQueries({ queryKey: ["me"] });
       // Full reload to clear tenant-scoped caches.
       setTimeout(() => window.location.reload(), 400);
     },
-    onError: (e: Error) => toast.error(e.message || "Failed to end impersonation."),
+    onError: (e: Error) => toast.error(e.message || t("misc-impersonation-end-failed")),
   });
 
   if (!imp || !target) return null;
@@ -80,8 +82,8 @@ export function ImpersonateBanner() {
       <div className="mx-auto max-w-[1600px] px-4 py-2 flex items-center gap-3 text-[13px] font-medium">
         <AlertTriangle className="size-4 shrink-0" />
         <span className="truncate">
-          IMPERSONATING as <span className="font-bold">{target.username}</span>
-          {imp.target_tenant_id ? ` · tenant ${imp.target_tenant_id.slice(0, 8)}…` : ""}
+          {t("misc-impersonating-as")} <span className="font-bold">{target.username}</span>
+          {imp.target_tenant_id ? ` · ${t("pf-tenant")} ${imp.target_tenant_id.slice(0, 8)}…` : ""}
         </span>
         <span className="ml-auto flex items-center gap-1.5 opacity-90 tabular">
           <Clock className="size-3.5" />
@@ -100,7 +102,7 @@ export function ImpersonateBanner() {
           )}
         >
           <LogOut className="size-3.5" />
-          End
+          {t("misc-end-impersonation-btn")}
         </button>
       </div>
     </div>

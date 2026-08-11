@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/store";
 
 /**
  * Permission catalog — every module the platform exposes, with the actions
@@ -160,6 +161,7 @@ export function PermissionTree({
   disabled,
   compact,
 }: PermissionTreeProps) {
+  const t = useT();
   const selected = React.useMemo(
     () => new Set(value || []),
     [value]
@@ -216,7 +218,7 @@ export function PermissionTree({
             onCheckedChange={toggleWildcard}
             disabled={disabled}
           />
-          <span className="text-sm font-medium">Full access</span>
+          <span className="text-sm font-medium">{t("admin-perm-full-access")}</span>
           <Badge variant="secondary" className="text-[10px] font-mono">*</Badge>
         </label>
         <div className="flex items-center gap-1">
@@ -234,7 +236,7 @@ export function PermissionTree({
               update(next);
             }}
           >
-            Select all
+            {t("admin-perm-select-all")}
           </Button>
           <Button
             type="button"
@@ -244,7 +246,7 @@ export function PermissionTree({
             disabled={disabled || selected.size === 0}
             onClick={() => update(new Set())}
           >
-            Clear
+            {t("admin-perm-clear")}
           </Button>
         </div>
       </div>
@@ -288,8 +290,8 @@ export function PermissionTree({
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
         <span>
           {hasWildcard
-            ? "Full access — every module and action"
-            : `${selected.size} permission${selected.size === 1 ? "" : "s"} selected`}
+            ? t("admin-perm-full-access-desc")
+            : t("admin-perm-count").replace("{n}", String(selected.size))}
         </span>
         {!hasWildcard && selected.size > 0 && (
           <button
@@ -298,7 +300,7 @@ export function PermissionTree({
             onClick={() => update(new Set())}
             disabled={disabled}
           >
-            Reset to role defaults
+            {t("admin-perm-reset")}
           </button>
         )}
       </div>

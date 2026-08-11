@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/lib/i18n/store";
 
 interface IbanInputProps {
   value: string;
@@ -51,6 +52,7 @@ export function IbanInput({
   disabled,
   entityType,
 }: IbanInputProps) {
+  const t = useT();
   const [status, setStatus] = React.useState<"idle" | "checking" | "valid" | "invalid">("idle");
   const [bankName, setBankName] = React.useState("");
   const [swift, setSwift] = React.useState("");
@@ -146,7 +148,7 @@ export function IbanInput({
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
-              <CheckCircle2 className="size-3 mr-1" /> Valid IBAN
+              <CheckCircle2 className="size-3 mr-1" /> {t("misc-iban-valid")}
             </Badge>
             {country && <Badge variant="secondary">{country}</Badge>}
             {sepa && (
@@ -157,20 +159,20 @@ export function IbanInput({
           </div>
           {bankName && (
             <div className="text-sm">
-              <span className="text-muted-foreground">Bank: </span>
+              <span className="text-muted-foreground">{t("misc-iban-bank-label")}</span>
               <span className="font-medium">{bankName}</span>
             </div>
           )}
           {swift && (
             <div className="text-sm">
-              <span className="text-muted-foreground">Suggested SWIFT/BIC: </span>
+              <span className="text-muted-foreground">{t("misc-iban-swift-label")}</span>
               <span className="font-mono font-medium">{swift}</span>
             </div>
           )}
           {!bankName && (
             <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
               <Info className="size-3.5 shrink-0 mt-0.5" />
-              <span>IBAN is valid but the bank is not in our database. Please enter the SWIFT/BIC manually.</span>
+              <span>{t("misc-iban-bank-not-found")}</span>
             </div>
           )}
         </div>
@@ -180,10 +182,10 @@ export function IbanInput({
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
           <div className="flex items-center gap-2">
             <XCircle className="size-4 text-destructive" />
-            <span className="text-sm font-medium text-destructive">Invalid IBAN</span>
+            <span className="text-sm font-medium text-destructive">{t("misc-iban-invalid")}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Check the IBAN number and try again. The checksum validation failed.
+            {t("misc-iban-check-msg")}
           </p>
         </div>
       )}
@@ -191,9 +193,9 @@ export function IbanInput({
       {entityType && (
         <div className="text-xs text-muted-foreground">
           {entityType === "individual" ? (
-            <span>👤 Personal account — passport or ID card is sufficient.</span>
+            <span>👤 {t("misc-iban-personal")}</span>
           ) : (
-            <span>🏢 Corporate account — trade license and company documents required.</span>
+            <span>🏢 {t("misc-iban-corporate")}</span>
           )}
         </div>
       )}

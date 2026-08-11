@@ -4,6 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/store";
 
 export interface BulkAction {
   key: string;
@@ -31,9 +32,11 @@ export function BulkActionBar({
   count,
   onClear,
   actions,
-  label = "selected",
+  label,
   className,
 }: BulkActionBarProps) {
+  const t = useT();
+  const selectedLabel = label || t("misc-bulk-selected");
   if (count <= 0) return null;
 
   return (
@@ -45,10 +48,10 @@ export function BulkActionBar({
         className,
       )}
       role="region"
-      aria-label="Bulk actions"
+      aria-label={t("misc-bulk-actions-aria")}
     >
       <span className="text-sm font-medium tabular-nums px-1">
-        {count} {label}
+        {count} {selectedLabel}
       </span>
       <div className="h-5 w-px bg-border/60 mx-1" />
       {actions.map((a) => (
@@ -72,8 +75,8 @@ export function BulkActionBar({
         variant="ghost"
         className="size-7 rounded-full"
         onClick={onClear}
-        aria-label="Clear selection"
-        title="Clear selection"
+        aria-label={t("misc-bulk-clear-selection")}
+        title={t("misc-bulk-clear-selection")}
       >
         <X className="size-4" />
       </Button>

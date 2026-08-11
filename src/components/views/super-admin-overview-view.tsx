@@ -36,6 +36,7 @@ import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 import { CURRENCIES, COUNTRIES } from "@/lib/data/reference";
 import { toast } from "sonner";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 type Plan = Tenant["plan"];
 type TenantStatus = Tenant["status"];
@@ -60,8 +61,8 @@ interface OverviewData {
   recent_activity: AuditLog[];
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  trial: "Trial", starter: "Starter", business: "Business", enterprise: "Enterprise",
+const PLAN_LABEL_KEYS: Record<string, string> = {
+  trial: "pf-plan-trial", starter: "pf-plan-starter", business: "pf-plan-business", enterprise: "pf-plan-enterprise",
 };
 
 const PLAN_BADGE: Record<string, string> = {
@@ -71,8 +72,8 @@ const PLAN_BADGE: Record<string, string> = {
   enterprise: "bg-primary/10 text-primary border-primary/30",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  active: "Active", suspended: "Suspended", cancelled: "Cancelled",
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  active: "active", suspended: "pf-status-suspended", cancelled: "pf-status-cancelled",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -123,6 +124,7 @@ function CompanyDialog({
 }) {
   const [form, setForm] = useState<CompanyForm>(initial);
   const [saving, setSaving] = useState(false);
+  const t = useT();
 
   // Reset form when dialog opens
   useState(() => { setForm(initial); });
@@ -132,13 +134,13 @@ function CompanyDialog({
   }
 
   async function handleSave() {
-    if (!form.name.trim()) { toast.error("Name is required."); return; }
+    if (!form.name.trim()) { toast.error(t("pf-name-required")); return; }
     setSaving(true);
     try {
       await onSubmit(form);
       onOpenChange(false);
     } catch (e: any) {
-      toast.error(e.message || "Failed to save.");
+      toast.error(e.message || t("pf-save-failed"));
     } finally {
       setSaving(false);
     }
@@ -149,21 +151,21 @@ function CompanyDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Enter the company details below.</DialogDescription>
+          <DialogDescription>{t("pf-enter-company-details")}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Name *</Label>
-            <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Acme Inc." />
+            <Label>{t("pf-name-label")}</Label>
+            <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={t("pf-name-placeholder")} />
           </div>
           <div className="md:col-span-2 space-y-1.5">
-            <Label>Legal Name</Label>
-            <Input value={form.legal_name} onChange={(e) => set("legal_name", e.target.value)} placeholder="Acme Corporation Ltd." />
+            <Label>{t("pf-legal-name-label")}</Label>
+            <Input value={form.legal_name} onChange={(e) => set("legal_name", e.target.value)} placeholder={t("pf-company-legal-placeholder")} />
           </div>
           <div className="space-y-1.5">
-            <Label>Country</Label>
+            <Label>{t("pf-country")}</Label>
             <Select value={form.country || "_none"} onValueChange={(v) => set("country", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("pf-select-ellipsis")} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">—</SelectItem>
                 {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
@@ -171,7 +173,7 @@ function CompanyDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Currency</Label>
+            <Label>{t("pf-currency")}</Label>
             <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -180,29 +182,29 @@ function CompanyDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Plan</Label>
+            <Label>{t("pf-plan")}</Label>
             <Select value={form.plan} onValueChange={(v) => set("plan", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {PLAN_OPTIONS.map((p) => <SelectItem key={p} value={p}>{PLAN_LABELS[p]}</SelectItem>)}
+                {PLAN_OPTIONS.map((p) => <SelectItem key={p} value={p}>{t(PLAN_LABEL_KEYS[p])}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Status</Label>
+            <Label>{t("status")}</Label>
             <Select value={form.status} onValueChange={(v) => set("status", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
+                {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{t(STATUS_LABEL_KEYS[s])}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="size-4 mr-1.5 animate-spin" />}
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("pf-saving") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -222,6 +224,7 @@ function ViewUsersDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["tenant-users", tenantKey, tenantId],
@@ -238,21 +241,21 @@ function ViewUsersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Users — {tenantName}</DialogTitle>
-          <DialogDescription>All users assigned to this tenant.</DialogDescription>
+          <DialogTitle>{t("pf-users-of-tenant").replace("{tenant}", tenantName)}</DialogTitle>
+          <DialogDescription>{t("pf-users-of-tenant-desc")}</DialogDescription>
         </DialogHeader>
         <div className="max-h-72 overflow-y-auto custom-scroll">
           {isLoading ? (
             <div className="space-y-2 p-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
           ) : !users || users.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No users found.</p>
+            <p className="text-sm text-muted-foreground text-center py-6">{t("pf-no-users-found")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("pf-role")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -267,7 +270,7 @@ function ViewUsersDialog({
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={u.active ? "bg-chart-1/15 text-chart-1 border-chart-1/30" : "bg-muted text-muted-foreground"}>
-                        {u.active ? "Active" : "Inactive"}
+                        {u.active ? t("active") : t("inactive")}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -277,7 +280,7 @@ function ViewUsersDialog({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("close")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -297,6 +300,7 @@ function AssignAdminDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [userId, setUserId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -320,7 +324,7 @@ function AssignAdminDialog({
   }, [allUsers, tenantId]);
 
   async function handleAssign() {
-    if (!userId) { toast.error("Select a user."); return; }
+    if (!userId) { toast.error(t("pf-user-select-required")); return; }
     setSaving(true);
     try {
       const r = await fetch(api("/api/users"), {
@@ -330,13 +334,13 @@ function AssignAdminDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to assign admin");
+        throw new Error(e.error || t("pf-assign-admin-failed"));
       }
-      toast.success("Admin assigned successfully.");
+      toast.success(t("pf-admin-assigned"));
       onAssigned();
       onOpenChange(false);
     } catch (e: any) {
-      toast.error(e.message || "Failed to assign admin.");
+      toast.error(e.message || t("pf-assign-admin-failed"));
     } finally {
       setSaving(false);
     }
@@ -346,14 +350,14 @@ function AssignAdminDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Assign Admin — {tenantName}</DialogTitle>
-          <DialogDescription>Promote a user to admin for this tenant. Max 2 admins per tenant.</DialogDescription>
+          <DialogTitle>{t("pf-assign-admin-title").replace("{tenant}", tenantName)}</DialogTitle>
+          <DialogDescription>{t("pf-assign-admin-desc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label>Select User</Label>
+            <Label>{t("pf-select-user")}</Label>
             <Select value={userId} onValueChange={setUserId}>
-              <SelectTrigger><SelectValue placeholder="Choose a user…" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("pf-choose-user-placeholder")} /></SelectTrigger>
               <SelectContent>
                 {availableUsers.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
@@ -365,10 +369,10 @@ function AssignAdminDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={handleAssign} disabled={saving || !userId}>
             {saving && <Loader2 className="size-4 mr-1.5 animate-spin" />}
-            Assign Admin
+            {t("pf-assign-admin-btn")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -381,6 +385,7 @@ function AssignAdminDialog({
 export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const setView = useAppStore((s) => s.setView);
@@ -413,7 +418,7 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
     for (const ts of data.tenants) {
       counts[ts.tenant.plan] = (counts[ts.tenant.plan] || 0) + 1;
     }
-    return Object.entries(counts).map(([plan, count]) => ({ plan, count, label: PLAN_LABELS[plan] || plan }));
+    return Object.entries(counts).map(([plan, count]) => ({ plan, count, label: plan }));
   }, [data]);
 
   // Storage estimate (rough: partners + offers + invoices × average size)
@@ -432,9 +437,9 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
     });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw new Error(e.error || "Failed to create tenant");
+      throw new Error(e.error || t("pf-tenant-create-failed"));
     }
-    toast.success("Company created.");
+    toast.success(t("pf-company-created"));
     queryClient.invalidateQueries({ queryKey: ["super-admin-overview", tenantKey] });
   }
 
@@ -447,9 +452,9 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
     });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw new Error(e.error || "Failed to update tenant");
+      throw new Error(e.error || t("pf-tenant-update-failed"));
     }
-    toast.success("Company updated.");
+    toast.success(t("pf-company-updated"));
     setEditTenant(null);
     queryClient.invalidateQueries({ queryKey: ["super-admin-overview", tenantKey] });
   }
@@ -459,34 +464,34 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
     const r = await fetch(api(`/api/tenants/${deleteTenant.tenant.id}`), { method: "DELETE" });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw new Error(e.error || "Failed to delete tenant");
+      throw new Error(e.error || t("pf-tenant-delete-failed"));
     }
-    toast.success("Company deleted.");
+    toast.success(t("pf-company-deleted"));
     setDeleteTenant(null);
     queryClient.invalidateQueries({ queryKey: ["super-admin-overview", tenantKey] });
   }
 
-  function handleSwitchTenant(t: Tenant) {
+  function handleSwitchTenant(tnt: Tenant) {
     // Store tenant context via query param — the URL and resolveTenantId will pick it up
     const url = new URL(window.location.href);
-    url.searchParams.set("tenant_id", t.id);
+    url.searchParams.set("tenant_id", tnt.id);
     window.history.pushState({}, "", url.toString());
-    toast.success(`Switched context to ${t.name}. Reload to apply.`);
+    toast.success(t("pf-switch-context").replace("{name}", tnt.name));
   }
 
   if (!isSuper) {
     return (
       <div>
-        <PageHeader title="System Overview" description="Monitor all tenants and platform activity." />
+        <PageHeader title={t("pf-system-overview")} description={t("pf-system-overview-desc")} />
         <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
           <CardContent className="p-6 flex items-start gap-3">
             <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
               <ShieldAlert className="size-5" />
             </div>
             <div>
-              <p className="font-medium">Super-admin access required.</p>
+              <p className="font-medium">{t("pf-superadmin-required")}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                This dashboard is restricted to platform super-administrators. Contact your platform operator if you believe this is an error.
+                {t("pf-superadmin-required-desc")}
               </p>
             </div>
           </CardContent>
@@ -498,7 +503,7 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
   if (isLoading || !data) {
     return (
       <div>
-        <PageHeader title="System Overview" description="Monitor all tenants and platform activity." />
+        <PageHeader title={t("pf-system-overview")} description={t("pf-system-overview-desc")} />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
@@ -513,15 +518,15 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
   return (
     <div>
       {!embedded ? <PageHeader
-        title="System Overview"
-        description="Monitor all tenants and platform activity."
+        title={t("pf-system-overview")}
+        description={t("pf-system-overview-desc")}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="size-4 mr-1" /> Create Company
+              <Plus className="size-4 mr-1" /> {t("pf-create-company")}
             </Button>
             <Button variant="outline" onClick={() => setView("platform-dashboard")}>
-              <Building2 className="size-4 mr-1" /> Manage Tenants
+              <Building2 className="size-4 mr-1" /> {t("pf-manage-tenants")}
             </Button>
           </div>
         }
@@ -533,7 +538,7 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
         onOpenChange={setCreateOpen}
         initial={EMPTY_COMPANY}
         onSubmit={handleCreateCompany}
-        title="Create Company"
+        title={t("pf-create-company")}
       />
 
       {/* Edit Company Dialog */}
@@ -550,7 +555,7 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
             status: editTenant.tenant.status,
           }}
           onSubmit={handleEditCompany}
-          title="Edit Company"
+          title={t("pf-edit-company")}
         />
       )}
 
@@ -558,24 +563,24 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
       <AlertDialog open={!!deleteTenant} onOpenChange={(v) => { if (!v) setDeleteTenant(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Company</AlertDialogTitle>
+            <AlertDialogTitle>{t("pf-delete-company")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{deleteTenant?.tenant.name}</strong>?
+              {t("pf-delete-company-confirm").replace("{name}", deleteTenant?.tenant.name || "")}
               {deleteTenant && deleteTenant.user_count > 0 && (
                 <span className="block mt-2 text-destructive font-medium">
-                  This tenant has {deleteTenant.user_count} user(s). Remove all users first.
+                  {t("pf-delete-company-user-warning").replace("{n}", String(deleteTenant.user_count))}
                 </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteTenant}
               disabled={!!deleteTenant && deleteTenant.user_count > 0}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -605,27 +610,27 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <KpiCard
-          label="Total Tenants"
+          label={t("pf-total-tenants")}
           value={fmtNumber(data.total_tenants)}
-          sub={`${data.active_tenants} active · ${activeRate}%`}
+          sub={t("pf-total-tenants-sub").replace("{n}", String(data.active_tenants)).replace("{pct}", String(activeRate))}
           icon={Building2}
         />
         <KpiCard
-          label="Total Users"
+          label={t("pf-total-users")}
           value={fmtNumber(data.total_users)}
-          sub="Across all tenants"
+          sub={t("pf-across-all-tenants")}
           icon={Users}
         />
         <KpiCard
-          label="Total Partners"
+          label={t("pf-total-partners")}
           value={fmtNumber(data.total_partners)}
-          sub="CRM contacts"
+          sub={t("pf-total-partners-sub")}
           icon={Handshake}
         />
         <KpiCard
-          label="Total Offers"
+          label={t("pf-total-offers")}
           value={fmtNumber(data.total_offers)}
-          sub={`${fmtNumber(data.total_invoices)} invoices`}
+          sub={t("pf-total-offers-sub").replace("{n}", fmtNumber(data.total_invoices))}
           icon={FileText}
         />
       </div>
@@ -636,13 +641,13 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
           <div className="flex items-center justify-between gap-2">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <Server className="size-4 text-primary" /> Tenant Registry
+                <Server className="size-4 text-primary" /> {t("pf-tenant-registry")}
               </CardTitle>
               <CardDescription className="text-xs mt-1">
-                All tenants on the platform with live counters.
+                {t("pf-tenant-registry-desc")}
               </CardDescription>
             </div>
-            <Badge variant="outline" className="tabular">{data.tenants.length} tenants</Badge>
+            <Badge variant="outline" className="tabular">{t("pf-tenants-count-badge").replace("{n}", String(data.tenants.length))}</Badge>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -650,15 +655,15 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
             <Table>
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="hidden md:table-cell">Country</TableHead>
-                  <TableHead className="hidden lg:table-cell">Currency</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Users</TableHead>
-                  <TableHead className="text-right hidden sm:table-cell">Partners</TableHead>
-                  <TableHead className="hidden xl:table-cell">Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t("pf-country")}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t("pf-currency")}</TableHead>
+                  <TableHead>{t("pf-plan")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead className="text-right">{t("pf-users")}</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">{t("pf-partners")}</TableHead>
+                  <TableHead className="hidden xl:table-cell">{t("pf-created")}</TableHead>
+                  <TableHead className="text-right">{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -691,13 +696,13 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={PLAN_BADGE[ts.tenant.plan] || ""}>
-                        {PLAN_LABELS[ts.tenant.plan] || ts.tenant.plan}
+                        {t(PLAN_LABEL_KEYS[ts.tenant.plan] || "pf-plan")}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={STATUS_BADGE[ts.tenant.status] || ""}>
                         <CircleDot className="size-3 mr-1" />
-                        {STATUS_LABELS[ts.tenant.status] || ts.tenant.status}
+                        {t(STATUS_LABEL_KEYS[ts.tenant.status] || "status")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular text-sm">{ts.user_count}</TableCell>
@@ -707,19 +712,19 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditTenant(ts)} title="Edit">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditTenant(ts)} title={t("edit")}>
                           <Pencil className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewUsersTenant(ts)} title="View Users">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewUsersTenant(ts)} title={t("pf-view-users")}>
                           <Eye className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setAssignAdminTenant(ts)} title="Assign Admin">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setAssignAdminTenant(ts)} title={t("pf-assign-admin")}>
                           <ShieldCheck className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleSwitchTenant(ts.tenant)} title="Switch to Tenant">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleSwitchTenant(ts.tenant)} title={t("pf-switch-tenant")}>
                           <Repeat className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteTenant(ts)} title="Delete">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setDeleteTenant(ts)} title={t("delete")}>
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
@@ -742,11 +747,11 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="size-4 text-primary" /> Platform Activity
+              <Activity className="size-4 text-primary" /> {t("pf-platform-activity")}
             </CardTitle>
-            <CardDescription className="text-xs">Full cross-tenant audit log — filter by user, action, entity. Live.</CardDescription>
+            <CardDescription className="text-xs">{t("pf-platform-activity-desc")}</CardDescription>
           </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">Open Platform Audit →</CardContent>
+          <CardContent className="text-xs text-muted-foreground">{t("pf-open-platform-audit")}</CardContent>
         </Card>
 
         <Card
@@ -755,18 +760,18 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Heart className="size-4 text-primary" /> Platform Health
+              <Heart className="size-4 text-primary" /> {t("pf-platform-health-card")}
             </CardTitle>
-            <CardDescription className="text-xs">Active/inactive tenants, plan distribution, storage, DB status.</CardDescription>
+            <CardDescription className="text-xs">{t("pf-platform-health-card-desc")}</CardDescription>
           </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">Open Platform Health →</CardContent>
+          <CardContent className="text-xs text-muted-foreground">{t("pf-open-platform-health")}</CardContent>
         </Card>
       </div>
 
       {/* Footer note */}
       <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
         <Clock className="size-3" />
-        <span>Snapshot loaded <span className="tabular">{fmtDateTime(new Date().toISOString())}</span></span>
+        <span>{t("pf-snapshot-loaded")} <span className="tabular">{fmtDateTime(new Date().toISOString())}</span></span>
       </div>
     </div>
   );

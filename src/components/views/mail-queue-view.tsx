@@ -39,23 +39,25 @@ import { useAppStore, isAdmin } from "@/lib/store/app-store";
 import type { MailQueueEntry, MailStatus } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
-const STATUS_META: Record<MailStatus, { label: string; className: string; icon: typeof Clock }> = {
-  queued: { label: "Queued", className: "bg-[var(--chart-4)] text-black", icon: Clock },
-  sending: { label: "Sending", className: "bg-[var(--chart-1)] text-white", icon: Loader2 },
-  sent: { label: "Sent", className: "bg-emerald-600 text-white", icon: CheckCircle2 },
-  failed: { label: "Failed", className: "bg-destructive text-white", icon: XCircle },
+const STATUS_META: Record<MailStatus, { labelKey: string; className: string; icon: typeof Clock }> = {
+  queued: { labelKey: "admin-mail-queued", className: "bg-[var(--chart-4)] text-black", icon: Clock },
+  sending: { labelKey: "admin-mail-sending", className: "bg-[var(--chart-1)] text-white", icon: Loader2 },
+  sent: { labelKey: "admin-mail-sent", className: "bg-emerald-600 text-white", icon: CheckCircle2 },
+  failed: { labelKey: "admin-failed", className: "bg-destructive text-white", icon: XCircle },
 };
 
 function AdminRequired() {
+  const t = useT();
   return (
     <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10">
       <CardContent className="p-6 flex items-start gap-3">
         <Lock className="size-5 text-amber-600 mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Admin access required</p>
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t("admin-access-required")}</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            The mail queue monitor is only available to administrators.
+            {t("admin-mail-admin-only-desc")}
           </p>
         </div>
       </CardContent>
@@ -66,6 +68,7 @@ function AdminRequired() {
 export function MailQueueView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const user = useAppStore((s) => s.user);
   const admin = isAdmin(user);
@@ -102,32 +105,32 @@ export function MailQueueView() {
           error: null,
         }),
       });
-      if (!r.ok) throw new Error("Failed to retry");
+      if (!r.ok) throw new Error(t("admin-mail-retry-failed-toast"));
     },
     onSuccess: () => {
-      toast.success("Email queued for retry.");
+      toast.success(t("admin-mail-retry-toast"));
       qc.invalidateQueries({ queryKey: ["mail-queue", tenantKey] });
     },
-    onError: () => toast.error("Retry failed."),
+    onError: () => toast.error(t("admin-mail-retry-failed-toast")),
   });
 
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
       const r = await fetch(api(`/api/mail-queue/${id}`), { method: "DELETE" });
-      if (!r.ok) throw new Error("Failed to delete email");
+      if (!r.ok) throw new Error(t("admin-mail-delete-failed-toast"));
     },
     onSuccess: () => {
-      toast.success("Email deleted.");
+      toast.success(t("admin-mail-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["mail-queue", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Failed to delete email."),
+    onError: () => toast.error(t("admin-mail-delete-failed-toast")),
   });
 
   if (!admin) {
     return (
       <div>
-        <PageHeader title="Mail Queue" description="Monitor outgoing email delivery." />
+        <PageHeader title={t("admin-mail-title")} description={t("admin-mail-desc")} />
         <AdminRequired />
       </div>
     );
@@ -147,41 +150,41 @@ export function MailQueueView() {
   return (
     <div>
       <PageHeader
-        title="Mail Queue"
-        description="Monitor outgoing email delivery."
+        title={t("admin-mail-title")}
+        description={t("admin-mail-desc")}
         actions={
           <Button onClick={() => setShowCompose(true)}>
-            <Plus className="size-4 mr-1" /> Compose
+            <Plus className="size-4 mr-1" /> {t("admin-mail-compose")}
           </Button>
         }
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <KpiCard
-          label="Queued"
+          label={t("admin-mail-queued")}
           value={queued}
           icon={Inbox}
-          sub="Waiting to send"
+          sub={t("admin-mail-kpi-queued-sub")}
         />
         <KpiCard
-          label="Sent (24h)"
+          label={t("admin-mail-kpi-sent24h")}
           value={sent24h}
           icon={CheckCircle2}
           iconClassName="text-success"
-          sub="Last 24 hours"
+          sub={t("admin-mail-kpi-sent24h-sub")}
         />
         <KpiCard
-          label="Failed"
+          label={t("admin-failed")}
           value={failed}
           icon={XCircle}
           iconClassName={failed > 0 ? "text-destructive" : undefined}
-          sub="Needs attention"
+          sub={t("admin-mail-kpi-failed-sub")}
         />
         <KpiCard
-          label="Total"
+          label={t("total")}
           value={total}
           icon={Mail}
-          sub="All in current view"
+          sub={t("admin-mail-kpi-total-sub")}
         />
       </div>
 
@@ -190,20 +193,20 @@ export function MailQueueView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by recipient or subject…"
+              placeholder={t("admin-mail-search-placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full md:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-40"><SelectValue placeholder={t("admin-col-status")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="queued">Queued</SelectItem>
-              <SelectItem value="sending">Sending</SelectItem>
-              <SelectItem value="sent">Sent</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="all">{t("admin-mail-all-statuses")}</SelectItem>
+              <SelectItem value="queued">{t("admin-mail-queued")}</SelectItem>
+              <SelectItem value="sending">{t("admin-mail-sending")}</SelectItem>
+              <SelectItem value="sent">{t("admin-mail-sent")}</SelectItem>
+              <SelectItem value="failed">{t("admin-failed")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -218,11 +221,11 @@ export function MailQueueView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Mail className="size-6" />}
-              title="No emails"
-              description="The mail queue is empty for the current filter."
+              title={t("admin-mail-empty-title")}
+              description={t("admin-mail-empty-desc")}
               action={
                 <Button onClick={() => setShowCompose(true)}>
-                  <Plus className="size-4 mr-1" /> Compose
+                  <Plus className="size-4 mr-1" /> {t("admin-mail-compose")}
                 </Button>
               }
             />
@@ -231,14 +234,14 @@ export function MailQueueView() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>To</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden md:table-cell">Attempts</TableHead>
-                    <TableHead className="hidden lg:table-cell">Error</TableHead>
-                    <TableHead className="hidden md:table-cell">Created</TableHead>
-                    <TableHead className="hidden lg:table-cell">Sent</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("admin-mail-col-to")}</TableHead>
+                    <TableHead>{t("admin-mail-subject")}</TableHead>
+                    <TableHead>{t("admin-col-status")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("admin-mail-col-attempts")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-mail-col-error")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("admin-col-created")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-mail-sent-at")}</TableHead>
+                    <TableHead className="text-right">{t("admin-col-actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -255,7 +258,7 @@ export function MailQueueView() {
                         <TableCell className="text-sm truncate max-w-[240px]">{m.subject || "—"}</TableCell>
                         <TableCell>
                           <Badge className={meta.className + " gap-1"}>
-                            <Icon className="size-3" /> {meta.label}
+                            <Icon className="size-3" /> {t(meta.labelKey)}
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden md:table-cell tabular text-sm">{m.attempts}</TableCell>
@@ -266,10 +269,10 @@ export function MailQueueView() {
                         <TableCell className="hidden lg:table-cell text-xs">{fmtRelative(m.sent_at)}</TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(m.id)} title="View">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(m.id)} title={t("view")}>
                               <Eye className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(m.id)} title="Delete">
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(m.id)} title={t("delete")}>
                               <Trash2 className="size-4" />
                             </Button>
                           </div>
@@ -290,9 +293,9 @@ export function MailQueueView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Mail className="size-5" />
-              {detailItem?.subject || "Email"}
+              {detailItem?.subject || t("admin-mail-detail-default-title")}
             </SheetTitle>
-            <SheetDescription>Queue entry detail</SheetDescription>
+            <SheetDescription>{t("admin-mail-detail-desc")}</SheetDescription>
           </SheetHeader>
           {isLoading ? (
             <div className="p-4 space-y-3">
@@ -305,8 +308,8 @@ export function MailQueueView() {
             <div className="p-4">
               <EmptyState
                 icon={<Mail className="size-6" />}
-                title="Email not found"
-                description="This email may have been deleted or is not in the current view."
+                title={t("admin-mail-detail-not-found-title")}
+                description={t("admin-mail-detail-not-found-desc")}
               />
             </div>
           )}
@@ -325,18 +328,18 @@ export function MailQueueView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this email?</AlertDialogTitle>
+            <AlertDialogTitle>{t("admin-mail-delete-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              The email will be removed from the queue permanently. If it has not been sent yet, the recipient will not receive it.
+              {t("admin-mail-delete-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -353,42 +356,43 @@ function MailDetail({
   onRetry: () => void;
   retrying: boolean;
 }) {
+  const t = useT();
   const meta = STATUS_META[entry.status];
   const Icon = meta.icon;
   return (
     <div className="px-4 pb-6 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Badge className={meta.className + " gap-1"}>
-          <Icon className="size-3" /> {meta.label}
+          <Icon className="size-3" /> {t(meta.labelKey)}
         </Badge>
         <Badge variant="outline" className="gap-1">
-          <RotateCcw className="size-3" /> {entry.attempts} attempt{entry.attempts === 1 ? "" : "s"}
+          <RotateCcw className="size-3" /> {entry.attempts} {t("admin-mail-attempt-suffix")}
         </Badge>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <Card><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">To</p>
+          <p className="text-xs text-muted-foreground">{t("admin-mail-recipient")}</p>
           <p className="text-sm font-medium truncate">{entry.to_email}</p>
         </CardContent></Card>
         <Card><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Created</p>
+          <p className="text-xs text-muted-foreground">{t("admin-col-created")}</p>
           <p className="text-sm">{fmtDateTime(entry.created_at)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Sent</p>
+          <p className="text-xs text-muted-foreground">{t("admin-mail-sent-at")}</p>
           <p className="text-sm">{fmtDateTime(entry.sent_at)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Last error</p>
+          <p className="text-xs text-muted-foreground">{t("admin-mail-detail-last-error")}</p>
           <p className="text-sm text-destructive truncate" title={entry.error || ""}>{entry.error || "—"}</p>
         </CardContent></Card>
       </div>
 
       <div>
-        <p className="text-xs text-muted-foreground mb-1">Body</p>
+        <p className="text-xs text-muted-foreground mb-1">{t("admin-mail-detail-body")}</p>
         <pre className="text-xs font-mono whitespace-pre-wrap p-3 rounded-md bg-muted/50 border border-border/60 max-h-[400px] overflow-y-auto custom-scroll">
-{entry.body || "(empty body)"}
+{entry.body || t("admin-mail-detail-empty-body")}
         </pre>
       </div>
 
@@ -396,9 +400,9 @@ function MailDetail({
         <div className="rounded-md border border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 p-3 flex items-start gap-2">
           <AlertTriangle className="size-4 text-amber-600 mt-0.5 shrink-0" />
           <div>
-            <p className="text-xs font-medium text-amber-900 dark:text-amber-200">Retry sending</p>
+            <p className="text-xs font-medium text-amber-900 dark:text-amber-200">{t("admin-mail-detail-retry-title")}</p>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-              This will reset the attempt counter and re-queue the email.
+              {t("admin-mail-detail-retry-desc")}
             </p>
           </div>
         </div>
@@ -411,7 +415,7 @@ function MailDetail({
           onClick={onRetry}
           disabled={retrying || entry.status === "sending"}
         >
-          <RotateCcw className="size-4 mr-1" /> {retrying ? "Retrying…" : "Retry sending"}
+          <RotateCcw className="size-4 mr-1" /> {retrying ? t("admin-mail-detail-retrying") : t("admin-mail-detail-retry-title")}
         </Button>
       </div>
     </div>
@@ -428,6 +432,7 @@ function ComposeDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
@@ -443,9 +448,9 @@ function ComposeDialog({
   }, [open]);
 
   async function save() {
-    if (!to.trim()) { toast.error("Recipient is required."); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) { toast.error("Recipient email is not valid."); return; }
-    if (!subject.trim()) { toast.error("Subject is required."); return; }
+    if (!to.trim()) { toast.error(t("admin-mail-recipient-required")); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) { toast.error(t("admin-mail-recipient-invalid")); return; }
+    if (!subject.trim()) { toast.error(t("admin-mail-subject-required")); return; }
     setSaving(true);
     try {
       const r = await fetch(api("/api/mail-queue"), {
@@ -461,12 +466,12 @@ function ComposeDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to queue email");
+        throw new Error(e.error || t("admin-mail-save-failed"));
       }
-      toast.success("Email queued.");
+      toast.success(t("admin-mail-queued-toast"));
       onSaved();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to queue email";
+      const msg = e instanceof Error ? e.message : t("admin-mail-save-failed");
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -478,37 +483,37 @@ function ComposeDialog({
       <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Send className="size-5" /> Compose email
+            <Send className="size-5" /> {t("admin-mail-compose-title")}
           </DialogTitle>
-          <DialogDescription>Queue a manual email for sending.</DialogDescription>
+          <DialogDescription>{t("admin-mail-compose-desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 py-2">
           <div className="space-y-1.5">
-            <Label>To *</Label>
-            <Input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="recipient@example.com" />
+            <Label>{t("admin-mail-recipient")} *</Label>
+            <Input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder={t("admin-mail-form-to-placeholder")} />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Subject *</Label>
-            <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject line" />
+            <Label>{t("admin-mail-subject")} *</Label>
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("admin-mail-form-subject-placeholder")} />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Body</Label>
+            <Label>{t("admin-mail-detail-body")}</Label>
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={8}
-              placeholder="Write your email…"
+              placeholder={t("admin-mail-form-body-placeholder")}
             />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Queuing…" : "Queue email"}
+            {saving ? t("admin-mail-queuing") : t("admin-mail-queue-email")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -34,24 +34,26 @@ import { fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { SharedDocument, Partner } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 type DocCategory = SharedDocument["category"];
 
-const CATEGORY_LABELS: Record<DocCategory, string> = {
-  contract: "Contract",
-  invoice: "Invoice",
-  spec: "Spec",
-  other: "Other",
+const CATEGORY_LABEL_KEY: Record<DocCategory, string> = {
+  contract: "fin-doc-type-contract",
+  invoice: "fin-doc-type-invoice",
+  spec: "fin-doc-type-spec",
+  other: "fin-doc-type-other",
 };
 
 function CategoryBadge({ category }: { category: DocCategory }) {
+  const t = useT();
   if (category === "contract")
-    return <Badge className="border-transparent bg-chart-1 text-white">{CATEGORY_LABELS[category]}</Badge>;
+    return <Badge className="border-transparent bg-chart-1 text-white">{t(CATEGORY_LABEL_KEY[category])}</Badge>;
   if (category === "invoice")
-    return <Badge className="border-transparent bg-chart-4 text-white">{CATEGORY_LABELS[category]}</Badge>;
+    return <Badge className="border-transparent bg-chart-4 text-white">{t(CATEGORY_LABEL_KEY[category])}</Badge>;
   if (category === "spec")
-    return <Badge className="border-transparent bg-chart-2 text-white">{CATEGORY_LABELS[category]}</Badge>;
-  return <Badge variant="secondary">{CATEGORY_LABELS[category]}</Badge>;
+    return <Badge className="border-transparent bg-chart-2 text-white">{t(CATEGORY_LABEL_KEY[category])}</Badge>;
+  return <Badge variant="secondary">{t(CATEGORY_LABEL_KEY[category])}</Badge>;
 }
 
 function fmtSize(size: number | null | undefined): string {
@@ -63,6 +65,7 @@ function fmtSize(size: number | null | undefined): string {
 export function DocumentsView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -100,12 +103,12 @@ export function DocumentsView() {
       if (!r.ok) throw new Error("Failed to delete document");
     },
     onSuccess: () => {
-      toast.success("Document deleted.");
+      toast.success(t("doc-deleted-toast"));
       qc.invalidateQueries({ queryKey: ["documents", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Failed to delete document."),
+    onError: () => toast.error(t("doc-failed-delete-toast")),
   });
 
   const partnerList = partners.data?.items || [];
@@ -122,11 +125,11 @@ export function DocumentsView() {
   return (
     <div>
       <PageHeader
-        title="Documents"
-        description={`${data?.total ?? 0} total`}
+        title={t("doc-title")}
+        description={`${data?.total ?? 0} ${t("doc-total-suffix")}`}
         actions={
           <Button onClick={() => setShowForm(true)}>
-            <Plus className="size-4 mr-1" /> Add document
+            <Plus className="size-4 mr-1" /> {t("doc-add-document")}
           </Button>
         }
       />
@@ -136,29 +139,29 @@ export function DocumentsView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by file name…"
+              placeholder={t("doc-search-filename")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Partner" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t("fin-partner")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All partners</SelectItem>
+              <SelectItem value="all">{t("fin-all-partners")}</SelectItem>
               {partnerList.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("category")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              <SelectItem value="contract">Contract</SelectItem>
-              <SelectItem value="invoice">Invoice</SelectItem>
-              <SelectItem value="spec">Spec</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              <SelectItem value="all">{t("doc-all-categories")}</SelectItem>
+              <SelectItem value="contract">{t("fin-doc-type-contract")}</SelectItem>
+              <SelectItem value="invoice">{t("fin-doc-type-invoice")}</SelectItem>
+              <SelectItem value="spec">{t("fin-doc-type-spec")}</SelectItem>
+              <SelectItem value="other">{t("fin-doc-type-other")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -171,9 +174,9 @@ export function DocumentsView() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<FileText className="size-6" />}
-          title="No documents"
-          description="Upload your first document."
-          action={<Button onClick={() => setShowForm(true)}><Plus className="size-4 mr-1" /> Add document</Button>}
+          title={t("doc-no-documents")}
+          description={t("doc-upload-first")}
+          action={<Button onClick={() => setShowForm(true)}><Plus className="size-4 mr-1" /> {t("doc-add-document")}</Button>}
         />
       ) : (
         <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll pr-1 -mr-1">
@@ -193,7 +196,7 @@ export function DocumentsView() {
                       <CategoryBadge category={doc.category} />
                       <span
                         className="inline-flex items-center justify-center size-6 rounded text-muted-foreground"
-                        title={doc.visible_to_partner ? "Visible to partner" : "Hidden from partner"}
+                        title={doc.visible_to_partner ? t("doc-visible-to-partner") : t("doc-hidden-from-partner")}
                       >
                         {doc.visible_to_partner ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
                       </span>
@@ -230,9 +233,9 @@ export function DocumentsView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <FileText className="size-5" />
-              <span className="truncate text-base">{detail?.filename || "Document"}</span>
+              <span className="truncate text-base">{detail?.filename || t("doc-document-singular")}</span>
             </SheetTitle>
-            <SheetDescription>Document details</SheetDescription>
+            <SheetDescription>{t("doc-details")}</SheetDescription>
           </SheetHeader>
           {detail ? (
             <DocumentDetail
@@ -253,18 +256,18 @@ export function DocumentsView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogTitle>{t("doc-delete-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone.
+              {t("doc-delete-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -281,12 +284,13 @@ function DocumentDetail({
   partnerName: string;
   onDelete: () => void;
 }) {
+  const t = useT();
   const info = [
-    { icon: FileText, label: "File name", value: doc.filename },
-    { icon: FolderOpen, label: "Category", value: CATEGORY_LABELS[doc.category] },
-    { icon: HardDrive, label: "Size", value: fmtSize(doc.size) },
-    { icon: FileText, label: "MIME type", value: doc.mime_type || "—" },
-    { icon: Calendar, label: "Uploaded", value: fmtDateTime(doc.created_at) },
+    { icon: FileText, label: t("doc-file-name"), value: doc.filename },
+    { icon: FolderOpen, label: t("category"), value: t(CATEGORY_LABEL_KEY[doc.category]) },
+    { icon: HardDrive, label: t("doc-size"), value: fmtSize(doc.size) },
+    { icon: FileText, label: t("doc-mime-type"), value: doc.mime_type || "—" },
+    { icon: Calendar, label: t("doc-uploaded"), value: fmtDateTime(doc.created_at) },
   ];
 
   return (
@@ -295,7 +299,7 @@ function DocumentDetail({
         <CategoryBadge category={doc.category} />
         <Badge variant={doc.visible_to_partner ? "default" : "secondary"} className="gap-1">
           {doc.visible_to_partner ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
-          {doc.visible_to_partner ? "Visible to partner" : "Hidden"}
+          {doc.visible_to_partner ? t("doc-visible-to-partner") : t("doc-hidden")}
         </Badge>
       </div>
 
@@ -319,11 +323,11 @@ function DocumentDetail({
 
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="p-3 rounded-md bg-muted/40">
-          <p className="text-xs text-muted-foreground">Partner</p>
+          <p className="text-xs text-muted-foreground">{t("fin-partner")}</p>
           <p className="text-sm font-medium truncate">{partnerName}</p>
         </div>
         <div className="p-3 rounded-md bg-muted/40">
-          <p className="text-xs text-muted-foreground">Path</p>
+          <p className="text-xs text-muted-foreground">{t("doc-path")}</p>
           <p className="text-xs font-mono truncate" title={doc.storage_path}>{doc.storage_path || "—"}</p>
         </div>
       </div>
@@ -338,10 +342,10 @@ function DocumentDetail({
             a.click();
             document.body.removeChild(a);
           } else {
-            toast.error("No file available for download");
+            toast.error(t("doc-no-file-toast"));
           }
         }}>
-          <Download className="size-4 mr-1" /> Download
+          <Download className="size-4 mr-1" /> {t("download")}
         </Button>
         <Button
           variant="outline"
@@ -349,7 +353,7 @@ function DocumentDetail({
           className="text-destructive"
           onClick={onDelete}
         >
-          <Trash2 className="size-4 mr-1" /> Delete
+          <Trash2 className="size-4 mr-1" /> {t("delete")}
         </Button>
       </div>
     </div>
@@ -367,6 +371,7 @@ function DocumentFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [form, setForm] = useState<Partial<SharedDocument>>({});
   const [saving, setSaving] = useState(false);
@@ -390,8 +395,8 @@ function DocumentFormDialog({
   }
 
   async function save() {
-    if (!form.filename) { toast.error("Please enter a file name."); return; }
-    if (!form.partner_id) { toast.error("Please select a partner."); return; }
+    if (!form.filename) { toast.error(t("doc-enter-filename-toast")); return; }
+    if (!form.partner_id) { toast.error(t("fin-select-partner-toast")); return; }
     setSaving(true);
     try {
       const r = await fetch(api("/api/documents"), {
@@ -401,12 +406,12 @@ function DocumentFormDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Failed to add document");
+        throw new Error(e.error || t("doc-failed-add-toast"));
       }
-      toast.success("Document added.");
+      toast.success(t("doc-added-toast"));
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Failed to add document.");
+      toast.error(e.message || t("doc-failed-add-toast"));
     } finally {
       setSaving(false);
     }
@@ -416,26 +421,26 @@ function DocumentFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>Add document</DialogTitle>
-          <DialogDescription>Register a new document in the library.</DialogDescription>
+          <DialogTitle>{t("doc-add-document")}</DialogTitle>
+          <DialogDescription>{t("doc-add-document-desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
         <div className="grid grid-cols-1 gap-3 py-2">
           <div className="space-y-1.5">
-            <Label>File name *</Label>
+            <Label>{t("doc-file-name")} *</Label>
             <Input
               value={form.filename || ""}
               onChange={(e) => set("filename", e.target.value)}
-              placeholder="contract-2026-001.pdf"
+              placeholder={t("doc-filename-placeholder")}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Partner *</Label>
+              <Label>{t("fin-partner")} *</Label>
               <Select value={form.partner_id || ""} onValueChange={(v) => set("partner_id", v)}>
-                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("fin-select-placeholder")} /></SelectTrigger>
                 <SelectContent>
                   {partners.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -444,14 +449,14 @@ function DocumentFormDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label>{t("category")}</Label>
               <Select value={form.category || "other"} onValueChange={(v) => set("category", v as DocCategory)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="contract">Contract</SelectItem>
-                  <SelectItem value="invoice">Invoice</SelectItem>
-                  <SelectItem value="spec">Spec</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  <SelectItem value="contract">{t("fin-doc-type-contract")}</SelectItem>
+                  <SelectItem value="invoice">{t("fin-doc-type-invoice")}</SelectItem>
+                  <SelectItem value="spec">{t("fin-doc-type-spec")}</SelectItem>
+                  <SelectItem value="other">{t("fin-doc-type-other")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -459,7 +464,7 @@ function DocumentFormDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>MIME type</Label>
+              <Label>{t("doc-mime-type")}</Label>
               <Input
                 value={form.mime_type || ""}
                 onChange={(e) => set("mime_type", e.target.value)}
@@ -468,7 +473,7 @@ function DocumentFormDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Size (B)</Label>
+              <Label>{t("doc-size-bytes")}</Label>
               <Input
                 type="number"
                 value={form.size ?? 0}
@@ -480,7 +485,7 @@ function DocumentFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Storage path</Label>
+            <Label>{t("doc-storage-path")}</Label>
             <Input
               value={form.storage_path || ""}
               onChange={(e) => set("storage_path", e.target.value)}
@@ -495,17 +500,17 @@ function DocumentFormDialog({
               onCheckedChange={(v) => set("visible_to_partner", v)}
             />
             <div>
-              <p className="text-sm font-medium">Visible to partner</p>
-              <p className="text-xs text-muted-foreground">Allow the partner to see this document in the portal.</p>
+              <p className="text-sm font-medium">{t("doc-visible-to-partner")}</p>
+              <p className="text-xs text-muted-foreground">{t("doc-visible-to-partner-desc")}</p>
             </div>
           </div>
         </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("fin-saving") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>

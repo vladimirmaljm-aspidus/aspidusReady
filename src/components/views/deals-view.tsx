@@ -55,16 +55,18 @@ import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
 
-const STAGE_LABELS: Record<DealStage, string> = {
-  lead: "Lead",
-  qualified: "Qualified",
-  proposal: "Proposal",
-  negotiation: "Negotiation",
-  won: "Won",
-  lost: "Lost",
+// Deal stage label resolver — keys are translation keys; values fall back to raw stage.
+const STAGE_LABEL_KEYS: Record<DealStage, string> = {
+  lead: "crm-stage-lead",
+  qualified: "crm-stage-qualified",
+  proposal: "crm-stage-proposal",
+  negotiation: "crm-stage-negotiation",
+  won: "crm-stage-won",
+  lost: "crm-stage-lost",
 };
 
 const STAGE_TEXT: Record<DealStage, string> = {
@@ -181,6 +183,7 @@ function computeDealProfit(deal: Deal, commissionAmount: number = 0) {
 }
 
 export function DealsView() {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -254,12 +257,12 @@ export function DealsView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Deal deleted.");
+      toast.success(t("crm-deal-deleted"));
       qc.invalidateQueries({ queryKey: ["deals", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("crm-delete-failed")),
   });
 
   const stageMut = useMutation({
@@ -273,21 +276,21 @@ export function DealsView() {
       return r.json();
     },
     onSuccess: (_data, variables) => {
-      toast.success(`Stage changed to ${STAGE_LABELS[variables.stage]}.`);
+      toast.success(t("crm-stage-changed-to").replace("${stage}", t(STAGE_LABEL_KEYS[variables.stage])));
       qc.invalidateQueries({ queryKey: ["deals", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
     },
-    onError: () => toast.error("Stage change failed."),
+    onError: () => toast.error(t("crm-stage-change-failed")),
   });
 
   return (
     <div>
       <PageHeader
-        title="Deals"
-        description={`${data?.total ?? 0} total · Pipeline ${fmtMoney(pipelineValue)}`}
+        title={t("deals")}
+        description={`${data?.total ?? 0} ${t("crm-total-count").replace("${n}", "")} · ${t("crm-pipeline")} ${fmtMoney(pipelineValue)}`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New deal
+            <Plus className="size-4 mr-1" /> {t("crm-new-deal")}
           </Button>
         }
       />
@@ -297,23 +300,23 @@ export function DealsView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by title…"
+              placeholder={t("crm-search-by-title")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Stage" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("crm-stage")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All stages</SelectItem>
-              {STAGES.map((s) => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}
+              <SelectItem value="all">{t("crm-all-stages")}</SelectItem>
+              {STAGES.map((s) => <SelectItem key={s} value={s}>{t(STAGE_LABEL_KEYS[s])}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={partnerId} onValueChange={setPartnerId}>
-            <SelectTrigger className="w-full md:w-52"><SelectValue placeholder="Partner" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-52"><SelectValue placeholder={t("crm-partner")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All partners</SelectItem>
+              <SelectItem value="all">{t("crm-all-partners")}</SelectItem>
               {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -323,18 +326,18 @@ export function DealsView() {
               variant={layout === "pipeline" ? "default" : "ghost"}
               className="h-7"
               onClick={() => setLayout("pipeline")}
-              title="Pipeline view"
+              title={t("crm-pipeline-view")}
             >
-              <LayoutGrid className="size-4 mr-1" /> Pipeline
+              <LayoutGrid className="size-4 mr-1" /> {t("crm-pipeline")}
             </Button>
             <Button
               size="sm"
               variant={layout === "table" ? "default" : "ghost"}
               className="h-7"
               onClick={() => setLayout("table")}
-              title="Table view"
+              title={t("crm-table-view")}
             >
-              <List className="size-4 mr-1" /> Table
+              <List className="size-4 mr-1" /> {t("crm-table")}
             </Button>
           </div>
         </CardContent>
@@ -349,9 +352,9 @@ export function DealsView() {
       ) : allItems.length === 0 ? (
         <EmptyState
           icon={<Handshake className="size-6" />}
-          title="No deals"
-          description="Add your first deal to start tracking the pipeline."
-          action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New deal</Button>}
+          title={t("crm-no-deals")}
+          description={t("crm-no-deals-desc")}
+          action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("crm-new-deal")}</Button>}
         />
       ) : layout === "pipeline" ? (
         <PipelineView
@@ -366,13 +369,13 @@ export function DealsView() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead className="hidden md:table-cell">Partner</TableHead>
-                    <TableHead>Stage</TableHead>
-                    <TableHead className="text-right">Value</TableHead>
-                    <TableHead className="hidden lg:table-cell w-40">Probability</TableHead>
-                    <TableHead className="hidden md:table-cell">Expected</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("crm-title")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("crm-partner")}</TableHead>
+                    <TableHead>{t("crm-stage")}</TableHead>
+                    <TableHead className="text-right">{t("crm-value")}</TableHead>
+                    <TableHead className="hidden lg:table-cell w-40">{t("crm-probability")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("crm-expected-close")}</TableHead>
+                    <TableHead className="text-right">{t("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -390,7 +393,7 @@ export function DealsView() {
                       <TableCell>
                         <Badge className={`${STAGE_BADGE[d.stage]} hover:opacity-90`}>
                           <span className={`size-1.5 rounded-full ${STAGE_DOT[d.stage]} mr-1`} />
-                          {STAGE_LABELS[d.stage]}
+                          {t(STAGE_LABEL_KEYS[d.stage])}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono tabular">{fmtMoney(d.value, d.currency)}</TableCell>
@@ -403,13 +406,13 @@ export function DealsView() {
                       <TableCell className="hidden md:table-cell text-sm">{fmtDate(d.expected_close)}</TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(d.id)} title="View">
+                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(d.id)} title={t("view")}>
                             <Eye className="size-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(d); setShowForm(true); }} title="Edit">
+                          <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(d); setShowForm(true); }} title={t("edit")}>
                             <Pencil className="size-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(d.id)} title="Delete">
+                          <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(d.id)} title={t("delete")}>
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
@@ -479,9 +482,9 @@ export function DealsView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Handshake className="size-5" />
-              {selected?.title || "Deal"}
+              {selected?.title || t("crm-deal")}
             </SheetTitle>
-            <SheetDescription>Deal details</SheetDescription>
+            <SheetDescription>{t("crm-deal-details")}</SheetDescription>
           </SheetHeader>
           {selected ? (
             <DealDetail
@@ -506,18 +509,18 @@ export function DealsView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete deal?</AlertDialogTitle>
+            <AlertDialogTitle>{t("crm-delete-deal-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Related offers may lose their reference.
+              {t("crm-delete-deal-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -534,6 +537,7 @@ function PipelineView({
   partnerName: Map<string, string>;
   onOpen: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <div className="overflow-x-auto custom-scroll pb-2">
       <div className="flex gap-3 min-w-max">
@@ -547,7 +551,7 @@ function PipelineView({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className={`size-2 rounded-full ${STAGE_DOT[stage]}`} />
-                      <span className="text-sm font-medium">{STAGE_LABELS[stage]}</span>
+                      <span className="text-sm font-medium">{t(STAGE_LABEL_KEYS[stage])}</span>
                     </div>
                     <Badge variant="secondary" className="font-mono tabular text-xs">{list.length}</Badge>
                   </div>
@@ -555,7 +559,7 @@ function PipelineView({
                 </div>
                 <div className="p-2 space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto custom-scroll">
                   {list.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-4">No deals.</p>
+                    <p className="text-xs text-muted-foreground text-center py-4">{t("crm-no-deals-pipeline")}</p>
                   )}
                   {list.map((d) => (
                     <button
@@ -599,6 +603,7 @@ function DealDetail({
   onDelete: () => void;
   changing: boolean;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -695,10 +700,10 @@ function DealDetail({
       return r.json();
     },
     onSuccess: (data) => {
-      toast.success("Offer created from deal!", {
-        description: `Offer ${data.number || ""} has been created.`,
+      toast.success(t("crm-offer-created-from-deal"), {
+        description: t("crm-offer-created-from-deal-desc").replace("${number}", data.number || ""),
         action: {
-          label: "View Offer",
+          label: t("crm-view-offer"),
           onClick: () => {
             setSelectedId(data.id);
             setView("offers");
@@ -707,56 +712,56 @@ function DealDetail({
       });
     },
     onError: (e: any) => {
-      toast.error(e.message || "Failed to create offer from deal.");
+      toast.error(e.message || t("crm-failed-create-offer-from-deal"));
     },
   });
 
   // Core info cards
   const info = [
-    { icon: User, label: "Partner", value: partnerName },
-    { icon: TrendingUp, label: "Value", value: fmtMoney(deal.value, deal.currency) },
-    { icon: Calendar, label: "Expected close", value: fmtDate(deal.expected_close) },
+    { icon: User, label: t("crm-partner"), value: partnerName },
+    { icon: TrendingUp, label: t("crm-value"), value: fmtMoney(deal.value, deal.currency) },
+    { icon: Calendar, label: t("crm-expected-close"), value: fmtDate(deal.expected_close) },
   ];
 
   // Additional deal data — full cost breakdown (audit D-2, D-4)
   const additionalInfo: { icon: typeof DollarSign; label: string; value: string; accent?: string }[] = [];
   if (calc.buyCost) additionalInfo.push({
     icon: DollarSign,
-    label: `Buy Cost${deal.purchase_currency && deal.purchase_currency !== deal.currency ? ` (${deal.purchase_currency})` : ""}`,
+    label: t("crm-buy-cost-total") + (deal.purchase_currency && deal.purchase_currency !== deal.currency ? ` (${deal.purchase_currency})` : ""),
     value: fmtMoney(calc.buyCost, deal.purchase_currency || deal.currency),
   });
   if (calc.sellingPrice && calc.sellingPrice !== deal.value) additionalInfo.push({
     icon: TrendingUp,
-    label: `Selling Price${deal.selling_currency && deal.selling_currency !== deal.currency ? ` (${deal.selling_currency})` : ""}`,
+    label: t("crm-selling-price-total") + (deal.selling_currency && deal.selling_currency !== deal.currency ? ` (${deal.selling_currency})` : ""),
     value: fmtMoney(calc.sellingPrice, deal.selling_currency || deal.currency),
   });
-  if (calc.bankCosts) additionalInfo.push({ icon: DollarSign, label: "Bank Costs", value: fmtMoney(calc.bankCosts, deal.currency) });
-  if (calc.otherCosts) additionalInfo.push({ icon: DollarSign, label: "Other Costs", value: fmtMoney(calc.otherCosts, deal.currency) });
-  if (calc.commission) additionalInfo.push({ icon: DollarSign, label: "Commission", value: fmtMoney(calc.commission, commissionPreview?.currency || deal.currency) });
-  if (calc.exchangeRate && calc.exchangeRate !== 1) additionalInfo.push({ icon: ArrowRight, label: "Exchange Rate", value: calc.exchangeRate.toString() });
-  if (calc.totalCost) additionalInfo.push({ icon: BarChart3, label: "Total Cost", value: fmtMoney(calc.totalCost, deal.currency) });
+  if (calc.bankCosts) additionalInfo.push({ icon: DollarSign, label: t("crm-bank-costs"), value: fmtMoney(calc.bankCosts, deal.currency) });
+  if (calc.otherCosts) additionalInfo.push({ icon: DollarSign, label: t("crm-other-costs"), value: fmtMoney(calc.otherCosts, deal.currency) });
+  if (calc.commission) additionalInfo.push({ icon: DollarSign, label: t("crm-commission"), value: fmtMoney(calc.commission, commissionPreview?.currency || deal.currency) });
+  if (calc.exchangeRate && calc.exchangeRate !== 1) additionalInfo.push({ icon: ArrowRight, label: t("crm-exchange-rate"), value: calc.exchangeRate.toString() });
+  if (calc.totalCost) additionalInfo.push({ icon: BarChart3, label: t("crm-total-cost"), value: fmtMoney(calc.totalCost, deal.currency) });
   if (calc.profit !== 0 || (calc.buyCost && calc.sellingPrice)) additionalInfo.push({
     icon: TrendingUp,
-    label: "Profit",
+    label: t("crm-profit"),
     value: fmtMoney(calc.profit, deal.currency),
     accent: calc.profit >= 0 ? "text-chart-1" : "text-destructive",
   });
   additionalInfo.push({
     icon: Target,
-    label: "Margin",
+    label: t("crm-margin-label"),
     value: `${calc.marginPct.toFixed(1)}%`,
     accent: calc.marginPct >= 0 ? "text-chart-1" : "text-destructive",
   });
-  if (deal.quantity) additionalInfo.push({ icon: Package, label: "Quantity", value: `${deal.quantity} ${deal.unit || ""}` });
-  if (deal.unit && !deal.quantity) additionalInfo.push({ icon: Scale, label: "Unit", value: deal.unit });
+  if (deal.quantity) additionalInfo.push({ icon: Package, label: t("crm-quantity-label"), value: `${deal.quantity} ${deal.unit || ""}` });
+  if (deal.unit && !deal.quantity) additionalInfo.push({ icon: Scale, label: t("crm-unit"), value: deal.unit });
   if (commissionAgent) {
     const rateLabel =
-      commissionAgent.commission_type === "profit_percent" ? `${commissionAgent.commission_rate}% profit`
-      : commissionAgent.commission_type === "revenue_percent" ? `${commissionAgent.commission_rate}% revenue`
-      : commissionAgent.commission_type === "per_unit" ? `${commissionAgent.commission_per_unit}/unit`
-      : commissionAgent.commission_type === "fixed" ? `Fixed ${commissionAgent.commission_rate}`
+      commissionAgent.commission_type === "profit_percent" ? t("crm-rate-profit-percent").replace("${rate}", String(commissionAgent.commission_rate))
+      : commissionAgent.commission_type === "revenue_percent" ? t("crm-rate-revenue-percent").replace("${rate}", String(commissionAgent.commission_rate))
+      : commissionAgent.commission_type === "per_unit" ? t("crm-rate-per-unit").replace("${rate}", String(commissionAgent.commission_per_unit))
+      : commissionAgent.commission_type === "fixed" ? t("crm-rate-fixed").replace("${rate}", String(commissionAgent.commission_rate))
       : commissionAgent.commission_type;
-    additionalInfo.push({ icon: User, label: "Commission Agent", value: `${commissionAgentPartnerName || "Unknown"} (${rateLabel})` });
+    additionalInfo.push({ icon: User, label: t("crm-commission-agent"), value: `${commissionAgentPartnerName || t("crm-unknown")} (${rateLabel})` });
   }
 
   return (
@@ -764,7 +769,7 @@ function DealDetail({
       <div className="flex flex-wrap items-center gap-2">
         <Badge className={`${STAGE_BADGE[deal.stage]} hover:opacity-90`}>
           <span className={`size-1.5 rounded-full ${STAGE_DOT[deal.stage]} mr-1`} />
-          {STAGE_LABELS[deal.stage]}
+          {t(STAGE_LABEL_KEYS[deal.stage])}
         </Badge>
         <Badge variant="outline" className="font-mono tabular">{deal.probability}%</Badge>
         <Badge variant="secondary" className="font-mono">{deal.currency}</Badge>
@@ -772,7 +777,7 @@ function DealDetail({
 
       {/* Quick stage change */}
       <div>
-        <p className="text-xs text-muted-foreground mb-2">Quick stage change</p>
+        <p className="text-xs text-muted-foreground mb-2">{t("crm-quick-stage-change")}</p>
         <div className="flex flex-wrap gap-1.5">
           {STAGES.map((s) => (
             <button
@@ -785,7 +790,7 @@ function DealDetail({
                   : "bg-card hover:bg-muted/50 border-border text-muted-foreground"
               } disabled:opacity-60`}
             >
-              {STAGE_LABELS[s]}
+              {t(STAGE_LABEL_KEYS[s])}
             </button>
           ))}
         </div>
@@ -815,7 +820,7 @@ function DealDetail({
           <CardContent className="p-3 space-y-2">
             <div className="flex items-center gap-2">
               <BarChart3 className="size-4 text-primary" />
-              <p className="text-xs font-medium text-muted-foreground">Deal Details</p>
+              <p className="text-xs font-medium text-muted-foreground">{t("crm-deal-details-card")}</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {additionalInfo.map((x) => {
@@ -852,28 +857,28 @@ function DealDetail({
           <CardContent className="p-3 space-y-2">
             <div className="flex items-center gap-2">
               <BarChart3 className="size-4 text-primary" />
-              <p className="text-xs font-medium text-muted-foreground">Partner Quick Stats</p>
+              <p className="text-xs font-medium text-muted-foreground">{t("crm-partner-quick-stats")}</p>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="text-center p-2 rounded-lg bg-card/80 border border-border/40">
                 <DollarSign className="size-3.5 text-chart-3 mx-auto mb-1" />
-                <p className="text-[10px] text-muted-foreground">Total Value</p>
+                <p className="text-[10px] text-muted-foreground">{t("crm-total-value")}</p>
                 <p className="text-xs font-semibold font-mono tabular">{fmtMoney(quickStats.totalDealsValue, quickStats.currency)}</p>
               </div>
               <div className="text-center p-2 rounded-lg bg-card/80 border border-border/40">
                 <Target className="size-3.5 text-chart-4 mx-auto mb-1" />
-                <p className="text-[10px] text-muted-foreground">Win Rate</p>
+                <p className="text-[10px] text-muted-foreground">{t("crm-win-rate")}</p>
                 <p className="text-xs font-semibold font-mono tabular">{quickStats.winRate}%</p>
               </div>
               <div className="text-center p-2 rounded-lg bg-card/80 border border-border/40">
                 <TrendingUp className="size-3.5 text-chart-1 mx-auto mb-1" />
-                <p className="text-[10px] text-muted-foreground">Avg Deal</p>
+                <p className="text-[10px] text-muted-foreground">{t("crm-avg-deal")}</p>
                 <p className="text-xs font-semibold font-mono tabular">{fmtMoney(quickStats.avgDealSize, quickStats.currency)}</p>
               </div>
             </div>
             {partnerCtx && partnerCtx.deals.length > 0 && (
               <div className="pt-1">
-                <p className="text-[10px] text-muted-foreground mb-1">Recent deals ({quickStats.wonDeals}/{quickStats.totalDeals} won)</p>
+                <p className="text-[10px] text-muted-foreground mb-1">{t("crm-recent-deals-won").replace("${won}", String(quickStats.wonDeals)).replace("${total}", String(quickStats.totalDeals))}</p>
                 <div className="space-y-1 max-h-24 overflow-y-auto custom-scroll">
                   {partnerCtx.deals.slice(0, 5).map((d) => (
                     <div key={d.id} className="flex items-center justify-between text-[11px] px-1.5 py-0.5 rounded bg-muted/40">
@@ -881,7 +886,7 @@ function DealDetail({
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono tabular text-muted-foreground">{fmtMoney(d.value, d.currency)}</span>
                         <Badge className={`${STAGE_BADGE[d.stage]} text-[9px] px-1 py-0`}>
-                          {STAGE_LABELS[d.stage]}
+                          {t(STAGE_LABEL_KEYS[d.stage])}
                         </Badge>
                       </div>
                     </div>
@@ -898,13 +903,13 @@ function DealDetail({
         <CardContent className="p-3 space-y-2">
           <div className="flex items-center gap-2">
             <FileText className="size-4 text-primary" />
-            <p className="text-xs font-medium">Create Offer from Deal</p>
+            <p className="text-xs font-medium">{t("crm-create-offer-from-deal")}</p>
           </div>
           {hasExistingOffer ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <CheckCircle2 className="size-3.5 text-chart-3" />
-                <span>This deal already has an associated offer</span>
+                <span>{t("crm-this-deal-already-offer")}</span>
               </div>
               {dealOffers && dealOffers.length > 0 && (
                 <div className="space-y-1">
@@ -931,7 +936,7 @@ function DealDetail({
           ) : (
             <div>
               <p className="text-xs text-muted-foreground mb-2">
-                Automatically create a draft offer from this deal with all partner details pre-filled.
+                {t("crm-auto-create-offer-desc")}
               </p>
               <Button
                 size="sm"
@@ -941,11 +946,11 @@ function DealDetail({
               >
                 {createOfferMut.isPending ? (
                   <>
-                    <Loader2 className="size-4 mr-1 animate-spin" /> Creating…
+                    <Loader2 className="size-4 mr-1 animate-spin" /> {t("crm-creating-ellipsis")}
                   </>
                 ) : (
                   <>
-                    <FileText className="size-4 mr-1" /> Create Offer from Deal
+                    <FileText className="size-4 mr-1" /> {t("crm-create-offer-from-deal")}
                   </>
                 )}
               </Button>
@@ -956,30 +961,30 @@ function DealDetail({
 
       {deal.description && (
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Description</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("description")}</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/50">{deal.description}</p>
         </div>
       )}
 
       {deal.lost_reason && (
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Lost reason</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("crm-lost-reason")}</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-destructive/5 text-destructive">{deal.lost_reason}</p>
         </div>
       )}
 
       <div className="flex items-center gap-2 pt-2">
         <Button variant="outline" size="sm" onClick={onEdit}>
-          <Pencil className="size-4 mr-1" /> Edit
+          <Pencil className="size-4 mr-1" /> {t("edit")}
         </Button>
         <Button variant="outline" size="sm" className="text-destructive" onClick={onDelete}>
-          <Trash2 className="size-4 mr-1" /> Delete
+          <Trash2 className="size-4 mr-1" /> {t("delete")}
         </Button>
       </div>
 
       <div className="pt-4 border-t space-y-1">
-        <p className="text-xs text-muted-foreground">Created: {fmtDate(deal.created_at)}</p>
-        <p className="text-xs text-muted-foreground">Updated: {fmtRelative(deal.updated_at)}</p>
+        <p className="text-xs text-muted-foreground">{t("crm-created-label")}: {fmtDate(deal.created_at)}</p>
+        <p className="text-xs text-muted-foreground">{t("crm-updated-label")}: {fmtRelative(deal.updated_at)}</p>
       </div>
     </div>
   );
@@ -1005,6 +1010,7 @@ function DealFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -1185,8 +1191,8 @@ function DealFormDialog({
   }
 
   async function save() {
-    if (!form.title) { toast.error("Title is required."); return; }
-    if (!form.partner_id) { toast.error("Select a partner."); return; }
+    if (!form.title) { toast.error(t("crm-title-required")); return; }
+    if (!form.partner_id) { toast.error(t("crm-select-a-partner-toast")); return; }
     setSaving(true);
     try {
       const method = deal ? "PUT" : "POST";
@@ -1200,12 +1206,12 @@ function DealFormDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Request failed");
       }
-      toast.success(deal ? "Deal updated." : `Deal "${form.title}" created.`, {
-        description: deal ? undefined : "It has been added to your pipeline.",
+      toast.success(deal ? t("crm-deal-updated") : t("crm-deal-created").replace("${title}", form.title || ""), {
+        description: deal ? undefined : t("crm-added-to-pipeline"),
       });
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Saving failed.");
+      toast.error(e.message || t("crm-saving-failed-toast"));
     } finally {
       setSaving(false);
     }
@@ -1222,11 +1228,9 @@ function DealFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>{deal ? "Edit deal" : "New deal"}</DialogTitle>
+          <DialogTitle>{deal ? t("crm-edit-deal") : t("crm-new-deal")}</DialogTitle>
           <DialogDescription>
-            {deal
-              ? "Update the deal details below."
-              : "Start with the basics — expand sections for more options."}
+            {deal ? t("crm-update-deal-details") : t("crm-create-deal-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1234,14 +1238,14 @@ function DealFormDialog({
           {/* ===== Essential fields (always visible) ===== */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="md:col-span-2 space-y-1.5">
-              <Label>Title *</Label>
-              <Input value={form.title || ""} onChange={(e) => set("title", e.target.value)} placeholder="Aluminium profile delivery" />
+              <Label>{t("crm-title-required-label")}</Label>
+              <Input value={form.title || ""} onChange={(e) => set("title", e.target.value)} placeholder={t("crm-search-by-title")} />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Partner *</Label>
+              <Label>{t("crm-partner-required-label")}</Label>
               <Select value={form.partner_id} onValueChange={handlePartnerChange}>
-                <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("crm-select-a-partner")} /></SelectTrigger>
                 <SelectContent>
                   {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
@@ -1249,29 +1253,29 @@ function DealFormDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Stage</Label>
+              <Label>{t("crm-stage")}</Label>
               <Select value={form.stage} onValueChange={(v) => set("stage", v as DealStage)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {STAGES.map((s) => <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>)}
+                  {STAGES.map((s) => <SelectItem key={s} value={s}>{t(STAGE_LABEL_KEYS[s])}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Value</Label>
+              <Label>{t("crm-value")}</Label>
               <Input type="number" min={0} step="0.01" value={form.value ?? 0} onChange={(e) => set("value", Number(e.target.value))} />
               {form.value && Number(form.value) > 0 && form.partner_id && (
                 <p className="text-[10px] text-chart-3 flex items-center gap-1">
-                  <CheckCircle2 className="size-3" /> Auto-staged to &quot;Qualified&quot;
+                  <CheckCircle2 className="size-3" /> {t("crm-auto-staged-qualified")}
                 </p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label>Currency</Label>
+              <Label>{t("currency")}</Label>
               <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
-                <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("crm-select-currency")} /></SelectTrigger>
                 <SelectContent className="max-h-72">
                   {CURRENCIES_LIST.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
@@ -1286,7 +1290,7 @@ function DealFormDialog({
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="size-3.5 text-primary" />
-                    <span className="text-xs font-medium text-primary">Auto-filled from partner</span>
+                    <span className="text-xs font-medium text-primary">{t("crm-auto-filled-from-partner")}</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -1294,7 +1298,7 @@ function DealFormDialog({
                     className="h-6 text-xs"
                     onClick={() => setShowPartnerContext(!showPartnerContext)}
                   >
-                    {showPartnerContext ? "Hide" : "Show"} details
+                    {showPartnerContext ? t("crm-hide-details") : t("crm-show-details")}
                     {showPartnerContext ? <ChevronUp className="size-3 ml-1" /> : <ChevronDown className="size-3 ml-1" />}
                   </Button>
                 </div>
@@ -1342,30 +1346,30 @@ function DealFormDialog({
                       </div>
                     ) : quickStats ? (
                       <div>
-                        <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Partner Quick Stats</p>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1.5">{t("crm-partner-quick-stats")}</p>
                         <div className="grid grid-cols-3 gap-2">
                           <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
-                            <p className="text-[9px] text-muted-foreground">Total Value</p>
+                            <p className="text-[9px] text-muted-foreground">{t("crm-total-value")}</p>
                             <p className="text-[11px] font-semibold font-mono tabular">{fmtMoney(quickStats.totalDealsValue, quickStats.currency)}</p>
                           </div>
                           <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
-                            <p className="text-[9px] text-muted-foreground">Win Rate</p>
+                            <p className="text-[9px] text-muted-foreground">{t("crm-win-rate")}</p>
                             <p className="text-[11px] font-semibold font-mono tabular">{quickStats.winRate}%</p>
                           </div>
                           <div className="text-center p-1.5 rounded bg-card/80 border border-border/40">
-                            <p className="text-[9px] text-muted-foreground">Avg Deal</p>
+                            <p className="text-[9px] text-muted-foreground">{t("crm-avg-deal")}</p>
                             <p className="text-[11px] font-semibold font-mono tabular">{fmtMoney(quickStats.avgDealSize, quickStats.currency)}</p>
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground">No historical data for this partner.</p>
+                      <p className="text-[10px] text-muted-foreground">{t("crm-no-historical-data-partner")}</p>
                     )}
 
                     {/* Recent deals */}
                     {partnerCtx && partnerCtx.deals.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-medium text-muted-foreground mb-1">Recent deals</p>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1">{t("crm-recent-deals")}</p>
                         <div className="space-y-1 max-h-28 overflow-y-auto custom-scroll">
                           {partnerCtx.deals.slice(0, 5).map((d) => (
                             <div key={d.id} className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-muted/40">
@@ -1373,7 +1377,7 @@ function DealFormDialog({
                               <div className="flex items-center gap-1.5">
                                 <span className="font-mono tabular text-muted-foreground">{fmtMoney(d.value, d.currency)}</span>
                                 <Badge className={`${STAGE_BADGE[d.stage]} text-[9px] px-1 py-0`}>
-                                  {STAGE_LABELS[d.stage]}
+                                  {t(STAGE_LABEL_KEYS[d.stage])}
                                 </Badge>
                               </div>
                             </div>
@@ -1385,7 +1389,7 @@ function DealFormDialog({
                     {/* Recent offers */}
                     {partnerCtx && partnerCtx.offers.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-medium text-muted-foreground mb-1">Recent offers</p>
+                        <p className="text-[10px] font-medium text-muted-foreground mb-1">{t("crm-recent-offers")}</p>
                         <div className="space-y-1 max-h-28 overflow-y-auto custom-scroll">
                           {partnerCtx.offers.slice(0, 5).map((o) => (
                             <div key={o.id} className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-muted/40">
@@ -1409,14 +1413,14 @@ function DealFormDialog({
           <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
             <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
               <FileText className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium flex-1 text-left">More Details</span>
-              <span className="text-xs text-muted-foreground mr-1">Probability, close date, notes</span>
+              <span className="text-sm font-medium flex-1 text-left">{t("crm-more-details")}</span>
+              <span className="text-xs text-muted-foreground mr-1">{t("crm-probability-close-date-notes")}</span>
               {detailsOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
                 <div className="space-y-1.5">
-                  <Label>Probability: {form.probability ?? 0}%</Label>
+                  <Label>{t("crm-probability")}: {form.probability ?? 0}%</Label>
                   <div className="pt-2.5">
                     <Slider
                       value={[form.probability ?? 0]}
@@ -1428,12 +1432,12 @@ function DealFormDialog({
                   </div>
                   {form.stage && STAGE_PROBABILITY[form.stage] !== undefined && (
                     <p className="text-[10px] text-muted-foreground">
-                      Suggested for {STAGE_LABELS[form.stage]}: {STAGE_PROBABILITY[form.stage]}%
+                      {t("crm-suggested-for")} {t(STAGE_LABEL_KEYS[form.stage])}: {STAGE_PROBABILITY[form.stage]}%
                     </p>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Expected close</Label>
+                  <Label>{t("crm-expected-close")}</Label>
                   <Input
                     type="date"
                     value={expectedCloseValue}
@@ -1441,8 +1445,8 @@ function DealFormDialog({
                   />
                 </div>
                 <div className="md:col-span-2 space-y-1.5">
-                  <Label>Notes</Label>
-                  <Textarea rows={3} value={form.description || ""} onChange={(e) => set("description", e.target.value)} placeholder="Additional details about this deal…" />
+                  <Label>{t("crm-notes-label")}</Label>
+                  <Textarea rows={3} value={form.description || ""} onChange={(e) => set("description", e.target.value)} placeholder={t("crm-additional-notes-placeholder")} />
                 </div>
               </div>
             </CollapsibleContent>
@@ -1452,23 +1456,23 @@ function DealFormDialog({
           <Collapsible open={lineItemsOpen} onOpenChange={setLineItemsOpen}>
             <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
               <BarChart3 className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium flex-1 text-left">Costs &amp; Pricing</span>
-              <span className="text-xs text-muted-foreground mr-1">Quantity, buy cost, fees, FX, profit</span>
+              <span className="text-sm font-medium flex-1 text-left">{t("crm-costs-pricing")}</span>
+              <span className="text-xs text-muted-foreground mr-1">{t("crm-costs-pricing-desc")}</span>
               {lineItemsOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="space-y-3 pt-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Quantity</Label>
+                    <Label>{t("crm-quantity-label")}</Label>
                     <Input type="number" min={0} step={1} value={form.quantity ?? 0} onChange={(e) => set("quantity", Number(e.target.value))} placeholder="0" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Unit of Measure</Label>
-                    <Input value={form.unit || ""} onChange={(e) => set("unit", e.target.value)} placeholder="pcs, kg, set, etc." />
+                    <Label>{t("crm-unit-of-measure")}</Label>
+                    <Input value={form.unit || ""} onChange={(e) => set("unit", e.target.value)} placeholder={t("crm-unit-of-measure")} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Exchange Rate</Label>
+                    <Label>{t("crm-exchange-rate")}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -1478,48 +1482,48 @@ function DealFormDialog({
                       placeholder="1.00"
                     />
                     <p className="text-[10px] text-muted-foreground">
-                      Multiplier applied to total cost (sell currency per buy currency).
+                      {t("crm-exchange-rate-desc")}
                     </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Buy Cost (total)</Label>
+                    <Label>{t("crm-buy-cost-total")}</Label>
                     <Input type="number" min={0} step="0.01" value={form.buy_cost ?? 0} onChange={(e) => set("buy_cost", Number(e.target.value))} placeholder="0.00" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Purchase Currency</Label>
+                    <Label>{t("crm-purchase-currency")}</Label>
                     <Select value={form.purchase_currency || form.currency || "USD"} onValueChange={(v) => set("purchase_currency", v)}>
-                      <SelectTrigger><SelectValue placeholder="Same as deal currency" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("crm-same-as-deal-currency")} /></SelectTrigger>
                       <SelectContent className="max-h-72">
                         {CURRENCIES_LIST.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Selling Price (total)</Label>
+                    <Label>{t("crm-selling-price-total")}</Label>
                     <Input
                       type="number"
                       min={0}
                       step="0.01"
                       value={form.selling_price ?? 0}
                       onChange={(e) => set("selling_price", Number(e.target.value) as Deal["selling_price"])}
-                      placeholder="0.00 (defaults to deal value)"
+                      placeholder="0.00"
                     />
-                    <p className="text-[10px] text-muted-foreground">If 0, deal value is used as the selling price.</p>
+                    <p className="text-[10px] text-muted-foreground">{t("crm-selling-price-desc")}</p>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Selling Currency</Label>
+                    <Label>{t("crm-selling-currency")}</Label>
                     <Select value={form.selling_currency || form.currency || "USD"} onValueChange={(v) => set("selling_currency", v)}>
-                      <SelectTrigger><SelectValue placeholder="Same as deal currency" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("crm-same-as-deal-currency")} /></SelectTrigger>
                       <SelectContent className="max-h-72">
                         {CURRENCIES_LIST.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Bank Costs</Label>
+                    <Label>{t("crm-bank-costs")}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -1530,14 +1534,14 @@ function DealFormDialog({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Other Costs</Label>
+                    <Label>{t("crm-other-costs")}</Label>
                     <Input
                       type="number"
                       min={0}
                       step="0.01"
                       value={Array.isArray(form.costs) && form.costs[0]?.amount != null ? Number(form.costs[0].amount) : 0}
                       onChange={(e) => set("costs", [{ label: "Other", amount: Number(e.target.value) }] as Deal["costs"])}
-                      placeholder="0.00 (shipping, insurance, duties…)"
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
@@ -1547,45 +1551,45 @@ function DealFormDialog({
                   <CardContent className="p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="size-3.5 text-primary" />
-                      <p className="text-xs font-medium">Profit &amp; Margin Preview</p>
+                      <p className="text-xs font-medium">{t("crm-profit-margin-preview")}</p>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Buy Cost</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-buy-cost-total")}</p>
                         <p className="font-mono tabular">{fmtMoney(formCalc.buyCost, form.purchase_currency || form.currency || "USD")}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Selling Price</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-selling-price-total")}</p>
                         <p className="font-mono tabular">{fmtMoney(formCalc.sellingPrice, form.selling_currency || form.currency || "USD")}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Bank Costs</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-bank-costs")}</p>
                         <p className="font-mono tabular">{fmtMoney(formCalc.bankCosts, form.currency || "USD")}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Other Costs</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-other-costs")}</p>
                         <p className="font-mono tabular">{fmtMoney(formCalc.otherCosts, form.currency || "USD")}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Commission</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-commission")}</p>
                         <p className="font-mono tabular">{fmtMoney(formCalc.commission, commissionPreview?.currency || form.currency || "USD")}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Exchange Rate</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-exchange-rate")}</p>
                         <p className="font-mono tabular">{formCalc.exchangeRate}</p>
                       </div>
                       <div className="border-t pt-1">
-                        <p className="text-[10px] text-muted-foreground">Total Cost</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-total-cost")}</p>
                         <p className="font-mono tabular font-semibold">{fmtMoney(formCalc.totalCost, form.currency || "USD")}</p>
                       </div>
                       <div className="border-t pt-1">
-                        <p className="text-[10px] text-muted-foreground">Profit</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-profit")}</p>
                         <p className={`font-mono tabular font-semibold ${formCalc.profit >= 0 ? "text-chart-1" : "text-destructive"}`}>
                           {fmtMoney(formCalc.profit, form.currency || "USD")}
                         </p>
                       </div>
                       <div className="border-t pt-1">
-                        <p className="text-[10px] text-muted-foreground">Margin</p>
+                        <p className="text-[10px] text-muted-foreground">{t("crm-margin-label")}</p>
                         <p className={`font-mono tabular font-semibold ${formCalc.marginPct >= 0 ? "text-chart-1" : "text-destructive"}`}>
                           {formCalc.marginPct.toFixed(1)}%
                         </p>
@@ -1601,24 +1605,30 @@ function DealFormDialog({
           <Collapsible open={commissionOpen} onOpenChange={setCommissionOpen}>
             <CollapsibleTrigger className="flex items-center gap-2 w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
               <DollarSign className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium flex-1 text-left">Commission</span>
-              <span className="text-xs text-muted-foreground mr-1">Agent, type, value</span>
+              <span className="text-sm font-medium flex-1 text-left">{t("crm-commission-section")}</span>
+              <span className="text-xs text-muted-foreground mr-1">{t("crm-commission-section-desc")}</span>
               {commissionOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="space-y-3 pt-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Commission Agent</Label>
+                    <Label>{t("crm-commission-agent")}</Label>
                     <Select value={form.commission_agent_id || "none"} onValueChange={(v) => set("commission_agent_id", v === "none" ? null : (v as any))}>
-                      <SelectTrigger><SelectValue placeholder="No commission agent" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("crm-no-commission-agent")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">No commission agent</SelectItem>
+                        <SelectItem value="none">{t("crm-no-commission-agent")}</SelectItem>
                         {commissionAgents.filter(a => a.active).map((a) => {
                           const p = partners.find(p => p.id === a.partner_id);
+                          const agentRateLabel =
+                            a.commission_type === "profit_percent" ? t("crm-rate-profit-percent").replace("${rate}", String(a.commission_rate))
+                            : a.commission_type === "per_unit" ? t("crm-rate-per-unit").replace("${rate}", String(a.commission_per_unit))
+                            : a.commission_type === "fixed" ? t("crm-rate-fixed").replace("${rate}", String(a.commission_rate))
+                            : a.commission_type === "revenue_percent" ? t("crm-rate-revenue-percent").replace("${rate}", String(a.commission_rate))
+                            : t("crm-rate-custom");
                           return (
                             <SelectItem key={a.id} value={a.id}>
-                              {p?.name || a.id} ({a.commission_type === "profit_percent" ? `${a.commission_rate}% profit` : a.commission_type === "per_unit" ? `${a.commission_per_unit}/unit` : a.commission_type === "fixed" ? `Fixed ${a.commission_rate}` : a.commission_type === "revenue_percent" ? `${a.commission_rate}% revenue` : "Custom"})
+                              {p?.name || a.id} ({agentRateLabel})
                             </SelectItem>
                           );
                         })}
@@ -1634,18 +1644,18 @@ function DealFormDialog({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="size-3.5 text-primary" />
-                          <span className="text-xs font-medium text-primary">Estimated Commission</span>
+                          <span className="text-xs font-medium text-primary">{t("crm-estimated-commission")}</span>
                         </div>
                         <span className="text-lg font-bold font-mono tabular text-primary">
                           {fmtMoney(commissionPreview.calculated_commission, commissionPreview.currency)}
                         </span>
                       </div>
                       <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
-                        <p>Type: {commissionPreview.breakdown?.formula}</p>
-                        <p>Deal Value: {fmtMoney(form.value || 0, form.currency || "USD")}</p>
-                        <p>Deal Profit: {fmtMoney((form.value || 0) - (form.buy_cost || 0), form.currency || "USD")}</p>
+                        <p>{t("crm-commission-type-label")} {commissionPreview.breakdown?.formula}</p>
+                        <p>{t("crm-commission-deal-value-label")} {fmtMoney(form.value || 0, form.currency || "USD")}</p>
+                        <p>{t("crm-commission-deal-profit-label")} {fmtMoney((form.value || 0) - (form.buy_cost || 0), form.currency || "USD")}</p>
                         {commissionPreview.commission_type === "per_unit" && (
-                          <p>Quantity: {form.quantity || 0} {form.unit || ""}</p>
+                          <p>{t("crm-commission-quantity-label")} {form.quantity || 0} {form.unit || ""}</p>
                         )}
                       </div>
                     </CardContent>
@@ -1658,16 +1668,16 @@ function DealFormDialog({
           {/* Lost reason (conditional, always visible when stage is lost) */}
           {(form.stage === "lost" || deal?.stage === "lost") && (
             <div className="space-y-1.5">
-              <Label>Lost reason</Label>
+              <Label>{t("crm-lost-reason")}</Label>
               <Textarea rows={2} value={form.lost_reason || ""} onChange={(e) => set("lost_reason", e.target.value)} />
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : deal ? "Save changes" : "Create deal"}
+            {saving ? t("crm-saving-ellipsis") : deal ? t("crm-save-changes") : t("crm-create-deal")}
           </Button>
         </DialogFooter>
       </DialogContent>

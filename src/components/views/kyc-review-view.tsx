@@ -46,6 +46,7 @@ import {
 import { getCountry } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useT } from "@/lib/i18n/store";
 
 // Local copy of the KycSubmission.status union — there is a pre-existing
 // duplicate `KycStatus` export in supabase/types.ts (Partner.kyc_status uses a
@@ -56,13 +57,13 @@ type KycSubmissionStatus =
 
 // ---------- static lookups ----------
 
-const STATUS_LABELS: Record<KycSubmissionStatus, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  under_review: "Under Review",
-  approved: "Approved",
-  rejected: "Rejected",
-  resubmit: "Resubmit",
+const STATUS_LABEL_KEYS: Record<KycSubmissionStatus, string> = {
+  draft: "admin-kyc-status-draft",
+  submitted: "admin-kyc-status-submitted",
+  under_review: "admin-kyc-status-under-review",
+  approved: "admin-kyc-status-approved",
+  rejected: "admin-kyc-status-rejected",
+  resubmit: "admin-kyc-status-resubmit",
 };
 
 // Helper to coerce the runtime status string into our local union. The
@@ -70,27 +71,27 @@ const STATUS_LABELS: Record<KycSubmissionStatus, string> = {
 // declaration used for Partner.kyc_status, so we cast defensively here.
 function asStatus(s: string | null | undefined): KycSubmissionStatus {
   if (!s) return "draft";
-  if (s in STATUS_LABELS) return s as KycSubmissionStatus;
+  if (s in STATUS_LABEL_KEYS) return s as KycSubmissionStatus;
   return "draft";
 }
 
-const ENTITY_LABELS: Record<PartnerEntityType, string> = {
-  company: "Company",
-  individual: "Individual",
+const ENTITY_LABEL_KEYS: Record<PartnerEntityType, string> = {
+  company: "admin-kyc-entity-company",
+  individual: "admin-kyc-entity-individual",
 };
 
-const DOC_TYPE_LABELS: Record<KycDocumentType, string> = {
-  passport: "Passport",
-  id_card: "ID Card",
-  company_registration: "Company Registration",
-  tax_certificate: "Tax Certificate",
-  vat_certificate: "VAT Certificate",
-  bank_statement: "Bank Statement",
-  utility_bill: "Utility Bill",
-  beneficial_owner_declaration: "Beneficial Owner Declaration",
-  trade_license: "Trade License",
-  chamber_of_commerce: "Chamber of Commerce",
-  other: "Other",
+const DOC_TYPE_LABEL_KEYS: Record<KycDocumentType, string> = {
+  passport: "admin-kyc-doc-type-passport",
+  id_card: "admin-kyc-doc-type-id-card",
+  company_registration: "admin-kyc-doc-type-company-registration",
+  tax_certificate: "admin-kyc-doc-type-tax-certificate",
+  vat_certificate: "admin-kyc-doc-type-vat-certificate",
+  bank_statement: "admin-kyc-doc-type-bank-statement",
+  utility_bill: "admin-kyc-doc-type-utility-bill",
+  beneficial_owner_declaration: "admin-kyc-doc-type-beneficial-owner",
+  trade_license: "admin-kyc-doc-type-trade-license",
+  chamber_of_commerce: "admin-kyc-doc-type-chamber",
+  other: "admin-kyc-doc-type-other",
 };
 
 const DOC_ICON: Record<KycDocumentType, LucideIcon> = {
@@ -137,6 +138,7 @@ function entityBadgeClass(et: PartnerEntityType): string {
 export function KycReviewView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -208,42 +210,42 @@ export function KycReviewView() {
   function resolvePartnerName(k: KycSubmission): string {
     if (k.legal_name) return k.legal_name;
     const p = partnerMap.get(k.partner_id);
-    return p?.name || "Unknown partner";
+    return p?.name || t("admin-kyc-unknown-partner");
   }
 
   return (
     <div>
       <PageHeader
-        title="KYC Review"
-        description="Review compliance submissions from portal clients."
+        title={t("admin-kyc-title")}
+        description={t("admin-kyc-desc")}
       />
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <KpiCard
-          label="Pending Review"
+          label={t("admin-kyc-kpi-pending")}
           value={kpis.pending}
-          sub="Awaiting compliance"
+          sub={t("admin-kyc-kpi-pending-sub")}
           icon={Clock}
           iconClassName={kpis.pending > 0 ? "text-warning" : undefined}
         />
         <KpiCard
-          label="Under Review"
+          label={t("admin-kyc-kpi-under-review")}
           value={kpis.underReview}
-          sub="Being checked"
+          sub={t("admin-kyc-kpi-under-review-sub")}
           icon={ClipboardCheck}
         />
         <KpiCard
-          label="Approved"
+          label={t("admin-kyc-kpi-approved")}
           value={kpis.approved}
-          sub="Transferred to partner"
+          sub={t("admin-kyc-kpi-approved-sub")}
           icon={CheckCircle2}
           iconClassName="text-success"
         />
         <KpiCard
-          label="Rejected"
+          label={t("admin-kyc-kpi-rejected")}
           value={kpis.rejected}
-          sub="Returned to client"
+          sub={t("admin-kyc-kpi-rejected-sub")}
           icon={XCircle}
           iconClassName="text-destructive"
         />
@@ -255,7 +257,7 @@ export function KycReviewView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by legal name, contact…"
+              placeholder={t("admin-kyc-search-placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -263,16 +265,16 @@ export function KycReviewView() {
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full md:w-52">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t("status")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="submitted">Submitted</SelectItem>
-              <SelectItem value="under_review">Under Review</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="resubmit">Resubmit</SelectItem>
+              <SelectItem value="all">{t("admin-kyc-all-statuses")}</SelectItem>
+              <SelectItem value="draft">{t("admin-kyc-status-draft")}</SelectItem>
+              <SelectItem value="submitted">{t("admin-kyc-status-submitted")}</SelectItem>
+              <SelectItem value="under_review">{t("admin-kyc-status-under-review")}</SelectItem>
+              <SelectItem value="approved">{t("admin-kyc-status-approved")}</SelectItem>
+              <SelectItem value="rejected">{t("admin-kyc-status-rejected")}</SelectItem>
+              <SelectItem value="resubmit">{t("admin-kyc-status-resubmit")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -288,21 +290,21 @@ export function KycReviewView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<ShieldCheck className="size-6" />}
-              title="No KYC submissions"
-              description="When portal clients submit their compliance data, it will appear here for review."
+              title={t("admin-kyc-empty-title")}
+              description={t("admin-kyc-empty-desc")}
             />
           ) : (
             <div className="max-h-[calc(100vh-380px)] overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Partner</TableHead>
-                    <TableHead className="hidden md:table-cell">Entity</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden lg:table-cell">Submitted</TableHead>
-                    <TableHead className="hidden sm:table-cell text-center">Documents</TableHead>
-                    <TableHead className="hidden xl:table-cell">Reviewed By</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("admin-kyc-col-partner")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("admin-kyc-col-entity")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("admin-kyc-col-submitted")}</TableHead>
+                    <TableHead className="hidden sm:table-cell text-center">{t("admin-kyc-col-documents")}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t("admin-kyc-col-reviewed-by")}</TableHead>
+                    <TableHead className="text-right">{t("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -323,12 +325,12 @@ export function KycReviewView() {
                         <TableCell className="hidden md:table-cell">
                           <Badge className={entityBadgeClass(k.entity_type)}>
                             {k.entity_type === "company" ? <Building2 className="size-3" /> : <UserRound className="size-3" />}
-                            {ENTITY_LABELS[k.entity_type]}
+                            {t(ENTITY_LABEL_KEYS[k.entity_type])}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge className={statusBadgeClass(asStatus(k.status))}>
-                            {STATUS_LABELS[asStatus(k.status)]}
+                            {t(STATUS_LABEL_KEYS[asStatus(k.status)])}
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular">
@@ -343,7 +345,7 @@ export function KycReviewView() {
                           {k.reviewed_by ? (
                             <span className="inline-flex items-center gap-1.5">
                               <Check className="size-3.5 text-muted-foreground" />
-                              {userMap.get(k.reviewed_by) || "Reviewer"}
+                              {userMap.get(k.reviewed_by) || t("admin-kyc-reviewer")}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -357,7 +359,7 @@ export function KycReviewView() {
                             className="h-8"
                           >
                             <Eye className="size-3.5 mr-1" />
-                            Review
+                            {t("admin-kyc-review-btn")}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -400,22 +402,23 @@ export function KycReviewView() {
 
 // ---------- status flow stepper ----------
 
-const FLOW_STEPS: { key: KycSubmissionStatus; label: string }[] = [
-  { key: "draft", label: "Draft" },
-  { key: "submitted", label: "Submitted" },
-  { key: "under_review", label: "Under Review" },
-  { key: "approved", label: "Approved" },
+const FLOW_STEPS: { key: KycSubmissionStatus; labelKey: string }[] = [
+  { key: "draft", labelKey: "admin-kyc-status-draft" },
+  { key: "submitted", labelKey: "admin-kyc-status-submitted" },
+  { key: "under_review", labelKey: "admin-kyc-status-under-review" },
+  { key: "approved", labelKey: "admin-kyc-status-approved" },
 ];
 
 function StatusFlow({ status, rejectionReason }: { status: KycSubmissionStatus; rejectionReason?: string | null }) {
+  const t = useT();
   // For rejected state, show first 3 steps + a rejected terminal
   const rejected = status === "rejected";
   const steps = rejected
     ? [
-        { key: "draft" as KycSubmissionStatus, label: "Draft" },
-        { key: "submitted" as KycSubmissionStatus, label: "Submitted" },
-        { key: "under_review" as KycSubmissionStatus, label: "Under Review" },
-        { key: "rejected" as KycSubmissionStatus, label: "Rejected" },
+        { key: "draft" as KycSubmissionStatus, labelKey: "admin-kyc-status-draft" },
+        { key: "submitted" as KycSubmissionStatus, labelKey: "admin-kyc-status-submitted" },
+        { key: "under_review" as KycSubmissionStatus, labelKey: "admin-kyc-status-under-review" },
+        { key: "rejected" as KycSubmissionStatus, labelKey: "admin-kyc-status-rejected" },
       ]
     : FLOW_STEPS;
 
@@ -450,7 +453,7 @@ function StatusFlow({ status, rejectionReason }: { status: KycSubmissionStatus; 
                 {isDone && !isCurrent ? <Check className="size-3.5" /> : i + 1}
               </div>
               <span className={`text-[10px] uppercase tracking-wide font-medium whitespace-nowrap ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
-                {s.label}
+                {t(s.labelKey)}
               </span>
             </div>
             {i < steps.length - 1 && (
@@ -465,7 +468,7 @@ function StatusFlow({ status, rejectionReason }: { status: KycSubmissionStatus; 
       })}
       {rejected && rejectionReason && (
         <div className="ml-3 -mt-4 max-w-xs text-xs text-destructive/90 bg-destructive/10 border border-destructive/20 rounded-md px-2.5 py-1.5">
-          <span className="font-medium">Reason:</span> {rejectionReason}
+          <span className="font-medium">{t("admin-kyc-reason-label")}</span> {rejectionReason}
         </div>
       )}
     </div>
@@ -501,6 +504,7 @@ function ReviewDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [tab, setTab] = useState("business");
   const [notes, setNotes] = useState("");
@@ -556,7 +560,7 @@ function ReviewDialog({
       setNotesDirty(false);
       onNotesChanged();
     },
-    onError: () => toast.error("Could not save notes."),
+    onError: () => toast.error(t("admin-kyc-toast-notes-failed")),
   });
 
   // Approve + transfer
@@ -577,12 +581,12 @@ function ReviewDialog({
       setApprovedResult({ partner: data.partner, submission: data.submission });
       toast.success(
         data.portal_access
-          ? "Approved — partner updated, portal access auto-provisioned, welcome email sent."
-          : "Approved — data transferred to partner record."
+          ? t("admin-kyc-toast-approved-portal")
+          : t("admin-kyc-toast-approved")
       );
       onApproved();
     },
-    onError: (e: any) => toast.error(e.message || "Approval failed."),
+    onError: (e: any) => toast.error(e.message || t("admin-kyc-toast-approve-failed")),
   });
 
   // Request resubmission (admin asks client for more info)
@@ -600,10 +604,10 @@ function ReviewDialog({
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Resubmission requested — client has been emailed.");
+      toast.success(t("admin-kyc-toast-resubmit"));
       onApproved();
     },
-    onError: (e: any) => toast.error(e.message || "Resubmit failed."),
+    onError: (e: any) => toast.error(e.message || t("admin-kyc-toast-resubmit-failed")),
   });
 
   const sub = q.data;
@@ -623,26 +627,26 @@ function ReviewDialog({
                 <>
                   <DialogTitle className="flex items-center gap-2 text-xl">
                     <ShieldCheck className="size-5 text-primary" />
-                    <span className="truncate">{sub.legal_name || partnerMap.get(sub.partner_id)?.name || "KYC Submission"}</span>
+                    <span className="truncate">{sub.legal_name || partnerMap.get(sub.partner_id)?.name || t("admin-kyc-dialog-title")}</span>
                   </DialogTitle>
                   <DialogDescription className="flex flex-wrap items-center gap-2 mt-1.5">
                     <Badge className={entityBadgeClass(sub.entity_type)}>
                       {sub.entity_type === "company" ? <Building2 className="size-3" /> : <UserRound className="size-3" />}
-                      {ENTITY_LABELS[sub.entity_type]}
+                      {t(ENTITY_LABEL_KEYS[sub.entity_type])}
                     </Badge>
-                    <Badge className={statusBadgeClass(asStatus(sub.status))}>{STATUS_LABELS[asStatus(sub.status)]}</Badge>
+                    <Badge className={statusBadgeClass(asStatus(sub.status))}>{t(STATUS_LABEL_KEYS[asStatus(sub.status)])}</Badge>
                     {sub.auto_transferred && (
                       <Badge className="border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 gap-1">
-                        <FileCheck2 className="size-3" /> Transferred
+                        <FileCheck2 className="size-3" /> {t("admin-kyc-transferred-badge")}
                       </Badge>
                     )}
                     <span className="text-xs text-muted-foreground tabular">
-                      Submitted {fmtRelative(sub.submitted_at || sub.created_at)}
+                      {t("admin-kyc-submitted-prefix")} {fmtRelative(sub.submitted_at || sub.created_at)}
                     </span>
                   </DialogDescription>
                 </>
               ) : (
-                <DialogTitle>KYC Submission</DialogTitle>
+                <DialogTitle>{t("admin-kyc-dialog-title")}</DialogTitle>
               )}
             </div>
           </div>
@@ -663,7 +667,7 @@ function ReviewDialog({
           </div>
         ) : !sub ? (
           <div className="p-6">
-            <EmptyState title="Submission not found" description="This submission may have been deleted." />
+            <EmptyState title={t("admin-kyc-not-found-title")} description={t("admin-kyc-not-found-desc")} />
           </div>
         ) : approvedResult ? (
           // Approval success state
@@ -676,16 +680,16 @@ function ReviewDialog({
           <div className="px-6 py-5">
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="flex w-full overflow-x-auto justify-start mb-4 sm:grid sm:grid-cols-5">
-                <TabsTrigger value="business">Business</TabsTrigger>
-                <TabsTrigger value="owner">Beneficial Owner</TabsTrigger>
-                <TabsTrigger value="bank">Bank</TabsTrigger>
+                <TabsTrigger value="business">{t("admin-kyc-tab-business")}</TabsTrigger>
+                <TabsTrigger value="owner">{t("admin-kyc-tab-owner")}</TabsTrigger>
+                <TabsTrigger value="bank">{t("admin-kyc-tab-bank")}</TabsTrigger>
                 <TabsTrigger value="documents">
-                  Documents
+                  {t("admin-kyc-col-documents")}
                   <Badge variant="secondary" className="ml-1.5 tabular h-4 px-1.5">
                     {sub.documents?.length || 0}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="notes">Review Notes</TabsTrigger>
+                <TabsTrigger value="notes">{t("admin-kyc-tab-notes")}</TabsTrigger>
               </TabsList>
 
               {/* Business Info */}
@@ -694,35 +698,35 @@ function ReviewDialog({
                   <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <Building2 className="size-4 text-primary" />
-                      {sub.entity_type === "company" ? "Company Information" : "Individual Information"}
+                      {sub.entity_type === "company" ? t("admin-kyc-card-company") : t("admin-kyc-card-individual")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
                     <dl className="divide-y divide-border/50">
-                      <DefRow label="Entity Type" value={ENTITY_LABELS[sub.entity_type]} />
-                      <DefRow label="Legal Name" value={sub.legal_name} />
-                      {sub.trade_name && <DefRow label="Trade Name" value={sub.trade_name} />}
+                      <DefRow label={t("admin-kyc-field-entity-type")} value={t(ENTITY_LABEL_KEYS[sub.entity_type])} />
+                      <DefRow label={t("admin-kyc-field-legal-name")} value={sub.legal_name} />
+                      {sub.trade_name && <DefRow label={t("admin-kyc-field-trade-name")} value={sub.trade_name} />}
                       {sub.entity_type === "company" && (
                         <>
-                          <DefRow label="Registration Number" value={sub.registration_number} mono />
-                          <DefRow label="Tax ID" value={sub.tax_id} mono />
-                          <DefRow label="VAT Number" value={sub.vat_number} mono />
-                          <DefRow label="Website" value={sub.company_website} />
+                          <DefRow label={t("admin-kyc-field-reg-number")} value={sub.registration_number} mono />
+                          <DefRow label={t("admin-kyc-field-tax-id")} value={sub.tax_id} mono />
+                          <DefRow label={t("admin-kyc-field-vat-number")} value={sub.vat_number} mono />
+                          <DefRow label={t("admin-kyc-field-website")} value={sub.company_website} />
                         </>
                       )}
                       <DefRow
-                        label="Address"
+                        label={t("admin-kyc-field-address")}
                         value={[sub.address_line, sub.postal_code, sub.city, sub.state, getCountry(sub.country || "")?.name || sub.country]
                           .filter(Boolean)
                           .join(", ") || null}
                       />
-                      <DefRow label="Contact Person" value={sub.contact_name} />
-                      <DefRow label="Contact Email" value={sub.contact_email} mono />
-                      <DefRow label="Contact Phone" value={sub.contact_phone} mono />
-                      {sub.contact_position && <DefRow label="Position" value={sub.contact_position} />}
-                      <DefRow label="Business Activity" value={sub.business_activity} />
-                      <DefRow label="Expected Monthly Volume" value={sub.expected_monthly_volume} />
-                      <DefRow label="Source of Funds" value={sub.source_of_funds} />
+                      <DefRow label={t("admin-kyc-field-contact-person")} value={sub.contact_name} />
+                      <DefRow label={t("admin-kyc-field-contact-email")} value={sub.contact_email} mono />
+                      <DefRow label={t("admin-kyc-field-contact-phone")} value={sub.contact_phone} mono />
+                      {sub.contact_position && <DefRow label={t("admin-kyc-field-position")} value={sub.contact_position} />}
+                      <DefRow label={t("admin-kyc-field-business-activity")} value={sub.business_activity} />
+                      <DefRow label={t("admin-kyc-field-monthly-volume")} value={sub.expected_monthly_volume} />
+                      <DefRow label={t("admin-kyc-field-source-of-funds")} value={sub.source_of_funds} />
                     </dl>
                   </CardContent>
                 </Card>
@@ -734,22 +738,22 @@ function ReviewDialog({
                   <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <UserCheck className="size-4 text-primary" />
-                      Beneficial Owner (AML)
+                      {t("admin-kyc-card-owner")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
                     {!sub.owner_name && !sub.owner_id_number && !sub.owner_nationality ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">
-                        No beneficial owner information provided.
+                        {t("admin-kyc-no-owner")}
                       </p>
                     ) : (
                       <dl className="divide-y divide-border/50">
-                        <DefRow label="Owner Name" value={sub.owner_name} />
-                        <DefRow label="ID Type" value={sub.owner_id_type} />
-                        <DefRow label="ID Number" value={sub.owner_id_number} mono />
-                        <DefRow label="Nationality" value={getCountry(sub.owner_nationality || "")?.name || sub.owner_nationality} />
-                        <DefRow label="Date of Birth" value={sub.owner_dob ? fmtDate(sub.owner_dob) : null} />
-                        <DefRow label="Address" value={sub.owner_address} />
+                        <DefRow label={t("admin-kyc-field-owner-name")} value={sub.owner_name} />
+                        <DefRow label={t("admin-kyc-field-id-type")} value={sub.owner_id_type} />
+                        <DefRow label={t("admin-kyc-field-id-number")} value={sub.owner_id_number} mono />
+                        <DefRow label={t("admin-kyc-field-nationality")} value={getCountry(sub.owner_nationality || "")?.name || sub.owner_nationality} />
+                        <DefRow label={t("admin-kyc-field-dob")} value={sub.owner_dob ? fmtDate(sub.owner_dob) : null} />
+                        <DefRow label={t("admin-kyc-field-address")} value={sub.owner_address} />
                       </dl>
                     )}
                   </CardContent>
@@ -762,20 +766,20 @@ function ReviewDialog({
                   <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <Landmark className="size-4 text-primary" />
-                      Banking Details
+                      {t("admin-kyc-card-bank")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
                     {!sub.bank_name && !sub.bank_account && !sub.bank_iban && !sub.bank_swift ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">
-                        No banking details provided.
+                        {t("admin-kyc-no-bank")}
                       </p>
                     ) : (
                       <dl className="divide-y divide-border/50">
-                        <DefRow label="Bank Name" value={sub.bank_name} />
-                        <DefRow label="Account Number" value={sub.bank_account} mono />
-                        <DefRow label="IBAN" value={sub.bank_iban} mono />
-                        <DefRow label="SWIFT / BIC" value={sub.bank_swift} mono />
+                        <DefRow label={t("admin-kyc-field-bank-name")} value={sub.bank_name} />
+                        <DefRow label={t("admin-kyc-field-account-number")} value={sub.bank_account} mono />
+                        <DefRow label={t("admin-kyc-field-iban")} value={sub.bank_iban} mono />
+                        <DefRow label={t("admin-kyc-field-swift")} value={sub.bank_swift} mono />
                       </dl>
                     )}
                   </CardContent>
@@ -788,14 +792,14 @@ function ReviewDialog({
                   <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <FileText className="size-4 text-primary" />
-                      Uploaded Documents
+                      {t("admin-kyc-card-docs")}
                       <Badge variant="secondary" className="tabular ml-1">{sub.documents?.length || 0}</Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
                     {(!sub.documents || sub.documents.length === 0) ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">
-                        No documents uploaded.
+                        {t("admin-kyc-no-docs")}
                       </p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -811,7 +815,7 @@ function ReviewDialog({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <Badge variant="outline" className="mb-1 text-[10px]">
-                                  {DOC_TYPE_LABELS[doc.type]}
+                                  {t(DOC_TYPE_LABEL_KEYS[doc.type])}
                                 </Badge>
                                 <p className="text-sm font-medium truncate" title={doc.filename}>
                                   {doc.filename}
@@ -824,10 +828,10 @@ function ReviewDialog({
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 shrink-0"
-                                onClick={() => { if (doc.file_path || doc.url) { window.open(doc.url || `/api/documents/${doc.id}`, "_blank"); } else { toast.info("No file available for preview"); } }}
+                                onClick={() => { if (doc.file_path || doc.url) { window.open(doc.url || `/api/documents/${doc.id}`, "_blank"); } else { toast.info(t("admin-kyc-no-file")); } }}
                               >
                                 <Eye className="size-3.5 mr-1" />
-                                View
+                                {t("view")}
                               </Button>
                             </div>
                           );
@@ -844,12 +848,12 @@ function ReviewDialog({
                   <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <ClipboardCheck className="size-4 text-primary" />
-                      Compliance Review Notes
+                      {t("admin-kyc-card-notes")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0 space-y-2">
                     <Textarea
-                      placeholder="Internal compliance notes — auto-saves on blur. Visible only to admins."
+                      placeholder={t("admin-kyc-notes-placeholder")}
                       rows={6}
                       value={notes}
                       onChange={(e) => {
@@ -861,12 +865,12 @@ function ReviewDialog({
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
                         {saveNotesMut.isPending
-                          ? "Saving…"
+                          ? t("admin-saving")
                           : notesDirty
-                            ? "Unsaved — click away to save"
+                            ? t("admin-kyc-unsaved")
                             : notes
-                              ? "Saved"
-                              : "No notes yet"}
+                              ? t("admin-kyc-saved")
+                              : t("admin-kyc-no-notes")}
                       </span>
                       <Button
                         size="sm"
@@ -875,25 +879,25 @@ function ReviewDialog({
                         disabled={!notesDirty || saveNotesMut.isPending}
                         onClick={() => saveNotesMut.mutate(notes)}
                       >
-                        Save now
+                        {t("admin-kyc-save-now")}
                       </Button>
                     </div>
 
                     {sub.reviewed_by && (
                       <div className="pt-3 mt-3 border-t border-border/50 text-xs text-muted-foreground space-y-1">
                         <p>
-                          <span className="font-medium text-foreground">Reviewed by:</span>{" "}
-                          {userMap.get(sub.reviewed_by) || "Reviewer"}
+                          <span className="font-medium text-foreground">{t("admin-kyc-reviewed-by-label")}</span>{" "}
+                          {userMap.get(sub.reviewed_by) || t("admin-kyc-reviewer")}
                         </p>
                         {sub.reviewed_at && (
                           <p>
-                            <span className="font-medium text-foreground">Reviewed at:</span>{" "}
+                            <span className="font-medium text-foreground">{t("admin-kyc-reviewed-at")}:</span>{" "}
                             <span className="tabular">{fmtDateTime(sub.reviewed_at)}</span>
                           </p>
                         )}
                         {sub.rejection_reason && (
                           <p className="text-destructive">
-                            <span className="font-medium">Rejection reason:</span> {sub.rejection_reason}
+                            <span className="font-medium">{t("admin-kyc-rejection-reason")}</span> {sub.rejection_reason}
                           </p>
                         )}
                       </div>
@@ -911,8 +915,8 @@ function ReviewDialog({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-3">
               <p className="text-xs text-muted-foreground">
                 {asStatus(sub.status) === "approved"
-                  ? "This submission is approved. Data has been transferred to the partner record."
-                  : "Verify all documents and data before approving. Approval auto-transfers data to the partner record."}
+                  ? t("admin-kyc-action-approved-desc")
+                  : t("admin-kyc-action-pending-desc")}
               </p>
               <div className="flex items-center gap-2 shrink-0">
                 <Button
@@ -920,14 +924,14 @@ function ReviewDialog({
                   className="border-amber-500/40 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40"
                   onClick={() => {
                     const note = prompt(
-                      "What does the client need to update or provide? This note will be emailed to them."
+                      t("admin-kyc-resubmit-prompt")
                     );
                     if (note !== null) resubmitMut.mutate(note);
                   }}
                   disabled={approveMut.isPending || resubmitMut.isPending}
                 >
                   <AlertTriangle className="size-4 mr-1" />
-                  Request update
+                  {t("admin-kyc-request-update")}
                 </Button>
                 <Button
                   variant="outline"
@@ -936,7 +940,7 @@ function ReviewDialog({
                   disabled={approveMut.isPending}
                 >
                   <XCircle className="size-4 mr-1" />
-                  Reject
+                  {t("reject")}
                 </Button>
                 <Button
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -948,7 +952,7 @@ function ReviewDialog({
                   ) : (
                     <CheckCircle2 className="size-4 mr-1" />
                   )}
-                  {asStatus(sub.status) === "approved" ? "Already Approved" : "Approve & Transfer"}
+                  {asStatus(sub.status) === "approved" ? t("admin-kyc-already-approved") : t("admin-kyc-approve-transfer")}
                 </Button>
               </div>
             </div>
@@ -960,9 +964,9 @@ function ReviewDialog({
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2 text-sm text-destructive">
                 <AlertTriangle className="size-4" />
-                <span>This submission was rejected.</span>
+                <span>{t("admin-kyc-rejected-banner")}</span>
               </div>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t("close")}</Button>
             </div>
           </DialogFooter>
         )}
@@ -973,24 +977,24 @@ function ReviewDialog({
 
 // ---------- approved / transferred state ----------
 
-const TRANSFERRED_FIELDS: { key: keyof Partner; label: string }[] = [
-  { key: "name", label: "Legal Name" },
-  { key: "entity_type", label: "Entity Type" },
-  { key: "tax_id", label: "Tax ID" },
-  { key: "vat_number", label: "VAT Number" },
-  { key: "registration_number", label: "Registration Number" },
-  { key: "address_line", label: "Address" },
-  { key: "city", label: "City" },
-  { key: "state", label: "State" },
-  { key: "postal_code", label: "Postal Code" },
-  { key: "country", label: "Country" },
-  { key: "contact_name", label: "Contact Name" },
-  { key: "contact_email", label: "Contact Email" },
-  { key: "contact_phone", label: "Contact Phone" },
-  { key: "bank_name", label: "Bank Name" },
-  { key: "bank_account", label: "Bank Account" },
-  { key: "bank_iban", label: "IBAN" },
-  { key: "bank_swift", label: "SWIFT" },
+const TRANSFERRED_FIELDS: { key: keyof Partner; labelKey: string }[] = [
+  { key: "name", labelKey: "admin-kyc-field-legal-name" },
+  { key: "entity_type", labelKey: "admin-kyc-field-entity-type" },
+  { key: "tax_id", labelKey: "admin-kyc-field-tax-id" },
+  { key: "vat_number", labelKey: "admin-kyc-field-vat-number" },
+  { key: "registration_number", labelKey: "admin-kyc-field-reg-number" },
+  { key: "address_line", labelKey: "admin-kyc-field-address" },
+  { key: "city", labelKey: "admin-kyc-field-city" },
+  { key: "state", labelKey: "admin-kyc-field-state" },
+  { key: "postal_code", labelKey: "admin-kyc-field-postal-code" },
+  { key: "country", labelKey: "admin-kyc-field-country" },
+  { key: "contact_name", labelKey: "admin-kyc-field-contact-name" },
+  { key: "contact_email", labelKey: "admin-kyc-field-contact-email" },
+  { key: "contact_phone", labelKey: "admin-kyc-field-contact-phone" },
+  { key: "bank_name", labelKey: "admin-kyc-field-bank-name" },
+  { key: "bank_account", labelKey: "admin-kyc-field-bank-account" },
+  { key: "bank_iban", labelKey: "admin-kyc-field-iban" },
+  { key: "bank_swift", labelKey: "admin-kyc-field-swift-short" },
 ];
 
 function ApprovedState({
@@ -1000,6 +1004,7 @@ function ApprovedState({
   submission: KycSubmission;
   onClose: () => void;
 }) {
+  const t = useT();
   return (
     <div className="px-6 py-8">
       <div className="flex flex-col items-center text-center mb-6">
@@ -1009,13 +1014,13 @@ function ApprovedState({
             <Check className="size-9" strokeWidth={3} />
           </div>
         </div>
-        <h2 className="text-xl font-semibold text-foreground">Approved</h2>
+        <h2 className="text-xl font-semibold text-foreground">{t("admin-kyc-approved-state-title")}</h2>
         <p className="text-sm text-muted-foreground mt-1 max-w-md">
-          All compliance data has been automatically transferred to the partner record.
+          {t("admin-kyc-approved-state-desc")}
         </p>
         <Badge className="mt-3 border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 gap-1">
           <FileCheck2 className="size-3" />
-          Data transferred to partner record
+          {t("admin-kyc-data-transferred")}
         </Badge>
       </div>
 
@@ -1024,7 +1029,7 @@ function ApprovedState({
           <CardHeader className="pb-2 pt-4">
             <CardTitle className="text-sm flex items-center gap-2">
               <Building2 className="size-4 text-primary" />
-              Partner Record Updated
+              {t("admin-kyc-card-partner-updated")}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
@@ -1037,7 +1042,7 @@ function ApprovedState({
                     key={String(f.key)}
                     className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0"
                   >
-                    <span className="text-xs text-muted-foreground">{f.label}</span>
+                    <span className="text-xs text-muted-foreground">{t(f.labelKey)}</span>
                     <span className="text-xs font-medium tabular truncate max-w-[60%] text-right">
                       {display || <span className="text-muted-foreground">—</span>}
                     </span>
@@ -1051,11 +1056,11 @@ function ApprovedState({
 
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/60">
         <div className="text-xs text-muted-foreground">
-          Approved {fmtDateTime(submission.reviewed_at || new Date().toISOString())}
+          {t("admin-kyc-approved-prefix")} {fmtDateTime(submission.reviewed_at || new Date().toISOString())}
         </div>
         <Button onClick={onClose} className="bg-emerald-600 hover:bg-emerald-700 text-white">
           <Check className="size-4 mr-1" />
-          Done
+          {t("admin-kyc-done")}
         </Button>
       </div>
     </div>
@@ -1074,6 +1079,7 @@ function RejectDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [reason, setReason] = useState("");
   // Reset the reason field whenever a different submission is opened for rejection.
@@ -1100,11 +1106,11 @@ function RejectDialog({
       return r.json();
     },
     onSuccess: () => {
-      toast.success("Submission rejected. The client will be asked to resubmit.");
+      toast.success(t("admin-kyc-toast-rejected"));
       onDone();
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(e.message || "Could not reject."),
+    onError: (e: any) => toast.error(e.message || t("admin-kyc-toast-reject-failed")),
   });
 
   return (
@@ -1113,17 +1119,17 @@ function RejectDialog({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <XCircle className="size-5 text-destructive" />
-            Reject KYC submission?
+            {t("admin-kyc-reject-dialog-title")}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            The client will be notified and asked to resubmit with corrections. Please provide a clear reason.
+            {t("admin-kyc-reject-dialog-desc")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="py-2">
-          <Label htmlFor="reject-reason" className="text-xs">Rejection reason *</Label>
+          <Label htmlFor="reject-reason" className="text-xs">{t("admin-kyc-reject-reason-label")}</Label>
           <Textarea
             id="reject-reason"
-            placeholder="e.g. The passport scan is unreadable. Please re-upload a clear, full-page color scan."
+            placeholder={t("admin-kyc-reject-reason-placeholder")}
             rows={4}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -1131,7 +1137,7 @@ function RejectDialog({
           />
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={mut.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={mut.isPending}>{t("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             disabled={!reason.trim() || mut.isPending}
             onClick={(e) => {
@@ -1140,7 +1146,7 @@ function RejectDialog({
             }}
             className="bg-destructive text-white hover:bg-destructive/90"
           >
-            {mut.isPending ? "Rejecting…" : "Reject submission"}
+            {mut.isPending ? t("admin-kyc-rejecting") : t("admin-kyc-reject-submit")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

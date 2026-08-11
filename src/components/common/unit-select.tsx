@@ -16,6 +16,7 @@ import {
   getUnitsByCategory,
   type UnitCategory,
 } from "@/lib/utils/units";
+import { useT } from "@/lib/i18n/store";
 
 interface UnitSelectProps {
   value: string;
@@ -26,13 +27,13 @@ interface UnitSelectProps {
   disabled?: boolean;
 }
 
-const CATEGORIES: Array<{ value: UnitCategory; label: string }> = [
-  { value: "weight", label: "Weight" },
-  { value: "volume", label: "Volume" },
-  { value: "length", label: "Length" },
-  { value: "area", label: "Area" },
-  { value: "count", label: "Count / Packaging" },
-  { value: "other", label: "Other" },
+const CATEGORIES_KEYS: Array<{ value: UnitCategory; key: string }> = [
+  { value: "weight", key: "misc-unit-weight" },
+  { value: "volume", key: "misc-unit-volume" },
+  { value: "length", key: "misc-unit-length" },
+  { value: "area", key: "misc-unit-area" },
+  { value: "count", key: "misc-unit-count" },
+  { value: "other", key: "misc-unit-other" },
 ];
 
 /**
@@ -45,10 +46,12 @@ const CATEGORIES: Array<{ value: UnitCategory; label: string }> = [
 export function UnitSelect({
   value,
   onChange,
-  placeholder = "Select unit",
+  placeholder,
   className,
   disabled,
 }: UnitSelectProps) {
+  const t = useT();
+  const effectivePlaceholder = placeholder || t("misc-select-unit");
   const isCustom =
     !!value && !UNITS_OF_MEASURE.some((u) => u.value === value);
 
@@ -59,15 +62,15 @@ export function UnitSelect({
       disabled={disabled}
     >
       <SelectTrigger className={className}>
-        <SelectValue placeholder={placeholder} />
+        <SelectValue placeholder={effectivePlaceholder} />
       </SelectTrigger>
       <SelectContent>
-        {CATEGORIES.map((cat) => {
+        {CATEGORIES_KEYS.map((cat) => {
           const units = getUnitsByCategory(cat.value);
           if (units.length === 0) return null;
           return (
             <SelectGroup key={cat.value}>
-              <SelectLabel>{cat.label}</SelectLabel>
+              <SelectLabel>{t(cat.key)}</SelectLabel>
               {units.map((u) => (
                 <SelectItem key={u.value} value={u.value}>
                   {u.label}
@@ -78,7 +81,7 @@ export function UnitSelect({
         })}
         {isCustom && (
           <SelectGroup>
-            <SelectLabel>Custom</SelectLabel>
+            <SelectLabel>{t("misc-unit-custom")}</SelectLabel>
             <SelectItem value={value}>{value}</SelectItem>
           </SelectGroup>
         )}

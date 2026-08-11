@@ -4,6 +4,7 @@ import * as React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
 import { useSearchStore } from "@/components/layout/global-search";
+import { useT } from "@/lib/i18n/store";
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
@@ -55,6 +56,7 @@ export function KeyboardShortcuts() {
   const setSelectedId = useAppStore((s) => s.setSelectedId);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const chordRef = React.useRef<{ prefix: string; until: number } | null>(null);
+  const t = useT();
 
   React.useEffect(() => {
     function isTypingContext(el: EventTarget | null): boolean {
@@ -112,8 +114,8 @@ export function KeyboardShortcuts() {
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Keyboard shortcuts</DialogTitle>
-          <DialogDescription>Every shortcut is disabled while typing in a field.</DialogDescription>
+          <DialogTitle>{t("misc-keyboard-shortcuts-title")}</DialogTitle>
+          <DialogDescription>{t("misc-keyboard-shortcuts-desc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 text-sm">
           <Row keys={["⌘", "K"]} desc="Open global search" />

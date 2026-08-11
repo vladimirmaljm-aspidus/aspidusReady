@@ -33,6 +33,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { fmtDate, fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/store";
 
 /* ────────────────────────────────────────────────────────────────────────
    Types — mirror what the /api/portal-access/locations endpoint returns.
@@ -125,6 +126,7 @@ function sourceBadge(source: PortalLocation["source"]) {
 export function PortalLocationsView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const { data, isLoading, isFetching, refetch, error } = useQuery<LocationsResponse>({
     queryKey: ["portal-locations", tenantKey],
@@ -151,22 +153,22 @@ export function PortalLocationsView() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Portal Locations"
-        description="Where your portal clients are accessing from. Every location links to Google Maps — no API key needed."
+        title={t("portal-locations")}
+        description={t("portal-loc-desc")}
         actions={
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className={cn("size-3.5 mr-1", isFetching && "animate-spin")} />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
 
       {/* ── Stat tiles ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatTile label="Portal users tracked" value={locations.length} />
-        <StatTile label="With GPS coordinates" value={withGps} />
-        <StatTile label="Resolved via IP" value={withCoords - withGps} />
-        <StatTile label="Failed logins (recent)" value={failedLogins} alert={failedLogins > 0} />
+        <StatTile label={t("portal-loc-stat-tracked")} value={locations.length} />
+        <StatTile label={t("portal-loc-stat-gps")} value={withGps} />
+        <StatTile label={t("portal-loc-stat-ip")} value={withCoords - withGps} />
+        <StatTile label={t("portal-loc-stat-failed")} value={failedLogins} alert={failedLogins > 0} />
       </div>
 
       {error ? (
@@ -174,7 +176,7 @@ export function PortalLocationsView() {
           <CardContent className="p-4 flex items-start gap-3">
             <ShieldAlert className="size-5 text-destructive shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-destructive">Failed to load locations</p>
+              <p className="text-sm font-medium text-destructive">{t("portal-loc-load-failed")}</p>
               <p className="text-xs text-muted-foreground mt-1">{(error as Error).message}</p>
             </div>
           </CardContent>
@@ -185,36 +187,32 @@ export function PortalLocationsView() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <MapPin className="size-4 text-primary" /> Last Known Locations
+            <MapPin className="size-4 text-primary" /> {t("portal-loc-last-known-title")}
           </CardTitle>
           <CardDescription className="text-xs">
-            Per-portal-user location. <span className="font-medium">GPS</span> = coordinates
-            reported by the portal client; <span className="font-medium">IP</span> = resolved
-            from the last login IP. Click <span className="font-medium">Open</span> to view
-            the exact spot in Google Maps.
+            {t("portal-loc-last-known-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading…</div>
+            <div className="text-center py-8 text-muted-foreground">{t("portal-loading-dots")}</div>
           ) : locations.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No portal user locations yet. Locations appear after a portal
-              client logs in for the first time.
+              {t("portal-loc-empty")}
             </div>
           ) : (
             <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Portal user</TableHead>
-                    <TableHead>IP address</TableHead>
-                    <TableHead>Country</TableHead>
-                    <TableHead>City</TableHead>
-                    <TableHead>Coordinates</TableHead>
-                    <TableHead>Last login</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Map</TableHead>
+                    <TableHead>{t("portal-loc-col-user")}</TableHead>
+                    <TableHead>{t("portal-loc-col-ip")}</TableHead>
+                    <TableHead>{t("portal-loc-col-country")}</TableHead>
+                    <TableHead>{t("portal-loc-col-city")}</TableHead>
+                    <TableHead>{t("portal-loc-col-coords")}</TableHead>
+                    <TableHead>{t("portal-last-login")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead className="text-right">{t("portal-loc-col-map")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -228,7 +226,7 @@ export function PortalLocationsView() {
                             <div className="min-w-0">
                               <p className="font-medium truncate">{loc.email || "—"}</p>
                               <p className="text-[11px] text-muted-foreground">
-                                tier: {loc.tier}
+                                {t("portal-loc-tier-prefix")} {loc.tier}
                               </p>
                             </div>
                           </div>
@@ -272,7 +270,7 @@ export function PortalLocationsView() {
                               className="inline-flex items-center gap-1 text-xs text-primary hover:underline px-1 py-0.5 rounded hover:bg-primary/10"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <ExternalLink className="size-3" /> Open
+                              <ExternalLink className="size-3" /> {t("portal-loc-open")}
                             </a>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
@@ -292,19 +290,18 @@ export function PortalLocationsView() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Clock className="size-4 text-primary" /> Portal Login History
+            <Clock className="size-4 text-primary" /> {t("log-portal-login-history")}
           </CardTitle>
           <CardDescription className="text-xs">
-            Every recent portal login attempt — both successes and failures.
-            Click the IP to look it up on the map.
+            {t("log-portal-login-history-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading…</div>
+            <div className="text-center py-8 text-muted-foreground">{t("portal-loading-dots")}</div>
           ) : loginHistory.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No portal login attempts recorded yet.
+              {t("portal-loc-history-empty")}
             </div>
           ) : (
             <ScrollArea className="max-h-96">
@@ -312,12 +309,12 @@ export function PortalLocationsView() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Email / username</TableHead>
-                      <TableHead>IP</TableHead>
-                      <TableHead>Country</TableHead>
-                      <TableHead>Device</TableHead>
-                      <TableHead>Result</TableHead>
-                      <TableHead>Time</TableHead>
+                      <TableHead>{t("portal-loc-col-email-username")}</TableHead>
+                      <TableHead>{t("portal-loc-col-ip-short")}</TableHead>
+                      <TableHead>{t("portal-loc-col-country")}</TableHead>
+                      <TableHead>{t("portal-loc-col-device")}</TableHead>
+                      <TableHead>{t("portal-loc-col-result")}</TableHead>
+                      <TableHead>{t("portal-loc-col-time")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -335,7 +332,7 @@ export function PortalLocationsView() {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-primary hover:underline"
-                                  title="Look up IP on map"
+                                  title={t("portal-loc-lookup-ip")}
                                 >
                                   <ExternalLink className="size-3" />
                                 </a>
@@ -348,7 +345,7 @@ export function PortalLocationsView() {
                           </TableCell>
                           <TableCell>
                             <Badge variant={h.success ? "default" : "destructive"}>
-                              {h.success ? "Success" : "Failed"}
+                              {h.success ? t("success") : t("failed")}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs" title={h.created_at}>
@@ -370,11 +367,10 @@ export function PortalLocationsView() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShieldAlert className="size-4 text-primary" /> Portal Login Audit
+              <ShieldAlert className="size-4 text-primary" /> {t("log-portal-login-audit")}
             </CardTitle>
             <CardDescription className="text-xs">
-              Most recent <code>portal.login</code> audit entries — raw signals
-              used to assemble the table above.
+              {t("log-portal-login-audit-desc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
@@ -383,10 +379,10 @@ export function PortalLocationsView() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>IP</TableHead>
-                      <TableHead>Device</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead>When</TableHead>
+                      <TableHead>{t("portal-loc-col-ip-short")}</TableHead>
+                      <TableHead>{t("portal-loc-col-device")}</TableHead>
+                      <TableHead>{t("portal-loc-col-details")}</TableHead>
+                      <TableHead>{t("portal-loc-col-when")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

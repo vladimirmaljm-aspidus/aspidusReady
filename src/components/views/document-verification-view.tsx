@@ -28,15 +28,16 @@ import { EmptyState } from "@/components/common/empty-state";
 import { fmtDate, fmtDateTime, fmtBytes, fmtRelative } from "@/lib/utils/format";
 import { DocumentVerification, Offer, Invoice, Proforma } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 
 type DocType = "offer" | "invoice" | "proforma";
 
-const DOC_TYPE_LABELS: Record<DocType, string> = {
-  offer: "Offer", invoice: "Invoice", proforma: "Proforma",
+const DOC_TYPE_LABEL_KEYS: Record<DocType, string> = {
+  offer: "admin-verify-doc-type-offer", invoice: "admin-verify-doc-type-invoice", proforma: "admin-verify-doc-type-proforma",
 };
 
-const STATUS_LABELS: Record<DocumentVerification["status"], string> = {
-  active: "Active", revoked: "Revoked", superseded: "Superseded",
+const STATUS_LABEL_KEYS: Record<DocumentVerification["status"], string> = {
+  active: "admin-verify-status-active", revoked: "admin-verify-status-revoked", superseded: "admin-verify-status-superseded",
 };
 
 const STATUS_BADGE: Record<DocumentVerification["status"], string> = {
@@ -50,24 +51,25 @@ const STATUS_BADGE: Record<DocumentVerification["status"], string> = {
 // ============================================================
 export function DocumentVerificationView() {
   const [tab, setTab] = useState("by-code");
+  const t = useT();
 
   return (
     <div>
       <PageHeader
-        title="Document Verification"
-        description="Verify document authenticity and check for modifications."
+        title={t("admin-verify-title")}
+        description={t("admin-verify-desc")}
       />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="flex w-full max-w-md overflow-x-auto justify-start sm:grid sm:grid-cols-3">
           <TabsTrigger value="by-code" className="text-xs sm:text-sm">
-            <ScanLine className="size-3.5 mr-1.5" /> Verify by Code
+            <ScanLine className="size-3.5 mr-1.5" /> {t("admin-verify-tab-by-code")}
           </TabsTrigger>
           <TabsTrigger value="by-doc" className="text-xs sm:text-sm">
-            <FileSearch className="size-3.5 mr-1.5" /> Verify by Document
+            <FileSearch className="size-3.5 mr-1.5" /> {t("admin-verify-tab-by-doc")}
           </TabsTrigger>
           <TabsTrigger value="forensic" className="text-xs sm:text-sm">
-            <Fingerprint className="size-3.5 mr-1.5" /> Forensic Check
+            <Fingerprint className="size-3.5 mr-1.5" /> {t("admin-verify-tab-forensic")}
           </TabsTrigger>
         </TabsList>
 
@@ -104,6 +106,7 @@ interface VerifyResult {
 function VerifyByCodeTab() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [code, setCode] = useState("");
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
@@ -122,7 +125,7 @@ function VerifyByCodeTab() {
   function handleVerify() {
     const trimmed = code.trim();
     if (!trimmed) {
-      toast.error("Enter a verification code.");
+      toast.error(t("admin-verify-enter-code"));
       return;
     }
     setSubmittedCode(trimmed);
@@ -134,26 +137,26 @@ function VerifyByCodeTab() {
       <Card className="border-border/60 shadow-soft rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <ScanLine className="size-4 text-primary" /> Code lookup
+            <ScanLine className="size-4 text-primary" /> {t("admin-verify-code-lookup")}
           </CardTitle>
           <CardDescription className="text-xs">
-            Enter the verification code printed on the document or embedded in its QR.
+            {t("admin-verify-code-lookup-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="code" className="text-xs">Verification code</Label>
+            <Label htmlFor="code" className="text-xs">{t("admin-verify-code-label")}</Label>
             <Input
               id="code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleVerify()}
-              placeholder="e.g. ASP-OF-2026-0014-AB12"
+              placeholder={t("admin-verify-code-placeholder")}
               className="font-mono"
               autoCapitalize="characters"
             />
             <p className="text-[11px] text-muted-foreground">
-              Codes are case-insensitive. They appear on the bottom of every issued PDF.
+              {t("admin-verify-code-hint")}
             </p>
           </div>
           <Button onClick={handleVerify} disabled={isLoading || isFetching} className="w-full">
@@ -162,7 +165,7 @@ function VerifyByCodeTab() {
             ) : (
               <Search className="size-4 mr-1" />
             )}
-            Verify document
+            {t("admin-verify-verify-btn")}
           </Button>
         </CardContent>
       </Card>
@@ -170,17 +173,17 @@ function VerifyByCodeTab() {
       {/* Result panel */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Result</CardTitle>
+          <CardTitle className="text-base">{t("admin-verify-result-title")}</CardTitle>
           <CardDescription className="text-xs">
-            {submittedCode ? `Code: ${submittedCode}` : "Awaiting input."}
+            {submittedCode ? `${t("admin-verify-result-code-prefix")} ${submittedCode}` : t("admin-verify-result-awaiting")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!submittedCode ? (
             <EmptyState
               icon={<ShieldCheck className="size-6" />}
-              title="No verification submitted"
-              description="Enter a code on the left to verify a document."
+              title={t("admin-verify-empty-title")}
+              description={t("admin-verify-empty-desc")}
             />
           ) : isLoading || isFetching ? (
             <div className="space-y-3">
@@ -197,28 +200,29 @@ function VerifyByCodeTab() {
 }
 
 function VerifyResultView({ result }: { result: VerifyResult }) {
+  const t = useT();
   if (result.valid) {
     return (
       <div className="space-y-4">
         <Alert className="border-chart-1/30 bg-chart-1/5">
           <CheckCircle2 className="size-4 text-chart-1" />
-          <AlertTitle className="text-chart-1">Authentic document</AlertTitle>
+          <AlertTitle className="text-chart-1">{t("admin-verify-authentic")}</AlertTitle>
           <AlertDescription className="text-sm">
             {result.message}
           </AlertDescription>
         </Alert>
 
         <div className="grid grid-cols-2 gap-3">
-          <DetailField icon={FileText} label="Document type" value={result.document_type ? DOC_TYPE_LABELS[result.document_type as DocType] : "—"} />
-          <DetailField icon={Hash} label="Document number" value={result.document_number || "—"} mono />
-          <DetailField icon={Calendar} label="Issued at" value={result.issued_at ? fmtDateTime(result.issued_at) : "—"} />
-          <DetailField icon={Activity} label="Verification count" value={String(result.verification_count ?? "—")} mono />
+          <DetailField icon={FileText} label={t("admin-verify-doc-type-label")} value={result.document_type ? t(DOC_TYPE_LABEL_KEYS[result.document_type as DocType]) : "—"} />
+          <DetailField icon={Hash} label={t("admin-verify-doc-number-label")} value={result.document_number || "—"} mono />
+          <DetailField icon={Calendar} label={t("admin-verify-issued-at")} value={result.issued_at ? fmtDateTime(result.issued_at) : "—"} />
+          <DetailField icon={Activity} label={t("admin-verify-verification-count")} value={String(result.verification_count ?? "—")} mono />
         </div>
 
         {result.last_verified_at && (
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <Globe className="size-3.5" />
-            Last verified <span className="tabular">{fmtRelative(result.last_verified_at)}</span>
+            {t("admin-verify-last-verified")} <span className="tabular">{fmtRelative(result.last_verified_at)}</span>
           </div>
         )}
       </div>
@@ -232,19 +236,19 @@ function VerifyResultView({ result }: { result: VerifyResult }) {
         className={result.result === "invalid" ? "" : "border-chart-3/30 bg-chart-3/5"}>
         <ShieldX className="size-4" />
         <AlertTitle>
-          {result.result === "invalid" ? "Invalid verification code"
-            : result.result === "revoked" ? "Document revoked"
-            : result.result === "superseded" ? "Document superseded"
-            : "Verification failed"}
+          {result.result === "invalid" ? t("admin-verify-invalid-code")
+            : result.result === "revoked" ? t("admin-verify-doc-revoked")
+            : result.result === "superseded" ? t("admin-verify-doc-superseded")
+            : t("admin-verify-failed")}
         </AlertTitle>
         <AlertDescription className="text-sm">{result.message}</AlertDescription>
       </Alert>
 
       {result.document_number && (
         <div className="grid grid-cols-2 gap-3">
-          <DetailField icon={FileText} label="Document type" value={result.document_type ? DOC_TYPE_LABELS[result.document_type as DocType] : "—"} />
-          <DetailField icon={Hash} label="Document number" value={result.document_number} mono />
-          {result.issued_at && <DetailField icon={Calendar} label="Issued at" value={fmtDateTime(result.issued_at)} />}
+          <DetailField icon={FileText} label={t("admin-verify-doc-type-label")} value={result.document_type ? t(DOC_TYPE_LABEL_KEYS[result.document_type as DocType]) : "—"} />
+          <DetailField icon={Hash} label={t("admin-verify-doc-number-label")} value={result.document_number} mono />
+          {result.issued_at && <DetailField icon={Calendar} label={t("admin-verify-issued-at")} value={fmtDateTime(result.issued_at)} />}
         </div>
       )}
     </div>
@@ -268,6 +272,7 @@ function DetailField({ icon: Icon, label, value, mono }: { icon: any; label: str
 function VerifyByDocTab() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [docType, setDocType] = useState<DocType>("offer");
   const [docId, setDocId] = useState<string>("");
@@ -304,34 +309,34 @@ function VerifyByDocTab() {
       <Card className="border-border/60 shadow-soft rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <FileSearch className="size-4 text-primary" /> Document lookup
+            <FileSearch className="size-4 text-primary" /> {t("admin-verify-doc-lookup")}
           </CardTitle>
           <CardDescription className="text-xs">
-            Select a document to view its verification record and QR code.
+            {t("admin-verify-doc-lookup-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Document type</Label>
+            <Label className="text-xs">{t("admin-verify-doc-type-label")}</Label>
             <Select value={docType} onValueChange={(v) => { setDocType(v as DocType); setDocId(""); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="offer">Offer</SelectItem>
-                <SelectItem value="invoice">Invoice</SelectItem>
-                <SelectItem value="proforma">Proforma</SelectItem>
+                <SelectItem value="offer">{t("admin-verify-doc-type-offer")}</SelectItem>
+                <SelectItem value="invoice">{t("admin-verify-doc-type-invoice")}</SelectItem>
+                <SelectItem value="proforma">{t("admin-verify-doc-type-proforma")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Document</Label>
+            <Label className="text-xs">{t("admin-verify-doc-label")}</Label>
             {docsQuery.isLoading ? (
               <Skeleton className="h-9 w-full" />
             ) : docs.length === 0 ? (
-              <div className="text-xs text-muted-foreground py-2">No {DOC_TYPE_LABELS[docType].toLowerCase()}s found.</div>
+              <div className="text-xs text-muted-foreground py-2">{t("admin-verify-no-docs").replace("{type}", t(DOC_TYPE_LABEL_KEYS[docType]).toLowerCase())}</div>
             ) : (
               <Select value={docId} onValueChange={setDocId}>
-                <SelectTrigger><SelectValue placeholder="Select a document…" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("admin-verify-select-doc-placeholder")} /></SelectTrigger>
                 <SelectContent>
                   {docs.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
@@ -348,17 +353,17 @@ function VerifyByDocTab() {
       {/* Verification record */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Verification record</CardTitle>
+          <CardTitle className="text-base">{t("admin-verify-record-title")}</CardTitle>
           <CardDescription className="text-xs">
-            {!docId ? "Select a document to view its record." : verQuery.isLoading ? "Loading…" : verification ? "Verification metadata" : "No verification record exists for this document."}
+            {!docId ? t("admin-verify-record-select-desc") : verQuery.isLoading ? t("admin-verify-record-loading") : verification ? t("admin-verify-record-meta-desc") : t("admin-verify-record-empty-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!docId ? (
             <EmptyState
               icon={<QrCode className="size-6" />}
-              title="Nothing selected"
-              description="Pick a document to inspect its verification."
+              title={t("admin-verify-nothing-selected-title")}
+              description={t("admin-verify-nothing-selected-desc")}
             />
           ) : verQuery.isLoading ? (
             <div className="space-y-3">
@@ -368,8 +373,8 @@ function VerifyByDocTab() {
           ) : !verification ? (
             <EmptyState
               icon={<ShieldAlert className="size-6" />}
-              title="No verification issued"
-              description="This document has not been registered for verification. Issue a verified PDF to enable QR verification."
+              title={t("admin-verify-no-verification-title")}
+              description={t("admin-verify-no-verification-desc")}
             />
           ) : (
             <VerificationRecordView v={verification} />
@@ -381,6 +386,7 @@ function VerifyByDocTab() {
 }
 
 function VerificationRecordView({ v }: { v: DocumentVerification }) {
+  const t = useT();
   const code = v.verification_code;
   return (
     <div className="space-y-4">
@@ -404,12 +410,12 @@ function VerificationRecordView({ v }: { v: DocumentVerification }) {
           </div>
         </div>
         <div className="flex-1 min-w-0 text-center sm:text-left">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Verification code</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("admin-verify-code-label")}</div>
           <div className="font-mono text-sm font-semibold break-all bg-muted/40 rounded-md p-2 border border-border/60">
             {code}
           </div>
           <div className="text-[11px] text-muted-foreground mt-2 flex items-center justify-center sm:justify-start gap-1.5">
-            <ScanLine className="size-3" /> Scan with camera to verify
+            <ScanLine className="size-3" /> {t("admin-verify-scan-hint")}
           </div>
         </div>
       </div>
@@ -417,14 +423,14 @@ function VerificationRecordView({ v }: { v: DocumentVerification }) {
       <Separator />
 
       <div className="grid grid-cols-2 gap-3">
-        <DetailField icon={FileText} label="Document type" value={DOC_TYPE_LABELS[v.document_type]} />
-        <DetailField icon={Hash} label="Document number" value={v.document_number} mono />
-        <DetailField icon={Calendar} label="Issued at" value={fmtDateTime(v.issued_at)} />
-        <DetailField icon={Activity} label="Verification count" value={String(v.verification_count)} mono />
+        <DetailField icon={FileText} label={t("admin-verify-doc-type-label")} value={t(DOC_TYPE_LABEL_KEYS[v.document_type])} />
+        <DetailField icon={Hash} label={t("admin-verify-doc-number-label")} value={v.document_number} mono />
+        <DetailField icon={Calendar} label={t("admin-verify-issued-at")} value={fmtDateTime(v.issued_at)} />
+        <DetailField icon={Activity} label={t("admin-verify-verification-count")} value={String(v.verification_count)} mono />
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-xs">Stored PDF hash (SHA-256)</Label>
+        <Label className="text-xs">{t("admin-verify-stored-hash")}</Label>
         <div className="font-mono text-[10px] break-all bg-muted/40 rounded-md p-2 border border-border/60">
           {v.pdf_hash}
         </div>
@@ -433,10 +439,10 @@ function VerificationRecordView({ v }: { v: DocumentVerification }) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={STATUS_BADGE[v.status]}>
-            {STATUS_LABELS[v.status]}
+            {t(STATUS_LABEL_KEYS[v.status])}
           </Badge>
           <span className="text-xs text-muted-foreground">
-            PDF size <span className="tabular">{fmtBytes(v.pdf_size)}</span>
+            {t("admin-verify-pdf-size")} <span className="tabular">{fmtBytes(v.pdf_size)}</span>
           </span>
         </div>
         <Button
@@ -444,10 +450,10 @@ function VerificationRecordView({ v }: { v: DocumentVerification }) {
           variant="outline"
           onClick={() => {
             navigator.clipboard?.writeText(code);
-            toast.success("Code copied to clipboard.");
+            toast.success(t("admin-verify-code-copied"));
           }}
         >
-          <ClipboardCopy className="size-3.5 mr-1" /> Copy code
+          <ClipboardCopy className="size-3.5 mr-1" /> {t("admin-verify-copy-code")}
         </Button>
       </div>
     </div>
@@ -472,6 +478,7 @@ interface ForensicResult {
 function ForensicTab() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const t = useT();
 
   const [code, setCode] = useState("");
   const [hash, setHash] = useState("");
@@ -491,9 +498,9 @@ function ForensicTab() {
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
       setHash(`sha256:${hex}`);
-      toast.success(`SHA-256 computed for ${file.name}.`);
+      toast.success(t("admin-verify-toast-hashed").replace("{name}", file.name));
     } catch {
-      toast.error("Failed to hash file.");
+      toast.error(t("admin-verify-toast-hash-failed"));
     } finally {
       setComputing(false);
     }
@@ -501,11 +508,11 @@ function ForensicTab() {
 
   async function handleCheck() {
     if (!code.trim()) {
-      toast.error("Enter the verification code.");
+      toast.error(t("admin-verify-toast-code-required"));
       return;
     }
     if (!hash.trim()) {
-      toast.error("Provide a hash by uploading a PDF or pasting a hash.");
+      toast.error(t("admin-verify-toast-hash-required"));
       return;
     }
     setSubmitting(true);
@@ -520,12 +527,12 @@ function ForensicTab() {
         }),
       });
       const json = await r.json();
-      if (!r.ok) throw new Error(json.error || "Forensic check failed");
+      if (!r.ok) throw new Error(json.error || t("admin-verify-toast-forensic-failed"));
       setResult(json as ForensicResult);
-      if (json.match) toast.success("PDF is authentic.");
-      else toast.error("PDF has been modified.");
+      if (json.match) toast.success(t("admin-verify-toast-pdf-authentic"));
+      else toast.error(t("admin-verify-toast-pdf-modified"));
     } catch (e: any) {
-      toast.error(e.message || "Forensic check failed.");
+      toast.error(e.message || t("admin-verify-toast-forensic-failed"));
     } finally {
       setSubmitting(false);
     }
@@ -537,15 +544,15 @@ function ForensicTab() {
       <Card className="border-border/60 shadow-soft rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Fingerprint className="size-4 text-primary" /> Forensic check
+            <Fingerprint className="size-4 text-primary" /> {t("admin-verify-forensic-title")}
           </CardTitle>
           <CardDescription className="text-xs">
-            Compare a PDF against the original hash stored at issuance.
+            {t("admin-verify-forensic-desc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="fcode" className="text-xs">Verification code</Label>
+            <Label htmlFor="fcode" className="text-xs">{t("admin-verify-code-label")}</Label>
             <Input
               id="fcode"
               value={code}
@@ -560,7 +567,7 @@ function ForensicTab() {
 
           <div className="space-y-2">
             <Label className="text-xs flex items-center gap-1.5">
-              <Upload className="size-3.5" /> Upload PDF to hash
+              <Upload className="size-3.5" /> {t("admin-verify-upload-pdf")}
             </Label>
             <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border/60 px-4 py-6 cursor-pointer hover:border-primary/40 hover:bg-muted/40 transition-colors">
               <input
@@ -575,22 +582,22 @@ function ForensicTab() {
               <Upload className="size-5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
                 {fileName ? (
-                  <>Selected: <span className="font-medium text-foreground">{fileName}</span></>
+                  <>{t("admin-verify-selected")} <span className="font-medium text-foreground">{fileName}</span></>
                 ) : (
-                  "Click to choose a PDF (max ~20MB)"
+                  t("admin-verify-click-choose")
                 )}
               </span>
             </label>
             {computing && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" /> Computing SHA-256…
+                <Loader2 className="size-3.5 animate-spin" /> {t("admin-verify-computing")}
               </div>
             )}
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="fhash" className="text-xs flex items-center gap-1.5">
-              <Hash className="size-3.5" /> Or paste hash directly
+              <Hash className="size-3.5" /> {t("admin-verify-paste-hash")}
             </Label>
             <Textarea
               id="fhash"
@@ -604,7 +611,7 @@ function ForensicTab() {
 
           <Button onClick={handleCheck} disabled={submitting || computing} className="w-full">
             {submitting ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Fingerprint className="size-4 mr-1" />}
-            Run forensic check
+            {t("admin-verify-run-forensic")}
           </Button>
         </CardContent>
       </Card>
@@ -612,17 +619,17 @@ function ForensicTab() {
       {/* Result */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Comparison result</CardTitle>
+          <CardTitle className="text-base">{t("admin-verify-comparison-result")}</CardTitle>
           <CardDescription className="text-xs">
-            {!result ? "Awaiting forensic check." : result.match ? "PDF is authentic." : "PDF differs from original."}
+            {!result ? t("admin-verify-awaiting-forensic") : result.match ? t("admin-verify-pdf-authentic") : t("admin-verify-pdf-differs")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!result ? (
             <EmptyState
               icon={<Fingerprint className="size-6" />}
-              title="No check run yet"
-              description="Provide a verification code and a PDF (or hash) to compare against the original."
+              title={t("admin-verify-no-check-title")}
+              description={t("admin-verify-no-check-desc")}
             />
           ) : (
             <ForensicResultView result={result} />
@@ -634,11 +641,12 @@ function ForensicTab() {
 }
 
 function ForensicResultView({ result }: { result: ForensicResult }) {
+  const t = useT();
   if (result.result === "invalid") {
     return (
       <Alert variant="destructive">
         <ShieldX className="size-4" />
-        <AlertTitle>Verification code not found</AlertTitle>
+        <AlertTitle>{t("admin-verify-code-not-found")}</AlertTitle>
         <AlertDescription className="text-sm">{result.message}</AlertDescription>
       </Alert>
     );
@@ -652,28 +660,28 @@ function ForensicResultView({ result }: { result: ForensicResult }) {
       >
         {result.match ? <CheckCircle2 className="size-4 text-chart-1" /> : <FileWarning className="size-4" />}
         <AlertTitle className={result.match ? "text-chart-1" : ""}>
-          {result.match ? "Authentic — no modifications" : "Modified after issuance"}
+          {result.match ? t("admin-verify-authentic-no-mod") : t("admin-verify-modified")}
         </AlertTitle>
         <AlertDescription className="text-sm">{result.message}</AlertDescription>
       </Alert>
 
       {result.document_number && (
         <div className="grid grid-cols-2 gap-3">
-          <DetailField icon={FileText} label="Document type" value={result.document_type ? DOC_TYPE_LABELS[result.document_type] : "—"} />
-          <DetailField icon={Hash} label="Document number" value={result.document_number} mono />
-          {result.issued_at && <DetailField icon={Calendar} label="Issued at" value={fmtDateTime(result.issued_at)} />}
-          {result.pdf_size != null && <DetailField icon={Activity} label="Original size" value={fmtBytes(result.pdf_size)} mono />}
+          <DetailField icon={FileText} label={t("admin-verify-doc-type-label")} value={result.document_type ? t(DOC_TYPE_LABEL_KEYS[result.document_type]) : "—"} />
+          <DetailField icon={Hash} label={t("admin-verify-doc-number-label")} value={result.document_number} mono />
+          {result.issued_at && <DetailField icon={Calendar} label={t("admin-verify-issued-at")} value={fmtDateTime(result.issued_at)} />}
+          {result.pdf_size != null && <DetailField icon={Activity} label={t("admin-verify-original-size")} value={fmtBytes(result.pdf_size)} mono />}
         </div>
       )}
 
       {result.stored_hash && result.computed_hash && (
         <div className="space-y-3">
-          <HashRow label="Stored hash (original)" value={result.stored_hash} match={result.match} />
-          <HashRow label="Computed hash (uploaded)" value={result.computed_hash} match={result.match} />
+          <HashRow label={t("admin-verify-stored-hash-original")} value={result.stored_hash} match={result.match} />
+          <HashRow label={t("admin-verify-computed-hash")} value={result.computed_hash} match={result.match} />
           <div className={`text-xs flex items-center gap-2 ${result.match ? "text-chart-1" : "text-destructive"}`}>
             {result.match ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
             <span className="font-medium">
-              {result.match ? "Hashes match exactly." : "Hashes differ — the PDF was modified or is not the originally issued file."}
+              {result.match ? t("admin-verify-hashes-match") : t("admin-verify-hashes-differ")}
             </span>
           </div>
         </div>
@@ -683,14 +691,15 @@ function ForensicResultView({ result }: { result: ForensicResult }) {
 }
 
 function HashRow({ label, value, match }: { label: string; value: string; match: boolean }) {
+  const t = useT();
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <Label className="text-xs">{label}</Label>
         {match ? (
-          <Badge variant="outline" className="text-[10px] bg-chart-1/10 text-chart-1 border-chart-1/30">match</Badge>
+          <Badge variant="outline" className="text-[10px] bg-chart-1/10 text-chart-1 border-chart-1/30">{t("admin-verify-match")}</Badge>
         ) : (
-          <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/30">differ</Badge>
+          <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/30">{t("admin-verify-differ")}</Badge>
         )}
       </div>
       <div className="font-mono text-[10px] break-all bg-muted/40 rounded-md p-2 border border-border/60">

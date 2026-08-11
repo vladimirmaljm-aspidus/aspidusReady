@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n/store"
 
 const dialogSizeClasses: Record<string, string> = {
   sm: "sm:max-w-md",
@@ -66,6 +67,7 @@ function DialogContent({
 }) {
   const isFull = size === "full"
   const sizeClasses = dialogSizeClasses[size] ?? dialogSizeClasses.md
+  const t = useT()
 
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -90,7 +92,7 @@ function DialogContent({
             className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("close")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

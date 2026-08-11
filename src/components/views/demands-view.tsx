@@ -46,33 +46,26 @@ import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
-
-const STATUS_LABELS: Record<DemandStatus, string> = {
-  open: "Open",
-  quoted: "Quoted",
-  closed: "Closed",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-};
+import { useT } from "@/lib/i18n/store";
 
 function StatusBadge({ status }: { status: DemandStatus }) {
+  const t = useT();
+  const label = status === "open" ? t("crm-open") : status === "quoted" ? t("crm-quoted") : t("crm-closed");
   if (status === "open")
-    return <Badge className="border-transparent bg-primary text-primary-foreground">{STATUS_LABELS[status]}</Badge>;
+    return <Badge className="border-transparent bg-primary text-primary-foreground">{label}</Badge>;
   if (status === "quoted")
-    return <Badge className="border-transparent bg-[var(--chart-4)] text-black">{STATUS_LABELS[status]}</Badge>;
-  return <Badge className="border-transparent bg-muted text-muted-foreground">{STATUS_LABELS[status]}</Badge>;
+    return <Badge className="border-transparent bg-[var(--chart-4)] text-black">{label}</Badge>;
+  return <Badge className="border-transparent bg-muted text-muted-foreground">{label}</Badge>;
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
+  const t = useT();
+  const label = priority === "high" ? t("crm-high") : priority === "medium" ? t("crm-medium") : t("crm-low");
   if (priority === "high")
-    return <Badge className="border-transparent bg-destructive text-destructive-foreground">{PRIORITY_LABELS[priority]}</Badge>;
+    return <Badge className="border-transparent bg-destructive text-destructive-foreground">{label}</Badge>;
   if (priority === "medium")
-    return <Badge className="border-transparent bg-amber-500 text-white">{PRIORITY_LABELS[priority]}</Badge>;
-  return <Badge className="border-transparent bg-muted text-muted-foreground">{PRIORITY_LABELS[priority]}</Badge>;
+    return <Badge className="border-transparent bg-amber-500 text-white">{label}</Badge>;
+  return <Badge className="border-transparent bg-muted text-muted-foreground">{label}</Badge>;
 }
 
 const UNIT_OPTIONS = ["pcs", "kg", "l", "m", "m²", "m³", "hr", "can", "set", "t"];
@@ -103,6 +96,7 @@ interface ProductContext {
 }
 
 export function DemandsView() {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -161,12 +155,12 @@ export function DemandsView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Demand deleted.");
+      toast.success(t("crm-demand-deleted"));
       qc.invalidateQueries({ queryKey: ["demands", tenantKey] });
       qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t("crm-delete-failed")),
   });
 
   const items = data?.items || [];
@@ -178,15 +172,15 @@ export function DemandsView() {
   return (
     <div>
       <PageHeader
-        title="Demands"
-        description={`${total} total`}
+        title={t("demands")}
+        description={t("crm-total-count").replace("${n}", String(total))}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setShowRfqPicker(true)}>
-              <Import className="size-4 mr-1" /> From Portal RFQ
+              <Import className="size-4 mr-1" /> {t("crm-from-portal-rfq")}
             </Button>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-              <Plus className="size-4 mr-1" /> New demand
+              <Plus className="size-4 mr-1" /> {t("crm-new-demand")}
             </Button>
           </div>
         }
@@ -197,19 +191,19 @@ export function DemandsView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search…"
+              placeholder={t("search")}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               className="pl-9"
             />
           </div>
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("status")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="quoted">Quoted</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
+              <SelectItem value="all">{t("crm-all-statuses")}</SelectItem>
+              <SelectItem value="open">{t("crm-open")}</SelectItem>
+              <SelectItem value="quoted">{t("crm-quoted")}</SelectItem>
+              <SelectItem value="closed">{t("crm-closed")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -224,9 +218,9 @@ export function DemandsView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Inbox className="size-6" />}
-              title="No demands"
-              description="Create your first demand (RFQ) to get started."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New demand</Button>}
+              title={t("crm-no-demands")}
+              description={t("crm-no-demands-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("crm-new-demand")}</Button>}
             />
           ) : (
             <>
@@ -234,14 +228,14 @@ export function DemandsView() {
                 <Table>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
-                      <TableHead>Number</TableHead>
-                      <TableHead className="hidden md:table-cell">Subject</TableHead>
-                      <TableHead className="hidden lg:table-cell">Partner</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Items</TableHead>
-                      <TableHead className="hidden xl:table-cell">Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t("crm-number")}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t("crm-subject")}</TableHead>
+                      <TableHead className="hidden lg:table-cell">{t("crm-partner")}</TableHead>
+                      <TableHead>{t("crm-priority")}</TableHead>
+                      <TableHead>{t("status")}</TableHead>
+                      <TableHead className="text-right">{t("crm-items")}</TableHead>
+                      <TableHead className="hidden xl:table-cell">{t("crm-date")}</TableHead>
+                      <TableHead className="text-right">{t("actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -262,13 +256,13 @@ export function DemandsView() {
                         <TableCell className="hidden xl:table-cell">{fmtDate(d.created_at)}</TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(d.id)} title="View">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(d.id)} title={t("view")}>
                               <Eye className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(d); setShowForm(true); }} title="Edit">
+                            <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(d); setShowForm(true); }} title={t("edit")}>
                               <Pencil className="size-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(d.id)} title="Delete">
+                            <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(d.id)} title={t("delete")}>
                               <Trash2 className="size-4" />
                             </Button>
                           </div>
@@ -283,19 +277,19 @@ export function DemandsView() {
               <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 gap-3 flex-wrap">
                 <p className="text-sm text-muted-foreground">
                   {total > 0
-                    ? <>Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total}</>
-                    : <>No results</>}
+                    ? <>{t("crm-showing-range").replace("${from}", String(page * pageSize + 1)).replace("${to}", String(Math.min((page + 1) * pageSize, total))).replace("${total}", String(total))}</>
+                    : <>{t("crm-no-results")}</>}
                 </p>
                 <div className="flex items-center gap-3">
                   <PageSizeSelector value={pageSize} onChange={setPageSize} options={pageSizeOptions} />
                   {totalPages > 1 && (
                     <div className="flex items-center gap-1">
                       <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                        Previous
+                        {t("crm-previous")}
                       </Button>
                       <span className="text-sm px-2 tabular-nums">{page + 1} / {totalPages}</span>
                       <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                        Next
+                        {t("crm-next")}
                       </Button>
                     </div>
                   )}
@@ -336,9 +330,9 @@ export function DemandsView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Inbox className="size-5" />
-              <span className="font-mono text-base">{detail.data?.number || "Demand"}</span>
+              <span className="font-mono text-base">{detail.data?.number || t("crm-demand")}</span>
             </SheetTitle>
-            <SheetDescription>{detail.data?.subject || "Demand details"}</SheetDescription>
+            <SheetDescription>{detail.data?.subject || t("crm-demand-details")}</SheetDescription>
           </SheetHeader>
           {detail.isLoading ? (
             <div className="p-4 space-y-3">
@@ -358,18 +352,18 @@ export function DemandsView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete demand?</AlertDialogTitle>
+            <AlertDialogTitle>{t("crm-delete-demand-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The demand and its items will be permanently deleted.
+              {t("crm-delete-demand-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -385,6 +379,7 @@ function DemandDetail({
   demand: Demand;
   partnerName: string;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -401,11 +396,11 @@ function DemandDetail({
       {/* Key dates */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> Requested delivery</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> {t("crm-requested-delivery")}</p>
           <p className="text-sm font-medium">{fmtDate(demand.requested_delivery)}</p>
         </div>
         <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><FileInput className="size-3" /> Created</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><FileInput className="size-3" /> {t("crm-created-label")}</p>
           <p className="text-sm font-medium">{fmtDateTime(demand.created_at)}</p>
         </div>
       </div>
@@ -414,60 +409,60 @@ function DemandDetail({
       {hasTradeData && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <Truck className="size-4" /> Trade Details
+            <Truck className="size-4" /> {t("crm-trade-details")}
           </h4>
           <div className="grid grid-cols-2 gap-2">
             {demand.product_name && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Package className="size-3" /> Product</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Package className="size-3" /> {t("crm-product")}</p>
                 <p className="text-sm font-medium">{demand.product_name}</p>
               </div>
             )}
             {demand.target_price != null && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Tag className="size-3" /> Target Price</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Tag className="size-3" /> {t("crm-target-price-label")}</p>
                 <p className="text-sm font-medium">{fmtMoney(demand.target_price, demand.currency)}</p>
               </div>
             )}
             {demand.is_new_product && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Sparkles className="size-3" /> New Product</p>
-                <p className="text-sm font-medium">Yes</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Sparkles className="size-3" /> {t("crm-new-product-trade")}</p>
+                <p className="text-sm font-medium">{t("crm-yes")}</p>
               </div>
             )}
             {demand.source && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Import className="size-3" /> Source</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Import className="size-3" /> {t("crm-source")}</p>
                 <p className="text-sm font-medium capitalize">{demand.source}</p>
               </div>
             )}
             {demand.payment_terms && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><CreditCard className="size-3" /> Payment Terms</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><CreditCard className="size-3" /> {t("crm-payment-terms")}</p>
                 <p className="text-sm font-medium">{demand.payment_terms}</p>
               </div>
             )}
             {demand.destination && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> Destination</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {t("crm-destination")}</p>
                 <p className="text-sm font-medium">{demand.destination}</p>
               </div>
             )}
             {demand.needed_by && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> Needed By</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="size-3" /> {t("crm-needed-by")}</p>
                 <p className="text-sm font-medium">{fmtDate(demand.needed_by)}</p>
               </div>
             )}
             {demand.buyer_bank && (
               <div className="p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="size-3" /> Buyer Bank</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="size-3" /> {t("crm-buyer-bank")}</p>
                 <p className="text-sm font-medium whitespace-pre-wrap">{demand.buyer_bank}</p>
               </div>
             )}
             {demand.auto_hints && (
               <div className="col-span-2 p-3 rounded-lg bg-muted/40 border border-border/60">
-                <p className="text-xs text-muted-foreground flex items-center gap-1"><Sparkles className="size-3" /> Auto Hints</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1"><Sparkles className="size-3" /> {t("crm-auto-hints")}</p>
                 <p className="text-sm font-medium whitespace-pre-wrap">{demand.auto_hints}</p>
               </div>
             )}
@@ -480,18 +475,18 @@ function DemandDetail({
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead className="text-right">Quantity</TableHead>
-              <TableHead className="hidden sm:table-cell">Unit</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">Target price</TableHead>
-              <TableHead className="hidden md:table-cell">Notes</TableHead>
+              <TableHead>{t("crm-product")}</TableHead>
+              <TableHead className="text-right">{t("crm-quantity-label")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("crm-unit")}</TableHead>
+              <TableHead className="text-right hidden sm:table-cell">{t("crm-target-price")}</TableHead>
+              <TableHead className="hidden md:table-cell">{t("crm-notes-label")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {(demand.items || []).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
-                  No items.
+                  {t("crm-no-items")}
                 </TableCell>
               </TableRow>
             ) : (demand.items || []).map((it, i) => (
@@ -513,7 +508,7 @@ function DemandDetail({
 
       {demand.description && (
         <div className="mb-4">
-          <p className="text-xs text-muted-foreground mb-1">Description</p>
+          <p className="text-xs text-muted-foreground mb-1">{t("description")}</p>
           <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/40">{demand.description}</p>
         </div>
       )}
@@ -573,13 +568,13 @@ function DemandDetail({
               });
               if (!res.ok) throw new Error("Failed to create offer");
               const data = await res.json();
-              toast.success(`Offer created: ${data.number || data.id}`);
+              toast.success(t("crm-offer-created-prefix").replace("${number}", data.number || data.id));
             } catch {
-              toast.error("Failed to convert demand to offer");
+              toast.error(t("crm-failed-convert-demand-offer"));
             }
           }}
         >
-          <ArrowRightLeft className="size-4 mr-1" /> Convert to offer
+          <ArrowRightLeft className="size-4 mr-1" /> {t("crm-convert-to-offer")}
         </Button>
       </div>
     </div>
@@ -594,6 +589,7 @@ function PortalRfqPickerDialog({
   onOpenChange: (o: boolean) => void;
   onCreated: () => void;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -634,10 +630,10 @@ function PortalRfqPickerDialog({
         const e = await r.json().catch(() => ({}));
         throw new Error(e.error || "Failed to create demand");
       }
-      toast.success(`Demand created from RFQ ${rfq.number}`);
+      toast.success(t("crm-demand-created-from-rfq").replace("${number}", rfq.number));
       onCreated();
     } catch (e: any) {
-      toast.error(e.message || "Failed to create demand from RFQ.");
+      toast.error(e.message || t("crm-failed-create-demand-from-rfq"));
     } finally {
       setCreating(null);
     }
@@ -651,10 +647,10 @@ function PortalRfqPickerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Import className="size-5" />
-            Create Demand from Portal RFQ
+            {t("crm-create-demand-from-portal-rfq")}
           </DialogTitle>
           <DialogDescription>
-            Select a pending portal RFQ to auto-create a demand. Partner and product details will be auto-filled.
+            {t("crm-create-demand-from-portal-rfq-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -666,7 +662,7 @@ function PortalRfqPickerDialog({
         ) : rfqItems.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <FileCheck className="size-8 mx-auto mb-2 opacity-50" />
-            <p>No pending portal RFQs available.</p>
+            <p>{t("crm-no-pending-portal-rfqs")}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -682,7 +678,7 @@ function PortalRfqPickerDialog({
                       <p className="font-medium text-sm">{rfq.product_name}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {rfq.quantity} {rfq.unit} · {partnerName(rfq.partner_id)}
-                        {rfq.target_price != null && ` · Target: ${fmtMoney(rfq.target_price, rfq.currency)}`}
+                        {rfq.target_price != null && ` · ${t("crm-target-prefix")}${fmtMoney(rfq.target_price, rfq.currency)}`}
                       </p>
                       {rfq.notes && (
                         <p className="text-xs text-muted-foreground mt-1 truncate max-w-[400px]">{rfq.notes}</p>
@@ -694,9 +690,9 @@ function PortalRfqPickerDialog({
                       disabled={creating === rfq.id}
                     >
                       {creating === rfq.id ? (
-                        <><Loader2 className="size-4 mr-1 animate-spin" /> Creating…</>
+                        <><Loader2 className="size-4 mr-1 animate-spin" /> {t("crm-creating-ellipsis")}</>
                       ) : (
-                        <><Plus className="size-4 mr-1" /> Create</>
+                        <><Plus className="size-4 mr-1" /> {t("crm-create-btn")}</>
                       )}
                     </Button>
                   </div>
@@ -721,6 +717,7 @@ function DemandFormDialog({
   partners: Partner[];
   onSaved: () => void;
 }) {
+  const t = useT();
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
@@ -828,9 +825,9 @@ function DemandFormDialog({
         currency: p.preferred_currency || f.currency || "USD",
       }));
 
-      toast.success(`Partner data loaded: ${p.name}`, { description: "Currency & preferences auto-filled." });
+      toast.success(t("crm-partner-data-loaded").replace("${name}", p.name), { description: t("crm-currency-prefs-auto-filled") });
     } catch {
-      toast.error("Failed to load partner context.");
+      toast.error(t("crm-failed-load-partner-context"));
       setPartnerContext(null);
     } finally {
       setLoadingPartner(false);
@@ -858,7 +855,7 @@ function DemandFormDialog({
         setItem(idx, { target_price: ctx.product.price });
       }
 
-      toast.success(`Product data loaded: ${p.name}`, { description: "Price, unit & currency auto-filled." });
+      toast.success(t("crm-product-data-loaded").replace("${name}", p.name), { description: t("crm-price-unit-currency-auto-filled") });
     } catch {
       // Basic fill already done, no need to show error
     }
@@ -867,7 +864,7 @@ function DemandFormDialog({
   const selectedPartner = form.partner_id ? partners.find((p) => p.id === form.partner_id) : undefined;
 
   async function save() {
-    if (!form.partner_id) { toast.error("Select a partner."); return; }
+    if (!form.partner_id) { toast.error(t("crm-select-a-partner-toast")); return; }
     setSaving(true);
     try {
       const method = demand ? "PUT" : "POST";
@@ -888,13 +885,13 @@ function DemandFormDialog({
         throw new Error(e.error || "Request failed");
       }
       if (demand) {
-        toast.success("Demand updated.", { description: form.subject });
+        toast.success(t("crm-demand-updated"), { description: form.subject });
       } else {
-        toast.success("Demand created!", { description: form.subject || "New demand" });
+        toast.success(t("crm-demand-created"), { description: form.subject || t("crm-demand-new-lower") });
       }
       onSaved();
     } catch (e: any) {
-      toast.error(e.message || "Saving failed.");
+      toast.error(e.message || t("crm-saving-failed-toast"));
     } finally {
       setSaving(false);
     }
@@ -906,12 +903,12 @@ function DemandFormDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-amber-500" />
-            {demand ? "Edit demand" : "New demand"}
+            {demand ? t("crm-edit-demand") : t("crm-new-demand")}
           </DialogTitle>
           <DialogDescription>
             {demand
-              ? "Update the demand details below."
-              : "Fill in the essentials to create a demand. Expand sections for more options."}
+              ? t("crm-update-demand-details")
+              : t("crm-create-demand-desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -926,7 +923,7 @@ function DemandFormDialog({
                   <Sparkles className="size-3 text-amber-500 mr-1" />
                   {autoNumber}
                 </Badge>
-                <span className="text-xs text-muted-foreground">Auto-generated number</span>
+                <span className="text-xs text-muted-foreground">{t("crm-auto-generated-number")}</span>
               </div>
             )}
 
@@ -935,11 +932,11 @@ function DemandFormDialog({
               {/* Partner select */}
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
-                  Partner *
+                  {t("crm-partner-required-label")}
                   {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
                   {partnerContext && !loadingPartner && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 gap-0.5">
-                      <Sparkles className="size-2.5 text-amber-500" /> Auto-filled
+                      <Sparkles className="size-2.5 text-amber-500" /> {t("crm-auto-filled")}
                     </Badge>
                   )}
                 </Label>
@@ -950,7 +947,7 @@ function DemandFormDialog({
                     fetchPartnerContext(v);
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select a partner" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("crm-select-a-partner")} /></SelectTrigger>
                   <SelectContent>
                     {partners.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
@@ -966,7 +963,7 @@ function DemandFormDialog({
 
               {/* Product (top-level) */}
               <div className="space-y-1.5">
-                <Label>Product</Label>
+                <Label>{t("crm-product")}</Label>
                 <Select
                   value={form.product_id || "__none__"}
                   onValueChange={(v) => {
@@ -983,9 +980,9 @@ function DemandFormDialog({
                     }
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("crm-select-product-item")} /></SelectTrigger>
                   <SelectContent className="max-h-60">
-                    <SelectItem value="__none__">— None —</SelectItem>
+                    <SelectItem value="__none__">{t("crm-none-option")}</SelectItem>
                     {productList.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         <div className="flex items-center gap-2">
@@ -1017,7 +1014,7 @@ function DemandFormDialog({
                   {selectedPartner.vat_number && (
                     <div className="flex items-center gap-1.5">
                       <Hash className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">VAT: {selectedPartner.vat_number}</span>
+                      <span className="text-muted-foreground">{t("crm-vat-prefix").replace("${value}", selectedPartner.vat_number)}</span>
                     </div>
                   )}
                   {selectedPartner.email && (
@@ -1029,7 +1026,7 @@ function DemandFormDialog({
                   {selectedPartner.preferred_currency && (
                     <div className="flex items-center gap-1.5">
                       <Globe className="size-3 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground">Currency: {selectedPartner.preferred_currency}</span>
+                      <span className="text-muted-foreground">{t("crm-currency-prefix").replace("${value}", selectedPartner.preferred_currency)}</span>
                     </div>
                   )}
                 </div>
@@ -1039,7 +1036,7 @@ function DemandFormDialog({
             {/* Quantity + Target Price row */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Quantity</Label>
+                <Label>{t("crm-quantity-label")}</Label>
                 <Input
                   type="number"
                   value={form.items?.[0]?.quantity ?? 1}
@@ -1054,7 +1051,7 @@ function DemandFormDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Target Price</Label>
+                <Label>{t("crm-target-price-label")}</Label>
                 <Input
                   type="number"
                   value={form.target_price ?? form.items?.[0]?.target_price ?? ""}
@@ -1083,8 +1080,8 @@ function DemandFormDialog({
                 ) : (
                   <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                 )}
-                <span className="text-sm font-medium">More Details</span>
-                <span className="text-xs text-muted-foreground">Subject, currency, delivery, notes, items…</span>
+                <span className="text-sm font-medium">{t("crm-more-details")}</span>
+                <span className="text-xs text-muted-foreground">{t("crm-subject-currency-etc")}</span>
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -1092,15 +1089,15 @@ function DemandFormDialog({
                 {/* Subject + Currency */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Subject</Label>
+                    <Label>{t("crm-subject")}</Label>
                     <Input
                       value={form.subject || ""}
                       onChange={(e) => set("subject", e.target.value)}
-                      placeholder="Equipment inquiry"
+                      placeholder={t("crm-equipment-inquiry-ph")}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Currency</Label>
+                    <Label>{t("currency")}</Label>
                     <Select value={form.currency || "USD"} onValueChange={(v) => set("currency", v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -1113,33 +1110,33 @@ function DemandFormDialog({
                 {/* Status + Payment Terms */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Status</Label>
+                    <Label>{t("status")}</Label>
                     <Select value={form.status || "open"} onValueChange={(v) => set("status", v as DemandStatus)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="quoted">Quoted</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
+                        <SelectItem value="open">{t("crm-open")}</SelectItem>
+                        <SelectItem value="quoted">{t("crm-quoted")}</SelectItem>
+                        <SelectItem value="closed">{t("crm-closed")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Priority</Label>
+                    <Label>{t("crm-priority")}</Label>
                     <Select value={(form as any).priority || "medium"} onValueChange={(v) => set("priority" as any, v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="low">{t("crm-low")}</SelectItem>
+                        <SelectItem value="medium">{t("crm-medium")}</SelectItem>
+                        <SelectItem value="high">{t("crm-high")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Payment Terms</Label>
+                    <Label>{t("crm-payment-terms")}</Label>
                     <Select value={form.payment_terms || "__none__"} onValueChange={(v) => set("payment_terms", v === "__none__" ? null : v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">— None —</SelectItem>
+                        <SelectItem value="__none__">{t("crm-none-option")}</SelectItem>
                         {PAYMENT_TERMS_LOCAL.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1149,11 +1146,11 @@ function DemandFormDialog({
                 {/* Trade fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Destination</Label>
-                    <Input value={form.destination || ""} onChange={(e) => set("destination", e.target.value)} placeholder="Delivery city/country" />
+                    <Label>{t("crm-destination")}</Label>
+                    <Input value={form.destination || ""} onChange={(e) => set("destination", e.target.value)} placeholder={t("crm-delivery-city-country")} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Requested Delivery</Label>
+                    <Label>{t("crm-requested-delivery-label")}</Label>
                     <Input
                       type="date"
                       value={form.requested_delivery ? form.requested_delivery.slice(0, 10) : ""}
@@ -1161,7 +1158,7 @@ function DemandFormDialog({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Needed By</Label>
+                    <Label>{t("crm-needed-by")}</Label>
                     <Input
                       type="date"
                       value={form.needed_by ? form.needed_by.slice(0, 10) : ""}
@@ -1172,18 +1169,18 @@ function DemandFormDialog({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Buyer Bank</Label>
-                    <Input value={form.buyer_bank || ""} onChange={(e) => set("buyer_bank", e.target.value)} placeholder="Bank name · IBAN" />
+                    <Label>{t("crm-buyer-bank")}</Label>
+                    <Input value={form.buyer_bank || ""} onChange={(e) => set("buyer_bank", e.target.value)} placeholder={t("crm-bank-name-iban")} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Source</Label>
+                    <Label>{t("crm-source")}</Label>
                     <Select value={form.source || "__none__"} onValueChange={(v) => set("source", v === "__none__" ? null : v)}>
-                      <SelectTrigger><SelectValue placeholder="Source" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("crm-source")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">— None —</SelectItem>
-                        <SelectItem value="portal">Portal RFQ</SelectItem>
-                        <SelectItem value="manual">Manual</SelectItem>
-                        <SelectItem value="import">Import</SelectItem>
+                        <SelectItem value="__none__">{t("crm-none-option")}</SelectItem>
+                        <SelectItem value="portal">{t("crm-source-portal-rfq")}</SelectItem>
+                        <SelectItem value="manual">{t("crm-source-manual")}</SelectItem>
+                        <SelectItem value="import">{t("crm-source-import")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1191,33 +1188,33 @@ function DemandFormDialog({
 
                 {/* Description */}
                 <div className="space-y-1.5">
-                  <Label>Notes / Description</Label>
+                  <Label>{t("crm-notes-description")}</Label>
                   <Textarea
                     rows={2}
                     value={form.description || ""}
                     onChange={(e) => set("description", e.target.value)}
-                    placeholder="Additional notes or requirements…"
+                    placeholder={t("crm-additional-notes-placeholder")}
                   />
                 </div>
 
                 {/* Items list (for multi-item demands) */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm">Line Items</Label>
+                    <Label className="text-sm">{t("crm-line-items")}</Label>
                     <Button type="button" size="sm" variant="outline" onClick={addItem}>
-                      <Plus className="size-4 mr-1" /> Add item
+                      <Plus className="size-4 mr-1" /> {t("crm-add-item")}
                     </Button>
                   </div>
                   {(form.items || []).length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4 border rounded-md border-dashed">
-                      No items yet. Click &ldquo;Add item&rdquo; to add products.
+                      {t("crm-no-items-yet")}
                     </p>
                   ) : (
                     <div className="space-y-2 max-h-72 overflow-y-auto custom-scroll pr-1">
                       {(form.items || []).map((it, idx) => (
                         <div key={idx} className="rounded-md border border-border/60 p-2 grid grid-cols-12 gap-1.5 items-end">
                           <div className="col-span-12 sm:col-span-4 space-y-1">
-                            <Label className="text-xs">Product</Label>
+                            <Label className="text-xs">{t("crm-product")}</Label>
                             <Select
                               value={it.product_id || "__custom__"}
                               onValueChange={(v) => {
@@ -1226,10 +1223,10 @@ function DemandFormDialog({
                               }}
                             >
                               <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder="Select product" />
+                                <SelectValue placeholder={t("crm-select-product-item")} />
                               </SelectTrigger>
                               <SelectContent className="max-h-48">
-                                <SelectItem value="__custom__">— Manual entry —</SelectItem>
+                                <SelectItem value="__custom__">{t("crm-manual-entry")}</SelectItem>
                                 {productList.map((p) => (
                                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                 ))}
@@ -1239,11 +1236,11 @@ function DemandFormDialog({
                               className="h-8 text-xs"
                               value={it.product_name || ""}
                               onChange={(e) => setItem(idx, { product_name: e.target.value })}
-                              placeholder="Product name"
+                              placeholder={t("crm-product-name-ph")}
                             />
                           </div>
                           <div className="col-span-3 sm:col-span-2 space-y-1">
-                            <Label className="text-xs">Qty</Label>
+                            <Label className="text-xs">{t("crm-qty")}</Label>
                             <Input
                               type="number"
                               className="h-8 text-xs"
@@ -1252,7 +1249,7 @@ function DemandFormDialog({
                             />
                           </div>
                           <div className="col-span-3 sm:col-span-2 space-y-1">
-                            <Label className="text-xs">Unit</Label>
+                            <Label className="text-xs">{t("crm-unit")}</Label>
                             <Select value={it.unit} onValueChange={(v) => setItem(idx, { unit: v })}>
                               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                               <SelectContent>
@@ -1261,7 +1258,7 @@ function DemandFormDialog({
                             </Select>
                           </div>
                           <div className="col-span-3 sm:col-span-2 space-y-1">
-                            <Label className="text-xs">Target price</Label>
+                            <Label className="text-xs">{t("crm-target-price")}</Label>
                             <Input
                               type="number"
                               className="h-8 text-xs"
@@ -1276,7 +1273,7 @@ function DemandFormDialog({
                               variant="ghost"
                               className="size-8 text-destructive"
                               onClick={() => removeItem(idx)}
-                              title="Remove"
+                              title={t("remove")}
                             >
                               <X className="size-4" />
                             </Button>
@@ -1293,19 +1290,19 @@ function DemandFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
             {saving ? (
               <>
                 <Loader2 className="size-4 mr-1 animate-spin" />
-                Saving…
+                {t("crm-saving-ellipsis")}
               </>
             ) : demand ? (
-              "Save changes"
+              t("crm-save-changes")
             ) : (
               <>
                 <Plus className="size-4 mr-1" />
-                Create demand
+                {t("crm-create-demand")}
               </>
             )}
           </Button>

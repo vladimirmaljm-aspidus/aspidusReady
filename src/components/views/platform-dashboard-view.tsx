@@ -11,38 +11,40 @@ import { PlatformAuditView } from "@/components/views/platform-audit-view";
 import { PlatformHealthView } from "@/components/views/platform-health-view";
 import { PageHeader } from "@/components/common/page-header";
 import { LayoutDashboard, Building2, ToggleRight, CreditCard, Users, ScrollText, Heart } from "lucide-react";
+import { useT } from "@/lib/i18n/store";
 
 export function PlatformDashboardView() {
   const [tab, setTab] = useState("overview");
+  const t = useT();
 
   return (
     <div>
       <PageHeader
-        title="Platform Dashboard"
-        description="Manage tenants, subscriptions, feature flags, and plans — all in one place."
+        title={t("pf-dashboard-title")}
+        description={t("pf-dashboard-desc")}
       />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full sm:w-auto overflow-x-auto">
           <TabsTrigger value="overview" className="gap-1.5">
-            <LayoutDashboard className="size-3.5" /> Overview
+            <LayoutDashboard className="size-3.5" /> {t("pf-tab-overview")}
           </TabsTrigger>
           <TabsTrigger value="tenants" className="gap-1.5">
-            <Building2 className="size-3.5" /> Tenants
+            <Building2 className="size-3.5" /> {t("pf-tab-tenants")}
           </TabsTrigger>
           <TabsTrigger value="flags" className="gap-1.5">
-            <ToggleRight className="size-3.5" /> Feature Flags
+            <ToggleRight className="size-3.5" /> {t("pf-tab-flags")}
           </TabsTrigger>
           <TabsTrigger value="plans" className="gap-1.5">
-            <CreditCard className="size-3.5" /> Plans
+            <CreditCard className="size-3.5" /> {t("pf-tab-plans")}
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-1.5">
-            <Users className="size-3.5" /> Users
+            <Users className="size-3.5" /> {t("pf-tab-users")}
           </TabsTrigger>
           <TabsTrigger value="audit" className="gap-1.5">
-            <ScrollText className="size-3.5" /> Audit
+            <ScrollText className="size-3.5" /> {t("pf-tab-audit")}
           </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5">
-            <Heart className="size-3.5" /> Health
+            <Heart className="size-3.5" /> {t("pf-tab-health")}
           </TabsTrigger>
         </TabsList>
 
