@@ -13,6 +13,7 @@ interface I18nState {
   hydrated: boolean;
   setLocale: (l: Locale) => void;
   hydrate: () => Promise<void>;
+  reset: () => void;
 }
 
 export const useI18nStore = create<I18nState>((set, get) => ({
@@ -31,7 +32,17 @@ export const useI18nStore = create<I18nState>((set, get) => ({
     }
   },
 
+  // Clears any cached locale so the next hydrate() re-fetches from scratch.
+  // Called on logout so a second user on the same browser/tab never inherits
+  // the previous user's language before their own preference loads.
+  reset: () => {
+    if (typeof window !== "undefined") localStorage.removeItem("aspidus-locale");
+    set({ locale: "en", hydrated: false });
+  },
+
   // Priority: user's saved preference -> tenant default -> localStorage cache -> "en"
+  // Re-entrant per login: callers must reset() on logout so this can run again
+  // for the next user without a full page reload (the app is an SPA).
   hydrate: async () => {
     if (get().hydrated || typeof window === "undefined") return;
     set({ hydrated: true });

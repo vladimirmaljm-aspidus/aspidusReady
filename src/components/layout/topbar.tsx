@@ -189,6 +189,7 @@ export function Topbar() {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
     setView("dashboard");
+    useI18nStore.getState().reset();
     toast.success("Signed out.");
   }
 

@@ -22,6 +22,7 @@ import {
   Globe,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 export function LoginView() {
   const setUser = useAppStore((s) => s.setUser);
@@ -56,6 +57,11 @@ export function LoginView() {
         return;
       }
       setUser(data.user);
+      // SPA transition (no page reload) — force a fresh locale hydrate so
+      // this user's own saved language loads instead of whatever the
+      // previous session on this browser left behind.
+      useI18nStore.getState().reset();
+      useI18nStore.getState().hydrate();
     } catch {
       setError("Network error. Please check your connection and try again.");
     } finally {
