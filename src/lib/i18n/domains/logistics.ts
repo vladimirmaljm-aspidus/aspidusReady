@@ -2,6 +2,7 @@ import type { Locale } from "@/lib/i18n/dictionaries";
 
 export const LOGISTICS: Record<Locale, Record<string, string>> = {
   en: {
+    "log-marker-border": "Border crossing",
     // Logistics Requests view
     "log-page-title": "Logistics Requests",
     "log-page-description": "Freight quote requests submitted by portal clients (sea, road, air, rail).",
@@ -194,6 +195,7 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-web": "Web",
   },
   sr: {
+    "log-marker-border": "Granični prelaz",
     "log-page-title": "Zahtevi za logistiku",
     "log-page-description": "Zahtevi za ponude prevoza koje su podneli klijenti sa portala (more, drum, vazduh, železnica).",
     "log-stat-pending": "Na čekanju",
@@ -383,6 +385,7 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-web": "Veb",
   },
   tr: {
+    "log-marker-border": "Sınır geçişi",
     "log-page-title": "Lojistik Talepleri",
     "log-page-description": "Portal müşterileri tarafından gönderilen navlun teklif talepleri (deniz, kara, hava, demiryolu).",
     "log-stat-pending": "Beklemede",
@@ -572,6 +575,7 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-web": "Web",
   },
   de: {
+    "log-marker-border": "Grenzübergang",
     "log-page-title": "Logistikanfragen",
     "log-page-description": "Frachtangebotsanfragen von Portalkunden (See, Straße, Luft, Schiene).",
     "log-stat-pending": "Ausstehend",
@@ -761,6 +765,7 @@ export const LOGISTICS: Record<Locale, Record<string, string>> = {
     "log-device-web": "Web",
   },
   ru: {
+    "log-marker-border": "Пересечение границы",
     "log-page-title": "Логистические заявки",
     "log-page-description": "Запросы на расчёт стоимости перевозки, поданные клиентами портала (море, автотранспорт, авиа, ж/д).",
     "log-stat-pending": "На рассмотрении",
