@@ -48,6 +48,8 @@ import {
 import { getCountry } from "@/lib/data/geo/countries";
 import { CountrySelect } from "@/components/common/country-select";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useI18nStore } from "@/lib/i18n/store";
+import { t } from "@/lib/i18n/dictionaries";
 
 const PAGE_SIZE = 20;
 
@@ -121,6 +123,7 @@ const CATEGORY_BADGE: Record<string, string> = {
 export function ProductCatalogView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
 
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -187,11 +190,11 @@ export function ProductCatalogView() {
       if (!r.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
-      toast.success("Product deleted.");
+      toast.success(t(locale, "crm-product-deleted"));
       qc.invalidateQueries({ queryKey: ["product-catalog", tenantKey] });
       setDeleteId(null);
     },
-    onError: () => toast.error("Delete failed."),
+    onError: () => toast.error(t(locale, "crm-delete-failed")),
   });
 
   const items = data?.items || [];
@@ -201,11 +204,11 @@ export function ProductCatalogView() {
   return (
     <div>
       <PageHeader
-        title="Product Catalog"
-        description={`${total} catalog entries · spec-sheet used by Supplier Offers and the client portal (HS codes, specifications, images). The portal also automatically shows every active product from Products, so this catalog is optional.`}
+        title={t(locale, "product-catalog")}
+        description={`${total} ${t(locale, "crm-catalog-entries-desc")}`}
         actions={
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="size-4 mr-1" /> New Product
+            <Plus className="size-4 mr-1" /> {t(locale, "crm-new-product")}
           </Button>
         }
       />
@@ -215,16 +218,16 @@ export function ProductCatalogView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, HS code…"
+              placeholder={t(locale, "crm-search-name-hs")}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={category} onValueChange={handleCategoryChange}>
-            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder={t(locale, "crm-category")} /></SelectTrigger>
             <SelectContent className="max-h-72">
-              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="all">{t(locale, "crm-all-categories")}</SelectItem>
               {PRODUCT_CATEGORIES.map((c) => (
                 <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
               ))}
@@ -242,9 +245,9 @@ export function ProductCatalogView() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<Package className="size-6" />}
-              title="No products"
-              description="Add your first catalog product to get started."
-              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> New Product</Button>}
+              title={t(locale, "crm-no-products")}
+              description={t(locale, "crm-no-products-desc")}
+              action={<Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t(locale, "crm-new-product")}</Button>}
             />
           ) : (
             <>
@@ -252,14 +255,14 @@ export function ProductCatalogView() {
                 <Table>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="hidden md:table-cell">Category</TableHead>
-                      <TableHead className="hidden lg:table-cell">HS Code</TableHead>
-                      <TableHead className="hidden xl:table-cell">Base Unit</TableHead>
-                      <TableHead className="hidden lg:table-cell">Origin</TableHead>
-                      <TableHead className="hidden xl:table-cell">Specs</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t(locale, "name")}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t(locale, "crm-category")}</TableHead>
+                      <TableHead className="hidden lg:table-cell">{t(locale, "crm-hs-code")}</TableHead>
+                      <TableHead className="hidden xl:table-cell">{t(locale, "crm-base-unit")}</TableHead>
+                      <TableHead className="hidden lg:table-cell">{t(locale, "crm-origin")}</TableHead>
+                      <TableHead className="hidden xl:table-cell">{t(locale, "crm-specs")}</TableHead>
+                      <TableHead>{t(locale, "status")}</TableHead>
+                      <TableHead className="text-right">{t(locale, "actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -299,18 +302,18 @@ export function ProductCatalogView() {
                           </TableCell>
                           <TableCell>
                             <Badge variant={p.active ? "outline" : "secondary"} className={p.active ? "bg-chart-1/15 text-chart-1 border-chart-1/30" : ""}>
-                              {p.active ? "Active" : "Inactive"}
+                              {p.active ? t(locale, "active") : t(locale, "inactive")}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title="View">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(p.id)} title={t(locale, "view")}>
                                 <Eye className="size-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title="Edit">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => { setEditing(p); setShowForm(true); }} title={t(locale, "edit")}>
                                 <Pencil className="size-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Delete">
+                              <Button size="icon" variant="ghost" className="size-8 text-destructive" onClick={() => setDeleteId(p.id)} title={t(locale, "delete")}>
                                 <Trash2 className="size-4" />
                               </Button>
                             </div>
@@ -326,7 +329,7 @@ export function ProductCatalogView() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between border-t px-4 py-3">
                   <p className="text-sm text-muted-foreground">
-                    Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+                    {t(locale, "crm-showing")} {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} {t(locale, "crm-of")} {total}
                   </p>
                   <Pagination>
                     <PaginationContent>
@@ -383,9 +386,9 @@ export function ProductCatalogView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Package className="size-5" />
-              {detail.data?.name || "Product"}
+              {detail.data?.name || t(locale, "crm-product")}
             </SheetTitle>
-            <SheetDescription>Product catalog entry</SheetDescription>
+            <SheetDescription>{t(locale, "crm-product-catalog-entry")}</SheetDescription>
           </SheetHeader>
           {detail.isLoading ? (
             <div className="p-4 space-y-3">
@@ -405,18 +408,18 @@ export function ProductCatalogView() {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogTitle>{t(locale, "crm-delete-product-title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Supplier offers linked to this product may lose their reference.
+              {t(locale, "crm-delete-product-desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t(locale, "cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteId && deleteMut.mutate(deleteId)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t(locale, "delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -433,18 +436,19 @@ function ProductDetail({
   offers: SupplierOffer[];
   partnerMap: Map<string, Partner>;
 }) {
+  const locale = useI18nStore((s) => s.locale);
   const specs = normalizeSpecs(product.specifications);
 
   // Known imported data keys that should be displayed with nice labels
   const IMPORTED_KEY_LABELS: Record<string, string> = {
-    brand: "Brand",
-    shelf_life: "Shelf Life",
-    image_url: "Image URL",
-    logistics: "Logistics",
-    coa_params: "COA Parameters",
-    tags: "Tags",
-    inventory: "Inventory",
-    sku: "SKU",
+    brand: t(locale, "crm-brand"),
+    shelf_life: t(locale, "crm-shelf-life"),
+    image_url: t(locale, "crm-image-url"),
+    logistics: t(locale, "crm-logistics-label"),
+    coa_params: t(locale, "crm-coa-parameters"),
+    tags: t(locale, "crm-tags"),
+    inventory: t(locale, "inventory"),
+    sku: t(locale, "crm-sku"),
   };
 
   // Separate imported data fields from generic specs
@@ -459,7 +463,7 @@ function ProductDetail({
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={CATEGORY_BADGE[product.category] || ""}>{categoryLabel(product.category)}</Badge>
         <Badge variant={product.active ? "outline" : "secondary"} className={product.active ? "bg-chart-1/15 text-chart-1 border-chart-1/30" : ""}>
-          {product.active ? "Active" : "Inactive"}
+          {product.active ? t(locale, "active") : t(locale, "inactive")}
         </Badge>
         {product.origin_country && (
           <Badge variant="outline">
@@ -470,7 +474,7 @@ function ProductDetail({
 
       {product.description && (
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Description</p>
+          <p className="text-xs text-muted-foreground mb-1">{t(locale, "description")}</p>
           <p className="text-sm whitespace-pre-wrap">{product.description}</p>
         </div>
       )}
@@ -478,13 +482,13 @@ function ProductDetail({
       <div className="grid grid-cols-2 gap-2">
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Hash className="size-3" /> HS Code</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Hash className="size-3" /> {t(locale, "crm-hs-code")}</p>
             <p className="text-sm font-mono tabular mt-1">{product.hs_code || "—"}</p>
           </CardContent>
         </Card>
         <Card className="border-border/60 shadow-soft rounded-xl">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Boxes className="size-3" /> Base unit</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Boxes className="size-3" /> {t(locale, "crm-base-unit")}</p>
             <p className="text-sm mt-1">{unitLabel(product.base_unit)}</p>
           </CardContent>
         </Card>
@@ -493,11 +497,11 @@ function ProductDetail({
       {/* Images */}
       {images.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Images</p>
+          <p className="text-xs text-muted-foreground mb-2">{t(locale, "crm-images")}</p>
           <div className="flex flex-wrap gap-2">
             {images.map((url, i) => (
               <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline break-all">
-                Image {i + 1}
+                {t(locale, "crm-image")} {i + 1}
               </a>
             ))}
           </div>
@@ -507,7 +511,7 @@ function ProductDetail({
       {/* Imported data fields (brand, shelf_life, image_url, logistics, coa_params, tags, inventory, sku) */}
       {importedEntries.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Product Details</p>
+          <p className="text-xs text-muted-foreground mb-2">{t(locale, "crm-product-details")}</p>
           <div className="grid grid-cols-2 gap-2">
             {importedEntries.map((s) => (
               <Card key={s.name} className="border-border/60 shadow-soft rounded-xl">
@@ -536,7 +540,7 @@ function ProductDetail({
       {/* Other specifications */}
       {otherSpecEntries.length > 0 && (
         <div>
-          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><Tag className="size-3" /> Specifications</p>
+          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><Tag className="size-3" /> {t(locale, "crm-specifications")}</p>
           <div className="border border-border/60 rounded-md divide-y divide-border/60">
             {otherSpecEntries.map((s, i) => (
               <div key={i} className="flex items-center justify-between p-2 text-sm">
@@ -552,19 +556,19 @@ function ProductDetail({
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="size-3" /> Supplier offers ({offers.length})</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="size-3" /> {t(locale, "supplier-offers")} ({offers.length})</p>
         </div>
         {offers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No supplier offers linked to this product yet.</p>
+          <p className="text-sm text-muted-foreground">{t(locale, "crm-no-supplier-offers-linked")}</p>
         ) : (
           <div className="border border-border/60 rounded-md overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead className="h-8 text-xs">Supplier</TableHead>
-                  <TableHead className="h-8 text-xs text-right">Unit price</TableHead>
-                  <TableHead className="h-8 text-xs">Incoterm</TableHead>
-                  <TableHead className="h-8 text-xs hidden sm:table-cell">Origin</TableHead>
+                  <TableHead className="h-8 text-xs">{t(locale, "crm-supplier")}</TableHead>
+                  <TableHead className="h-8 text-xs text-right">{t(locale, "crm-unit-price")}</TableHead>
+                  <TableHead className="h-8 text-xs">{t(locale, "crm-incoterm")}</TableHead>
+                  <TableHead className="h-8 text-xs hidden sm:table-cell">{t(locale, "crm-origin")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -589,7 +593,7 @@ function ProductDetail({
       </div>
 
       <div className="pt-3 border-t">
-        <p className="text-xs text-muted-foreground">Updated {fmtDate(product.updated_at)}</p>
+        <p className="text-xs text-muted-foreground">{t(locale, "crm-updated")} {fmtDate(product.updated_at)}</p>
       </div>
     </div>
   );
@@ -606,6 +610,7 @@ function ProductFormDialog({
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
 
   const [form, setForm] = useState<Partial<ProductCatalogEntry>>({});
   const [specs, setSpecs] = useState<{ key: string; value: string }[]>([]);
@@ -644,7 +649,7 @@ function ProductFormDialog({
   }
 
   async function save() {
-    if (!form.name) { toast.error("Name is required."); return; }
+    if (!form.name) { toast.error(t(locale, "crm-name-required")); return; }
     setSaving(true);
     try {
       const specObj: Record<string, string> = {};
@@ -662,12 +667,12 @@ function ProductFormDialog({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || "Request failed");
+        throw new Error(e.error || t(locale, "crm-request-failed"));
       }
-      toast.success(product ? "Product updated." : "Product created successfully!");
+      toast.success(product ? t(locale, "crm-product-updated") : t(locale, "crm-product-created"));
       onSaved();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Saving failed.");
+      toast.error(e instanceof Error ? e.message : t(locale, "crm-saving-failed"));
     } finally {
       setSaving(false);
     }
@@ -677,9 +682,9 @@ function ProductFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>{product ? "Edit product" : "New product"}</DialogTitle>
+          <DialogTitle>{product ? t(locale, "crm-edit-product") : t(locale, "crm-new-product")}</DialogTitle>
           <DialogDescription>
-            {product ? "Update the catalog entry." : "Start with the basics — you can add more details later."}
+            {product ? t(locale, "crm-update-catalog-entry") : t(locale, "crm-start-with-basics")}
           </DialogDescription>
         </DialogHeader>
 
@@ -688,11 +693,11 @@ function ProductFormDialog({
           {/* ── Essential fields (always visible) ── */}
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-sm font-semibold">Product name *</Label>
+              <Label className="text-sm font-semibold">{t(locale, "crm-product-name-required")}</Label>
               <Input
                 value={form.name || ""}
                 onChange={(e) => set("name", e.target.value)}
-                placeholder="e.g. Refined White Sugar ICUMSA 45"
+                placeholder={t(locale, "crm-product-name-placeholder")}
                 className="h-11 text-base"
                 autoFocus
               />
@@ -700,7 +705,7 @@ function ProductFormDialog({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Category</Label>
+                <Label>{t(locale, "crm-category")}</Label>
                 <Select value={form.category || "OTHER"} onValueChange={(v) => set("category", v)}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -711,7 +716,7 @@ function ProductFormDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>HS code</Label>
+                <Label>{t(locale, "crm-hs-code")}</Label>
                 <Input
                   value={form.hs_code || ""}
                   onChange={(e) => set("hs_code", e.target.value)}
@@ -720,7 +725,7 @@ function ProductFormDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Base unit</Label>
+                <Label>{t(locale, "crm-base-unit")}</Label>
                 <Select value={form.base_unit || "pcs"} onValueChange={(v) => set("base_unit", v)}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -747,48 +752,48 @@ function ProductFormDialog({
                 ) : (
                   <ChevronRight className="size-4 transition-transform" />
                 )}
-                More Details
+                {t(locale, "crm-more-details")}
                 {!moreOpen && (form.description || form.origin_country || specs.length > 0) && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">filled</Badge>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t(locale, "crm-filled")}</Badge>
                 )}
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="space-y-3 pt-1 pb-2">
                 <div className="space-y-1.5">
-                  <Label>Origin country</Label>
+                  <Label>{t(locale, "crm-origin-country")}</Label>
                   <CountrySelect
                     value={form.origin_country}
                     onChange={(v) => set("origin_country", v)}
-                    placeholder="Not specified"
+                    placeholder={t(locale, "crm-not-specified")}
                     className="h-10"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Description</Label>
+                  <Label>{t(locale, "description")}</Label>
                   <Textarea rows={2} value={form.description || ""} onChange={(e) => set("description", e.target.value)} />
                 </div>
 
                 <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
                   <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} />
                   <div>
-                    <p className="text-sm font-medium">Active</p>
-                    <p className="text-xs text-muted-foreground">Inactive products are hidden from new offers.</p>
+                    <p className="text-sm font-medium">{t(locale, "active")}</p>
+                    <p className="text-xs text-muted-foreground">{t(locale, "crm-inactive-products-hidden")}</p>
                   </div>
                 </div>
 
                 <div>
                   <Separator className="my-2" />
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs text-muted-foreground">Specifications (key / value pairs)</p>
+                    <p className="text-xs text-muted-foreground">{t(locale, "crm-specifications-kv")}</p>
                     <Button type="button" size="sm" variant="outline" onClick={addSpec}>
-                      <Plus className="size-3.5 mr-1" /> Add spec
+                      <Plus className="size-3.5 mr-1" /> {t(locale, "crm-add-spec")}
                     </Button>
                   </div>
                   {specs.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed border-border rounded-md">
-                      No specifications yet. Click &quot;Add spec&quot; to add one.
+                      {t(locale, "crm-no-specs-yet")}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -797,16 +802,16 @@ function ProductFormDialog({
                           <Input
                             value={s.key}
                             onChange={(e) => updateSpec(idx, "key", e.target.value)}
-                            placeholder="Key (e.g. icumsa)"
+                            placeholder={t(locale, "crm-spec-key-placeholder")}
                             className="flex-1"
                           />
                           <Input
                             value={s.value}
                             onChange={(e) => updateSpec(idx, "value", e.target.value)}
-                            placeholder="Value (e.g. 45 RBU)"
+                            placeholder={t(locale, "crm-spec-value-placeholder")}
                             className="flex-1"
                           />
-                          <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive shrink-0" onClick={() => removeSpec(idx)} title="Remove">
+                          <Button type="button" size="icon" variant="ghost" className="size-9 text-destructive shrink-0" onClick={() => removeSpec(idx)} title={t(locale, "remove")}>
                             <X className="size-4" />
                           </Button>
                         </div>
@@ -821,9 +826,9 @@ function ProductFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t(locale, "cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : product ? "Update" : "Create product"}
+            {saving ? t(locale, "crm-saving") : product ? t(locale, "crm-update") : t(locale, "crm-create-product")}
           </Button>
         </DialogFooter>
       </DialogContent>

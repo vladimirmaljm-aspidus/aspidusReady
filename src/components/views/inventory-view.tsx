@@ -27,10 +27,13 @@ import { KpiCard } from "@/components/common/kpi-card";
 import { fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { InventoryMovement, Partner, Product } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { useI18nStore } from "@/lib/i18n/store";
+import { t } from "@/lib/i18n/dictionaries";
 
 export function InventoryView() {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
+  const locale = useI18nStore((s) => s.locale);
 
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -106,29 +109,29 @@ export function InventoryView() {
   return (
     <div>
       <PageHeader
-        title="Inventory"
-        description="Global stock movement log"
+        title={t(locale, "inventory")}
+        description={t(locale, "crm-inventory-desc")}
       />
 
       {/* KPI summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <KpiCard
-          label="Movements (30 days)"
+          label={t(locale, "crm-movements-30d")}
           value={fmtNumber(kpis.movements30d)}
-          sub="Last 30 days"
+          sub={t(locale, "crm-last-30-days")}
           icon={Activity}
         />
         <KpiCard
-          label="Net stock change"
+          label={t(locale, "crm-net-stock-change")}
           value={fmtNumber(kpis.netChange)}
-          sub="Sum of deltas (30 days)"
+          sub={t(locale, "crm-sum-deltas-30d")}
           icon={Boxes}
           iconClassName={kpis.netChange >= 0 ? "text-success" : "text-destructive"}
         />
         <KpiCard
-          label="Active partners"
+          label={t(locale, "crm-active-partners")}
           value={fmtNumber(kpis.activePartners)}
-          sub="With movements (30 days)"
+          sub={t(locale, "crm-with-movements-30d")}
           icon={Users}
         />
       </div>
@@ -138,17 +141,17 @@ export function InventoryView() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              aria-label="Search inventory"
-              placeholder="Search partner, product, reason…"
+              aria-label={t(locale, "crm-search-inventory")}
+              placeholder={t(locale, "crm-search-inventory-placeholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder="Partner" /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder={t(locale, "crm-partner")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All partners</SelectItem>
+              <SelectItem value="all">{t(locale, "crm-all-partners")}</SelectItem>
               {partnerList.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
               ))}
@@ -166,21 +169,21 @@ export function InventoryView() {
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={<Layers className="size-6" />}
-              title="No inventory movements"
-              description="Stock movements appear here once they are recorded via partner actions or offer acceptance."
+              title={t(locale, "crm-no-inventory-movements")}
+              description={t(locale, "crm-inventory-empty-desc")}
             />
           ) : (
             <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="hidden md:table-cell">Partner</TableHead>
-                    <TableHead className="hidden lg:table-cell">Product</TableHead>
-                    <TableHead>Delta</TableHead>
-                    <TableHead className="hidden md:table-cell">Reason</TableHead>
-                    <TableHead className="hidden xl:table-cell">Reference</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t(locale, "date")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t(locale, "crm-partner")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t(locale, "crm-product")}</TableHead>
+                    <TableHead>{t(locale, "crm-delta")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t(locale, "crm-reason")}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t(locale, "crm-reference")}</TableHead>
+                    <TableHead className="text-right">{t(locale, "actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -210,7 +213,7 @@ export function InventoryView() {
                         </TableCell>
                         <TableCell className="hidden xl:table-cell font-mono text-xs">{m.reference || "—"}</TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(m.id)} title="View" aria-label="View">
+                          <Button size="icon" variant="ghost" className="size-8" onClick={() => setDetailId(m.id)} title={t(locale, "view")} aria-label={t(locale, "view")}>
                             <Eye className="size-4" />
                           </Button>
                         </TableCell>
@@ -230,7 +233,7 @@ export function InventoryView() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Layers className="size-5" />
-              Movement details
+              {t(locale, "crm-movement-details")}
             </SheetTitle>
             <SheetDescription>{detail ? fmtDateTime(detail.created_at) : ""}</SheetDescription>
           </SheetHeader>
@@ -244,24 +247,24 @@ export function InventoryView() {
                   {detail.delta > 0 ? "+" : ""}{fmtNumber(detail.delta)}
                 </span>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {detail.delta > 0 ? "Inbound" : detail.delta < 0 ? "Outbound" : "No change"}
+                  {detail.delta > 0 ? t(locale, "crm-inbound") : detail.delta < 0 ? t(locale, "crm-outbound") : t(locale, "crm-no-change")}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <DetailRow label="Partner" value={partnerName(detail.partner_id)} />
-                <DetailRow label="Product" value={productName(detail.product_id)} />
-                <DetailRow label="Reason" value={detail.reason || "—"} />
-                <DetailRow label="Reference" value={detail.reference || "—"} mono />
-                <DetailRow label="Date" value={fmtDateTime(detail.created_at)} />
+                <DetailRow label={t(locale, "crm-partner")} value={partnerName(detail.partner_id)} />
+                <DetailRow label={t(locale, "crm-product")} value={productName(detail.product_id)} />
+                <DetailRow label={t(locale, "crm-reason")} value={detail.reason || "—"} />
+                <DetailRow label={t(locale, "crm-reference")} value={detail.reference || "—"} mono />
+                <DetailRow label={t(locale, "date")} value={fmtDateTime(detail.created_at)} />
               </div>
 
               <div className="mt-4 pt-4 border-t">
                 <Badge variant="outline" className="gap-1">
-                  <Activity className="size-3" /> Read-only
+                  <Activity className="size-3" /> {t(locale, "crm-read-only")}
                 </Badge>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Movements are created automatically on partner actions or offer acceptance.
+                  {t(locale, "crm-movements-auto-desc")}
                 </p>
               </div>
             </div>
