@@ -900,6 +900,11 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "login-secure-note": "Secure login · Your data is encrypted end-to-end",
     "login-rights": "All rights reserved.",
 
+    // ── Verify page extras ─────────────────────────────────────────────
+    "misc-verify-not-found": "Verification code not found",
+    "misc-verify-check-code": "Please check your verification code and try again.",
+    "misc-verify-loading": "Loading document details...",
+
   },
   sr: {
     "misc-calendar-desc": "Zadaci, fakture, poslovi i ponude — sve na jednom kalendaru.",
@@ -1795,6 +1800,11 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "login-signin-failed": "Prijava nije uspela. Pokusajte ponovo.",
     "login-secure-note": "Bezbedna prijava · Vasi podaci su sifrovani end-to-end",
     "login-rights": "Sva prava zadrzana.",
+
+    // ── Verify page extras ─────────────────────────────────────────────
+    "misc-verify-not-found": "Verifikacioni kod nije pronađen",
+    "misc-verify-check-code": "Proverite svoj verifikacioni kod i pokušajte ponovo.",
+    "misc-verify-loading": "Učitavanje detalja dokumenta...",
 
   },
   tr: {
@@ -2692,6 +2702,11 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "login-secure-note": "Güvenli giris · Verileriniz uctan uca sifrelidir",
     "login-rights": "Tüm haklari saklidir.",
 
+    // ── Verify page extras ─────────────────────────────────────────────
+    "misc-verify-not-found": "Doğrulama kodu bulunamadı",
+    "misc-verify-check-code": "Doğrulama kodunuzu kontrol edip tekrar deneyin.",
+    "misc-verify-loading": "Belge detayları yükleniyor...",
+
   },
   de: {
     "misc-calendar-desc": "Aufgaben, Rechnungen, Geschäfte und Angebote — alles in einem Kalender.",
@@ -3587,6 +3602,11 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "login-signin-failed": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
     "login-secure-note": "Sichere Anmeldung · Ihre Daten sind Ende-zu-Ende verschlüsselt",
     "login-rights": "Alle Rechte vorbehalten.",
+
+    // ── Verify page extras ─────────────────────────────────────────────
+    "misc-verify-not-found": "Verifizierungscode nicht gefunden",
+    "misc-verify-check-code": "Bitte prüfen Sie Ihren Verifizierungscode und versuchen Sie es erneut.",
+    "misc-verify-loading": "Dokumentdetails werden geladen...",
 
   },
   ru: {
@@ -4484,5 +4504,10 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "login-signin-failed": "Вход не удался. Попробуйте снова.",
     "login-secure-note": "Безопасный вход · Ваши данные зашифрованы end-to-end",
     "login-rights": "Все права защищены.",
+
+    // ── Verify page extras ─────────────────────────────────────────────
+    "misc-verify-not-found": "Код верификации не найден",
+    "misc-verify-check-code": "Проверьте код верификации и попробуйте снова.",
+    "misc-verify-loading": "Загрузка деталей документа...",
   },
 };

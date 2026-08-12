@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const body = await req.json();
-    const postedBy = body.posted_by || auth.user.id;
+    const postedBy = auth.user.id;
 
     const posted = await auth.store.postErpJournalEntry(id, postedBy);
     await audit(auth.store, auth.user, req, "journal_entry.post", "erp_journal_entry", id, {

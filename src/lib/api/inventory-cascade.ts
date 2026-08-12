@@ -58,17 +58,24 @@ export async function deductStockForOffer(opts: DeductStockOpts): Promise<
     productId: string; newStock: number; productName: string; sku: string; reorderLevel: number;
   }> = [];
 
-  // ── Idempotency check (Re-Audit-2 N7) ─────────────────────────────────
-  // If any deduction movement already exists for this offer id, skip the
-  // whole cascade. This prevents:
+  // ── Idempotency check (Re-Audit-2 N7, fix P0-5/C-5) ────────────────
+  // If a prior DEDUCTION movement already exists for this offer id, skip
+  // the whole cascade. This prevents:
   //   1. Double-deduction when a super-admin re-accepts a cancelled offer.
   //   2. Double-deduction when two concurrent calls (admin + portal, or
   //      double-click) both fire the cascade.
+  //
+  // CRITICAL: we filter `delta < 0` so we ONLY match prior DEDUCTIONS.
+  // Without this filter, after `accepted → cancelled (restore) → accepted
+  // (re-deduct)`, the prior RESTORATION movement (positive delta) would
+  // match here and we'd skip the re-deduction entirely — leaving stock
+  // un-deducted on the second acceptance (audit C-5).
   const { data: existingMovements, error: existingErr } = await sb
     .from("inventory_movements")
     .select("id")
     .eq("tenant_id", tenantId)
     .eq("reference", offerId)
+    .lt("delta", 0) // P0-5/C-5: only count prior DEDUCTIONS (negative deltas)
     .limit(1);
   if (existingErr) {
     console.warn("[inventory cascade] idempotency lookup failed:", existingErr.message);
@@ -77,7 +84,7 @@ export async function deductStockForOffer(opts: DeductStockOpts): Promise<
   }
   if (existingMovements && existingMovements.length > 0) {
     console.log(
-      `[inventory cascade] movement already exists for offer ${offerId}, skipping deduction`,
+      `[inventory cascade] prior deduction already exists for offer ${offerId}, skipping deduction`,
     );
     return updatedProducts;
   }
@@ -244,7 +251,7 @@ export async function restoreStockForOffer(opts: RestoreStockOpts): Promise<void
       continue;
     }
 
-    // 2) Fetch current stock and increment.
+    // 2) Fetch current stock.
     const { data: productRow } = await sb
       .from("products")
       .select("id, stock")
@@ -253,8 +260,35 @@ export async function restoreStockForOffer(opts: RestoreStockOpts): Promise<void
       .maybeSingle();
     if (!productRow) continue;
 
+    // CRITICAL FIX (audit C-4): restore only the ACTUAL amount that was
+    // deducted, not the requested `qty`. `deductStockForOffer` caps stock
+    // at 0 via `Math.max(0, currentStock - qty)`, so if stock was 10 and
+    // qty was 15, only 10 units were actually removed from `products.stock`
+    // (the movement row still records delta = -15). Naively restoring
+    // `+qty` (15) would create 5 phantom units.
+    //
+    // We read the delta from the prior deduction movement (matched by
+    // tenant + reference + product_id + delta < 0). The movement delta
+    // matches the *requested* qty in the current implementation, so this
+    // fix is forward-compatible: if `deductStockForOffer` is later changed
+    // to record `actual_delta` (clamped to currentStock), the restore will
+    // automatically pick up the correct value without further changes.
+    // Falls back to `qty` only if the movement row can't be found (defensive).
+    const { data: priorDeduction } = await sb
+      .from("inventory_movements")
+      .select("delta")
+      .eq("tenant_id", tenantId)
+      .eq("reference", offerId)
+      .eq("product_id", productId)
+      .lt("delta", 0) // negative = deduction
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const actualDeducted = priorDeduction
+      ? Math.abs(Number((priorDeduction as any).delta) || 0)
+      : qty;
     const currentStock = Number((productRow as any).stock ?? 0) || 0;
-    const newStock = currentStock + qty;
+    const newStock = currentStock + actualDeducted;
     const { error: updErr } = await sb
       .from("products")
       .update({ stock: newStock, updated_at: new Date().toISOString() })

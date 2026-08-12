@@ -18,18 +18,19 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
  *     even if `SECRET_KEY` is rotated/lost. Log the failure upstream.
  *
  * The key is derived from `SECRET_KEY` env var (padded/truncated to 32
- * bytes). When `SECRET_KEY` is unset, a deterministic fallback is used so
- * the dev environment still works — but production MUST set SECRET_KEY.
+ * bytes). When `SECRET_KEY` is unset or shorter than 16 chars, `getKey()`
+ * throws — every environment (including dev) MUST set SECRET_KEY.
  */
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 
 function getKey(): Buffer {
-  const raw =
-    (process.env.SECRET_KEY && process.env.SECRET_KEY.padEnd(32, "0").slice(0, 32)) ||
-    "default-key-pad-to-32-chars!!"; // 32 ASCII chars = 32 bytes
-  return Buffer.from(raw, "utf8");
+  const raw = process.env.SECRET_KEY;
+  if (!raw || raw.length < 16) {
+    throw new Error("SECRET_KEY environment variable is required (min 16 chars). Set it in your .env or Render env vars.");
+  }
+  return Buffer.from(raw.padEnd(32, "0").slice(0, 32), "utf8");
 }
 
 /**

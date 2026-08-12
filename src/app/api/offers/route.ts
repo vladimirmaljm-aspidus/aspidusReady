@@ -77,6 +77,16 @@ export async function POST(req: NextRequest) {
     }
   body.tenant_id = tid!;
   if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
+
+  // CRITICAL FIX (audit P1-5): validate partner_id belongs to caller's tenant.
+  // Without this, a tenant-A user can create an offer referencing tenant-B's
+  // partner — polluting downstream reports and commission calculations.
+  if (body.partner_id) {
+    const partner = await auth.store.getPartner(body.partner_id);
+    if (partner && partner.tenant_id !== tid) {
+      return NextResponse.json({ error: "Partner not found." }, { status: 404 });
+    }
+  }
   // ── Strip `_` prefixed metadata fields BEFORE upserting ──────────────
   // These are passed through by the offer form when the offer was pre-filled
   // from a Trade Calculator preview (Fix 1). They carry trade-calc-only

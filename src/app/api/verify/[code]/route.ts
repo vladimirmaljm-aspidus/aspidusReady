@@ -80,14 +80,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     });
   }
 
-  // ── GPS gate (audit finding E P0 #3) ────────────────────────────────────
-  // Without `?gps=1`, return only a masked preview + a `requires_gps` flag.
-  // The full payload (document_number, etc.) is gated behind explicit GPS
-  // verification — the UI gates this client-side, but the server now refuses
-  // to leak sensitive fields when the gate isn't passed. The unlock flow
-  // (POST /api/verify/[code]/unlock with token + GPS coords) is left for a
-  // future task; this is the minimum-viable server-side gate.
-  const gpsVerified = req.nextUrl.searchParams.get("gps") === "1";
+  // ── GPS gate (audit finding P0-4/D-1) ───────────────────────────────────
+  // CRITICAL FIX: the old `?gps=1` query param was trivially bypassable.
+  // Now the server checks document_verification_logs for a RECENT GPS
+  // verification (within 5 minutes) from the same IP address for this code.
+  // Only then is the full document payload returned.
+  const gpsVerified = await checkGpsVerified(req, code);
   if (!gpsVerified) {
     return NextResponse.json({
       valid: true,
@@ -227,6 +225,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
 // the IP-based lat/lng — they're written into the `latitude` / `longitude`
 // columns so the super-admin viewer's Google Maps link points at the
 // verifier's EXACT location rather than their ISP's city.
+
+// ─── GPS verification check ──────────────────────────────────────────────
+// Returns true if there's a recent (within 5 min) GPS verification log
+// for this code from the same IP. This is the server-side gate that
+// prevents document data from leaking without actual GPS sharing.
+async function checkGpsVerified(req: NextRequest, code: string): Promise<boolean> {
+  try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+               req.headers.get("x-real-ip") || "unknown";
+    const sb = getSupabase();
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data, error } = await sb
+      .from("document_verification_logs")
+      .select("id, latitude, longitude")
+      .eq("verification_code", code)
+      .eq("ip", ip)
+      .gte("verified_at", fiveMinAgo)
+      .not("latitude", "is", null)
+      .order("verified_at", { ascending: false })
+      .limit(1);
+    if (error) return false;
+    return !!(data && data.length > 0);
+  } catch {
+    return false;
+  }
+}
+
 async function logVerificationAttempt(
   req: NextRequest,
   code: string,

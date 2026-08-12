@@ -1828,6 +1828,19 @@ export function t(locale: Locale, key: string): string {
   for (const dict of DOMAIN_DICTS) {
     if (dict[locale]?.[key]) return dict[locale][key];
   }
+  // CRITICAL FIX (audit D-2/P2-1): when a translation is missing for the
+  // requested locale, fall back to English instead of returning the raw key.
+  // Previously, Serbian users would see "crm-product-deleted" etc. in the UI
+  // when the sr translation was missing. Now they see the English text.
+  if (locale !== "en") {
+    if (UI.en[key]) return UI.en[key];
+    if (NAV.en[key]) return NAV.en[key];
+    if (SECTIONS.en[key]) return SECTIONS.en[key];
+    if (DASHBOARD.en[key]) return DASHBOARD.en[key];
+    for (const dict of DOMAIN_DICTS) {
+      if (dict.en?.[key]) return dict.en[key];
+    }
+  }
   return key;
 }
 

@@ -31,7 +31,12 @@ export async function GET(req: NextRequest) {
   let q = sb.from("logistics_requests").select("*", { count: "exact" }).eq("tenant_id", tid);
   if (partnerId) q = q.eq("partner_id", partnerId);
   if (status) q = q.eq("status", status);
-  if (search) q = q.or(`number.ilike.%${search}%,cargo_description.ilike.%${search}%,origin_city.ilike.%${search}%,destination_city.ilike.%${search}%`);
+  if (search) {
+    // Sanitize search to prevent PostgREST .or() filter injection
+    // (audit A-3/P0-3): commas separate OR clauses, parens group them.
+    const s = search.replace(/[(),\\]/g, " ");
+    q = q.or(`number.ilike.%${s}%,cargo_description.ilike.%${s}%,origin_city.ilike.%${s}%,destination_city.ilike.%${s}%`);
+  }
   q = q.order("created_at", { ascending: false }).range(offset, offset + limit - 1);
   const { data, count, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

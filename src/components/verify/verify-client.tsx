@@ -20,16 +20,30 @@ import type { DocumentVerification } from "@/lib/supabase/types";
 import { useT } from "@/lib/i18n/store";
 
 interface VerifyClientProps {
-  verification: DocumentVerification | null;
+  exists: boolean;
+  documentType: string | null;
   code: string;
   cipheredRecipient?: string;
 }
 
-export function VerifyClient({ verification: v, code, cipheredRecipient = "—" }: VerifyClientProps) {
+export function VerifyClient({ exists, documentType, code, cipheredRecipient = "—" }: VerifyClientProps) {
   const t = useT();
   const [phase, setPhase] = React.useState<"requesting" | "denied" | "ready">("requesting");
   const [gpsCoords, setGpsCoords] = React.useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
   const submittedRef = React.useRef(false);
+  // CRITICAL FIX (audit P0-1/D-1): fetch the full verification payload ONLY
+  // after GPS is granted. The SSR page no longer passes the full object as a
+  // prop — this prevents document data from leaking in the RSC payload.
+  const [v, setV] = React.useState<DocumentVerification | null>(null);
+
+  // After GPS is granted, fetch the full verification via the API.
+  React.useEffect(() => {
+    if (phase !== "ready" || v) return;
+    fetch(`/api/verify/${encodeURIComponent(code)}?gps=1`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data && !data.requires_gps) setV(data); })
+      .catch(() => {});
+  }, [phase, code, v]);
 
   // Request GPS — BLOCK if user denies
   React.useEffect(() => {
@@ -153,6 +167,45 @@ export function VerifyClient({ verification: v, code, cipheredRecipient = "—" 
             >
               {t("misc-verify-reload-try-again")}
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Phase: Ready — but still fetching the verification payload ─────
+  if (phase === "ready" && !v) {
+    // If the code doesn't exist at all, show "not found".
+    if (!exists) {
+      return (
+        <div className="verify-bg min-h-screen flex items-center justify-center p-4">
+          <div className="verify-card w-full max-w-md p-10 text-center">
+            <div className="verify-glow verify-glow-red" />
+            <div className="relative z-10">
+              <div className="verify-logo mb-8">
+                <div className="size-12 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center mx-auto shadow-lg">
+                  <span className="text-white font-bold text-lg">A</span>
+                </div>
+                <p className="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-2">Aspidus</p>
+              </div>
+              <div className="size-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-5">
+                <XCircle className="size-8 text-red-500" />
+              </div>
+              <h1 className="text-lg font-semibold text-slate-800 mb-2">{t("misc-verify-not-found")}</h1>
+              <p className="text-sm text-slate-500">{t("misc-verify-check-code")}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    // Loading — fetching the full verification payload after GPS was granted.
+    return (
+      <div className="verify-bg min-h-screen flex items-center justify-center p-4">
+        <div className="verify-card w-full max-w-md p-10 text-center">
+          <div className="verify-glow" />
+          <div className="relative z-10">
+            <Loader2 className="size-10 animate-spin mx-auto text-slate-600 mb-4" />
+            <p className="text-sm text-slate-500">{t("misc-verify-loading")}</p>
           </div>
         </div>
       </div>

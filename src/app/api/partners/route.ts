@@ -42,7 +42,12 @@ export async function GET(req: NextRequest) {
       result.items = result.items.filter((p) => p.tenant_id === auth.tenantId);
       result.total = result.total - (before - result.items.length);
     }
-    return NextResponse.json(result);
+    // CRITICAL FIX (audit D-5): strip portal_token from API responses.
+    // This field is a 32+ char secret stored on the partner row and was
+    // being leaked to anyone with partners:read permission (including API keys).
+    // The field is legacy (no code path uses it for auth) — safe to strip.
+    const safeItems = result.items.map(({ portal_token, ...rest }: any) => rest);
+    return NextResponse.json({ ...result, items: safeItems });
   } catch (e: any) {
     console.error("[partners.list]", e);
     return NextResponse.json(

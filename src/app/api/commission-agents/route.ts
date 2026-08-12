@@ -76,8 +76,17 @@ export async function POST(req: NextRequest) {
     const created = await auth.store.upsertCommissionAgent(body);
     await audit(auth.store, auth.user, req, "commission_agent.create", "commission_agent", created.id, { partner_id: created.partner_id });
 
-    // Update the partner's is_commissioner flag
+    // CRITICAL FIX (audit P0-2/A-2): validate partner_id belongs to caller's
+    // tenant BEFORE reading or writing it. Without this, a tenant-A admin can
+    // submit partner_id = <tenant-B's partner UUID> and the route would:
+    //   1. fetch tenant-B's partner (cross-tenant READ — name, email, tax_id)
+    //   2. write is_commissioner=true onto tenant-B's partner (cross-tenant WRITE)
     const partner = await auth.store.getPartner(created.partner_id);
+    if (partner && partner.tenant_id !== tenantId) {
+      // Cross-tenant reference — roll back the commission agent we just created.
+      await auth.store.deleteCommissionAgent(created.id).catch(() => {});
+      return NextResponse.json({ error: "Partner not found." }, { status: 404 });
+    }
     if (partner && !partner.is_commissioner) {
       await auth.store.upsertPartner({ ...partner, is_commissioner: true });
     }

@@ -36,6 +36,23 @@ function paginate<T>(items: T[], params?: ListParams): ListResult<T> {
   return { items: items.slice(offset, offset + limit), total: items.length };
 }
 
+/**
+ * Sanitize a user-provided search term before interpolating it into a
+ * PostgREST `.or()` filter string (audit finding A-3/P0-3).
+ *
+ * PostgREST parses top-level commas as OR-clause separators and parentheses
+ * as group delimiters, so a malicious search like `foo,number.ilike.%bar`
+ * would inject an extra filter clause. Stripping these characters closes
+ * the injection vector.
+ *
+ * NOTE: supabase-js v2.x `.or()` only accepts a raw filter string — the
+ * runtime coerces arrays to `([object Object],...)`, so the structured
+ * object form is unavailable. Input sanitization is the defense.
+ */
+function safeSearch(value: string): string {
+  return value.replace(/[(),\\]/g, " ");
+}
+
 export class SupabaseStore implements Store {
   private sb() {
     return getSupabase();
@@ -221,7 +238,7 @@ export class SupabaseStore implements Store {
   async listPartners(tenantId: string, params?: ListParams): Promise<ListResult<Partner>> {
     let q = this.sb().from("partners").select("*");
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%,contact_name.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,email.ilike.%${safeSearch(params.search)}%,contact_name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.type) q = q.eq("type", params.filters.type);
     q = q.order("created_at", { ascending: false });
@@ -245,7 +262,7 @@ export class SupabaseStore implements Store {
   // ---- products ----
   async listProducts(tenantId: string, params?: ListParams): Promise<ListResult<Product>> {
     let q = this.sb().from("products").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`name.ilike.%${params.search}%,sku.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,sku.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.category) q = q.eq("category", params.filters.category);
     q = q.order("created_at", { ascending: false });
     const { data, error } = await q;
@@ -294,7 +311,7 @@ export class SupabaseStore implements Store {
   async listOffers(tenantId: string, params?: ListParams): Promise<ListResult<Offer>> {
     let q = this.sb().from("offers").select("*");
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${params.search}%,subject.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
@@ -318,7 +335,7 @@ export class SupabaseStore implements Store {
   // ---- demands ----
   async listDemands(tenantId: string, params?: ListParams): Promise<ListResult<Demand>> {
     let q = this.sb().from("demands").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${params.search}%,subject.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
@@ -366,7 +383,7 @@ export class SupabaseStore implements Store {
   async listAudit(tenantId: string, params?: ListParams): Promise<ListResult<AuditLog>> {
     let q = this.sb().from("audit_logs").select("*");
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`action.ilike.%${params.search}%,username.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`action.ilike.%${safeSearch(params.search)}%,username.ilike.%${safeSearch(params.search)}%`);
     q = q.order("created_at", { ascending: false });
     const { data, error } = await q;
     if (error) throw error;
@@ -596,7 +613,7 @@ export class SupabaseStore implements Store {
   async listInvoices(tenantId: string, params?: ListParams): Promise<ListResult<Invoice>> {
     let q = this.sb().from("invoices").select("*");
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${params.search}%,subject.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
@@ -620,7 +637,7 @@ export class SupabaseStore implements Store {
   // ---- proformas ----
   async listProformas(tenantId: string, params?: ListParams): Promise<ListResult<Proforma>> {
     let q = this.sb().from("proformas").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${params.search}%,subject.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
@@ -644,7 +661,7 @@ export class SupabaseStore implements Store {
   // ---- document register ----
   async listDocumentRegister(tenantId: string, params?: ListParams): Promise<ListResult<DocumentRegisterEntry>> {
     let q = this.sb().from("document_register").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${params.search}%,title.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,title.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.type) q = q.eq("type", params.filters.type);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
@@ -682,7 +699,7 @@ export class SupabaseStore implements Store {
   // ---- vault ----
   async listVault(tenantId: string, params?: ListParams): Promise<ListResult<VaultSecret>> {
     let q = this.sb().from("vault_secrets").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`key.ilike.%${params.search}%,description.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`key.ilike.%${safeSearch(params.search)}%,description.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.category) q = q.eq("category", params.filters.category);
     q = q.order("created_at", { ascending: false });
     const { data, error } = await q;
@@ -759,8 +776,40 @@ export class SupabaseStore implements Store {
     return (data as SecuritySession[]) || [];
   }
   async revokeSession(id: string): Promise<void> {
+    // CRITICAL FIX (audit P0-2/D-2): revoked sessions were still valid for
+    // up to 7 days because requireAuth() only checks token_version in the
+    // JWT, not the `revoked` flag in the DB. Bumping token_version here
+    // forces ALL of the user's JWTs to become invalid immediately.
+    // (Yes, this logs out all devices — that's the secure default for an
+    // explicit "revoke session" action. The admin can re-login.)
+    const { data: session, error: fetchErr } = await this.sb()
+      .from("sessions")
+      .select("user_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
     const { error } = await this.sb().from("sessions").update({ revoked: true }).eq("id", id);
     if (error) throw error;
+    if (session?.user_id) {
+      if (session.user_id.startsWith("portal:")) {
+        // Portal session — bump portal_access.token_version atomically.
+        const portalId = session.user_id.replace("portal:", "");
+        const { data: pa } = await this.sb()
+          .from("portal_access")
+          .select("token_version")
+          .eq("id", portalId)
+          .maybeSingle();
+        if (pa) {
+          await this.sb()
+            .from("portal_access")
+            .update({ token_version: (pa.token_version ?? 0) + 1 })
+            .eq("id", portalId);
+        }
+      } else {
+        // Regular user — bump users.token_version.
+        await this.bumpUserTokenVersion(session.user_id);
+      }
+    }
   }
   async listLoginHistory(tenantId: string, userId?: string, limit?: number): Promise<LoginHistoryEntry[]> {
     let q = this.sb().from("login_history").select("*").eq("tenant_id", tenantId);
@@ -803,7 +852,7 @@ export class SupabaseStore implements Store {
   // ---- mail queue ----
   async listMailQueue(tenantId: string, params?: ListParams): Promise<ListResult<MailQueueEntry>> {
     let q = this.sb().from("mail_queue").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`subject.ilike.%${params.search}%,to_email.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`subject.ilike.%${safeSearch(params.search)}%,to_email.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
     const { data, error } = await q;
@@ -821,7 +870,7 @@ export class SupabaseStore implements Store {
   // ---- all inventory (global view) ----
   async listAllInventory(tenantId: string, params?: ListParams): Promise<ListResult<InventoryMovement>> {
     let q = this.sb().from("inventory_movements").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`reason.ilike.%${params.search}%,reference.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`reason.ilike.%${safeSearch(params.search)}%,reference.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.product_id) q = q.eq("product_id", params.filters.product_id);
     q = q.order("created_at", { ascending: false });
@@ -855,7 +904,7 @@ export class SupabaseStore implements Store {
   // ---- product catalog ----
   async listProductCatalog(tenantId: string, params?: ListParams): Promise<ListResult<ProductCatalogEntry>> {
     let q = this.sb().from("product_catalog").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`name.ilike.%${params.search}%,hs_code.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,hs_code.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.category) q = q.eq("category", params.filters.category);
     if (params?.filters?.active !== undefined) q = q.eq("active", params.filters.active === "true");
     q = q.order("created_at", { ascending: false });
@@ -879,7 +928,7 @@ export class SupabaseStore implements Store {
   // ---- supplier offers ----
   async listSupplierOffers(tenantId: string, params?: ListParams): Promise<ListResult<SupplierOffer>> {
     let q = this.sb().from("supplier_offers").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`offer_number.ilike.%${params.search}%,packaging.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`offer_number.ilike.%${safeSearch(params.search)}%,packaging.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.product_id) q = q.eq("product_id", params.filters.product_id);
     if (params?.filters?.supplier_id) q = q.eq("supplier_id", params.filters.supplier_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
@@ -1281,7 +1330,7 @@ export class SupabaseStore implements Store {
   // ---- KYC submissions ----
   async listKycSubmissions(tenantId: string, params?: ListParams): Promise<ListResult<KycSubmission>> {
     let q = this.sb().from("kyc_submissions").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`legal_name.ilike.%${params.search}%,trade_name.ilike.%${params.search}%,contact_email.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`legal_name.ilike.%${safeSearch(params.search)}%,trade_name.ilike.%${safeSearch(params.search)}%,contact_email.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
     const { data, error } = await q;
@@ -1406,7 +1455,7 @@ export class SupabaseStore implements Store {
   // ---- portal RFQs ----
   async listPortalRfqs(tenantId: string, params?: ListParams): Promise<ListResult<PortalRfq>> {
     let q = this.sb().from("portal_rfqs").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${params.search}%,product_name.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,product_name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     q = q.order("created_at", { ascending: false });
@@ -1677,7 +1726,7 @@ export class SupabaseStore implements Store {
   // ─── ERP Accounts ────────────────────────────────────────────────────────
   async listErpAccounts(tenantId: string, params?: ListParams): Promise<ListResult<ErpAccount>> {
     let q = this.sb().from("erp_accounts").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`code.ilike.%${params.search}%,name.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`code.ilike.%${safeSearch(params.search)}%,name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.account_type) q = q.eq("account_type", params.filters.account_type);
     if (params?.filters?.is_active !== undefined) q = q.eq("is_active", params.filters.is_active);
     q = q.order("code", { ascending: true });
@@ -1741,7 +1790,7 @@ export class SupabaseStore implements Store {
   // ─── Journal Entries ─────────────────────────────────────────────────────
   async listErpJournalEntries(tenantId: string, params?: ListParams): Promise<ListResult<ErpJournalEntry>> {
     let q = this.sb().from("erp_journal_entries").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`entry_number.ilike.%${params.search}%,description.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`entry_number.ilike.%${safeSearch(params.search)}%,description.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.reference_type) q = q.eq("reference_type", params.filters.reference_type);
     if (params?.filters?.reference_id) q = q.eq("reference_id", params.filters.reference_id);
@@ -1928,7 +1977,7 @@ export class SupabaseStore implements Store {
   // ─── Cost Centers ────────────────────────────────────────────────────────
   async listErpCostCenters(tenantId: string, params?: ListParams): Promise<ListResult<ErpCostCenter>> {
     let q = this.sb().from("erp_cost_centers").select("*").eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`code.ilike.%${params.search}%,name.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`code.ilike.%${safeSearch(params.search)}%,name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.is_active !== undefined) q = q.eq("is_active", params.filters.is_active);
     q = q.order("code", { ascending: true });
     const { data, error } = await q;
@@ -1969,7 +2018,7 @@ export class SupabaseStore implements Store {
   async listErpBankTransactions(tenantId: string, bankAccountId?: string, params?: ListParams): Promise<ListResult<ErpBankTransaction>> {
     let q = this.sb().from("erp_bank_transactions").select("*").eq("tenant_id", tenantId);
     if (bankAccountId) q = q.eq("bank_account_id", bankAccountId);
-    if (params?.search) q = q.or(`description.ilike.%${params.search}%,reference.ilike.%${params.search}%,counterparty.ilike.%${params.search}%`);
+    if (params?.search) q = q.or(`description.ilike.%${safeSearch(params.search)}%,reference.ilike.%${safeSearch(params.search)}%,counterparty.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.is_reconciled !== undefined) q = q.eq("is_reconciled", params.filters.is_reconciled);
     q = q.order("date", { ascending: false });
     const { data, error } = await q;
@@ -1980,7 +2029,17 @@ export class SupabaseStore implements Store {
   async upsertErpBankTransaction(t: Partial<ErpBankTransaction> & { id?: string }): Promise<ErpBankTransaction> {
     const payload: SupaRow = { ...t };
     let txn: ErpBankTransaction;
+    // If updating, fetch the OLD amount/type FIRST (before the write) so we
+    // can reverse its effect on the bank balance. Fetching after the update
+    // would return the new values and yield a zero net adjustment.
+    let oldTxn: { amount: number; transaction_type: string } | null = null;
     if (t.id) {
+      const { data: old } = await this.sb()
+        .from("erp_bank_transactions")
+        .select("amount, transaction_type")
+        .eq("id", t.id)
+        .maybeSingle();
+      oldTxn = (old as { amount: number; transaction_type: string } | null) ?? null;
       const { id, ...fields } = payload;
       const { data, error } = await this.sb()
         .from("erp_bank_transactions")
@@ -1990,6 +2049,9 @@ export class SupabaseStore implements Store {
         .single();
       if (error) throw error;
       if (!data) {
+        // Row vanished between fetch and update — treat as a fresh insert and
+        // drop the stale oldTxn so we don't double-reverse a deleted row.
+        oldTxn = null;
         const { data: inserted, error: insErr } = await this.sb()
           .from("erp_bank_transactions")
           .insert(payload)
@@ -2013,8 +2075,19 @@ export class SupabaseStore implements Store {
     if (txn.bank_account_id) {
       const { data: ba } = await this.sb().from("erp_bank_accounts").select("balance").eq("id", txn.bank_account_id).maybeSingle();
       if (ba) {
-        const adjustment = txn.transaction_type === "credit" ? txn.amount : -txn.amount;
-        await this.sb().from("erp_bank_accounts").update({ balance: (ba.balance as number) + adjustment }).eq("id", txn.bank_account_id);
+        const isCredit = txn.transaction_type === "credit" || txn.transaction_type === "income";
+        const adjustment = isCredit ? txn.amount : -txn.amount;
+        // If updating, reverse the OLD adjustment then apply the new one so
+        // we don't re-apply the full amount on every edit.
+        if (oldTxn) {
+          const oldIsCredit = oldTxn.transaction_type === "credit" || oldTxn.transaction_type === "income";
+          const oldAdjustment = oldIsCredit ? -oldTxn.amount : oldTxn.amount; // reverse of old
+          // Net adjustment = reverse old + apply new
+          const netAdjustment = oldAdjustment + adjustment;
+          await this.sb().from("erp_bank_accounts").update({ balance: (ba.balance as number) + netAdjustment }).eq("id", txn.bank_account_id);
+        } else {
+          await this.sb().from("erp_bank_accounts").update({ balance: (ba.balance as number) + adjustment }).eq("id", txn.bank_account_id);
+        }
       }
     }
     return txn;
@@ -2485,8 +2558,34 @@ export class SupabaseStore implements Store {
   }
 
   async revokeSessionById(id: string): Promise<void> {
+    // CRITICAL FIX (audit P0-2/D-2): same as revokeSession — must bump
+    // token_version so the JWT actually becomes invalid.
+    const { data: session, error: fetchErr } = await this.sb()
+      .from("sessions")
+      .select("user_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
     const { error } = await this.sb().from("sessions").update({ revoked: true, current: false }).eq("id", id);
     if (error) throw error;
+    if (session?.user_id) {
+      if (session.user_id.startsWith("portal:")) {
+        const portalId = session.user_id.replace("portal:", "");
+        const { data: pa } = await this.sb()
+          .from("portal_access")
+          .select("token_version")
+          .eq("id", portalId)
+          .maybeSingle();
+        if (pa) {
+          await this.sb()
+            .from("portal_access")
+            .update({ token_version: (pa.token_version ?? 0) + 1 })
+            .eq("id", portalId);
+        }
+      } else {
+        await this.bumpUserTokenVersion(session.user_id);
+      }
+    }
   }
 
   async touchSession(id: string): Promise<void> {

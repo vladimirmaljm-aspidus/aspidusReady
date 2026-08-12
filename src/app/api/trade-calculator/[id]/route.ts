@@ -6,6 +6,25 @@ import { getExchangeRate } from "@/lib/utils/exchange-rates";
 
 export const runtime = "nodejs";
 
+/**
+ * Normalize commission type from UI format to backend enum.
+ * CRITICAL FIX (audit C-2): see comment in route.ts (POST).
+ */
+function normalizeCommissionType(t: string | null | undefined): string | null {
+  if (!t) return null;
+  const map: Record<string, string> = {
+    percent_profit: "profit_percent",
+    percent_revenue: "revenue_percent",
+    fixed_per_unit: "per_unit",
+    fixed_total: "fixed",
+    profit_percent: "profit_percent",
+    revenue_percent: "revenue_percent",
+    per_unit: "per_unit",
+    fixed: "fixed",
+  };
+  return map[t] || t;
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuthOrApiKey(_req);
   if (auth instanceof NextResponse) return auth;
@@ -83,7 +102,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // supply them, fall back to the existing values so partial PUTs don't
     // silently clear the commission chain on a calc that already had it set.
     body.commission_agent_id = body.commission_agent_id ?? (existing as any).commission_agent_id ?? null;
-    body.commission_type = body.commission_type ?? (existing as any).commission_type ?? null;
+    body.commission_type = normalizeCommissionType(body.commission_type ?? (existing as any).commission_type ?? null);
     body.commission_rate = body.commission_rate ?? (existing as any).commission_rate ?? 0;
 
     // Compute totals from cost lines

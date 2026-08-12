@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { notify } from "@/lib/notif/helper";
 import { recordRevision } from "@/lib/api/doc-revisions";
+import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
 
@@ -159,6 +160,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // and `category = "invoice_payment"` — without this filter, refunds (debits)
     // or manual adjustments are summed as positive contributions, inflating
     // `totalPaid` and marking the invoice "paid" prematurely.
+    //
+    // RACE NOTE (P1-7 / advisory lock): this cumulative lookup + subsequent
+    // `upsertInvoice` is NOT atomic against concurrent record-payment calls
+    // on the same invoice. Two simultaneous payments could both read the
+    // same prior-txns snapshot, both compute "partial", and both write
+    // "partial" — leaving a fully-paid invoice stuck in "partial" status.
+    // Defense-in-depth currently relies on:
+    //   1. The unique constraint on `erp_bank_transactions` (prevents dup rows
+    //      if the client retries with identical reference + date).
+    //   2. The cumulative SELECT re-runs on every call, so the *next* payment
+    //      after a race will recompute correctly and flip the invoice to "paid".
+    //   3. The journal-entry idempotency check below prevents double-booking.
+    // A proper fix would wrap this block in a Postgres advisory lock (e.g.
+    // `pg_advisory_xact_lock(hashtext(invoice_id))`) or move the cumulative
+    // sum into a conditional `UPDATE ... SET status = CASE WHEN ... ` RPC.
+    // Out of scope for this hotfix — documented for the next sprint.
     const invoiceTotal = Number(invoice.total ?? 0);
     let totalPaid = numericAmount; // include the payment we just recorded
     try {
@@ -186,6 +203,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const isFullPayment = totalPaid >= invoiceTotal - 0.01; // 1 cent tolerance
     const newStatus: string = isFullPayment ? "paid" : "partial";
     const nowIso = new Date().toISOString();
+
+    // ── Validate status transition (P1-6) ───────────────────────────────
+    // Enforce the invoice state machine BEFORE persisting the new status.
+    // Without this, a "draft" invoice could be marked "paid" directly,
+    // skipping the required "sent" step (e.g. when a clerk records a payment
+    // against a draft they forgot to send). This guard applies to all
+    // callers (including super-admins) because record-payment is a workflow
+    // action, not a manual status correction — the super-admin bypass that
+    // exists in the PUT /api/invoices/[id] handler is intentionally NOT
+    // mirrored here.
+    if (newStatus !== invoice.status) {
+      const transitionError = validateStatusTransition("invoice", invoice.status, newStatus);
+      if (typeof transitionError === "string") {
+        return NextResponse.json({ error: transitionError }, { status: 409 });
+      }
+      if (transitionError && !transitionError.valid) {
+        return NextResponse.json(
+          { error: transitionError.error || "Invalid status transition." },
+          { status: 409 },
+        );
+      }
+    }
 
     try {
       // Only stamp `paid_at` when transitioning to "paid". On a partial

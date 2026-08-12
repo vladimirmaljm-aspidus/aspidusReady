@@ -6,6 +6,28 @@ import { getExchangeRate } from "@/lib/utils/exchange-rates";
 
 export const runtime = "nodejs";
 
+/**
+ * Normalize commission type from UI format to backend enum.
+ * CRITICAL FIX (audit C-2): UI saves percent_profit/percent_revenue/fixed_per_unit/fixed_total
+ * but backend expects profit_percent/revenue_percent/per_unit/fixed.
+ * Without normalization, every commission computes to $0.
+ */
+function normalizeCommissionType(t: string | null | undefined): string | null {
+  if (!t) return null;
+  const map: Record<string, string> = {
+    percent_profit: "profit_percent",
+    percent_revenue: "revenue_percent",
+    fixed_per_unit: "per_unit",
+    fixed_total: "fixed",
+    // Pass-through already-correct values:
+    profit_percent: "profit_percent",
+    revenue_percent: "revenue_percent",
+    per_unit: "per_unit",
+    fixed: "fixed",
+  };
+  return map[t] || t;
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
@@ -79,7 +101,11 @@ export async function POST(req: NextRequest) {
   // and are saved on the trade_calculations row. They're later read by the
   // offer-preview endpoint to auto-track commission obligations on accept.
   body.commission_agent_id = body.commission_agent_id ?? null;
-  body.commission_type = body.commission_type ?? null;
+  // CRITICAL FIX (audit C-2): normalize UI commission types to backend enum.
+  // UI sends: percent_profit | percent_revenue | fixed_per_unit | fixed_total
+  // Backend expects: profit_percent | revenue_percent | per_unit | fixed
+  // Without this, every commission computes to $0 (switch falls through to default).
+  body.commission_type = normalizeCommissionType(body.commission_type);
 
   // Compute totals from cost lines
   const qty = body.quantity || 0;
