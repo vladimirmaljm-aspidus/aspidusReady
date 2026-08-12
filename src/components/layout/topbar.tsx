@@ -64,41 +64,10 @@ import { useTheme } from "next-themes";
 import { fmtRelative } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 
-const VIEW_TITLES: Record<string, string> = {
-  dashboard: "Dashboard",
-  partners: "Partners",
-  products: "Products",
-  deals: "Deals",
-  offers: "Offers",
-  demands: "Demands",
-  documents: "Documents",
-  tasks: "Tasks",
-  audit: "Audit Log",
-  users: "Users",
-  settings: "Settings",
-  security: "Security Center",
-  vault: "Vault",
-  "api-keys": "API Keys",
-  webhooks: "Webhooks",
-  "mail-queue": "Mail Queue",
-  invoices: "Invoices",
-  proformas: "Proformas",
-  "document-register": "Document Register",
-  "document-templates": "Document Templates",
-  "document-verification": "Document Verification",
-  inventory: "Inventory",
-  "kyc-review": "KYC Review",
-  "portal-rfqs": "Client Requests",
-  "product-catalog": "Product Catalog",
-  "supplier-offers": "Supplier Offers",
-  "trade-calculator": "Trade Calculator",
-  tenants: "Tenants",
-  "platform-dashboard": "Platform Dashboard",
-  "partner-360": "Partner 360",
-  "custom-dashboard": "Custom Dashboard",
-  "email-templates": "Email Templates",
-  "api-integrations": "API Integrations",
-};
+// View-id → NAV dict key is 1:1 for every entry below; "security-center" is
+// the one exception (view id is "security", NAV key is also "security" —
+// kept here only for the cases where the view id itself isn't a NAV key).
+const VIEW_TITLE_FALLBACK = "CRM";
 
 // Mock notifications for real-time demo
 interface NotifItem {
@@ -197,7 +166,8 @@ export function Topbar() {
     setAppMode("portal");
   }
 
-  const viewTitle = VIEW_TITLES[view] || "CRM";
+  const translatedViewTitle = t(locale, view);
+  const viewTitle = translatedViewTitle === view ? VIEW_TITLE_FALLBACK : translatedViewTitle;
 
   return (
     <>
