@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // PUT /api/erp/journal-entries/[id] — Update journal entry
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (erp.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -57,6 +57,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Recalculate totals if lines provided
     if (body.lines && Array.isArray(body.lines)) {
+      // P2-12: Validate each line's debit/credit BEFORE the balance check.
+      // `reduce` propagates NaN (NaN + x = NaN, Math.abs(NaN - NaN) > 0.01 === false),
+      // so a single malformed line would silently bypass the balance gate. Negative
+      // amounts are nonsensical in accounting and must also be rejected up-front.
+      // We normalize the values so downstream code sees clean finite numbers.
+      for (const l of body.lines) {
+        const d = Number(l.debit) || 0;
+        const c = Number(l.credit) || 0;
+        if (!Number.isFinite(d) || d < 0) {
+          return NextResponse.json({ error: "Invalid debit amount." }, { status: 400 });
+        }
+        if (!Number.isFinite(c) || c < 0) {
+          return NextResponse.json({ error: "Invalid credit amount." }, { status: 400 });
+        }
+        // Normalize to clean numbers
+        l.debit = d;
+        l.credit = c;
+      }
       const totalDebit = body.lines.reduce((sum: number, l: any) => sum + (l.debit || 0), 0);
       const totalCredit = body.lines.reduce((sum: number, l: any) => sum + (l.credit || 0), 0);
       if (Math.abs(totalDebit - totalCredit) > 0.01) {
@@ -78,7 +96,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // DELETE /api/erp/journal-entries/[id] — Delete journal entry (only if draft)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (erp.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

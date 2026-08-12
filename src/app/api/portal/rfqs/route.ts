@@ -33,6 +33,10 @@ export async function POST(req: NextRequest) {
   if (!access.can_submit_rfq) {
     return NextResponse.json({ error: "RFQ submission not permitted." }, { status: 403 });
   }
+  // CRITICAL FIX (audit P1-3): POST was missing the KYC gate that GET has.
+  // A partner with can_submit_rfq=true but unapproved KYC could submit RFQs.
+  const _kycBlock = await requireKycApproved(access);
+  if (_kycBlock) return _kycBlock;
   const store = await getStore();
 
   let body;

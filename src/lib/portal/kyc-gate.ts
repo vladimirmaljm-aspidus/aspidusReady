@@ -12,9 +12,13 @@ import type { PortalAccess } from "@/lib/supabase/types";
  *     the endpoint returns any customer/document data.
  *
  * Returns a 403 NextResponse when the caller should be blocked, or null when
- * the caller may proceed. Fail-open on internal errors so a Supabase blip
- * never locks users out of their own portal — the client-side gate + the
- * per-nav `can_view_*` flags remain in force.
+ * the caller may proceed.
+ *
+ * CRITICAL FIX (audit P1-2): fail-CLOSED on internal errors. Previously the
+ * gate returned null (allow) when the DB threw — a transient Supabase blip
+ * would let unapproved partners access all portal data. Now a DB error
+ * returns 503 (Service Unavailable) so the client can retry, but data is
+ * never exposed without verification.
  */
 export async function requireKycApproved(access: PortalAccess): Promise<NextResponse | null> {
   const tier = getTierMeta(access.tier);
@@ -38,7 +42,12 @@ export async function requireKycApproved(access: PortalAccess): Promise<NextResp
     }
     return null;
   } catch (e) {
-    console.warn("[requireKycApproved]", e);
-    return null; // fail-open
+    // CRITICAL FIX (audit P1-2): fail-CLOSED. A DB error must NOT allow
+    // access to unverified partners. Return 503 so the client can retry.
+    console.error("[requireKycApproved] DB error — failing closed:", e);
+    return NextResponse.json(
+      { error: "Unable to verify KYC status. Please try again.", retry: true },
+      { status: 503 },
+    );
   }
 }

@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/erp/journal-entries — Create journal entry (with lines array)
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (erp.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -59,6 +59,25 @@ export async function POST(req: NextRequest) {
     // Validate lines exist
     if (!body.lines || !Array.isArray(body.lines) || body.lines.length === 0) {
       return NextResponse.json({ error: "Journal entry must have at least one line." }, { status: 400 });
+    }
+
+    // P2-12: Validate each line's debit/credit BEFORE the balance check.
+    // `reduce` propagates NaN (NaN + x = NaN, Math.abs(NaN - NaN) > 0.01 === false),
+    // so a single malformed line would silently bypass the balance gate. Negative
+    // amounts are nonsensical in accounting and must also be rejected up-front.
+    // We normalize the values so downstream code sees clean finite numbers.
+    for (const l of body.lines) {
+      const d = Number(l.debit) || 0;
+      const c = Number(l.credit) || 0;
+      if (!Number.isFinite(d) || d < 0) {
+        return NextResponse.json({ error: "Invalid debit amount." }, { status: 400 });
+      }
+      if (!Number.isFinite(c) || c < 0) {
+        return NextResponse.json({ error: "Invalid credit amount." }, { status: 400 });
+      }
+      // Normalize to clean numbers
+      l.debit = d;
+      l.credit = c;
     }
 
     // Validate debit/credit balance

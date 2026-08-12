@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         user_agent: userAgent,
       });
       return NextResponse.json(
-        { error: "User does not exist or is deactivated." },
+        { error: "Invalid username or password." },
         { status: 401 }
       );
     }
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
         ip,
         user_agent: userAgent,
       });
-      return NextResponse.json({ error: "Incorrect password." }, { status: 401 });
+      return NextResponse.json({ error: "Invalid username or password." }, { status: 401 });
     }
 
     // ---- Tenant status gate ---------------------------------------------

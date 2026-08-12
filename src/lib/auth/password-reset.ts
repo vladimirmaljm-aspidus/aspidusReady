@@ -70,12 +70,17 @@ export async function consumePasswordReset(token: string): Promise<ConsumeResetR
   if (data.used_at) return { ok: false, reason: "already_used" };
   if (new Date(data.expires_at) < new Date()) return { ok: false, reason: "expired" };
 
-  const { error: markError } = await supabase
+  const { data: updated, error: markError } = await supabase
     .from("password_resets")
     .update({ used_at: new Date().toISOString() })
     .eq("id", data.id)
-    .is("used_at", null);
+    .is("used_at", null)
+    .select();
   if (markError) return { ok: false, reason: "not_found" };
+  if (!updated || updated.length === 0) {
+    // Token was already used by a concurrent request.
+    return { ok: false, reason: "already_used" };
+  }
 
   return {
     ok: true,

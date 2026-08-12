@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { randomBytes } from "crypto";
 
 /**
  * Generates a QR code as a data URL (base64 PNG).
@@ -41,6 +42,6 @@ export function generateVerificationCode(docType: string, docNumber: string): st
   const prefix = "ASP";
   const typeCode = docType === "offer" ? "OF" : docType === "invoice" ? "IV" : docType === "proforma" ? "PR" : "DC";
   const numPart = docNumber.replace(/[^0-9]/g, "").slice(-6).padStart(3, "0");
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const random = randomBytes(4).toString("hex").toUpperCase().slice(0, 6);
   return `${prefix}-${typeCode}${numPart.slice(-2)}-${numPart.slice(0, 3)}-${random}`;
 }

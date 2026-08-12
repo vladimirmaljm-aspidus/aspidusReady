@@ -26,8 +26,18 @@ export interface ApiKeyAuthContext {
 /**
  * Authenticate via session cookie OR API key (Bearer token).
  * API keys are checked first, then falls back to session auth.
+ *
+ * P2-18 (CSRF): callers MAY pass the inbound `req` so this helper can enforce
+ * a server-side Origin check on state-changing requests (POST/PUT/PATCH/
+ * DELETE). `SameSite=Lax` blocks cookies on cross-site sub-resource requests,
+ * but top-level navigations still send the cookie — an explicit Origin check
+ * closes that gap. The parameter is optional so existing call sites keep
+ * working unchanged; routes that want the CSRF defense pass `req` through.
+ * API-key-authenticated requests (detected via the `Authorization: Bearer`
+ * header) are exempt — bearer tokens are not sent automatically by browsers,
+ * so they are not vulnerable to CSRF.
  */
-export async function requireAuth(): Promise<AuthContext | NextResponse> {
+export async function requireAuth(req?: NextRequest): Promise<AuthContext | NextResponse> {
   const session = await getSessionFromCookie();
   if (!session) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
@@ -99,6 +109,35 @@ export async function requireAuth(): Promise<AuthContext | NextResponse> {
       }
     } catch (e) {
       console.error("[requireAuth] Subscription check failed:", e);
+    }
+  }
+
+  // ── CSRF defense (P2-18) ─────────────────────────────────────────────
+  // Reject cross-site state-changing requests. SameSite=Lax blocks cookies
+  // on cross-site sub-resource requests, but top-level navigations still
+  // send the cookie — an explicit Origin check closes this gap. We only
+  // run the check when the caller has passed the inbound `req` (optional
+  // parameter, kept optional so legacy call sites compile unchanged) AND
+  // the request is cookie-authenticated (no `Authorization: Bearer` header
+  // — bearer-token API-key auth is not vulnerable to CSRF and is exempt).
+  if (req) {
+    const authHeader = req.headers.get("authorization");
+    const isApiKeyRequest =
+      !!authHeader && authHeader.startsWith("Bearer ") && authHeader.slice(7).trim().startsWith("asp_");
+    if (!isApiKeyRequest) {
+      const method = req.method.toUpperCase();
+      if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+        const origin = req.headers.get("origin");
+        const appBaseUrl = process.env.APP_BASE_URL;
+        if (appBaseUrl && origin && !origin.startsWith(appBaseUrl)) {
+          return NextResponse.json(
+            { error: "Cross-site requests are not allowed." },
+            { status: 403 },
+          );
+        }
+        // If origin is missing (same-origin requests sometimes omit it),
+        // allow — SameSite=Lax covers this case.
+      }
     }
   }
 

@@ -20,6 +20,8 @@ import {
   ShieldCheck,
   TrendingUp,
   Globe,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
 import { useI18nStore, useT } from "@/lib/i18n/store";
@@ -31,6 +33,7 @@ export function LoginView() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -210,7 +213,7 @@ export function LoginView() {
                     <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50 transition-colors duration-200 group-focus-within:text-primary" />
                     <Input
                       id="login-password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       value={password}
                       onChange={(e) => {
@@ -221,8 +224,17 @@ export function LoginView() {
                       disabled={loading}
                       aria-required="true"
                       aria-label={t("login-password")}
-                      className="h-11 pl-10 pr-4"
+                      className="h-11 pl-10 pr-10"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
                   </div>
                 </div>
 

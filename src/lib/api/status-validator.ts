@@ -22,24 +22,27 @@ export type DocType = "offer" | "invoice" | "proforma" | "deal";
 
 const VALID_TRANSITIONS: Record<DocType, Record<string, string[]>> = {
   offer: {
-    draft: ["sent", "cancelled"],
-    sent: ["accepted", "rejected", "expired", "draft"],
+    draft: ["sent", "cancelled", "viewed"],
+    sent: ["accepted", "rejected", "expired", "draft", "viewed", "cancelled"],
+    viewed: ["accepted", "rejected", "expired", "cancelled", "sent"],
     accepted: ["cancelled"],
     rejected: [],
     expired: [],
     cancelled: [],
   },
   invoice: {
-    draft: ["sent", "cancelled"],
-    sent: ["paid", "partial", "overdue", "cancelled"],
+    draft: ["sent", "cancelled", "viewed"],
+    sent: ["paid", "partial", "overdue", "cancelled", "viewed"],
+    viewed: ["paid", "partial", "overdue", "cancelled", "sent"],
     partial: ["paid", "cancelled"],
     paid: [],
     overdue: ["paid", "partial", "cancelled"],
     cancelled: [],
   },
   proforma: {
-    draft: ["sent", "cancelled"],
-    sent: ["accepted", "expired", "cancelled"],
+    draft: ["sent", "cancelled", "viewed"],
+    sent: ["accepted", "expired", "cancelled", "viewed"],
+    viewed: ["accepted", "expired", "cancelled", "sent"],
     accepted: ["paid", "cancelled"],
     paid: [],
     expired: [],
