@@ -18,6 +18,10 @@ import { getTierMeta } from "@/lib/portal/tiers";
  *
  * Location is captured ONCE per login (per access.id). No periodic re-logging
  * — the audit entry belongs to the login event, not to session activity.
+ *
+ * FIX (P1-7): after 23 hours (1 hour before the 24h server-side expiry),
+ * the hook automatically re-requests GPS so the user doesn't get stuck
+ * with empty lists when the server expires the verification.
  */
 export function usePortalGeolocation(access: PortalAccess | null) {
   const [state, setState] = useState<{
@@ -35,6 +39,7 @@ export function usePortalGeolocation(access: PortalAccess | null) {
   });
 
   const sentRef = useRef(false);
+  const verifiedAtRef = useRef<number>(0);
 
   useEffect(() => {
     if (!access) return;
@@ -53,6 +58,10 @@ export function usePortalGeolocation(access: PortalAccess | null) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...coords, source }),
         keepalive: true,
+      }).then((r) => {
+        if (r.ok) {
+          verifiedAtRef.current = Date.now();
+        }
       }).catch((e) => {
         // P1-9: surface the failure to the user instead of silently
         // swallowing it. Reset `shared` to false so the GPS gate
@@ -112,7 +121,25 @@ export function usePortalGeolocation(access: PortalAccess | null) {
     // Fire once per login. `sentRef` protects against React strict-mode
     // double-invoke and against any accidental re-render loop.
     if (!sentRef.current) request();
-  }, [access?.id, access?.tier]);
+
+    // FIX (P1-7): check every 5 minutes if the 23-hour window is approaching.
+    // If so, re-request GPS so the user doesn't get stuck when the server
+    // expires the verification at 24 hours.
+    const RE_VERIFY_MS = 23 * 60 * 60 * 1000; // 23 hours (1h before 24h expiry)
+    const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    const interval = setInterval(() => {
+      if (!required || !state.shared) return;
+      const elapsed = Date.now() - (verifiedAtRef.current || 0);
+      if (elapsed > RE_VERIFY_MS) {
+        // GPS verification is about to expire — re-request.
+        setState((s) => ({ ...s, loading: true, shared: false }));
+        sentRef.current = false;
+        request();
+      }
+    }, CHECK_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [access?.id, access?.tier, state.shared]);
 
   return state;
 }
