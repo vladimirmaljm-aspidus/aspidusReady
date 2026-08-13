@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { getStore } from "@/lib/data/store";
 import { redactListForPortal } from "@/lib/portal/redact";
 
@@ -35,6 +36,8 @@ export async function GET(req: NextRequest) {
 
     const _kycBlock = await requireKycApproved(access);
   if (_kycBlock) return _kycBlock;
+  const _gpsBlock = await requireGpsVerified(access);
+  if (_gpsBlock) return _gpsBlock;
   const store = await getStore();
     const result = await store.listInvoices(access.tenant_id, {
       filters: {

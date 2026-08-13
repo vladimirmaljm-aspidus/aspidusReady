@@ -1008,6 +1008,8 @@ export class SupabaseStore implements Store {
       //   for older deployments that may be missing one.
       // ↓ newly-introduced columns — see migration 005_portal_access_last_login_country.sql.
       "last_login_country",
+      // ↓ newly-introduced column — see migration 015_portal_access_gps_verified_at.sql.
+      "gps_verified_at",
     ];
     const stripOptionalColumns = (row: SupaRow): SupaRow => {
       const out: SupaRow = { ...row };

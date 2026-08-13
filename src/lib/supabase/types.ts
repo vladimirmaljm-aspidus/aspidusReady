@@ -856,6 +856,18 @@ export interface PortalAccess {
    * exist on every deployment — the store layer falls back gracefully.
    */
   last_login_country?: string | null;
+  /**
+   * ISO timestamp of the most recent precise GPS verification shared by the
+   * portal client (POST /api/portal/log-location with `source === "browser"`).
+   * Used by `requireGpsVerified()` to gate portal data endpoints — a portal
+   * user with a valid session cookie must share location within the last 24h
+   * or be premium / exempt_location_share.
+   *
+   * Optional because the underlying column is added by migration
+   * `015_portal_access_gps_verified_at.sql` and may not yet exist on every
+   * deployment — the store layer falls back gracefully.
+   */
+  gps_verified_at?: string | null;
   created_at: string;
   updated_at: string;
   // Brute-force protection + session revocation on password change

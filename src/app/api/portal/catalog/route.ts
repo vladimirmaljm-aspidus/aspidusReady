@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { getStore } from "@/lib/data/store";
 import { redactListForPortal } from "@/lib/portal/redact";
 import type { Product, ProductCatalogEntry } from "@/lib/supabase/types";
@@ -62,6 +63,8 @@ export async function GET() {
     if (!access.can_view_catalog) return NextResponse.json({ error: "Not permitted." }, { status: 403 });
     const kycBlock = await requireKycApproved(access);
     if (kycBlock) return kycBlock;
+    const _gpsBlock = await requireGpsVerified(access);
+    if (_gpsBlock) return _gpsBlock;
 
     const store = await getStore();
     // Pull a generous slice of products for this tenant, then filter to the

@@ -1079,6 +1079,10 @@ model PortalAccess {
   must_set_password      Boolean   @default(true)
   last_login_at          DateTime?
   last_login_ip          String?
+  // GPS verification (migration 015_portal_access_gps_verified_at.sql).
+  // Set to now() by /api/portal/log-location when source === "browser".
+  // Checked by src/lib/portal/require-gps.ts to gate portal data endpoints.
+  gps_verified_at        DateTime?
   // Security: lockout & token version
   locked_until           DateTime?
   failed_attempts        Int       @default(0)

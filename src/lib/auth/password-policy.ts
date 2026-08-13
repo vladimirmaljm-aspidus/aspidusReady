@@ -21,6 +21,32 @@ export const DEFAULT_POLICY: PasswordPolicy = {
   requireSymbols: false,
 };
 
+/**
+ * Portal client password policy.
+ *
+ * Audit finding P1-7: `setup-password` previously used a permissive policy
+ * (minLength: 8, no character-class requirements) that accepted passwords
+ * like "abcdefgh", while `reset-password` and `change-password` enforced the
+ * strong DEFAULT_POLICY (uppercase + lowercase + number). That inconsistency
+ * meant a client could set a weak password at first login that they could
+ * then never re-use via the change-password flow.
+ *
+ * Portal clients now use the same strong policy as staff users: 8+ chars
+ * with at least one uppercase, one lowercase, and one number. Symbols are
+ * intentionally NOT required (mobile-keyboard UX).
+ *
+ * This is exported as a named constant (rather than re-using DEFAULT_POLICY
+ * inline) so there's a single source of truth if the product team later
+ * wants to diverge portal and staff policies again.
+ */
+export const PORTAL_POLICY: PasswordPolicy = {
+  minLength: 8,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumbers: true,
+  requireSymbols: false,
+};
+
 export interface PasswordValidationResult {
   ok: boolean;
   errors: string[];

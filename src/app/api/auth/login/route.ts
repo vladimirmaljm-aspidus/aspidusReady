@@ -142,9 +142,25 @@ export async function POST(req: NextRequest) {
         ip,
         user_agent: userAgent,
       });
+      // Surface the exact unlock time + a Retry-After header so the client
+      // can show a live countdown instead of a vague "try again later".
+      // Math.max(0, …) guards against clock drift pushing retry_after
+      // negative between the lock check above and here.
+      const lockedUntil = user.locked_until;
+      const retryAfter = Math.max(
+        0,
+        Math.ceil((new Date(lockedUntil).getTime() - Date.now()) / 1000),
+      );
       return NextResponse.json(
-        { error: "Account is temporarily locked. Try again later." },
-        { status: 423 }
+        {
+          error: "Account is temporarily locked. Try again later.",
+          locked_until: lockedUntil,
+          retry_after: retryAfter,
+        },
+        {
+          status: 423,
+          headers: { "Retry-After": String(retryAfter) },
+        },
       );
     }
 

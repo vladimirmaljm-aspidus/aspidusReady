@@ -877,6 +877,10 @@ export class MockStore implements Store {
       exempt_kyc: p.exempt_kyc ?? (tier === "premium"),
       exempt_document_upload: p.exempt_document_upload ?? (tier === "premium"),
       exempt_location_share: p.exempt_location_share ?? (tier === "premium"),
+      // GPS verification — populated by /api/portal/log-location when
+      // source === "browser". Optional on PortalAccess; defaults to null
+      // for newly-created rows until the client shares location.
+      gps_verified_at: p.gps_verified_at ?? null,
       status: p.status || "pending_approval", approved_by: p.approved_by || null,
       approved_at: p.approved_at || null, invited_at: p.invited_at || null,
       welcome_email_sent: p.welcome_email_sent ?? false,

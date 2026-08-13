@@ -2,22 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { getSessionFromCookie, createSession, setSessionCookie } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
-import { validatePassword } from "@/lib/auth/password-policy";
+import { validatePassword, PORTAL_POLICY } from "@/lib/auth/password-policy";
 
 export const runtime = "nodejs";
-
-// Password policy for portal *clients* is intentionally lighter than for staff
-// users — most portal clients type on mobile keyboards and the strong staff
-// policy (uppercase + number required) caused silent failures where the user
-// typed something valid-looking and got a generic "setup failed" toast. The
-// full staff policy still applies to CRM/ERP users.
-const PORTAL_CLIENT_POLICY = {
-  minLength: 8,
-  requireUppercase: false,
-  requireLowercase: false,
-  requireNumbers: false,
-  requireSymbols: false,
-};
 
 // Portal password setup — used two ways:
 //  1. Anonymous first-time setup: the customer follows the emailed invite
@@ -25,6 +12,14 @@ const PORTAL_CLIENT_POLICY = {
 //     true. Once a password has been set, this path closes.
 //  2. Staff-initiated: an authenticated admin of the same tenant (or a
 //     super-admin) sets/resets a portal account's password from the CRM.
+//
+// Audit finding P1-7: this route previously used a permissive policy
+// (minLength: 8, no character-class requirements) that accepted "abcdefgh".
+// The reset-password and change-password routes enforced the strong
+// DEFAULT_POLICY — so a client could set a weak password at first login
+// that they could then never re-use via change-password. We now use the
+// same PORTAL_POLICY (8+ chars + uppercase + lowercase + number, no
+// symbol requirement for mobile UX) as the other portal password routes.
 export async function POST(req: NextRequest) {
   try {
     const { access_id, password } = await req.json();
@@ -32,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Access ID and password are required." }, { status: 400 });
     }
 
-    const validation = validatePassword(password, PORTAL_CLIENT_POLICY);
+    const validation = validatePassword(password, PORTAL_POLICY);
     if (!validation.ok) {
       return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
     }

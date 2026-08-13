@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { getStore } from "@/lib/data/store";
 import { redactListForPortal } from "@/lib/portal/redact";
 
@@ -17,6 +18,8 @@ export async function GET() {
   }
   const _kycBlock = await requireKycApproved(access);
   if (_kycBlock) return _kycBlock;
+  const _gpsBlock = await requireGpsVerified(access);
+  if (_gpsBlock) return _gpsBlock;
   const store = await getStore();
   const result = await store.listDocuments(access.tenant_id, { filters: { partner_id: access.partner_id } });
   // only show docs visible to partner

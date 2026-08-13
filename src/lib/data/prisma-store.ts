@@ -231,6 +231,7 @@ function mapPortalAccessRow(r: any): PortalAccess {
     invited_at: dateToISO(r.invited_at),
     last_login: dateToISO(r.last_login),
     locked_until: dateToISO(r.locked_until),
+    gps_verified_at: dateToISO(r.gps_verified_at),
     failed_attempts: r.failed_attempts ?? 0,
     token_version: r.token_version ?? 1,
     created_at: dateToISOOrNow(r.created_at),
@@ -1637,6 +1638,12 @@ export class PrismaStore implements Store {
       // Last login
       last_login_at: p.last_login_at ? new Date(p.last_login_at) : null,
       last_login_ip: p.last_login_ip ?? null,
+      // GPS verification (migration 015_portal_access_gps_verified_at.sql).
+      // When the column hasn't been applied yet, prisma throws on update —
+      // the caller in /api/portal/log-location already wraps this in a
+      // try/catch so the upsert failure is non-fatal and the audit log
+      // entry (which always succeeds) still records the location share.
+      gps_verified_at: p.gps_verified_at ? new Date(p.gps_verified_at) : null,
       // Security
       locked_until: p.locked_until ? new Date(p.locked_until) : null,
       failed_attempts: p.failed_attempts ?? 0,
