@@ -63,7 +63,9 @@ const SECTIONS: NavSection[] = [
       { key: "calendar", i18nKey: "calendar", i18nSection: "overview", icon: Calendar, permission: "calendar.read" },
       { key: "tasks", i18nKey: "tasks", i18nSection: "overview", icon: ListChecks, permission: "tasks.read", badgeKey: "tasks" },
       { key: "quick-notes", i18nKey: "quick-notes", i18nSection: "overview", icon: StickyNote, permission: "notes.read" },
-      { key: "workspace", i18nKey: "workspace", i18nSection: "overview", icon: Briefcase },
+      // Workspace is a "coming soon" placeholder — hide from sidebar until
+      // at least one module (Reminders, Time Tracker, Expenses, etc.) ships.
+      // { key: "workspace", i18nKey: "workspace", i18nSection: "overview", icon: Briefcase },
     ],
   },
   {

@@ -95,15 +95,11 @@ export function MailQueueView() {
 
   const retryMut = useMutation({
     mutationFn: async (entry: MailQueueEntry) => {
-      const r = await fetch(api("/api/mail-queue"), {
+      // FIX (audit P3-3): use the dedicated /retry endpoint instead of
+      // upserting via POST /api/mail-queue. The /retry endpoint handles
+      // attempt counting, status transitions, and audit logging correctly.
+      const r = await fetch(api(`/api/mail-queue/${entry.id}/retry`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: entry.id,
-          status: "queued",
-          attempts: 0,
-          error: null,
-        }),
       });
       if (!r.ok) throw new Error(t("admin-mail-retry-failed-toast"));
     },
