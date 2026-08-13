@@ -1044,6 +1044,8 @@ export class SupabaseStore implements Store {
       "last_login_country",
       // ↓ newly-introduced column — see migration 015_portal_access_gps_verified_at.sql.
       "gps_verified_at",
+      // ↓ newly-introduced column — see migration 019_portal_access_locale.sql.
+      "locale",
     ];
     const stripOptionalColumns = (row: SupaRow): SupaRow => {
       const out: SupaRow = { ...row };

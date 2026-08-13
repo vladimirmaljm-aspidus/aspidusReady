@@ -868,6 +868,12 @@ export interface PortalAccess {
    * deployment — the store layer falls back gracefully.
    */
   gps_verified_at?: string | null;
+  /**
+   * Per-client language preference (en/sr/tr/de/ru).
+   * Optional — added by migration 019. Defaults to 'en' in the DB.
+   * Set by the portal language selector, restored on login.
+   */
+  locale?: string | null;
   created_at: string;
   updated_at: string;
   // Brute-force protection + session revocation on password change

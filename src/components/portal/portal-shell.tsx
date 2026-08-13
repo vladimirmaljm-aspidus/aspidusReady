@@ -24,13 +24,16 @@ import {
   MessageSquare,
   Bell,
   Truck,
+  Globe2,
 } from "lucide-react";
 import { useAppStore, ViewKey } from "@/lib/store/app-store";
-import { useT } from "@/lib/i18n/store";
+import { useT, useI18nStore } from "@/lib/i18n/store";
+import { LOCALE_LABELS, LOCALE_FLAGS, type Locale } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { initials, fmtRelative } from "@/lib/utils/format";
 import { toast } from "sonner";
 import type { PortalAccess, PortalTier, Partner } from "@/lib/supabase/types";
@@ -244,6 +247,31 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
     };
   }, [portalAccess?.id]);
 
+  // ─── Restore client's saved locale preference ───────────────────────────
+  // Each portal client can have their own language. On mount, if the
+  // portal_access row has a locale set, apply it to the i18n store.
+  const setLocale = useI18nStore((s) => s.setLocale);
+  useEffect(() => {
+    if (portalAccess?.locale) {
+      const saved = portalAccess.locale as Locale;
+      if (["en", "sr", "tr", "de", "ru"].includes(saved)) {
+        setLocale(saved);
+      }
+    }
+  }, [portalAccess?.locale, setLocale]);
+
+  // Save locale preference when the user changes language in the portal.
+  function changeLocale(loc: Locale) {
+    setLocale(loc);
+    // Persist to portal_access (best-effort — non-blocking).
+    fetch("/api/portal/me", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale: loc }),
+    }).catch(() => {});
+    toast.success(LOCALE_LABELS[loc]);
+  }
+
   // If KYC is required but not yet approved, force the KYC view. Other tabs
   // are hidden in the sidebar below (see kycBlocking guard).
   // MUST live above every early return — Rules of Hooks. The body guards
@@ -418,6 +446,30 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
                 <TierIcon className="size-3" />
                 {t(TIER_META[tier].labelKey)}
               </Badge>
+              {/* Language selector — per-client locale preference */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1.5 h-9 px-2.5">
+                    <Globe2 className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{LOCALE_FLAGS[useI18nStore.getState().locale as Locale]}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[160px]">
+                  {(Object.keys(LOCALE_LABELS) as Locale[]).map((loc) => (
+                    <DropdownMenuItem
+                      key={loc}
+                      onClick={() => changeLocale(loc)}
+                      className={cn(
+                        "gap-2 cursor-pointer",
+                        useI18nStore.getState().locale === loc && "bg-accent"
+                      )}
+                    >
+                      <span className="text-base">{LOCALE_FLAGS[loc]}</span>
+                      <span className="text-sm">{LOCALE_LABELS[loc]}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Avatar className="size-9 ring-1 ring-border shadow-soft">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                   {initials(partnerName)}
