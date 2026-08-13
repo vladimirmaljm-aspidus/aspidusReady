@@ -12,7 +12,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Search, ScrollText } from "lucide-react";
+import { Search, ScrollText, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtDateTime } from "@/lib/utils/format";
@@ -20,6 +21,8 @@ import { AuditLog } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useT } from "@/lib/i18n/store";
+
+const PAGE_SIZE = 50;
 
 function initials(name?: string | null): string {
   if (!name) return "?";
@@ -57,12 +60,15 @@ export function AuditView() {
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
+  const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["audit", tenantKey, debouncedSearch],
+    queryKey: ["audit", tenantKey, debouncedSearch, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(page * PAGE_SIZE));
       const r = await fetch(api(`/api/audit?${params}`));
       if (!r.ok) throw new Error("Failed to load audit log");
       return r.json() as Promise<{ items: AuditLog[]; total: number }>;
@@ -70,6 +76,8 @@ export function AuditView() {
   });
 
   const items = data?.items || [];
+  const total = data?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div>
@@ -85,7 +93,7 @@ export function AuditView() {
             <Input
               placeholder={t("admin-audit-search-placeholder")}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setPage(0); setSearch(e.target.value); }}
               className="pl-9"
             />
           </div>
@@ -163,6 +171,34 @@ export function AuditView() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination — mirrors platform-audit-view pattern */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground mt-3">
+        <div>
+          {t("pf-audit-entries-page")
+            .replace("{total}", total.toLocaleString())
+            .replace("{page}", String(page + 1))
+            .replace("{pages}", String(totalPages))}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            <ChevronLeft className="size-3.5" /> {t("pf-audit-prev")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page + 1 >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            {t("pf-audit-next")} <ChevronRight className="size-3.5" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } catch {
       return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
     }
-    const { message, send_email } = _reqBody;
+    const { message, send_email, attachment_url, attachment_name, attachment_type } = _reqBody;
     const body = sanitizeMessageBody(message);
     if (!body) return NextResponse.json({ error: "Message is required." }, { status: 400 });
 
@@ -69,9 +69,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         body,
         sender_username: auth.user.username,
         sender_user_id: auth.user.id,
-        attachment_url: null,
-        attachment_name: null,
-        attachment_type: null,
+        attachment_url: attachment_url || null,
+        attachment_name: attachment_name || null,
+        attachment_type: attachment_type || null,
       });
 
       // Notify the portal client via in-app notification (visible in portal).

@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { initials, fmtRelative } from "@/lib/utils/format";
 import { toast } from "sonner";
 import type { PortalAccess, PortalTier, Partner } from "@/lib/supabase/types";
@@ -249,13 +250,23 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
 
   // ─── Restore client's saved locale preference ───────────────────────────
   // Each portal client can have their own language. On mount, if the
-  // portal_access row has a locale set, apply it to the i18n store.
+  // portal_access row has a locale set, apply it to the i18n store — but
+  // ONLY if the user hasn't already chosen a language on the login page
+  // (stored in localStorage under "aspidus-locale"). Without this guard,
+  // a fresh `portalAccess.locale` (default "en") would overwrite the
+  // pre-login choice on first login (P2-6).
   const setLocale = useI18nStore((s) => s.setLocale);
   useEffect(() => {
     if (portalAccess?.locale) {
       const saved = portalAccess.locale as Locale;
       if (["en", "sr", "tr", "de", "ru"].includes(saved)) {
-        setLocale(saved);
+        // Only apply if the user hasn't already chosen a language on the login page.
+        const localStorageLocale = typeof window !== "undefined"
+          ? (localStorage.getItem("aspidus-locale") as Locale | null)
+          : null;
+        if (!localStorageLocale || localStorageLocale === "en") {
+          setLocale(saved);
+        }
       }
     }
   }, [portalAccess?.locale, setLocale]);
@@ -446,6 +457,8 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
                 <TierIcon className="size-3" />
                 {t(TIER_META[tier].labelKey)}
               </Badge>
+              {/* Theme toggle — light/dark mode */}
+              <ThemeToggle />
               {/* Language selector — per-client locale preference */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -94,6 +94,99 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       body.total = Math.round((subtotal - discountTotal + taxTotal) * 100) / 100;
     }
     const updated = await auth.store.upsertInvoice({ ...body, id, tenant_id: existing.tenant_id });
+
+    // CRITICAL FIX (audit I-1/I-2): when an invoice is cancelled, reverse
+    // the financial side effects that were created when it was paid:
+    // 1. Reverse the auto-journal entry (if one exists)
+    // 2. Reverse the bank transaction (insert a debit row)
+    // 3. Un-mark the linked proforma (set back to 'accepted')
+    // 4. Void commissions that were marked 'approved' by the payment
+    if (body.status === "cancelled" && (existingStatus === "paid" || existingStatus === "partial")) {
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+        const tid = existing.tenant_id;
+
+        // 1. Find and reverse the auto-journal entry for this invoice
+        const { data: je } = await sb
+          .from("erp_journal_entries")
+          .select("id, status")
+          .eq("tenant_id", tid)
+          .eq("reference_type", "invoice")
+          .eq("reference_id", id)
+          .in("status", ["posted", "draft"])
+          .maybeSingle();
+        if (je) {
+          try {
+            await auth.store.reverseErpJournalEntry(je.id, auth.user.id);
+          } catch (e) {
+            console.warn("[invoice.cancel] JE reversal failed:", e);
+          }
+        }
+
+        // 2. Insert a reversal bank transaction (debit = negative adjustment)
+        const { data: bankTxns } = await sb
+          .from("erp_bank_transactions")
+          .select("id, amount, bank_account_id, invoice_number")
+          .eq("tenant_id", tid)
+          .eq("invoice_number", existing.number)
+          .eq("transaction_type", "credit")
+          .eq("category", "invoice_payment");
+        if (bankTxns && bankTxns.length > 0) {
+          for (const bt of bankTxns) {
+            await sb.from("erp_bank_transactions").insert({
+              tenant_id: tid,
+              bank_account_id: bt.bank_account_id,
+              transaction_type: "debit",
+              category: "invoice_reversal",
+              amount: bt.amount,
+              description: `Reversal: cancelled invoice ${existing.number}`,
+              invoice_number: existing.number,
+              reference: `reversal-inv-${id}`,
+              transaction_date: new Date().toISOString().split("T")[0],
+            });
+          }
+        }
+
+        // 3. Un-mark the linked proforma (set back to 'accepted' if it was auto-paid)
+        if (existing.offer_id) {
+          const { data: proforma } = await sb
+            .from("proformas")
+            .select("id, status")
+            .eq("tenant_id", tid)
+            .eq("offer_id", existing.offer_id)
+            .eq("status", "paid")
+            .maybeSingle();
+          if (proforma) {
+            await sb.from("proformas")
+              .update({ status: "accepted", paid_at: null })
+              .eq("id", proforma.id);
+          }
+        }
+
+        // 4. Void commissions that were marked 'approved' by the invoice payment
+        try {
+          const { data: commissions } = await sb
+            .from("deal_commissions")
+            .select("id, status")
+            .eq("tenant_id", tid)
+            .eq("deal_id", existing.offer_id) // commissions are linked via deal
+            .eq("status", "approved");
+          if (commissions) {
+            for (const c of commissions) {
+              await sb.from("deal_commissions")
+                .update({ status: "cancelled", notes: `Voided: invoice ${existing.number} cancelled` })
+                .eq("id", c.id);
+            }
+          }
+        } catch (e) {
+          console.warn("[invoice.cancel] commission void failed:", e);
+        }
+      } catch (e) {
+        console.error("[invoice.cancel] reversal cascade failed:", e);
+      }
+    }
+
     try {
       const { recordRevision } = await import("@/lib/api/doc-revisions");
       await recordRevision({

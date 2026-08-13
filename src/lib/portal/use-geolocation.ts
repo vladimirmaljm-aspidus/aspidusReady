@@ -53,7 +53,17 @@ export function usePortalGeolocation(access: PortalAccess | null) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...coords, source }),
         keepalive: true,
-      }).catch(() => {});
+      }).catch((e) => {
+        // P1-9: surface the failure to the user instead of silently
+        // swallowing it. Reset `shared` to false so the GPS gate
+        // re-appears — the location was NOT recorded by the server.
+        console.error("[portal-gps] Failed to log location:", e);
+        setState((s) => ({
+          ...s,
+          shared: false,
+          error: "Failed to verify your location. Please try again.",
+        }));
+      });
     };
 
     const onSuccess = (pos: GeolocationPosition) => {
