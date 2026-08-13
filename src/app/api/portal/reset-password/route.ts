@@ -3,6 +3,7 @@ import { getStore } from "@/lib/data/store";
 import { hashPassword } from "@/lib/auth/password";
 import { validatePassword } from "@/lib/auth/password-policy";
 import { consumePasswordReset } from "@/lib/auth/password-reset";
+import { getIp } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
       entity_type: "portal_access",
       entity_id: result.targetId!,
       details: { email: current.portal_email },
-      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
+      ip: getIp(req),
       user_agent: req.headers.get("user-agent") || null,
     });
 

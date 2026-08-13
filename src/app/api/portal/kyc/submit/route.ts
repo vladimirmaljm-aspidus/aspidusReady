@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
+import { getSupabase } from "@/lib/supabase/client";
 import { notifyKycSubmitted } from "@/lib/notif/helper";
 import { audit } from "@/lib/api/helpers";
 
@@ -32,6 +33,26 @@ export async function POST(req: NextRequest) {
   const missing = required.filter((f) => !merged[f]);
   if (missing.length > 0) {
     return NextResponse.json({ error: `Missing required fields: ${missing.join(", ")}` }, { status: 400 });
+  }
+
+  // CRITICAL FIX (audit P0-2): validate at least one KYC document was uploaded
+  // before allowing submission. Previously a partner could submit the KYC form
+  // with zero supporting documents — admins would then have to bounce it back,
+  // creating a back-and-forth loop and delaying approval. We require ≥1 active
+  // (non-deleted) upload in the "kyc" category for this (partner, tenant).
+  const { data: docs } = await getSupabase()
+    .from("portal_uploads")
+    .select("id, category")
+    .eq("partner_id", access.partner_id)
+    .eq("tenant_id", access.tenant_id)
+    .eq("category", "kyc")
+    .is("deleted_at", null) // exclude soft-deleted uploads
+    .limit(1);
+  if (!docs || docs.length === 0) {
+    return NextResponse.json(
+      { error: "Please upload at least one KYC document before submitting." },
+      { status: 400 },
+    );
   }
 
   const updated = await store.upsertKycSubmission({

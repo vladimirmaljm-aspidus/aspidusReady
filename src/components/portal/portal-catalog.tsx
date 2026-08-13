@@ -160,15 +160,21 @@ export function PortalCatalog() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll pr-1">
           {filtered.map((p) => {
             // Specifications can be either an array of {name,value} pairs
-            // (current Supabase data) or a Record<string,string> (legacy).
-            // Normalize both into [{name, value}].
+            // (current Supabase data) or a Record<string,*> built by the
+            // API mapper (coa_params / detailed_spec / logistics /
+            // shelf_life). Normalize both into [{name, value}], skipping
+            // null/empty entries.
             const rawSpecs = p.specifications as unknown;
             const specEntries: { name: string; value: string }[] = Array.isArray(rawSpecs)
               ? (rawSpecs as { name: string; value: string }[]).slice(0, 2)
               : typeof rawSpecs === "object" && rawSpecs !== null
-                ? Object.entries(rawSpecs as Record<string, string>)
+                ? Object.entries(rawSpecs as Record<string, unknown>)
+                    .filter(([, v]) => v !== null && v !== undefined && v !== "")
                     .slice(0, 2)
-                    .map(([name, value]) => ({ name, value: String(value) }))
+                    .map(([name, value]) => ({
+                      name,
+                      value: typeof value === "string" ? value : JSON.stringify(value),
+                    }))
                 : [];
             return (
               <div
@@ -263,12 +269,20 @@ function EmptyCatalog() {
 
 function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEntry; onRequestQuote?: (product: ProductCatalogEntry) => void }) {
   const t = useT();
-  // Normalize specifications — array of {name,value} OR Record<string,string>
+  // Normalize specifications — array of {name,value} OR Record<string,*>
+  // (the API mapper builds a record from coa_params / detailed_spec /
+  // logistics / shelf_life, where some values may be null when the product
+  // doesn't carry that field — we skip those so the UI doesn't render "null").
   const rawSpecs = product.specifications as unknown;
   const specEntries: { name: string; value: string }[] = Array.isArray(rawSpecs)
     ? (rawSpecs as { name: string; value: string }[])
     : typeof rawSpecs === "object" && rawSpecs !== null
-      ? Object.entries(rawSpecs as Record<string, string>).map(([name, value]) => ({ name, value: String(value) }))
+      ? Object.entries(rawSpecs as Record<string, unknown>)
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
+          .map(([name, value]) => ({
+            name,
+            value: typeof value === "string" ? value : JSON.stringify(value),
+          }))
       : [];
 
   return (

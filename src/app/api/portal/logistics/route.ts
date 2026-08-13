@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { getSupabase } from "@/lib/supabase/client";
 import { getStore } from "@/lib/data/store";
 import { audit } from "@/lib/api/helpers";
@@ -30,6 +31,12 @@ export async function GET() {
   const kyc = await requireKycApproved(access);
   if (kyc) return kyc;
 
+  // CRITICAL FIX (audit P0-5): GPS gate must also apply to logistics LIST —
+  // and previously only the offers/invoices/proformas LIST endpoints enforced
+  // it, while logistics skipped the check entirely.
+  const _gpsGet = await requireGpsVerified(access);
+  if (_gpsGet) return _gpsGet;
+
   const sb = getSupabase();
   const { data, error } = await sb
     .from("logistics_requests")
@@ -47,6 +54,12 @@ export async function POST(req: NextRequest) {
 
   const kyc = await requireKycApproved(access);
   if (kyc) return kyc;
+
+  // CRITICAL FIX (audit P0-5): GPS gate must also apply to logistics CREATE —
+  // otherwise a portal client could submit a new logistics request without
+  // sharing their location, bypassing the client-side gate.
+  const _gpsPost = await requireGpsVerified(access);
+  if (_gpsPost) return _gpsPost;
 
   if (!access.partner_id) {
     return NextResponse.json({ error: "Portal account is not linked to a partner. Ask your admin to link it before submitting a request." }, { status: 400 });

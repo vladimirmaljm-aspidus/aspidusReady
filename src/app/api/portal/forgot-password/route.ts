@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { sendEmail } from "@/lib/email/service";
 import { createPasswordReset } from "@/lib/auth/password-reset";
+import { getIp } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     if (!access) return genericOk;
 
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+    const ip = getIp(req);
     const ua = req.headers.get("user-agent") || null;
 
     const { token, expiresAt } = await createPasswordReset({

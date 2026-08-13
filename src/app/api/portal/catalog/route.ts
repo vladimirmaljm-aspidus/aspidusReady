@@ -29,7 +29,18 @@ function productToCatalogShape(p: Product): ProductCatalogEntry {
     base_unit: p.unit || "pc",
     // coa_params on the Product replaces the old `specifications` field on
     // ProductCatalogEntry — they represent the same key/value spec data.
-    specifications: null,
+    // FIX-P1-1: previously this was always `null`, hiding the trade metadata
+    // from portal clients. We now expose the four structured spec fields.
+    // Cast via `unknown` because the catalog-entry type models specs as
+    // `Record<string, string>` (legacy shape) — the UI normalizer
+    // (portal-catalog.tsx) already String()-coerces each value, so richer
+    // JSON values are safe to pass through here.
+    specifications: {
+      coa_params: p.coa_params || null,
+      detailed_spec: p.detailed_spec || null,
+      logistics: p.logistics || null,
+      shelf_life: p.shelf_life || null,
+    } as unknown as ProductCatalogEntry["specifications"],
     // The `products` table doesn't have an `origin_country` column yet —
     // fall back to the workaround where origin is stored inside the JSONB
     // `attributes` field. Treated as best-effort.

@@ -24,6 +24,9 @@ export async function PUT(req: NextRequest) {
   if (!access) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
+  if (!access.can_view_profile) {
+    return NextResponse.json({ error: "Profile editing not permitted." }, { status: 403 });
+  }
   const store = await getStore();
   let body;
   try {

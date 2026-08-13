@@ -342,7 +342,9 @@ function ProformaDetail({
           <SummaryTile icon={Calendar} label={t("portal-detail-issue-date")} value={fmtDate(proforma.issue_date)} />
           <SummaryTile icon={Hourglass} label={t("portal-detail-valid-until")} value={fmtDate(proforma.valid_until)} />
           <SummaryTile icon={DollarSign} label={t("portal-detail-currency")} value={proforma.currency} />
-          <SummaryTile icon={CheckCircle2} label={t("portal-detail-paid-on")} value={fmtDate(proforma.paid_at)} />
+          {proforma.paid_at && (
+            <SummaryTile icon={CheckCircle2} label={t("portal-detail-paid-on")} value={fmtDate(proforma.paid_at)} />
+          )}
         </div>
 
         {/* Line items */}

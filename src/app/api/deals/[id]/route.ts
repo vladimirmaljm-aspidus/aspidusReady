@@ -85,6 +85,26 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
+    // FIX-P1: cascade commissions before deleting the deal (D-1).
+    try {
+      const { cascadeCommissionOnDelete } = await import("@/lib/api/commission-cascade");
+      await cascadeCommissionOnDelete(id, existing.tenant_id, "deal deleted");
+    } catch (e) {
+      console.warn("[deals DELETE] commission cascade failed:", e);
+    }
+    // FIX-P1: refuse delete when linked offers exist.
+    try {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const { data: linkedOffers } = await getSupabase().from("offers").select("id").eq("deal_id", id).limit(1).maybeSingle();
+      if (linkedOffers) {
+        return NextResponse.json(
+          { error: "Cannot delete deal — linked offers exist." },
+          { status: 409 },
+        );
+      }
+    } catch (depErr) {
+      console.warn("[deals DELETE] dependency check failed:", depErr);
+    }
     await auth.store.deleteDeal(id);
     await audit(auth.store, auth.user, req, "deal.delete", "deal", id);
     return NextResponse.json({ ok: true });

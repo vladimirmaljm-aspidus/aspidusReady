@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { generatePdf } from "@/lib/pdf/generator";
 import { markDocumentViewed } from "@/lib/portal/mark-viewed";
 
@@ -27,6 +28,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const _kycBlock = await requireKycApproved(access);
     if (_kycBlock) return _kycBlock;
+
+    // CRITICAL FIX (audit P0-5): GPS gate must also apply to PDF download —
+    // otherwise a portal client with a valid session but no shared GPS can
+    // curl the PDF endpoint and bypass the client-side gate entirely.
+    const _gps = await requireGpsVerified(access);
+    if (_gps) return _gps;
 
     const { getStore } = await import("@/lib/data/store");
     const store = await getStore();

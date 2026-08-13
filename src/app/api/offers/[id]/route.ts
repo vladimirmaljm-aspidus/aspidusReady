@@ -212,6 +212,24 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         { status: 409 },
       );
     }
+    // FIX-P1: dependency check (O-2, PT-1, PR-1) — refuse delete when linked
+    // proformas or invoices exist. Cancel the offer instead.
+    try {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const sb = getSupabase();
+      const { data: linkedProformas } = await sb
+        .from("proformas").select("id").eq("offer_id", id).neq("status", "cancelled").limit(1).maybeSingle();
+      const { data: linkedInvoices } = await sb
+        .from("invoices").select("id").eq("offer_id", id).neq("status", "cancelled").limit(1).maybeSingle();
+      if (linkedProformas || linkedInvoices) {
+        return NextResponse.json(
+          { error: "Cannot delete offer — linked proformas or invoices exist. Cancel the offer instead." },
+          { status: 409 },
+        );
+      }
+    } catch (depErr) {
+      console.warn("[offers DELETE] dependency check failed:", depErr);
+    }
     // Void commissions tied to this offer's deal before we hard-delete.
     if ((existing as any).deal_id) {
       const { cascadeCommissionOnDelete } = await import("@/lib/api/commission-cascade");

@@ -12,9 +12,8 @@ import { notifyLowStock } from "@/lib/notif/helper";
  *   1. `deductStockForOffer(opts)` — called when an offer transitions to
  *      "accepted" (admin PUT or portal respond). Decrements `products.stock`
  *      for each line item and inserts an `inventory_movements` audit row.
- *      Idempotent: skipped if a movement already exists for the offer id
- *      (Re-Audit-2 N7: prevents double-deduction when a super-admin re-accepts
- *      a previously-cancelled offer, or when a concurrent call races).
+ *      Idempotent: skipped per-line-item if a NET deduction already exists
+ *      for that (offerId, productId) pair — see audit O-1 note below.
  *
  *   2. `restoreStockForOffer(opts)` — called when an offer transitions OUT of
  *      "accepted" (e.g. cancelled). Reverses the deduction by inserting a
@@ -24,6 +23,18 @@ import { notifyLowStock } from "@/lib/notif/helper";
  *
  * Both helpers are fire-and-forget — callers wrap them in try/catch and log
  * failures; they don't block the primary update.
+ *
+ * ── Audit O-1 (idempotency for accept → cancel → re-accept) ───────────────
+ * The old idempotency check at the top of `deductStockForOffer` filtered
+ * `reference = offerId AND delta < 0` and skipped the WHOLE cascade if any
+ * prior deduction row existed. After accept → cancel (restore) → re-accept,
+ * the original deduction movement (negative delta) still exists — so the
+ * second acceptance was skipped entirely, leaving stock un-deducted.
+ *
+ * The new per-line-item check counts BOTH deductions (delta < 0) AND
+ * restorations (delta > 0) for the (offerId, productId) pair, and only
+ * skips if `deductions > restorations` — i.e. there is a NET deduction
+ * still on the books for that product on that offer.
  */
 
 interface DeductStockOpts {
@@ -58,37 +69,6 @@ export async function deductStockForOffer(opts: DeductStockOpts): Promise<
     productId: string; newStock: number; productName: string; sku: string; reorderLevel: number;
   }> = [];
 
-  // ── Idempotency check (Re-Audit-2 N7, fix P0-5/C-5) ────────────────
-  // If a prior DEDUCTION movement already exists for this offer id, skip
-  // the whole cascade. This prevents:
-  //   1. Double-deduction when a super-admin re-accepts a cancelled offer.
-  //   2. Double-deduction when two concurrent calls (admin + portal, or
-  //      double-click) both fire the cascade.
-  //
-  // CRITICAL: we filter `delta < 0` so we ONLY match prior DEDUCTIONS.
-  // Without this filter, after `accepted → cancelled (restore) → accepted
-  // (re-deduct)`, the prior RESTORATION movement (positive delta) would
-  // match here and we'd skip the re-deduction entirely — leaving stock
-  // un-deducted on the second acceptance (audit C-5).
-  const { data: existingMovements, error: existingErr } = await sb
-    .from("inventory_movements")
-    .select("id")
-    .eq("tenant_id", tenantId)
-    .eq("reference", offerId)
-    .lt("delta", 0) // P0-5/C-5: only count prior DEDUCTIONS (negative deltas)
-    .limit(1);
-  if (existingErr) {
-    console.warn("[inventory cascade] idempotency lookup failed:", existingErr.message);
-    // Bail out — we can't safely proceed without the idempotency guarantee.
-    return updatedProducts;
-  }
-  if (existingMovements && existingMovements.length > 0) {
-    console.log(
-      `[inventory cascade] prior deduction already exists for offer ${offerId}, skipping deduction`,
-    );
-    return updatedProducts;
-  }
-
   // ── Deduct stock for each line item ───────────────────────────────────
   for (const item of opts.items) {
     const productId = item?.product_id;
@@ -112,6 +92,39 @@ export async function deductStockForOffer(opts: DeductStockOpts): Promise<
     if (!productRow) {
       // Product may have been deleted between offer save and accept — log + skip.
       console.warn(`[inventory cascade] product ${productId} not found, skipping stock decrement`);
+      continue;
+    }
+
+    // ── Idempotency check (audit O-1) ────────────────────────────────────
+    // CRITICAL FIX (audit O-1): only skip if there are MORE deductions than
+    // restorations for this (offer, product) pair. After accept → cancel →
+    // re-accept, the original deduction (negative delta) still exists, but so
+    // does the restoration (positive delta). We should only skip if the net
+    // is negative — i.e. stock is already short for this product on this
+    // offer. A net of zero (1 deduction + 1 restoration) means the previous
+    // acceptance was fully reversed and we SHOULD re-deduct on re-accept.
+    //
+    // This also preserves the original Re-Audit-2 N7 guarantee: a double-call
+    // (e.g. super-admin re-accepts an already-accepted offer, or a concurrent
+    // admin + portal accept) sees deductions > restorations and skips.
+    const { data: priorMovements, error: priorErr } = await sb
+      .from("inventory_movements")
+      .select("delta")
+      .eq("tenant_id", tenantId)
+      .eq("reference", offerId)
+      .eq("product_id", productId);
+    if (priorErr) {
+      console.warn(`[inventory cascade] idempotency lookup failed for product ${productId}:`, priorErr.message);
+      // Bail out for THIS item — we can't safely proceed without the
+      // idempotency guarantee. Other items in the loop still get processed.
+      continue;
+    }
+    const deductions = priorMovements?.filter((m: any) => Number(m.delta) < 0).length || 0;
+    const restorations = priorMovements?.filter((m: any) => Number(m.delta) > 0).length || 0;
+    if (deductions > restorations) {
+      console.log(
+        `[inventory cascade] net deduction already exists for offer ${offerId} / product ${productId} (deductions=${deductions}, restorations=${restorations}), skipping`,
+      );
       continue;
     }
 

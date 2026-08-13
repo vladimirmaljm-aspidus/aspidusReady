@@ -465,40 +465,40 @@ export function PortalRfq() {
                       <div className="space-y-3 p-3 rounded-lg border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
                         <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
                           <AlertCircle className="size-3.5" />
-                          We need the delivery company's details to verify the shipment destination.
+                          {t("portal-rfq-third-party-notice")}
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Company Name *</Label>
+                            <Label className="text-xs text-muted-foreground">{t("portal-rfq-tp-company-name")}</Label>
                             <Input value={form.third_party_company_name} onChange={(e) => update("third_party_company_name", e.target.value)} placeholder="ABC Trading LLC" />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Country *</Label>
+                            <Label className="text-xs text-muted-foreground">{t("portal-rfq-tp-country")}</Label>
                             <Select value={form.third_party_country} onValueChange={(v) => update("third_party_country", v)}>
-                              <SelectTrigger className="h-10"><SelectValue placeholder="Select country" /></SelectTrigger>
+                              <SelectTrigger className="h-10"><SelectValue placeholder={t("portal-rfq-select-country")} /></SelectTrigger>
                               <SelectContent className="max-h-60">
                                 {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Address</Label>
+                            <Label className="text-xs text-muted-foreground">{t("portal-rfq-tp-address")}</Label>
                             <Input value={form.third_party_address} onChange={(e) => update("third_party_address", e.target.value)} placeholder="Street, city, postal code" />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Tax ID / VAT</Label>
+                            <Label className="text-xs text-muted-foreground">{t("portal-rfq-tp-tax-id")}</Label>
                             <Input value={form.third_party_tax_id} onChange={(e) => update("third_party_tax_id", e.target.value)} placeholder="Tax registration number" />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Contact Name</Label>
+                            <Label className="text-xs text-muted-foreground">{t("portal-rfq-tp-contact-name")}</Label>
                             <Input value={form.third_party_contact_name} onChange={(e) => update("third_party_contact_name", e.target.value)} placeholder="John Smith" />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Contact Email *</Label>
+                            <Label className="text-xs text-muted-foreground">{t("portal-rfq-tp-contact-email")}</Label>
                             <Input type="email" value={form.third_party_contact_email} onChange={(e) => update("third_party_contact_email", e.target.value)} placeholder="contact@company.com" />
                           </div>
                           <div className="space-y-1.5 sm:col-span-2">
-                            <Label className="text-xs text-muted-foreground">Contact Phone</Label>
+                            <Label className="text-xs text-muted-foreground">{t("portal-rfq-tp-contact-phone")}</Label>
                             <Input value={form.third_party_contact_phone} onChange={(e) => update("third_party_contact_phone", e.target.value)} placeholder="+971 50 123 4567" />
                           </div>
                         </div>
@@ -510,7 +510,7 @@ export function PortalRfq() {
 
               <div className="border-t bg-muted/20 px-6 sm:px-8 py-4 flex items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground hidden sm:block">
-                  Our team typically responds within 24 hours.
+                  {t("portal-rfq-response-time")}
                 </p>
                 <Button
                   type="submit"
@@ -522,7 +522,7 @@ export function PortalRfq() {
                   ) : (
                     <Send className="size-4" />
                   )}
-                  Submit Request
+                  {t("portal-rfq-submit")}
                 </Button>
               </div>
             </form>
@@ -535,11 +535,11 @@ export function PortalRfq() {
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold tracking-tight flex items-center gap-2">
                 <Inbox className="size-4 text-primary" />
-                Your Requests
+                {t("portal-rfq-your-requests")}
               </h2>
               {rfqsQ.data && (
                 <Badge variant="outline" className="tabular text-xs">
-                  {items.length} total
+                  {t("portal-rfq-total").replace("{n}", String(items.length))}
                 </Badge>
               )}
             </div>
@@ -636,14 +636,14 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
       {expanded && (
         <div className="border-t bg-muted/20 px-4 py-4 space-y-3 animate-in fade-in-0 slide-in-from-top-1 duration-200">
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <DetailRow label="Category" value={categoryName(rfq.category)} />
+            <DetailRow label={t("portal-rfq-detail-category")} value={categoryName(rfq.category)} />
             <DetailRow
-              label="Quantity"
+              label={t("portal-rfq-detail-quantity")}
               value={`${rfq.quantity} ${rfq.unit}`}
               mono
             />
             <DetailRow
-              label="Target price"
+              label={t("portal-rfq-detail-target-price")}
               value={
                 rfq.target_price
                   ? fmtMoney(rfq.target_price, rfq.currency)
@@ -651,23 +651,23 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
               }
               mono
             />
-            <DetailRow label="Incoterm" value={rfq.incoterm || "—"} mono />
+            <DetailRow label={t("portal-rfq-detail-incoterm")} value={rfq.incoterm || "—"} mono />
             <DetailRow
-              label="Delivery country"
+              label={t("portal-rfq-detail-delivery-country")}
               value={countryName(rfq.delivery_country)}
             />
-            <DetailRow label="Delivery port" value={rfq.delivery_port || "—"} />
+            <DetailRow label={t("portal-rfq-detail-delivery-port")} value={rfq.delivery_port || "—"} />
             <DetailRow
-              label="Delivery date"
+              label={t("portal-rfq-detail-delivery-date")}
               value={rfq.delivery_date ? fmtDate(rfq.delivery_date) : "—"}
             />
-            <DetailRow label="Submitted" value={fmtDateTime(rfq.created_at)} />
+            <DetailRow label={t("portal-rfq-detail-submitted")} value={fmtDateTime(rfq.created_at)} />
           </div>
 
           {rfq.product_description && (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-medium mb-0.5">
-                Description
+                {t("portal-rfq-detail-description")}
               </p>
               <p className="text-xs text-foreground leading-relaxed">
                 {rfq.product_description}
@@ -678,7 +678,7 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
           {rfq.specifications && (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-medium mb-0.5">
-                Specifications
+                {t("portal-rfq-detail-specifications")}
               </p>
               <p className="text-xs text-foreground leading-relaxed">
                 {rfq.specifications}
@@ -689,7 +689,7 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
           {rfq.notes && (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-medium mb-0.5">
-                Notes
+                {t("portal-rfq-detail-notes")}
               </p>
               <p className="text-xs text-foreground leading-relaxed">
                 {rfq.notes}
@@ -702,7 +702,7 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-primary mb-1">
                 <MessageSquare className="size-3.5" />
-                Response from our team
+                {t("portal-rfq-response-from-team")}
               </div>
               <p className="text-xs text-foreground leading-relaxed">
                 {rfq.admin_notes}
@@ -714,8 +714,7 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 flex items-start gap-2">
               <MessageSquare className="size-3.5 text-primary mt-0.5 shrink-0" />
               <p className="text-xs text-foreground/80 leading-relaxed">
-                A quote has been prepared. Our team will share the details with
-                you shortly.
+                {t("portal-rfq-quoted-notice")}
               </p>
             </div>
           )}
@@ -730,16 +729,16 @@ function RfqCard({ rfq }: { rfq: PortalRfq }) {
 // ============================================================
 
 function EmptyRfqState() {
+  const t = useT();
   return (
     <Card className="border-dashed border-border/60 shadow-soft">
       <CardContent className="py-12 flex flex-col items-center justify-center text-center">
         <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-3 text-muted-foreground">
           <Inbox className="size-5" />
         </div>
-        <p className="text-sm font-medium">No requests yet</p>
+        <p className="text-sm font-medium">{t("portal-rfq-empty-title")}</p>
         <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-          Submit your first request and our team will source the product for
-          you.
+          {t("portal-rfq-empty-desc")}
         </p>
       </CardContent>
     </Card>

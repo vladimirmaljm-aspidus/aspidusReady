@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
-import { audit } from "@/lib/api/helpers";
+import { audit, getIp } from "@/lib/api/helpers";
 import { lookupIp } from "@/lib/utils/geo-ip";
 
 export const runtime = "nodejs";
-
-function getRequestIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "127.0.0.1"
-  );
-}
 
 // Portal login — separate session type (partner, not user)
 export async function POST(req: NextRequest) {
@@ -22,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
     }
     const store = await getStore();
-    const ip = getRequestIp(req);
+    const ip = getIp(req);
 
     // ── IP → Country resolution ───────────────────────────────────────────
     // Kick off the geo lookup early (runs concurrently with the credential

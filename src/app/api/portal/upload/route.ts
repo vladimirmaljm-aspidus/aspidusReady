@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { uploadPortalFile } from "@/lib/upload/service";
 import { recordPortalUpload, PortalUploadCategory } from "@/lib/portal/uploads";
 import { getStore } from "@/lib/data/store";
@@ -31,6 +32,12 @@ const MAX_SIZE = 25 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   const access = await getPortalSessionAccess();
   if (!access) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+
+  // CRITICAL FIX (audit P0-5): GPS gate must also apply to uploads —
+  // otherwise a portal client could upload KYC documents or RFQ attachments
+  // without sharing their location, bypassing the client-side gate.
+  const _gps = await requireGpsVerified(access);
+  if (_gps) return _gps;
 
   const form = await req.formData();
   const file = form.get("file") as File | null;

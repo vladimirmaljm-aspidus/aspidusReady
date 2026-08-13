@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { getStore } from "@/lib/data/store";
 import { getSupabase } from "@/lib/supabase/client";
 import { audit } from "@/lib/api/helpers";
@@ -22,6 +23,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!access.can_view_documents) return NextResponse.json({ error: "Not permitted." }, { status: 403 });
   const kycBlock = await requireKycApproved(access);
   if (kycBlock) return kycBlock;
+
+  // CRITICAL FIX (audit P0-5): GPS gate must also apply to shared document
+  // downloads — otherwise a portal client with a valid session but no shared
+  // GPS can curl the signed-URL endpoint and bypass the client-side gate.
+  const _gps = await requireGpsVerified(access);
+  if (_gps) return _gps;
 
   const { id } = await params;
   const store = await getStore();

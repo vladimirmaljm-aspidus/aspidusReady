@@ -68,13 +68,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // calculations). Caller can pass ?force=1 to override (will leave
     // orphans — admin recovery only).
     const sb = (auth.store as any).sb();
-    const [offers, invoices, proformas, kyc, portal, tradeCalcs] = await Promise.all([
+    const [offers, invoices, proformas, kyc, portal, tradeCalcs, demands, deals, sharedDocs, portalRfqs] = await Promise.all([
       sb.from("offers").select("id", { count: "exact", head: true }).eq("partner_id", id),
       sb.from("invoices").select("id", { count: "exact", head: true }).eq("partner_id", id),
       sb.from("proformas").select("id", { count: "exact", head: true }).eq("partner_id", id),
       sb.from("kyc_submissions").select("id", { count: "exact", head: true }).eq("partner_id", id),
       sb.from("portal_access").select("id", { count: "exact", head: true }).eq("partner_id", id),
       sb.from("trade_calculations").select("id", { count: "exact", head: true }).eq("buyer_id", id),
+      // FIX-P1: extend dependency check (PT-1) — demands, deals, shared_documents,
+      // portal_rfqs all reference the partner.
+      sb.from("demands").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("deals").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("shared_documents").select("id", { count: "exact", head: true }).eq("partner_id", id),
+      sb.from("portal_rfqs").select("id", { count: "exact", head: true }).eq("partner_id", id),
     ]);
     const depCount =
       (offers.count || 0) +
@@ -82,7 +88,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       (proformas.count || 0) +
       (kyc.count || 0) +
       (portal.count || 0) +
-      (tradeCalcs.count || 0);
+      (tradeCalcs.count || 0) +
+      (demands.count || 0) +
+      (deals.count || 0) +
+      (sharedDocs.count || 0) +
+      (portalRfqs.count || 0);
     const force = req.nextUrl.searchParams.get("force") === "1";
     if (depCount > 0 && !force) {
       return NextResponse.json({
@@ -94,6 +104,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
           kyc: kyc.count,
           portal: portal.count,
           trade_calcs: tradeCalcs.count,
+          demands: demands.count,
+          deals: deals.count,
+          shared_documents: sharedDocs.count,
+          portal_rfqs: portalRfqs.count,
         },
         hint: "Pass ?force=1 to delete anyway (will leave orphans).",
       }, { status: 409 });

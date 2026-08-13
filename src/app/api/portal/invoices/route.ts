@@ -8,9 +8,9 @@ import { redactListForPortal } from "@/lib/portal/redact";
 export const runtime = "nodejs";
 
 // Portal clients must never see draft invoices. Allowed:
-// sent | paid | overdue | cancelled (and the optional "partial" used by the
+// sent | viewed | paid | overdue | cancelled (and the optional "partial" used by the
 // record-payment flow).
-const PORTAL_INVOICE_STATUSES = new Set(["sent", "paid", "overdue", "cancelled", "partial"]);
+const PORTAL_INVOICE_STATUSES = new Set(["sent", "viewed", "paid", "overdue", "cancelled", "partial"]);
 
 /**
  * GET /api/portal/invoices

@@ -8,8 +8,8 @@ import { redactListForPortal } from "@/lib/portal/redact";
 export const runtime = "nodejs";
 
 // Portal clients must never see draft proformas. Allowed:
-// sent | accepted | paid | expired
-const PORTAL_PROFORMA_STATUSES = new Set(["sent", "accepted", "paid", "expired"]);
+// sent | viewed | accepted | paid | expired
+const PORTAL_PROFORMA_STATUSES = new Set(["sent", "viewed", "accepted", "paid", "expired"]);
 
 /**
  * GET /api/portal/proformas
