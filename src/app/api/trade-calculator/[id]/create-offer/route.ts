@@ -43,8 +43,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const calc = await auth.store.getTradeCalculation(id);
     if (!calc) return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
-    // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
-    if ("user" in auth && !auth.isSuperAdmin && (calc as any).tenant_id !== auth.tenantId) {
+    // CRITICAL FIX (audit T-2): tenant ownership check must cover BOTH auth
+    // modes. Previously the `"user" in auth && !auth.isSuperAdmin` guard
+    // skipped the check entirely for API key auth (which has no `isSuperAdmin`
+    // property) — so an API key from tenant A could create offers from
+    // tenant B's trade calculations.
+    const isSuperAdmin = "user" in auth && auth.isSuperAdmin;
+    if (!isSuperAdmin && (calc as any).tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
     }
 
@@ -110,7 +115,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       unit_price: sellPrice,
       discount: 0,
       tax_rate: 0,
-      total: totalSell,
+      // CRITICAL FIX (audit F-4): round to 2 decimals to avoid floating-point
+      // drift (e.g. 1199.9999999998) being persisted as the line total.
+      total: Math.round(totalSell * 100) / 100,
     }];
 
     // ── Build CLIENT-FACING notes ────────────────────────────────────────
@@ -226,10 +233,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       status: "draft",
       subject,
       currency,
-      subtotal: totalSell,
-      discount_total: 0,
-      tax_total: 0,
-      total: totalSell,
+      // CRITICAL FIX (audit F-4): round all currency totals to 2 decimals to
+      // avoid floating-point drift in stored offer records.
+      subtotal: Math.round(totalSell * 100) / 100,
+      discount_total: Math.round(0 * 100) / 100,
+      tax_total: Math.round(0 * 100) / 100,
+      total: Math.round(totalSell * 100) / 100,
       items,
       notes,
       valid_until: body.valid_until || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],

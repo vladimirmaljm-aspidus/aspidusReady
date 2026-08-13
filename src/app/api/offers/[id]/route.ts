@@ -46,6 +46,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json();
     // Preserve the entity's tenant_id
     body.tenant_id = existing.tenant_id;
+    // CRITICAL FIX (audit F-2): lock financial fields on accepted offers.
+    // A user with offers.update permission should NOT be able to change total,
+    // items, partner_id, or currency on an offer the customer has already
+    // accepted — that would silently rewrite a binding commercial commitment.
+    if (existing.status === "accepted") {
+      if (!auth.isSuperAdmin) {
+        const lockedFields = ["total", "subtotal", "items", "tax_total", "discount_total", "partner_id", "currency", "offer_id"];
+        for (const k of lockedFields) {
+          if (k in body) {
+            return NextResponse.json(
+              { error: `Cannot modify ${k} on an accepted offer. Super-admin override required.` },
+              { status: 409 },
+            );
+          }
+        }
+      }
+    }
     // FIX-P1-LOGIC Fix 1: enforce valid status transitions. Super-admins
     // bypass so they can correct bad data.
     if (body.status && body.status !== existing.status && !auth.isSuperAdmin) {

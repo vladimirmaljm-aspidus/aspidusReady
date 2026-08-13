@@ -40,8 +40,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const item = await auth.store.getTradeCalculation(id);
   if (!item) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  // Tenant ownership check (for session auth — API keys are always scoped to their tenant)
-  if ("user" in auth && !auth.isSuperAdmin && (item as any).tenant_id !== auth.tenantId) {
+  // CRITICAL FIX (audit T-2): tenant ownership check must cover BOTH auth
+  // modes. Previously the `"user" in auth && !auth.isSuperAdmin` guard
+  // skipped the check entirely for API key auth (which has no `isSuperAdmin`
+  // property) — so an API key from tenant A could read tenant B's calc by id.
+  const isSuperAdmin = "user" in auth && auth.isSuperAdmin;
+  if (!isSuperAdmin && (item as any).tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   return NextResponse.json(item);
@@ -69,8 +73,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const existing = await auth.store.getTradeCalculation(id);
   if (!existing) return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
-  // Tenant ownership check (for session auth)
-  if ("user" in auth && !auth.isSuperAdmin && (existing as any).tenant_id !== auth.tenantId) {
+  // CRITICAL FIX (audit T-2): tenant ownership check must cover BOTH auth
+  // modes (see GET handler above for full rationale).
+  const isSuperAdmin = "user" in auth && auth.isSuperAdmin;
+  if (!isSuperAdmin && (existing as any).tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Trade calculation not found." }, { status: 404 });
   }
 
@@ -196,7 +202,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Tenant ownership check before delete
   const existing = await auth.store.getTradeCalculation(id);
   if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  if ("user" in auth && !auth.isSuperAdmin && (existing as any).tenant_id !== auth.tenantId) {
+  // CRITICAL FIX (audit T-2): tenant ownership check must cover BOTH auth
+  // modes (see GET handler above for full rationale).
+  const isSuperAdmin = "user" in auth && auth.isSuperAdmin;
+  if (!isSuperAdmin && (existing as any).tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   await auth.store.deleteTradeCalculation(id);

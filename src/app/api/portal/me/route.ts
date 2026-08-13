@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromCookie, clearSessionCookie } from "@/lib/auth/session";
 import { audit } from "@/lib/api/helpers";
+import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromCookie();
     if (session && session.role === "portal_client") {
+      const accessId = session.sub.replace("portal:", "");
       try {
         const { getStore } = await import("@/lib/data/store");
         const store = await getStore();
@@ -42,9 +44,29 @@ export async function POST(req: NextRequest) {
           req,
           "portal.logout",
           "portal_access",
-          session.sub.replace("portal:", ""),
+          accessId,
           {},
         );
+        // CRITICAL FIX (audit S-4): bump portal_access.token_version so stolen
+        // cookies become invalid immediately after logout (was: valid for 7 days).
+        const access = await store.getPortalAccessById(accessId);
+        if (access) {
+          try {
+            const { data: pa } = await getSupabase()
+              .from("portal_access")
+              .select("token_version")
+              .eq("id", access.id)
+              .maybeSingle();
+            if (pa) {
+              await getSupabase()
+                .from("portal_access")
+                .update({ token_version: (pa.token_version ?? 0) + 1 })
+                .eq("id", access.id);
+            }
+          } catch (e) {
+            console.error("[portal logout] token_version bump failed:", e);
+          }
+        }
       } catch (e) { console.error("[audit]", e); }
     }
   } catch (e) { console.error("[portal/me.logout]", e); }

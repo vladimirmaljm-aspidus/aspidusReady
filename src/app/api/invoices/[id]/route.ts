@@ -45,6 +45,27 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const body = await req.json();
+    // CRITICAL FIX (audit F-2): lock financial fields on paid/partial invoices.
+    // A user with invoices.update permission should NOT be able to change total,
+    // items, partner_id, or currency on a document that's already been paid.
+    // `InvoiceStatus` doesn't formally include "partial" (the union is
+    // draft|sent|paid|overdue|cancelled) but record-payment.ts writes "partial"
+    // at runtime — so we widen the comparison to `string` to avoid TS narrowing
+    // away a status the database can actually hold.
+    const existingStatus: string = existing.status;
+    if (existingStatus === "paid" || existingStatus === "partial") {
+      if (!auth.isSuperAdmin) {
+        const lockedFields = ["total", "subtotal", "items", "tax_total", "discount_total", "partner_id", "currency", "offer_id"];
+        for (const k of lockedFields) {
+          if (k in body) {
+            return NextResponse.json(
+              { error: `Cannot modify ${k} on a ${existingStatus} invoice. Super-admin override required.` },
+              { status: 409 },
+            );
+          }
+        }
+      }
+    }
     // FIX-P1-LOGIC Fix 1: enforce valid status transitions. Super-admins
     // bypass so they can correct bad data.
     if (body.status && body.status !== existing.status && !auth.isSuperAdmin) {

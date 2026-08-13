@@ -77,6 +77,37 @@ export async function POST(req: NextRequest) {
       if (denied) return denied;
     }
 
+    // CRITICAL FIX (audit P1-12): partner_id must belong to the caller's
+    // tenant. Without this a super-admin (tid resolves to their own tenant)
+    // or an API key could attach an invoice to a partner owned by another
+    // tenant by passing that partner's UUID.
+    if (body.partner_id) {
+      const partner = await auth.store.getPartner(body.partner_id);
+      if (partner && partner.tenant_id !== tid) {
+        return NextResponse.json({ error: "Partner not found." }, { status: 404 });
+      }
+    }
+
+    // CRITICAL FIX (audit P1-11): recompute totals from line items — never trust
+    // client-supplied totals (parity with PUT routes and offers POST).
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      let subtotal = 0, discountTotal = 0, taxTotal = 0;
+      for (const it of body.items) {
+        const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+        const disc = line * (Number(it.discount) || 0) / 100;
+        const net = line - disc;
+        const tax = net * (Number(it.tax_rate) || 0) / 100;
+        subtotal += line;
+        discountTotal += disc;
+        taxTotal += tax;
+        it.total = Math.round((net + tax) * 100) / 100;
+      }
+      body.subtotal = Math.round(subtotal * 100) / 100;
+      body.discount_total = Math.round(discountTotal * 100) / 100;
+      body.tax_total = Math.round(taxTotal * 100) / 100;
+      body.total = Math.round((subtotal - discountTotal + taxTotal) * 100) / 100;
+    }
+
     // Auto-generate document number if not provided (e.g. manual "Create" click).
     // Atomic: tries the `get_next_doc_number` Postgres SEQUENCE RPC first;
     // falls back to the legacy `listInvoices().total + 1` if the RPC is

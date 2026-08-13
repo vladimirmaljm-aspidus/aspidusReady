@@ -65,5 +65,19 @@ export function redactDetails(
 /** Standard redaction keys for tenant-scoped audit logs. */
 export const TENANT_REDACT_KEYS = ["reset_token"];
 
-/** Extended redaction keys for super-admin (cross-tenant) audit logs. */
-export const SUPER_ADMIN_REDACT_KEYS = ["reset_token", "password", "token"];
+/**
+ * Extended redaction keys for super-admin (cross-tenant) audit logs.
+ *
+ * CRITICAL FIX (audit M-2): the previous list (`["reset_token", "password",
+ * "token"]`) was far too narrow — it let `api_key`, `secret`, `private_key`,
+ * `smtp_password`, `authorization`, and the various `*_token` fields leak
+ * into the super-admin audit feed. This now mirrors {@link DEFAULT_DENY} so
+ * every credential-shaped key is masked regardless of which tenant the
+ * caller is inspecting.
+ */
+export const SUPER_ADMIN_REDACT_KEYS = [
+  "password", "password_hash", "token", "secret", "key",
+  "api_key", "apikey", "authorization", "smtp_password",
+  "reset_token", "session_token", "access_token",
+  "refresh_token", "private_key",
+];

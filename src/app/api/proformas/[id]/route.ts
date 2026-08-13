@@ -45,6 +45,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const body = await req.json();
+    // CRITICAL FIX (audit F-2): lock financial fields on paid/accepted proformas.
+    // A user with proformas.update permission should NOT be able to change total,
+    // items, partner_id, or currency on a proforma that's already been accepted
+    // by the customer or paid — that would silently rewrite a binding commercial
+    // commitment and could diverge from the originating offer/invoice.
+    if (existing.status === "paid" || existing.status === "accepted") {
+      if (!auth.isSuperAdmin) {
+        const lockedFields = ["total", "subtotal", "items", "tax_total", "discount_total", "partner_id", "currency", "offer_id"];
+        for (const k of lockedFields) {
+          if (k in body) {
+            return NextResponse.json(
+              { error: `Cannot modify ${k} on a ${existing.status} proforma. Super-admin override required.` },
+              { status: 409 },
+            );
+          }
+        }
+      }
+    }
     // FIX-P1-LOGIC Fix 1: enforce valid status transitions. Super-admins
     // bypass so they can correct bad data.
     if (body.status && body.status !== existing.status && !auth.isSuperAdmin) {

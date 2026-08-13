@@ -298,11 +298,17 @@ export function resolveTenantId(auth: AuthContext | ApiKeyAuthContext, req: Next
 }
 
 export function getIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "127.0.0.1"
-  );
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    // Render's proxy appends the real client IP at the END of the chain.
+    // The first value is attacker-controlled and must NOT be trusted.
+    // CRITICAL FIX (audit S-1/C-1): previously this returned the FIRST entry,
+    // allowing an attacker to spoof `X-Forwarded-For: 1.2.3.4` and bypass
+    // rate-limiting / audit-IP attribution.
+    const parts = xff.split(",").map(s => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+  return req.headers.get("x-real-ip") || "127.0.0.1";
 }
 
 export async function audit(

@@ -109,6 +109,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         console.warn("[record-payment] listErpBankAccounts failed:", e);
       }
     }
+    // CRITICAL FIX (audit F-3): validate bank_account_id belongs to caller's
+    // tenant. Without this check, a user with invoices.update permission could
+    // supply an arbitrary `bank_account_id` from another tenant and write a
+    // credit row into that tenant's erp_bank_transactions (cross-tenant data
+    // injection). The fallback above is already tenant-scoped via
+    // listErpBankAccounts(tid), but the user-supplied value is NOT — so we
+    // re-check the final resolved id here as a defense-in-depth guard.
+    // `auth.store.sb()` is private on SupabaseStore, so we use the shared
+    // getSupabase() client (already used below for the cumulative-txn lookup).
+    if (bankAccountId) {
+      try {
+        const { getSupabase } = await import("@/lib/supabase/client");
+        const sb = getSupabase();
+        const { data: bankAccount, error: baError } = await sb
+          .from("erp_bank_accounts")
+          .select("id, tenant_id")
+          .eq("id", bankAccountId)
+          .eq("tenant_id", tid)
+          .maybeSingle();
+        if (baError) {
+          console.warn("[record-payment] bank account tenant check failed:", baError.message);
+        }
+        if (!bankAccount) {
+          return NextResponse.json(
+            { error: "Bank account not found." },
+            { status: 404 },
+          );
+        }
+      } catch (e: any) {
+        console.error("[record-payment] bank account validation threw:", e);
+        return NextResponse.json(
+          { error: `Bank account validation failed: ${e.message || e}` },
+          { status: 500 },
+        );
+      }
+    }
 
     // ── Insert ERP bank transaction ──────────────────────────────────────
     let transactionId: string | null = null;
@@ -472,10 +508,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         let bankAccountIdResolved: string | null = (settings as any)?.cash_account_id || null;
         if (!bankAccountIdResolved && bankAccountId) {
           // Fall back to the erp_bank_accounts row used for the payment.
+          // CRITICAL FIX (audit F-3): add `.eq("tenant_id", tid)` — without
+          // this filter, a `bank_account_id` that survived the earlier
+          // validation (or was auto-resolved here from a stale cache) could
+          // still resolve to another tenant's erp_accounts.id via the
+          // `account_id` join, leaking the resolved GL account id across
+          // tenants. The earlier F-3 guard already rejects foreign ids at the
+          // door, but defense-in-depth mandates the tenant filter on every
+          // erp_bank_accounts lookup, not just the first.
           const { data: ba } = await sb
             .from("erp_bank_accounts")
             .select("account_id")
             .eq("id", bankAccountId)
+            .eq("tenant_id", tid)
             .maybeSingle();
           if (ba?.account_id) bankAccountIdResolved = (ba as any).account_id;
         }

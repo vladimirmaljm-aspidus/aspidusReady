@@ -103,6 +103,12 @@ export class SupabaseStore implements Store {
    * Smart upsert: uses INSERT when no id is provided, UPDATE when id exists.
    * This avoids issues with Supabase's upsert() and auto-generated UUIDs.
    *
+   * CRITICAL SECURITY FIX (audit T-1/DEEP-3): the UPDATE path now filters
+   * by BOTH id AND tenant_id, preventing cross-tenant IDOR. A caller from
+   * tenant A can no longer POST body.id=<tenant-B-uuid> to overwrite
+   * tenant B's record — the UPDATE matches 0 rows and falls back to INSERT
+   * (which creates a NEW record in tenant A's scope).
+   *
    * On UPDATE we additionally strip:
    *   • created_at — DB owns this column; sending it would silently overwrite
    *     the original creation timestamp.
@@ -114,6 +120,7 @@ export class SupabaseStore implements Store {
   private async smartUpsert<T>(
     table: string,
     data: Partial<T> & { id?: string },
+    tenantId?: string,
   ): Promise<T> {
     const payload: SupaRow = this.sanitizePayload({ ...data });
     if (data.id) {
@@ -123,24 +130,31 @@ export class SupabaseStore implements Store {
       delete fields.created_by;
       // Let the DB default/trigger update updated_at.
       delete fields.updated_at;
-      const { data: updated, error } = await this.sb()
+      // CRITICAL: filter by tenant_id to prevent cross-tenant IDOR.
+      // If the row doesn't belong to this tenant, the UPDATE matches 0 rows
+      // and we fall back to INSERT (creating a new record instead of hijacking).
+      let query = this.sb().from(table).update(fields).eq("id", id);
+      if (tenantId && "tenant_id" in fields) {
+        query = query.eq("tenant_id", tenantId);
+      }
+      const { data: updated, error } = await query.select().single();
+      if (error) {
+        // PGRK116 = "Cannot coerce result to a single JSON object" — means
+        // 0 rows matched (either row doesn't exist OR belongs to different tenant).
+        // Fall through to INSERT path.
+      } else if (updated) {
+        return updated as T;
+      }
+      // Row doesn't exist OR belongs to different tenant — fall back to insert.
+      // For cross-tenant attempts, this creates a NEW record in the caller's
+      // tenant (safe — no data hijack).
+      const { data: inserted, error: insErr } = await this.sb()
         .from(table)
-        .update(fields)
-        .eq("id", id)
+        .insert(payload)
         .select()
         .single();
-      if (error) throw error;
-      if (!updated) {
-        // Row doesn't exist — fall back to insert
-        const { data: inserted, error: insErr } = await this.sb()
-          .from(table)
-          .insert(payload)
-          .select()
-          .single();
-        if (insErr) throw insErr;
-        return inserted as T;
-      }
-      return updated as T;
+      if (insErr) throw insErr;
+      return inserted as T;
     }
     // INSERT new record (database auto-generates id)
     const { data: inserted, error } = await this.sb()
@@ -185,12 +199,14 @@ export class SupabaseStore implements Store {
     // before the ON CONFLICT clause can kick in.
     if (u.id) {
       const { id, ...fields } = u;
-      const { data, error } = await this.sb()
-        .from("users")
-        .update(fields)
-        .eq("id", id)
-        .select()
-        .single();
+      // CRITICAL: filter by tenant_id to prevent cross-tenant IDOR. A caller
+      // from tenant A can no longer POST body.id=<tenant-B-uuid> to overwrite
+      // tenant B's user. If fields.tenant_id is falsy (super_admin has
+      // tenant_id = null), skip the filter — `.eq("tenant_id", null)` would
+      // match zero rows in Postgres and break super_admin updates.
+      let q = this.sb().from("users").update(fields).eq("id", id);
+      if (fields.tenant_id) q = q.eq("tenant_id", fields.tenant_id as string);
+      const { data, error } = await q.select().single();
       if (error) throw error;
       if (!data) {
         // Row doesn't exist yet — fall back to insert with full payload
@@ -252,7 +268,7 @@ export class SupabaseStore implements Store {
     return (data as Partner) || null;
   }
   async upsertPartner(p: Partial<Partner> & { id?: string }): Promise<Partner> {
-    return this.smartUpsert<Partner>("partners", p);
+    return this.smartUpsert<Partner>("partners", p, p.tenant_id ?? undefined);
   }
   async deletePartner(id: string): Promise<void> {
     const { error } = await this.sb().from("partners").delete().eq("id", id);
@@ -275,7 +291,7 @@ export class SupabaseStore implements Store {
     return (data as Product) || null;
   }
   async upsertProduct(p: Partial<Product> & { id?: string }): Promise<Product> {
-    return this.smartUpsert<Product>("products", p);
+    return this.smartUpsert<Product>("products", p, p.tenant_id ?? undefined);
   }
   async deleteProduct(id: string): Promise<void> {
     const { error } = await this.sb().from("products").delete().eq("id", id);
@@ -300,7 +316,7 @@ export class SupabaseStore implements Store {
     return (data as Deal) || null;
   }
   async upsertDeal(d: Partial<Deal> & { id?: string }): Promise<Deal> {
-    return this.smartUpsert<Deal>("deals", d);
+    return this.smartUpsert<Deal>("deals", d, d.tenant_id ?? undefined);
   }
   async deleteDeal(id: string): Promise<void> {
     const { error } = await this.sb().from("deals").delete().eq("id", id);
@@ -325,7 +341,7 @@ export class SupabaseStore implements Store {
     return (data as Offer) || null;
   }
   async upsertOffer(o: Partial<Offer> & { id?: string }): Promise<Offer> {
-    return this.smartUpsert<Offer>("offers", o);
+    return this.smartUpsert<Offer>("offers", o, o.tenant_id ?? undefined);
   }
   async deleteOffer(id: string): Promise<void> {
     const { error } = await this.sb().from("offers").delete().eq("id", id);
@@ -349,7 +365,7 @@ export class SupabaseStore implements Store {
     return (data as Demand) || null;
   }
   async upsertDemand(d: Partial<Demand> & { id?: string }): Promise<Demand> {
-    return this.smartUpsert<Demand>("demands", d);
+    return this.smartUpsert<Demand>("demands", d, d.tenant_id ?? undefined);
   }
   async deleteDemand(id: string): Promise<void> {
     const { error } = await this.sb().from("demands").delete().eq("id", id);
@@ -372,7 +388,7 @@ export class SupabaseStore implements Store {
     return (data as SharedDocument) || null;
   }
   async upsertDocument(d: Partial<SharedDocument> & { id?: string }): Promise<SharedDocument> {
-    return this.smartUpsert<SharedDocument>("shared_documents", d);
+    return this.smartUpsert<SharedDocument>("shared_documents", d, d.tenant_id ?? undefined);
   }
   async deleteDocument(id: string): Promise<void> {
     const { error } = await this.sb().from("shared_documents").delete().eq("id", id);
@@ -450,7 +466,7 @@ export class SupabaseStore implements Store {
     return (data as UserTask[]) || [];
   }
   async upsertTask(t: Partial<UserTask> & { id?: string }): Promise<UserTask> {
-    return this.smartUpsert<UserTask>("user_tasks", t);
+    return this.smartUpsert<UserTask>("user_tasks", t, t.tenant_id ?? undefined);
   }
   async deleteTask(id: string): Promise<void> {
     const { error } = await this.sb().from("user_tasks").delete().eq("id", id);
@@ -470,7 +486,7 @@ export class SupabaseStore implements Store {
     return (data as EntityNote[]) || [];
   }
   async upsertNote(n: Partial<EntityNote> & { id?: string }): Promise<EntityNote> {
-    return this.smartUpsert<EntityNote>("entity_notes", n);
+    return this.smartUpsert<EntityNote>("entity_notes", n, n.tenant_id ?? undefined);
   }
   async deleteNote(id: string): Promise<void> {
     const { error } = await this.sb().from("entity_notes").delete().eq("id", id);
@@ -627,7 +643,7 @@ export class SupabaseStore implements Store {
     return (data as Invoice) || null;
   }
   async upsertInvoice(i: Partial<Invoice> & { id?: string }): Promise<Invoice> {
-    return this.smartUpsert<Invoice>("invoices", i);
+    return this.smartUpsert<Invoice>("invoices", i, i.tenant_id ?? undefined);
   }
   async deleteInvoice(id: string): Promise<void> {
     const { error } = await this.sb().from("invoices").delete().eq("id", id);
@@ -651,7 +667,7 @@ export class SupabaseStore implements Store {
     return (data as Proforma) || null;
   }
   async upsertProforma(p: Partial<Proforma> & { id?: string }): Promise<Proforma> {
-    return this.smartUpsert<Proforma>("proformas", p);
+    return this.smartUpsert<Proforma>("proformas", p, p.tenant_id ?? undefined);
   }
   async deleteProforma(id: string): Promise<void> {
     const { error } = await this.sb().from("proformas").delete().eq("id", id);
@@ -671,7 +687,7 @@ export class SupabaseStore implements Store {
     return paginate((data as DocumentRegisterEntry[]) || [], params);
   }
   async upsertDocumentRegisterEntry(e: Partial<DocumentRegisterEntry> & { id?: string }): Promise<DocumentRegisterEntry> {
-    return this.smartUpsert<DocumentRegisterEntry>("document_register", e);
+    return this.smartUpsert<DocumentRegisterEntry>("document_register", e, e.tenant_id ?? undefined);
   }
   async listDocumentRevisions(tenantId: string, documentId: string): Promise<DocumentRevision[]> {
     const { data, error } = await this.sb()
@@ -707,7 +723,7 @@ export class SupabaseStore implements Store {
     return paginate((data as VaultSecret[]) || [], params);
   }
   async upsertVaultSecret(s: Partial<VaultSecret> & { id?: string }): Promise<VaultSecret> {
-    return this.smartUpsert<VaultSecret>("vault_secrets", s);
+    return this.smartUpsert<VaultSecret>("vault_secrets", s, s.tenant_id ?? undefined);
   }
   async deleteVaultSecret(id: string): Promise<void> {
     const { error } = await this.sb().from("vault_secrets").delete().eq("id", id);
@@ -721,7 +737,7 @@ export class SupabaseStore implements Store {
     return (data as ApiKey[]) || [];
   }
   async upsertApiKey(k: Partial<ApiKey> & { id?: string }): Promise<ApiKey> {
-    return this.smartUpsert<ApiKey>("api_keys", k);
+    return this.smartUpsert<ApiKey>("api_keys", k, k.tenant_id ?? undefined);
   }
   async deleteApiKey(id: string): Promise<void> {
     const { error } = await this.sb().from("api_keys").delete().eq("id", id);
@@ -759,7 +775,7 @@ export class SupabaseStore implements Store {
     return (data as Webhook[]) || [];
   }
   async upsertWebhook(w: Partial<Webhook> & { id?: string }): Promise<Webhook> {
-    return this.smartUpsert<Webhook>("webhooks", w);
+    return this.smartUpsert<Webhook>("webhooks", w, w.tenant_id ?? undefined);
   }
   async deleteWebhook(id: string): Promise<void> {
     const { error } = await this.sb().from("webhooks").delete().eq("id", id);
@@ -860,7 +876,7 @@ export class SupabaseStore implements Store {
     return paginate((data as MailQueueEntry[]) || [], params);
   }
   async upsertMailQueueEntry(m: Partial<MailQueueEntry> & { id?: string }): Promise<MailQueueEntry> {
-    return this.smartUpsert<MailQueueEntry>("mail_queue", m);
+    return this.smartUpsert<MailQueueEntry>("mail_queue", m, m.tenant_id ?? undefined);
   }
   async deleteMailQueueEntry(id: string): Promise<void> {
     const { error } = await this.sb().from("mail_queue").delete().eq("id", id);
@@ -894,7 +910,7 @@ export class SupabaseStore implements Store {
     return (data as Tenant) || null;
   }
   async upsertTenant(t: Partial<Tenant> & { id?: string }): Promise<Tenant> {
-    return this.smartUpsert<Tenant>("tenants", t);
+    return this.smartUpsert<Tenant>("tenants", t, (t as any).tenant_id ?? undefined);
   }
   async deleteTenant(id: string): Promise<void> {
     const { error } = await this.sb().from("tenants").delete().eq("id", id);
@@ -918,7 +934,7 @@ export class SupabaseStore implements Store {
     return (data as ProductCatalogEntry) || null;
   }
   async upsertProductCatalogEntry(p: Partial<ProductCatalogEntry> & { id?: string }): Promise<ProductCatalogEntry> {
-    return this.smartUpsert<ProductCatalogEntry>("product_catalog", p);
+    return this.smartUpsert<ProductCatalogEntry>("product_catalog", p, p.tenant_id ?? undefined);
   }
   async deleteProductCatalogEntry(id: string): Promise<void> {
     const { error } = await this.sb().from("product_catalog").delete().eq("id", id);
@@ -943,7 +959,7 @@ export class SupabaseStore implements Store {
     return (data as SupplierOffer) || null;
   }
   async upsertSupplierOffer(s: Partial<SupplierOffer> & { id?: string }): Promise<SupplierOffer> {
-    return this.smartUpsert<SupplierOffer>("supplier_offers", s);
+    return this.smartUpsert<SupplierOffer>("supplier_offers", s, s.tenant_id ?? undefined);
   }
   async deleteSupplierOffer(id: string): Promise<void> {
     const { error } = await this.sb().from("supplier_offers").delete().eq("id", id);
@@ -968,7 +984,7 @@ export class SupabaseStore implements Store {
     return (data as TradeCalculation) || null;
   }
   async upsertTradeCalculation(t: Partial<TradeCalculation> & { id?: string }): Promise<TradeCalculation> {
-    return this.smartUpsert<TradeCalculation>("trade_calculations", t);
+    return this.smartUpsert<TradeCalculation>("trade_calculations", t, t.tenant_id ?? undefined);
   }
   async deleteTradeCalculation(id: string): Promise<void> {
     const { error } = await this.sb().from("trade_calculations").delete().eq("id", id);
@@ -1031,12 +1047,14 @@ export class SupabaseStore implements Store {
         for (const [k, v] of Object.entries(fields)) {
           if (v !== undefined) cleanFields[k] = v;
         }
-        const { data, error } = await this.sb()
-          .from("portal_access")
-          .update(cleanFields)
-          .eq("id", id)
-          .select()
-          .single();
+        // CRITICAL: filter by tenant_id to prevent cross-tenant IDOR. A caller
+        // from tenant A can no longer POST body.id=<tenant-B-uuid> to hijack
+        // tenant B's portal access. portal_access.tenant_id is NOT NULL, so a
+        // falsy value here means the caller is doing something wrong — we
+        // still guard with the `if` for safety (and to mirror upsertUser).
+        let q = this.sb().from("portal_access").update(cleanFields).eq("id", id);
+        if (cleanFields.tenant_id) q = q.eq("tenant_id", cleanFields.tenant_id as string);
+        const { data, error } = await q.select().single();
         if (error) throw error;
         if (!data) {
           // Row doesn't exist yet — fall back to insert with full payload
@@ -1260,7 +1278,7 @@ export class SupabaseStore implements Store {
     }
   }
   async upsertDocumentTemplate(t: Partial<DocumentTemplate> & { id?: string }): Promise<DocumentTemplate> {
-    return this.smartUpsert<DocumentTemplate>("document_templates", t);
+    return this.smartUpsert<DocumentTemplate>("document_templates", t, t.tenant_id ?? undefined);
   }
   async deleteDocumentTemplate(id: string): Promise<void> {
     const { error } = await this.sb().from("document_templates").delete().eq("id", id);
@@ -1350,7 +1368,7 @@ export class SupabaseStore implements Store {
     return ((data as KycSubmission[]) || [])[0] || null;
   }
   async upsertKycSubmission(s: Partial<KycSubmission> & { id?: string }): Promise<KycSubmission> {
-    return this.smartUpsert<KycSubmission>("kyc_submissions", s);
+    return this.smartUpsert<KycSubmission>("kyc_submissions", s, s.tenant_id ?? undefined);
   }
   async deleteKycSubmission(id: string): Promise<void> {
     const { error } = await this.sb().from("kyc_submissions").delete().eq("id", id);
@@ -1476,7 +1494,7 @@ export class SupabaseStore implements Store {
     return (data as PortalRfq) || null;
   }
   async upsertPortalRfq(r: Partial<PortalRfq> & { id?: string }): Promise<PortalRfq> {
-    return this.smartUpsert<PortalRfq>("portal_rfqs", r);
+    return this.smartUpsert<PortalRfq>("portal_rfqs", r, r.tenant_id ?? undefined);
   }
   async deletePortalRfq(id: string): Promise<void> {
     const { error } = await this.sb().from("portal_rfqs").delete().eq("id", id);
@@ -1585,7 +1603,7 @@ export class SupabaseStore implements Store {
     return (data as CommissionAgent) || null;
   }
   async upsertCommissionAgent(a: Partial<CommissionAgent> & { id?: string }): Promise<CommissionAgent> {
-    return this.smartUpsert<CommissionAgent>("commission_agents", a);
+    return this.smartUpsert<CommissionAgent>("commission_agents", a, a.tenant_id ?? undefined);
   }
   async deleteCommissionAgent(id: string): Promise<void> {
     const { error } = await this.sb().from("commission_agents").delete().eq("id", id);
@@ -1617,7 +1635,7 @@ export class SupabaseStore implements Store {
     return (data as DealCommission) || null;
   }
   async upsertDealCommission(c: Partial<DealCommission> & { id?: string }): Promise<DealCommission> {
-    return this.smartUpsert<DealCommission>("deal_commissions", c);
+    return this.smartUpsert<DealCommission>("deal_commissions", c, c.tenant_id ?? undefined);
   }
   async deleteDealCommission(id: string): Promise<void> {
     const { error } = await this.sb().from("deal_commissions").delete().eq("id", id);
@@ -1684,7 +1702,7 @@ export class SupabaseStore implements Store {
     return (data as CommissionPayout) || null;
   }
   async upsertCommissionPayout(p: Partial<CommissionPayout> & { id?: string }): Promise<CommissionPayout> {
-    return this.smartUpsert<CommissionPayout>("commission_payouts", p);
+    return this.smartUpsert<CommissionPayout>("commission_payouts", p, p.tenant_id ?? undefined);
   }
   async deleteCommissionPayout(id: string): Promise<void> {
     const { error } = await this.sb().from("commission_payouts").delete().eq("id", id);
@@ -1716,7 +1734,8 @@ export class SupabaseStore implements Store {
     const agent = await this.getCommissionAgent(agentId);
     if (!agent) return 0;
     switch (agent.commission_type) {
-      case "profit_percent": return dealProfit * (agent.commission_rate / 100);
+      // CRITICAL FIX (audit P1-4): never return negative commission on loss-making deals.
+      case "profit_percent": return Math.max(0, dealProfit) * (agent.commission_rate / 100);
       case "revenue_percent": return dealValue * (agent.commission_rate / 100);
       case "fixed": return agent.commission_rate;
       case "per_unit": return agent.commission_per_unit * dealQuantity;
@@ -1775,7 +1794,7 @@ export class SupabaseStore implements Store {
   }
 
   async upsertFiscalPeriod(p: Partial<FiscalPeriod> & { id?: string }): Promise<FiscalPeriod> {
-    return this.smartUpsert<FiscalPeriod>("fiscal_periods", p);
+    return this.smartUpsert<FiscalPeriod>("fiscal_periods", p, p.tenant_id ?? undefined);
   }
 
   async closeFiscalPeriod(id: string, closedBy: string): Promise<FiscalPeriod> {
@@ -2008,7 +2027,7 @@ export class SupabaseStore implements Store {
   }
 
   async upsertErpBankAccount(b: Partial<ErpBankAccount> & { id?: string }): Promise<ErpBankAccount> {
-    return this.smartUpsert<ErpBankAccount>("erp_bank_accounts", b);
+    return this.smartUpsert<ErpBankAccount>("erp_bank_accounts", b, b.tenant_id ?? undefined);
   }
 
   async deleteErpBankAccount(id: string): Promise<void> {
@@ -2031,24 +2050,31 @@ export class SupabaseStore implements Store {
   async upsertErpBankTransaction(t: Partial<ErpBankTransaction> & { id?: string }): Promise<ErpBankTransaction> {
     const payload: SupaRow = { ...t };
     let txn: ErpBankTransaction;
+    // CRITICAL: tenant_id from the payload, used to scope every UPDATE/SELECT
+    // below so a caller from tenant A can't hijack tenant B's transaction by
+    // POSTing body.id=<tenant-B-txn-uuid>. ErpBankTransaction.tenant_id is
+    // NOT NULL, so a falsy value means the caller is doing something wrong —
+    // we still guard with the `if` to mirror upsertUser.
+    const tenantId = (payload.tenant_id as string | undefined) ?? undefined;
     // If updating, fetch the OLD amount/type FIRST (before the write) so we
     // can reverse its effect on the bank balance. Fetching after the update
     // would return the new values and yield a zero net adjustment.
     let oldTxn: { amount: number; transaction_type: string } | null = null;
     if (t.id) {
-      const { data: old } = await this.sb()
+      let oldQ = this.sb()
         .from("erp_bank_transactions")
         .select("amount, transaction_type")
-        .eq("id", t.id)
-        .maybeSingle();
+        .eq("id", t.id);
+      if (tenantId) oldQ = oldQ.eq("tenant_id", tenantId);
+      const { data: old } = await oldQ.maybeSingle();
       oldTxn = (old as { amount: number; transaction_type: string } | null) ?? null;
       const { id, ...fields } = payload;
-      const { data, error } = await this.sb()
+      let updQ = this.sb()
         .from("erp_bank_transactions")
         .update(fields)
-        .eq("id", id)
-        .select()
-        .single();
+        .eq("id", id);
+      if (tenantId) updQ = updQ.eq("tenant_id", tenantId);
+      const { data, error } = await updQ.select().single();
       if (error) throw error;
       if (!data) {
         // Row vanished between fetch and update — treat as a fresh insert and
@@ -2073,23 +2099,31 @@ export class SupabaseStore implements Store {
       if (error) throw error;
       txn = data as ErpBankTransaction;
     }
-    // Update bank account balance
+    // Update bank account balance. Scope the bank_account lookup by tenant_id
+    // too: a forged txn.bank_account_id pointing at another tenant's account
+    // would otherwise leak its balance into this tenant's adjustment.
     if (txn.bank_account_id) {
-      const { data: ba } = await this.sb().from("erp_bank_accounts").select("balance").eq("id", txn.bank_account_id).maybeSingle();
+      let baQ = this.sb().from("erp_bank_accounts").select("balance").eq("id", txn.bank_account_id);
+      const baTenantId = tenantId ?? (txn.tenant_id as string | undefined);
+      if (baTenantId) baQ = baQ.eq("tenant_id", baTenantId);
+      const { data: ba } = await baQ.maybeSingle();
       if (ba) {
         const isCredit = txn.transaction_type === "credit" || txn.transaction_type === "income";
         const adjustment = isCredit ? txn.amount : -txn.amount;
         // If updating, reverse the OLD adjustment then apply the new one so
         // we don't re-apply the full amount on every edit.
+        let netAdjustment = adjustment;
         if (oldTxn) {
           const oldIsCredit = oldTxn.transaction_type === "credit" || oldTxn.transaction_type === "income";
           const oldAdjustment = oldIsCredit ? -oldTxn.amount : oldTxn.amount; // reverse of old
-          // Net adjustment = reverse old + apply new
-          const netAdjustment = oldAdjustment + adjustment;
-          await this.sb().from("erp_bank_accounts").update({ balance: (ba.balance as number) + netAdjustment }).eq("id", txn.bank_account_id);
-        } else {
-          await this.sb().from("erp_bank_accounts").update({ balance: (ba.balance as number) + adjustment }).eq("id", txn.bank_account_id);
+          netAdjustment = oldAdjustment + adjustment;
         }
+        let balQ = this.sb()
+          .from("erp_bank_accounts")
+          .update({ balance: (ba.balance as number) + netAdjustment })
+          .eq("id", txn.bank_account_id);
+        if (baTenantId) balQ = balQ.eq("tenant_id", baTenantId);
+        await balQ;
       }
     }
     return txn;
@@ -2194,15 +2228,19 @@ export class SupabaseStore implements Store {
       switch (item.account_type) {
         case "asset":
           assets.push(bsItem);
-          totalAssets += item.balance; // assets: debit balance
+          totalAssets += item.balance; // assets: normal DEBIT balance (positive)
           break;
         case "liability":
           liabilities.push(bsItem);
-          totalLiabilities += item.balance; // liability: credit balance (shown as positive)
+          // CRITICAL FIX (audit P1-6): liabilities and equity have a normal
+          // CREDIT balance. Trial-balance `balance = debit - credit` is
+          // therefore negative for them. Use Math.abs() so the balance
+          // sheet actually balances: assets = liabilities + equity.
+          totalLiabilities += Math.abs(item.balance);
           break;
         case "equity":
           equity.push(bsItem);
-          totalEquity += item.balance; // equity: credit balance (shown as positive)
+          totalEquity += Math.abs(item.balance); // same credit-balance fix
           break;
         default:
           break;
@@ -2727,7 +2765,7 @@ export class SupabaseStore implements Store {
         .eq("is_default", true)
         .neq("id", l.id || "00000000-0000-0000-0000-000000000000");
     }
-    return this.smartUpsert<TenantLetterhead>("tenant_letterheads", l);
+    return this.smartUpsert<TenantLetterhead>("tenant_letterheads", l, l.tenant_id ?? undefined);
   }
 
   async deleteLetterhead(id: string): Promise<void> {
@@ -2776,7 +2814,7 @@ export class SupabaseStore implements Store {
         .eq("is_default", true)
         .neq("id", s.id || "00000000-0000-0000-0000-000000000000");
     }
-    return this.smartUpsert<TenantSeal>("tenant_seals", s);
+    return this.smartUpsert<TenantSeal>("tenant_seals", s, s.tenant_id ?? undefined);
   }
 
   async deleteSeal(id: string): Promise<void> {

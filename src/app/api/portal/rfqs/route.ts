@@ -48,6 +48,11 @@ export async function POST(req: NextRequest) {
   body.partner_id = access.partner_id;
   body.tenant_id = access.tenant_id;
   body.portal_access_id = access.id;
+  // CRITICAL FIX (audit T-portal): portal clients must only CREATE, never
+  // UPDATE. `upsertPortalRfq` is a smart-upsert keyed on `id`, so a client
+  // passing another partner's `id` could silently overwrite their RFQ.
+  // Strip any caller-supplied id so a fresh row is always inserted.
+  delete body.id;
 
   // Validate required fields
   if (!body.product_name || typeof body.product_name !== "string" || body.product_name.trim().length === 0) {

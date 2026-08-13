@@ -91,6 +91,15 @@ export async function POST(req: NextRequest) {
     // Validate required fields
     if (!body.deal_id) return NextResponse.json({ error: "deal_id is required." }, { status: 400 });
     if (!body.agent_id) return NextResponse.json({ error: "agent_id is required." }, { status: 400 });
+    // CRITICAL FIX (audit F-1): validate agent_id points to a real
+    // commission_agents row in the caller's tenant. Previously, partner_id
+    // values were accepted here, causing all commissions to compute as $0.
+    {
+      const agent = await auth.store.getCommissionAgent(body.agent_id);
+      if (!agent || agent.tenant_id !== tenantId) {
+        return NextResponse.json({ error: "Commission agent not found." }, { status: 400 });
+      }
+    }
     if (!body.partner_id) {
       // Try to resolve partner_id from the agent
       const agent = await auth.store.getCommissionAgent(body.agent_id);

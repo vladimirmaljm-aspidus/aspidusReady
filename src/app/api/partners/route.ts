@@ -102,6 +102,11 @@ export async function POST(req: NextRequest) {
         }
       } catch (e) { console.warn("[partners.upsert] dupe-check failed (allowing):", e); }
     }
+    // CRITICAL FIX (audit M-6): `force` is route-only logic (used by the
+    // duplicate-name soft-warn above) and is NOT a column on `partners`.
+    // PostgREST rejects the insert with a 400 if it reaches the upsert.
+    // Strip it, mirroring products/route.ts.
+    delete body.force;
     const created = await auth.store.upsertPartner(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "partner.update" : "partner.create", "partner", created.id, { name: created.name });
     return NextResponse.json(created);

@@ -51,6 +51,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: transition.error }, { status: 400 });
       }
     }
+    // CRITICAL FIX (audit F-1): validate commission_agent_id points to a real
+    // commission_agents row in the caller's tenant. Previously, partner_id values
+    // were stored here, causing all commissions to silently compute as $0.
+    if (body.commission_agent_id) {
+      const agent = await auth.store.getCommissionAgent(body.commission_agent_id);
+      if (!agent || agent.tenant_id !== auth.tenantId) {
+        return NextResponse.json({ error: "Commission agent not found." }, { status: 400 });
+      }
+    }
     const updated = await auth.store.upsertDeal({ ...body, id, tenant_id: existing.tenant_id });
     await audit(auth.store, auth.user, req, "deal.update", "deal", id, { stage: updated.stage });
     return NextResponse.json(updated);

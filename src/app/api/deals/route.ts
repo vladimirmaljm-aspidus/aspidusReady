@@ -67,6 +67,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     body.tenant_id = tid;
     if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
+    // CRITICAL FIX (audit F-1): validate commission_agent_id points to a real
+    // commission_agents row in the caller's tenant. Previously, partner_id values
+    // were stored here, causing all commissions to silently compute as $0.
+    if (body.commission_agent_id) {
+      const agent = await auth.store.getCommissionAgent(body.commission_agent_id);
+      if (!agent || agent.tenant_id !== tid) {
+        return NextResponse.json({ error: "Commission agent not found." }, { status: 400 });
+      }
+    }
     const created = await auth.store.upsertDeal(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "deal.update" : "deal.create", "deal", created.id, { title: created.title });
     return NextResponse.json(created);
