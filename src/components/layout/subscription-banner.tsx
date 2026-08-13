@@ -5,6 +5,7 @@ import { AlertTriangle, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/store/app-store";
+import { useT } from "@/lib/i18n/store";
 import { cn } from "@/lib/utils";
 
 interface SubscriptionInfo {
@@ -33,6 +34,7 @@ interface SubscriptionInfo {
  */
 export function SubscriptionBanner() {
   const setView = useAppStore((s) => s.setView);
+  const t = useT();
   const [dismissed, setDismissed] = useState(false);
 
   const q = useQuery({
@@ -75,19 +77,19 @@ export function SubscriptionBanner() {
         <span className="min-w-0">
           {isExpired
             ? sub.is_trial_expired
-              ? "Your trial has ended. Subscribe to keep using Aspidus."
-              : "Your subscription has expired. Renew to keep using Aspidus."
+              ? t("misc-sub-trial-ended")
+              : t("misc-sub-expired")
             : sub.is_trial
               ? days === 1
-                ? "Trial ends tomorrow."
+                ? t("misc-sub-trial-tomorrow")
                 : days !== null && days > 0
-                  ? `${days} days left on your trial.`
-                  : "Trial period."
+                  ? t("misc-sub-trial-days-left").replace("{days}", String(days))
+                  : t("misc-sub-trial-period")
               : days !== null && days > 0
-                ? `Subscription renews in ${days} day${days === 1 ? "" : "s"}.`
-                : "Subscription active."}
+                ? t("misc-sub-renews-in").replace("{days}", String(days)).replace("{s}", days === 1 ? "" : "s")
+                : t("misc-sub-active")}
           {sub.plan && sub.plan !== "trial" && (
-            <span className="opacity-70 ml-2">· Current plan: <strong className="capitalize">{sub.plan}</strong></span>
+            <span className="opacity-70 ml-2">· {t("misc-sub-current-plan")}: <strong className="capitalize">{sub.plan}</strong></span>
           )}
         </span>
       </div>
@@ -98,7 +100,7 @@ export function SubscriptionBanner() {
           onClick={() => setView("plans")}
           className={isExpired ? "bg-white text-destructive hover:bg-white/90" : ""}
         >
-          {sub.is_trial ? "Upgrade now" : "View plan"}
+          {sub.is_trial ? t("misc-sub-upgrade-now") : t("misc-sub-view-plan")}
         </Button>
         {!isExpired && sub.warning_level === "warning" && (
           <Button size="icon" variant="ghost" className="size-7" onClick={() => setDismissed(true)}>

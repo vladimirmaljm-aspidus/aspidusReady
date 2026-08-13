@@ -133,12 +133,14 @@ export async function POST(req: NextRequest) {
       subtotal += line;
       discountTotal += disc;
       taxTotal += tax;
-      it.total = net + tax;
+      // Round each line total to 2 decimals to prevent floating-point
+      // drift (e.g. 32199.999999999996 → 32200.00). Audit fix P2-15.
+      it.total = Math.round((net + tax) * 100) / 100;
     }
-    body.subtotal = subtotal;
-    body.discount_total = discountTotal;
-    body.tax_total = taxTotal;
-    body.total = subtotal - discountTotal + taxTotal;
+    body.subtotal = Math.round(subtotal * 100) / 100;
+    body.discount_total = Math.round(discountTotal * 100) / 100;
+    body.tax_total = Math.round(taxTotal * 100) / 100;
+    body.total = Math.round((subtotal - discountTotal + taxTotal) * 100) / 100;
   }
   if (!body.id) {
     const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
@@ -159,8 +161,14 @@ export async function POST(req: NextRequest) {
       body.number = seqNum;
     } else {
       try {
-        const existing = await auth.store.listOffers(tid!, { limit: 1 });
-        const nextSeq = (existing.total || 0) + 1;
+        // FIX (audit P2-20): year-aware fallback — count only offers with
+        // current year prefix so the sequence resets at year boundary.
+        const existing = await auth.store.listOffers(tid!, { limit: 1000 });
+        const yearPrefix = `${year}`;
+        const yearCount = existing.items.filter((i: any) =>
+          i.number?.startsWith(`OF-${yearPrefix}-`)
+        ).length;
+        const nextSeq = yearCount + 1;
         body.number = formatDocNumber("offer", year, nextSeq);
       } catch (e) {
         console.error("[offers.post] number auto-gen failed:", e);

@@ -65,12 +65,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         subtotal += line;
         discountTotal += disc;
         taxTotal += tax;
-        it.total = net + tax;
+        it.total = Math.round((net + tax) * 100) / 100;
       }
-      body.subtotal = subtotal;
-      body.discount_total = discountTotal;
-      body.tax_total = taxTotal;
-      body.total = subtotal - discountTotal + taxTotal;
+      body.subtotal = Math.round(subtotal * 100) / 100;
+      body.discount_total = Math.round(discountTotal * 100) / 100;
+      body.tax_total = Math.round(taxTotal * 100) / 100;
+      body.total = Math.round((subtotal - discountTotal + taxTotal) * 100) / 100;
     }
     const updated = await auth.store.upsertProforma({ ...body, id, tenant_id: existing.tenant_id });
     try {

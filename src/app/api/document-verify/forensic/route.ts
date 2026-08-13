@@ -39,6 +39,9 @@ export async function POST(req: NextRequest) {
     try {
       await audit(auth.store, auth.user, req, "document.forensic_check", "document", body.document_id, { check_type: body.check_type, verification_code, result: match ? "valid" : "modified" });
     } catch (e) { console.error("[audit]", e); }
+    // FIX (audit P3-25): do NOT return stored_hash or pdf_size to the client.
+    // These enable offline hash-comparison and length-extension analysis.
+    // Only return whether the hash matched + the document metadata.
     return NextResponse.json({
       match,
       result: match ? "valid" : "modified",
@@ -48,9 +51,7 @@ export async function POST(req: NextRequest) {
       document_number: v.document_number,
       document_type: v.document_type,
       issued_at: v.issued_at,
-      stored_hash: v.pdf_hash,
-      computed_hash: computed,
-      pdf_size: v.pdf_size,
+      // stored_hash + computed_hash intentionally omitted
     });
   } catch (e) {
     console.error("[forensic]", e);

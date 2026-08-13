@@ -82,14 +82,22 @@ export async function POST(req: NextRequest) {
     // falls back to the legacy `listInvoices().total + 1` if the RPC is
     // unavailable (e.g. before the 004 migration has been applied).
     //   Format: INV-<year>-<NNNN>  (4-digit sequence)
+    //
+    // FIX (audit P2-20): fallback is now YEAR-AWARE — counts only invoices
+    // whose number starts with the current year prefix, so the sequence
+    // resets at year boundary instead of counting all-time invoices.
     if (!body.id && !body.number) {
       const year = new Date().getFullYear();
       const seqNum = await nextDocNumber("invoice");
       if (seqNum) {
         body.number = seqNum;
       } else {
-        const existing = await auth.store.listInvoices(tid!, { limit: 1 });
-        const nextSeq = (existing.total || 0) + 1;
+        const existing = await auth.store.listInvoices(tid!, { limit: 1000 });
+        const yearPrefix = `${year}`;
+        const yearCount = existing.items.filter((i: any) =>
+          i.number?.startsWith(`INV-${yearPrefix}-`)
+        ).length;
+        const nextSeq = yearCount + 1;
         body.number = formatDocNumber("invoice", year, nextSeq);
       }
     }

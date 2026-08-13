@@ -88,8 +88,13 @@ export async function POST(req: NextRequest) {
       if (seqNum) {
         body.number = seqNum;
       } else {
-        const existing = await auth.store.listProformas(tid!, { limit: 1 });
-        const nextSeq = (existing.total || 0) + 1;
+        // FIX (audit P2-20): year-aware fallback.
+        const existing = await auth.store.listProformas(tid!, { limit: 1000 });
+        const yearPrefix = `${year}`;
+        const yearCount = existing.items.filter((i: any) =>
+          i.number?.startsWith(`PRO-${yearPrefix}-`)
+        ).length;
+        const nextSeq = yearCount + 1;
         body.number = formatDocNumber("proforma", year, nextSeq);
       }
     }

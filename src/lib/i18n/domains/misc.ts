@@ -905,6 +905,18 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-check-code": "Please check your verification code and try again.",
     "misc-verify-loading": "Loading document details...",
 
+    // ── Subscription banner ────────────────────────────────────────────
+    "misc-sub-trial-ended": "Your trial has ended. Subscribe to keep using Aspidus.",
+    "misc-sub-expired": "Your subscription has expired. Renew to keep using Aspidus.",
+    "misc-sub-trial-tomorrow": "Trial ends tomorrow.",
+    "misc-sub-trial-days-left": "{days} days left on your trial.",
+    "misc-sub-trial-period": "Trial period.",
+    "misc-sub-renews-in": "Subscription renews in {days} day{s}.",
+    "misc-sub-active": "Subscription active.",
+    "misc-sub-current-plan": "Current plan",
+    "misc-sub-upgrade-now": "Upgrade now",
+    "misc-sub-view-plan": "View plan",
+
   },
   sr: {
     "misc-calendar-desc": "Zadaci, fakture, poslovi i ponude — sve na jednom kalendaru.",
@@ -1805,6 +1817,18 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-not-found": "Verifikacioni kod nije pronađen",
     "misc-verify-check-code": "Proverite svoj verifikacioni kod i pokušajte ponovo.",
     "misc-verify-loading": "Učitavanje detalja dokumenta...",
+
+    // ── Subscription banner ────────────────────────────────────────────
+    "misc-sub-trial-ended": "Vaš probni period je istekao. Pretplatite se da nastavite da koristite Aspidus.",
+    "misc-sub-expired": "Vaša pretplata je istekla. Obnovite je da nastavite da koristite Aspidus.",
+    "misc-sub-trial-tomorrow": "Probni period ističe sutra.",
+    "misc-sub-trial-days-left": "Preostalo {days} dana probnog perioda.",
+    "misc-sub-trial-period": "Probni period.",
+    "misc-sub-renews-in": "Pretplata se obnavlja za {days} dan{s}.",
+    "misc-sub-active": "Pretplata aktivna.",
+    "misc-sub-current-plan": "Trenutni plan",
+    "misc-sub-upgrade-now": "Nadogradi sada",
+    "misc-sub-view-plan": "Vidi plan",
 
   },
   tr: {
@@ -2707,6 +2731,18 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-check-code": "Doğrulama kodunuzu kontrol edip tekrar deneyin.",
     "misc-verify-loading": "Belge detayları yükleniyor...",
 
+    // ── Subscription banner ────────────────────────────────────────────
+    "misc-sub-trial-ended": "Deneme süreniz doldu. Aspidus kullanmaya devam etmek için abone olun.",
+    "misc-sub-expired": "Aboneliğinizin süresi doldu. Aspidus kullanmaya devam etmek için yenileyin.",
+    "misc-sub-trial-tomorrow": "Deneme süresi yarın bitiyor.",
+    "misc-sub-trial-days-left": "Deneme sürenizde {days} gün kaldı.",
+    "misc-sub-trial-period": "Deneme dönemi.",
+    "misc-sub-renews-in": "Abonelik {days} gün{s} içinde yenileniyor.",
+    "misc-sub-active": "Abonelik aktif.",
+    "misc-sub-current-plan": "Mevcut plan",
+    "misc-sub-upgrade-now": "Hemen yükselt",
+    "misc-sub-view-plan": "Planı gör",
+
   },
   de: {
     "misc-calendar-desc": "Aufgaben, Rechnungen, Geschäfte und Angebote — alles in einem Kalender.",
@@ -3607,6 +3643,18 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-not-found": "Verifizierungscode nicht gefunden",
     "misc-verify-check-code": "Bitte prüfen Sie Ihren Verifizierungscode und versuchen Sie es erneut.",
     "misc-verify-loading": "Dokumentdetails werden geladen...",
+
+    // ── Subscription banner ────────────────────────────────────────────
+    "misc-sub-trial-ended": "Ihre Testphase ist abgelaufen. Abonnieren Sie, um Aspidus weiter zu nutzen.",
+    "misc-sub-expired": "Ihr Abonnement ist abgelaufen. Verlängern Sie es, um Aspidus weiter zu nutzen.",
+    "misc-sub-trial-tomorrow": "Testphase endet morgen.",
+    "misc-sub-trial-days-left": "Noch {days} Tage Testphase.",
+    "misc-sub-trial-period": "Testphase.",
+    "misc-sub-renews-in": "Abonnement wird in {days} Tag{s} erneuert.",
+    "misc-sub-active": "Abonnement aktiv.",
+    "misc-sub-current-plan": "Aktueller Plan",
+    "misc-sub-upgrade-now": "Jetzt upgraden",
+    "misc-sub-view-plan": "Plan ansehen",
 
   },
   ru: {
@@ -4509,5 +4557,17 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-not-found": "Код верификации не найден",
     "misc-verify-check-code": "Проверьте код верификации и попробуйте снова.",
     "misc-verify-loading": "Загрузка деталей документа...",
+
+    // ── Subscription banner ────────────────────────────────────────────
+    "misc-sub-trial-ended": "Ваш пробный период закончился. Подпишитесь, чтобы продолжить использовать Aspidus.",
+    "misc-sub-expired": "Ваша подписка истекла. Продлите, чтобы продолжить использовать Aspidus.",
+    "misc-sub-trial-tomorrow": "Пробный период заканчивается завтра.",
+    "misc-sub-trial-days-left": "Осталось {days} дней пробного периода.",
+    "misc-sub-trial-period": "Пробный период.",
+    "misc-sub-renews-in": "Подписка продлевается через {days} д{s}.",
+    "misc-sub-active": "Подписка активна.",
+    "misc-sub-current-plan": "Текущий план",
+    "misc-sub-upgrade-now": "Обновить сейчас",
+    "misc-sub-view-plan": "Посмотреть план",
   },
 };
