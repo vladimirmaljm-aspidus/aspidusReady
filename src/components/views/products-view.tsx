@@ -545,10 +545,7 @@ function ProductDetail({ product }: { product: Product }) {
   const IMPORTED_KEY_LABELS: Record<string, string> = {
     hs_code: t(locale, "crm-hs-code"),
     brand: t(locale, "crm-brand"),
-    shelf_life: t(locale, "crm-shelf-life"),
     image_url: t(locale, "crm-image-url"),
-    logistics: t(locale, "crm-logistics-label"),
-    coa_params: t(locale, "crm-coa-parameters"),
     tags: t(locale, "crm-tags"),
     inventory: t(locale, "inventory"),
   };
@@ -557,6 +554,26 @@ function ProductDetail({ product }: { product: Product }) {
   const attributes = product.attributes || {};
   const importedEntries = Object.entries(attributes).filter(([k]) => k in IMPORTED_KEY_LABELS);
   const otherEntries = Object.entries(attributes).filter(([k]) => !(k in IMPORTED_KEY_LABELS));
+
+  // CoA params can be an array of {name, value} objects OR a key-value object
+  const coaParams = (product as any).coa_params;
+  const coaEntries: Array<[string, string]> = Array.isArray(coaParams)
+    ? coaParams.map((p: any) => [p.name || p.key || "", String(p.value ?? "")])
+    : (coaParams && typeof coaParams === "object"
+      ? Object.entries(coaParams).map(([k, v]) => [k, String(v)])
+      : []);
+
+  // Logistics: {cap20, cap40} or similar
+  const logistics = (product as any).logistics;
+  const logisticsEntries: Array<[string, string]> = logistics && typeof logistics === "object"
+    ? Object.entries(logistics).map(([k, v]) => {
+        const label = k === "cap20" ? "20ft Container Capacity" : k === "cap40" ? "40ft Container Capacity" : k;
+        return [label, `${v} ${product.unit || "kg"}`];
+      })
+    : [];
+
+  const detailedSpec = (product as any).detailed_spec;
+  const shelfLife = (product as any).shelf_life;
 
   return (
     <div className="px-4 pb-6 space-y-4">
@@ -600,7 +617,8 @@ function ProductDetail({ product }: { product: Product }) {
         ))}
       </div>
 
-      {/* Imported data fields (hs_code, brand, shelf_life, image_url, logistics, coa_params, tags, inventory) */}
+      {/* Product details: hs_code, brand, shelf_life, logistics, coa_params, etc. */}
+      {/* Imported data fields from attributes */}
       {importedEntries.length > 0 && (
         <div>
           <p className="text-xs text-muted-foreground mb-2">{t(locale, "crm-product-details")}</p>
@@ -620,22 +638,6 @@ function ProductDetail({ product }: { product: Product }) {
                       </div>
                     ) : k === "inventory" && typeof v === "object" && v !== null ? (
                       <span className="font-mono text-xs">{JSON.stringify(v)}</span>
-                    ) : k === "coa_params" && typeof v === "object" && v !== null ? (
-                      <div className="space-y-0.5 mt-0.5">
-                        {Object.entries(v as Record<string, unknown>).map(([pk, pv]) => (
-                          <div key={pk} className="text-xs">
-                            <span className="text-muted-foreground">{pk}:</span> {String(pv)}
-                          </div>
-                        ))}
-                      </div>
-                    ) : k === "logistics" && typeof v === "object" && v !== null ? (
-                      <div className="space-y-0.5 mt-0.5">
-                        {Object.entries(v as Record<string, unknown>).map(([pk, pv]) => (
-                          <div key={pk} className="text-xs">
-                            <span className="text-muted-foreground">{pk}:</span> {String(pv)}
-                          </div>
-                        ))}
-                      </div>
                     ) : (
                       String(v)
                     )}
@@ -644,6 +646,58 @@ function ProductDetail({ product }: { product: Product }) {
               </Card>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* CoA Parameters (quality specifications) */}
+      {coaEntries.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">{t(locale, "crm-coa-parameters")}</p>
+          <div className="rounded-xl border border-border/60 overflow-hidden">
+            <table className="w-full text-sm">
+              <tbody>
+                {coaEntries.map(([name, value], i) => (
+                  <tr key={i} className={i % 2 === 0 ? "bg-muted/30" : ""}>
+                    <td className="px-3 py-1.5 text-muted-foreground font-medium whitespace-nowrap">{name}</td>
+                    <td className="px-3 py-1.5 text-right tabular">{value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Detailed specification */}
+      {detailedSpec && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-1">{t(locale, "crm-detailed-spec") || "Detailed Specification"}</p>
+          <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/50">{detailedSpec}</p>
+        </div>
+      )}
+
+      {/* Logistics */}
+      {logisticsEntries.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">{t(locale, "crm-logistics-label")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {logisticsEntries.map(([label, value]) => (
+              <Card key={label} className="border-border/60 shadow-soft rounded-xl">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-sm font-medium mt-0.5 tabular">{value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Shelf life */}
+      {shelfLife && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-1">{t(locale, "crm-shelf-life")}</p>
+          <p className="text-sm font-medium">{shelfLife}</p>
         </div>
       )}
 
@@ -899,6 +953,87 @@ function ProductFormDialog({
                     onChange={(e) => set("description", e.target.value)}
                     placeholder={t(locale, "crm-optional-product-description")}
                   />
+                </div>
+
+                {/* ── Specification fields (editable) ── */}
+                <div className="space-y-1.5">
+                  <Label>{t(locale, "crm-shelf-life")}</Label>
+                  <Input
+                    value={(form as any).shelf_life || ""}
+                    onChange={(e) => set("shelf_life" as any, e.target.value)}
+                    placeholder="e.g. 24 months sealed"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t(locale, "crm-detailed-spec") || "Detailed Specification"}</Label>
+                  <Textarea
+                    rows={4}
+                    value={(form as any).detailed_spec || ""}
+                    onChange={(e) => set("detailed_spec" as any, e.target.value)}
+                    placeholder="Origin, packaging, certifications, quality standards, handling instructions..."
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t(locale, "crm-coa-parameters")}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    One parameter per line, format: <code className="font-mono">Name | Value</code>
+                  </p>
+                  <Textarea
+                    rows={6}
+                    value={(() => {
+                      const params = (form as any).coa_params;
+                      if (Array.isArray(params)) {
+                        return params.map((p: any) => `${p.name || ""} | ${p.value || ""}`).join("\n");
+                      }
+                      if (params && typeof params === "object") {
+                        return Object.entries(params).map(([k, v]) => `${k} | ${String(v)}`).join("\n");
+                      }
+                      return "";
+                    })()}
+                    onChange={(e) => {
+                      const lines = e.target.value.split("\n").filter(l => l.trim());
+                      const arr = lines.map(line => {
+                        const [name, ...rest] = line.split("|");
+                        return { name: (name || "").trim(), value: rest.join("|").trim() };
+                      }).filter(p => p.name);
+                      set("coa_params" as any, arr.length > 0 ? arr : null);
+                    }}
+                    placeholder={"Zinc (Zn) Content | 33.0% Min\nMoisture | 1.0% Max\nAppearance | White powder"}
+                    className="font-mono text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>20ft Container Capacity ({form.unit || "kg"})</Label>
+                    <Input
+                      type="number"
+                      value={(form as any).logistics?.cap20 ?? ""}
+                      onChange={(e) => {
+                        const log = { ...((form as any).logistics || {}) };
+                        if (e.target.value) log.cap20 = Number(e.target.value);
+                        else delete log.cap20;
+                        set("logistics" as any, Object.keys(log).length > 0 ? log : null);
+                      }}
+                      placeholder="e.g. 24000"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>40ft Container Capacity ({form.unit || "kg"})</Label>
+                    <Input
+                      type="number"
+                      value={(form as any).logistics?.cap40 ?? ""}
+                      onChange={(e) => {
+                        const log = { ...((form as any).logistics || {}) };
+                        if (e.target.value) log.cap40 = Number(e.target.value);
+                        else delete log.cap40;
+                        set("logistics" as any, Object.keys(log).length > 0 ? log : null);
+                      }}
+                      placeholder="e.g. 27000"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">

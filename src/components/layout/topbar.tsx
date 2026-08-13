@@ -325,7 +325,7 @@ export function Topbar() {
                 variant="ghost"
                 size="sm"
                 className="w-full justify-center text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => { setView("audit"); setNotifOpen(false); }}
+                onClick={() => { setView("security"); setNotifOpen(false); }}
               >
                 {t(locale, "view-all")}
               </Button>

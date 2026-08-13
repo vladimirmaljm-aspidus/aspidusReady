@@ -828,7 +828,7 @@ function ReviewDialog({
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 shrink-0"
-                                onClick={() => { if (doc.file_path || doc.url) { window.open(doc.url || `/api/documents/${doc.id}`, "_blank"); } else { toast.info(t("admin-kyc-no-file")); } }}
+                                onClick={() => { if (doc.file_path || doc.url) { window.open(doc.url || `/api/portal-uploads/${(doc as any).portal_upload_id || doc.id}/download`, "_blank"); } else { toast.info(t("admin-kyc-no-file")); } }}
                               >
                                 <Eye className="size-3.5 mr-1" />
                                 {t("view")}

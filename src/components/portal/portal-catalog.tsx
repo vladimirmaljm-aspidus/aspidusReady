@@ -269,21 +269,46 @@ function EmptyCatalog() {
 
 function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEntry; onRequestQuote?: (product: ProductCatalogEntry) => void }) {
   const t = useT();
-  // Normalize specifications — array of {name,value} OR Record<string,*>
-  // (the API mapper builds a record from coa_params / detailed_spec /
-  // logistics / shelf_life, where some values may be null when the product
-  // doesn't carry that field — we skip those so the UI doesn't render "null").
-  const rawSpecs = product.specifications as unknown;
-  const specEntries: { name: string; value: string }[] = Array.isArray(rawSpecs)
-    ? (rawSpecs as { name: string; value: string }[])
-    : typeof rawSpecs === "object" && rawSpecs !== null
-      ? Object.entries(rawSpecs as Record<string, unknown>)
-          .filter(([, v]) => v !== null && v !== undefined && v !== "")
-          .map(([name, value]) => ({
-            name,
-            value: typeof value === "string" ? value : JSON.stringify(value),
-          }))
-      : [];
+
+  // Build a clean list of specification entries from the structured fields.
+  // The API returns specifications as { coa_params, detailed_spec, logistics,
+  // shelf_life } — each may be null, a string, an array, or an object.
+  const specSections: { title: string; entries: { name: string; value: string }[] }[] = [];
+
+  // CoA params: array of {name, value} or key-value object
+  const coa = (product as any).coa_params;
+  if (coa) {
+    const entries: { name: string; value: string }[] = Array.isArray(coa)
+      ? coa.map((p: any) => ({ name: p.name || p.key || "", value: String(p.value ?? "") }))
+      : typeof coa === "object"
+        ? Object.entries(coa).map(([k, v]) => ({ name: k, value: String(v) }))
+        : [];
+    if (entries.length > 0) specSections.push({ title: t("portal-catalog-quality-specs") || "Quality Specifications", entries });
+  }
+
+  // Detailed spec: plain text
+  const detailed = (product as any).detailed_spec;
+  if (detailed && typeof detailed === "string") {
+    specSections.push({ title: t("portal-catalog-detailed-spec") || "Detailed Specification", entries: [{ name: "", value: detailed }] });
+  }
+
+  // Logistics: container capacities
+  const log = (product as any).logistics;
+  if (log && typeof log === "object") {
+    const entries = Object.entries(log)
+      .filter(([, v]) => v !== null && v !== undefined)
+      .map(([k, v]) => {
+        const label = k === "cap20" ? "20ft Container" : k === "cap40" ? "40ft Container" : k;
+        return { name: label, value: `${v} ${product.base_unit || "kg"}` };
+      });
+    if (entries.length > 0) specSections.push({ title: t("portal-catalog-logistics") || "Logistics", entries });
+  }
+
+  // Shelf life
+  const shelf = (product as any).shelf_life;
+  if (shelf && typeof shelf === "string") {
+    specSections.push({ title: t("portal-catalog-shelf-life") || "Shelf Life", entries: [{ name: "", value: shelf }] });
+  }
 
   return (
     <>
@@ -333,28 +358,36 @@ function CatalogDetail({ product, onRequestQuote }: { product: ProductCatalogEnt
           <InfoTile icon={Layers} label={t("portal-catalog-category")} value={product.category} />
         </div>
 
-        {/* Full specifications as definition list */}
-        {specEntries.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        {/* Full specifications — rendered as sections */}
+        {specSections.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
               <Layers className="size-4 text-primary" />
               {t("portal-catalog-full-specs")}
             </h3>
-            <div className="rounded-xl border border-border/60 overflow-hidden shadow-soft bg-card">
-              <dl className="divide-y divide-border/60">
-                {specEntries.map((s) => (
-                  <div
-                    key={s.name}
-                    className="flex items-center justify-between px-4 py-2.5 hover:bg-accent/50 smooth"
-                  >
-                    <dt className="text-sm text-muted-foreground capitalize">
-                      {s.name.replace(/_/g, " ")}
-                    </dt>
-                    <dd className="text-sm font-medium tabular">{s.value}</dd>
+            {specSections.map((section, si) => (
+              <div key={si}>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">{section.title}</p>
+                {section.entries.length === 1 && !section.entries[0].name ? (
+                  // Single text entry (e.g. detailed_spec) — render as paragraph
+                  <p className="text-sm whitespace-pre-wrap p-3 rounded-md bg-muted/40">{section.entries[0].value}</p>
+                ) : (
+                  // Multiple entries — render as table
+                  <div className="rounded-xl border border-border/60 overflow-hidden bg-card">
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {section.entries.map((s, ei) => (
+                          <tr key={ei} className={ei % 2 === 0 ? "bg-muted/20" : ""}>
+                            <td className="px-3 py-1.5 text-muted-foreground font-medium whitespace-nowrap">{s.name}</td>
+                            <td className="px-3 py-1.5 text-right tabular">{s.value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </dl>
-            </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
