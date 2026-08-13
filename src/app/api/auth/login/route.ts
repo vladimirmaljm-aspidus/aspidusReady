@@ -272,13 +272,16 @@ export async function POST(req: NextRequest) {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     if (user.tenant_id) {
       // ── Concurrent session limit (LRU eviction) ───────────────────────
-      // Cap each user to MAX_CONCURRENT_SESSIONS active sessions. When the
-      // limit is reached, the oldest session is revoked before the new one
-      // is created. Defense against stolen-cookie farms and "session
-      // sharing" abuse. Implemented centrally in session.ts so the cap is
-      // enforced identically across every login surface.
-      await enforceConcurrentSessionLimit(user.id, user.tenant_id);
-
+      // Cap each user to MAX_CONCURRENT_SESSIONS active sessions.
+      // CRITICAL FIX (audit P2-11): enforce AFTER createSession, not before.
+      // The previous "revoke-before-create" flow raced on concurrent logins:
+      // two logins could both see count < max and neither would revoke, then
+      // both would create sessions, leaving the user with max+1 sessions.
+      // Running the cleanup AFTER the new row exists means the new session
+      // is counted, and any surplus (oldest, not the just-created one) is
+      // evicted. Defense against stolen-cookie farms and "session sharing"
+      // abuse. Implemented centrally in session.ts so the cap is enforced
+      // identically across every login surface.
       try {
         await store.createSession({
           user_id: user.id,
@@ -292,6 +295,10 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error("[login] createSession failed:", e);
       }
+      // Run the LRU cleanup AFTER the new session row exists so the count
+      // includes it. Best-effort: failures are logged inside the helper and
+      // must not block the login response.
+      await enforceConcurrentSessionLimit(user.id, user.tenant_id);
     }
 
     try {

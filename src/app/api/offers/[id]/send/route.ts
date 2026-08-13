@@ -93,7 +93,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             return NextResponse.json({ error: t.error }, { status: 400 });
           }
         }
-        await auth.store.upsertOffer({ id, status: newStatus, sent_at: new Date().toISOString() } as any);
+        // CRITICAL FIX (audit P2-6): only set sent_at on FIRST send — don't
+        // overwrite the original send timestamp on subsequent re-sends.
+        const updateFields: any = { status: newStatus };
+        if (!offer.sent_at) {
+          updateFields.sent_at = new Date().toISOString();
+        }
+        await auth.store.upsertOffer({ id, ...updateFields } as any);
       } catch (e) { console.warn("[offer.send] status bump failed:", e); }
     }
 

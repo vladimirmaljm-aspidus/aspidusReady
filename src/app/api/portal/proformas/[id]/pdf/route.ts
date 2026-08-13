@@ -38,6 +38,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Proforma not found." }, { status: 404 });
     }
 
+    // CRITICAL FIX (audit M-5): add tenant_id check for defense-in-depth.
+    // partner_id is globally unique (uuid), so this check is unlikely to fail
+    // if the partner_id check passes — but it guards against any future schema
+    // change (e.g. partner_id becoming tenant-scoped integer) and against
+    // bugs in getProforma that might leak cross-tenant rows.
+    if ((proforma as any).tenant_id !== access.tenant_id) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+
     // Security: the proforma's partner_id must match the portal access partner_id
     if (proforma.partner_id !== access.partner_id) {
       return NextResponse.json({ error: "Access denied." }, { status: 403 });

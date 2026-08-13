@@ -137,12 +137,19 @@ export async function rotateUserSessions(userId: string, tenantId: string | null
 }
 
 /**
- * Enforce the concurrent-session limit by revoking the oldest active session
- * if the user is already at the cap. Called by login routes BEFORE creating
- * a new session row.
+ * Enforce the concurrent-session limit by revoking the OLDEST active sessions
+ * that exceed the cap.
  *
- * Idempotent + safe to call on every login: if the user is under the limit,
- * this is a no-op.
+ * CRITICAL FIX (audit P2-11): this MUST be called AFTER the new session row
+ * has been created (not before). The previous "read-then-revoke-before-create"
+ * flow had a race: two concurrent logins could both observe `count < max`
+ * (stale read before either creates), then both create sessions, leaving the
+ * user with `max + 1` active sessions. By running the cleanup AFTER the new
+ * session exists, the new session is included in the count — if the total
+ * exceeds `max`, the oldest (NOT the just-created one) is revoked.
+ *
+ * Idempotent + safe to call on every login: if the user is at or under the
+ * limit, this is a no-op.
  */
 export async function enforceConcurrentSessionLimit(
   userId: string,
@@ -152,22 +159,28 @@ export async function enforceConcurrentSessionLimit(
   try {
     const store = await getStore();
     const sessions = await store.listSessions(tenantId, userId);
+    // Only consider sessions that are BOTH unrevoked AND not yet expired —
+    // expired rows are cleaned up by a separate cron and shouldn't count
+    // against the limit (otherwise we'd evict live sessions to make room
+    // for already-dead ones).
     const active = sessions
-      .filter((s) => !s.revoked)
+      .filter((s) => !s.revoked && new Date(s.expires_at) > new Date())
       .sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
-    // If we're at or above the limit, revoke the OLDEST session(s) until we
-    // are exactly one under the cap — leaving room for the new session the
-    // caller is about to create.
-    while (active.length >= max) {
-      const oldest = active.shift();
-      if (!oldest) break;
-      try {
-        await store.revokeSession(oldest.id);
-      } catch (e) {
-        console.error("[enforceConcurrentSessionLimit] revokeSession failed:", e);
+    // If we're over the limit, revoke the OLDEST session(s) — `active` is
+    // sorted oldest-first, so `slice(0, active.length - max)` yields exactly
+    // the surplus. The just-created session is at the END of the array
+    // (newest) and is never revoked.
+    if (active.length > max) {
+      const toRevoke = active.slice(0, active.length - max);
+      for (const s of toRevoke) {
+        try {
+          await store.revokeSession(s.id);
+        } catch (e) {
+          console.error("[enforceConcurrentSessionLimit] revokeSession failed:", e);
+        }
       }
     }
   } catch (e) {

@@ -242,12 +242,30 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
   async bumpUserTokenVersion(id: string): Promise<number> {
-    // read-modify-write (Supabase JS doesn't support atomic increment on json/jsonb easily)
-    const u = await this.getUserById(id);
-    const next = (u?.token_version ?? 0) + 1;
-    const { error } = await this.sb().from("users").update({ token_version: next }).eq("id", id);
-    if (error) throw error;
-    return next;
+    // CRITICAL FIX (audit M-4): use atomic increment via RPC instead of
+    // read-modify-write. Previously two concurrent calls could both read
+    // token_version=5 and both write 6 — losing one increment and breaking
+    // session invalidation guarantees.
+    //
+    // The RPC `bump_token_version(p_user_id)` is created by migration
+    // `supabase/migrations/017_bump_token_version_rpc.sql`. It performs a
+    // single UPDATE ... SET token_version = COALESCE(token_version, 0) + 1
+    // RETURNING token_version, which is atomic at the Postgres level.
+    //
+    // Fallback: if the RPC is missing (e.g. migration not yet applied to
+    // this environment, or running against the mock/prima store which
+    // doesn't implement it), fall back to the old read-modify-write. This
+    // is less safe under concurrency but preserves functionality.
+    const { data, error } = await this.sb().rpc("bump_token_version", { p_user_id: id });
+    if (error) {
+      // Fall back to read-modify-write if RPC doesn't exist.
+      const u = await this.getUserById(id);
+      const next = (u?.token_version ?? 0) + 1;
+      const { error: e2 } = await this.sb().from("users").update({ token_version: next }).eq("id", id);
+      if (e2) throw e2;
+      return next;
+    }
+    return data ?? 0;
   }
 
   // ---- partners ----
@@ -1558,8 +1576,18 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     return data as Notification;
   }
-  async markNotificationRead(id: string): Promise<void> {
-    const { error } = await this.sb().from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("id", id);
+  async markNotificationRead(id: string, tenantId: string): Promise<void> {
+    // CRITICAL FIX (audit A3): add tenant filter to prevent cross-tenant
+    // notification reads. Previously this method filtered only by `id`, so a
+    // caller from tenant A could mark tenant B's notification as read by
+    // guessing/enumerating the uuid. Callers must pass the tenant scope they
+    // resolved (their own tenant for regular users, the notification's
+    // tenant for super-admins operating cross-tenant).
+    const { error } = await this.sb()
+      .from("notifications")
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("tenant_id", tenantId);
     if (error) throw error;
   }
   async markAllNotificationsRead(tenantId: string, userId: string): Promise<void> {
@@ -1865,6 +1893,12 @@ export class SupabaseStore implements Store {
       entryFields.debit_total = lines.reduce((sum, l) => sum + (l.debit || 0), 0);
       entryFields.credit_total = lines.reduce((sum, l) => sum + (l.credit || 0), 0);
     }
+    // CRITICAL FIX (audit P2-8): validate journal entry balances before
+    // persisting. Double-entry bookkeeping requires debits == credits. An
+    // unbalanced entry would silently corrupt the GL.
+    if (Math.abs((entryFields.debit_total || 0) - (entryFields.credit_total || 0)) > 0.01) {
+      throw new Error(`Journal entry does not balance: debit=${entryFields.debit_total}, credit=${entryFields.credit_total}`);
+    }
     const payload: SupaRow = { ...entryFields };
     if (e.id) payload.id = e.id;
     const { data, error } = await this.sb().from("erp_journal_entries").upsert(payload, { onConflict: "tenant_id,entry_number" }).select().single();
@@ -1905,11 +1939,14 @@ export class SupabaseStore implements Store {
     // allow the post (don't block on missing config).
     const existing = await this.getErpJournalEntry(id);
     if (existing && existing.date) {
+      // CRITICAL FIX (audit P1-8): add tenant filter to fiscal period lookup.
+      // Without this, tenant A's closed period can block tenant B's posting.
       const period = await this.sb()
         .from("fiscal_periods")
         .select("id, status")
         .lte("start_date", existing.date)
         .gte("end_date", existing.date)
+        .eq("tenant_id", existing.tenant_id)
         .maybeSingle();
       if (period.error) throw period.error;
       if (period.data && period.data.status === "closed") {
@@ -1936,11 +1973,39 @@ export class SupabaseStore implements Store {
     const original = await this.getErpJournalEntry(id);
     if (!original) throw new Error("Journal entry not found");
     if (original.status === "reversed") throw new Error("Entry already reversed");
+    // CRITICAL FIX (audit P2-7): cannot reverse a draft entry. Drafts have
+    // no effect on the general ledger (they haven't been posted yet), so
+    // reversing them would create a phantom posted reversal entry that
+    // debases the books. The correct action is to delete or edit the draft.
+    if (original.status === "draft") {
+      throw new Error("Cannot reverse a draft journal entry. Post it first.");
+    }
     // Fetch lines
     const { data: origLines } = await this.sb().from("erp_journal_lines").select("*").eq("journal_entry_id", id).order("line_number", { ascending: true });
     const lines = (origLines as ErpJournalLine[]) || [];
     // Create reversal entry (swap debit/credit)
     const reversalNumber = `REV-${original.entry_number}`;
+    // CRITICAL FIX (audit P1-9): resolve today's fiscal period for the reversal,
+    // not the original's (possibly closed) period. The reversal is dated today,
+    // so it must land in today's period. If today has no period or the period
+    // is closed, fall back to null (post without a period) rather than risking
+    // a posting into the original's closed period.
+    let reversalPeriodId: string | null = null;
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const { data: todayPeriod, error: todayPeriodError } = await this.sb()
+        .from("fiscal_periods")
+        .select("id, status")
+        .lte("start_date", today)
+        .gte("end_date", today)
+        .eq("tenant_id", original.tenant_id)
+        .maybeSingle();
+      if (!todayPeriodError && todayPeriod && todayPeriod.status !== "closed") {
+        reversalPeriodId = todayPeriod.id;
+      }
+    } catch {
+      /* non-fatal — fall back to null period */
+    }
     const reversalPayload: SupaRow = {
       tenant_id: original.tenant_id,
       entry_number: reversalNumber,
@@ -1948,7 +2013,7 @@ export class SupabaseStore implements Store {
       description: `Reversal of ${original.entry_number}: ${original.description}`,
       reference_type: original.reference_type,
       reference_id: original.reference_id,
-      fiscal_period_id: original.fiscal_period_id,
+      fiscal_period_id: reversalPeriodId,
       status: "posted",
       source_type: "auto",
       debit_total: original.credit_total,
@@ -2156,12 +2221,16 @@ export class SupabaseStore implements Store {
 
   // ─── ERP Reports ────────────────────────────────────────────────────────
   async getTrialBalance(tenantId: string, asOfDate: string): Promise<TrialBalance> {
-    // Fetch all posted journal entries up to asOfDate
+    // Fetch all posted journal entries up to asOfDate.
+    // CRITICAL FIX (audit P1-10): include both "posted" and "reversed" entries.
+    // When an entry is reversed, its status changes to "reversed" — excluding it
+    // from reports would retroactively change historical periods. Including both
+    // means the reversal entry (status="posted") nets out the original.
     const { data: entries, error: entriesError } = await this.sb()
       .from("erp_journal_entries")
       .select("id")
       .eq("tenant_id", tenantId)
-      .eq("status", "posted")
+      .in("status", ["posted", "reversed"])
       .lte("date", asOfDate);
     if (entriesError) throw entriesError;
     const entryIds = ((entries || []) as { id: string }[]).map(e => e.id);
@@ -2250,12 +2319,15 @@ export class SupabaseStore implements Store {
   }
 
   async getProfitAndLoss(tenantId: string, periodStart: string, periodEnd: string): Promise<ProfitAndLoss> {
-    // Fetch posted journal entries in the period
+    // Fetch journal entries in the period.
+    // CRITICAL FIX (audit P1-10): include both "posted" and "reversed" entries
+    // so reversals (status="posted") correctly net out their reversed originals
+    // (status="reversed") without retroactively changing historical P&L.
     const { data: entries, error: entriesError } = await this.sb()
       .from("erp_journal_entries")
       .select("id")
       .eq("tenant_id", tenantId)
-      .eq("status", "posted")
+      .in("status", ["posted", "reversed"])
       .gte("date", periodStart)
       .lte("date", periodEnd);
     if (entriesError) throw entriesError;

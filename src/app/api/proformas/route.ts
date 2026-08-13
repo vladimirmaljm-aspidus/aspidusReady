@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
+import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
 
@@ -110,21 +111,26 @@ export async function POST(req: NextRequest) {
 
     // Auto-generate document number if not provided (e.g. manual "Create" click).
     // Atomic: tries the `get_next_doc_number` Postgres SEQUENCE RPC first;
-    // falls back to the legacy `listProformas().total + 1` if the RPC is
-    // unavailable (e.g. before the 004 migration has been applied).
+    // falls back to a targeted COUNT query if the RPC is unavailable (e.g.
+    // before the 004 migration has been applied).
     //   Format: PRO-<year>-<NNNN>  (4-digit sequence)
+    //
+    // CRITICAL FIX (audit P1-13): use targeted COUNT instead of
+    // listProformas(limit:1000). Avoids the 1000-record cap and is more
+    // efficient. Also keeps the year-aware reset-at-year-boundary behaviour
+    // (audit P2-20) by scoping the count to `PRO-<year>-%`.
     if (!body.id && !body.number) {
       const year = new Date().getFullYear();
       const seqNum = await nextDocNumber("proforma");
       if (seqNum) {
         body.number = seqNum;
       } else {
-        // FIX (audit P2-20): year-aware fallback.
-        const existing = await auth.store.listProformas(tid!, { limit: 1000 });
-        const yearPrefix = `${year}`;
-        const yearCount = existing.items.filter((i: any) =>
-          i.number?.startsWith(`PRO-${yearPrefix}-`)
-        ).length;
+        const { count } = await getSupabase()
+          .from("proformas")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tid!)
+          .like("number", `PRO-${year}-%`);
+        const yearCount = count || 0;
         const nextSeq = yearCount + 1;
         body.number = formatDocNumber("proforma", year, nextSeq);
       }

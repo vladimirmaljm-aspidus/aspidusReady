@@ -144,13 +144,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
       const lineCurrency = (line.currency || normalizedBuyCurrency).toUpperCase();
       let fxRate: number | undefined = undefined;
-      if (lineCurrency === normalizedBuyCurrency) {
+      // CRITICAL FIX (audit P1-15): percent cost lines apply to landedCost,
+      // which is already in buy_currency. The amount is already in
+      // buy_currency — do NOT convert again (was double-converting).
+      if (line.basis === "percent") {
+        fxRate = 1;
+      } else if (lineCurrency === normalizedBuyCurrency) {
         fxRate = 1;
       } else if (typeof line.fx_rate === "number" && line.fx_rate > 0) {
         fxRate = line.fx_rate;
       } else {
+        // CRITICAL FIX (audit P1-16): when the live rate provider is down,
+        // fail loudly rather than silently falling back to 1. Cannot return
+        // 400 from inside the try block — throw and let the catch propagate.
         const live = await getExchangeRate(lineCurrency, normalizedBuyCurrency);
-        fxRate = live && live > 0 ? live : 1;
+        if (!live || live <= 0) {
+          if (lineCurrency !== normalizedBuyCurrency) {
+            throw new Error(`Could not fetch exchange rate for ${lineCurrency} → ${normalizedBuyCurrency}. Please set the rate manually or retry.`);
+          }
+          fxRate = 1;
+        } else {
+          fxRate = live;
+        }
       }
       const convertedAmount = Math.round(amount * fxRate * 100) / 100;
       landedCost += convertedAmount;

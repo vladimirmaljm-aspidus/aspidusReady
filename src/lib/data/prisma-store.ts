@@ -2323,9 +2323,12 @@ export class PrismaStore implements Store {
     return mapNotificationRow(r);
   }
 
-  async markNotificationRead(id: string): Promise<void> {
-    await db.notification.update({
-      where: { id },
+  async markNotificationRead(id: string, tenantId: string): Promise<void> {
+    // CRITICAL FIX (audit A3): add tenant filter to prevent cross-tenant
+    // notification reads. updateMany (rather than update) lets us add the
+    // tenant_id to the WHERE clause without requiring a compound unique key.
+    await db.notification.updateMany({
+      where: { id, tenant_id: tenantId },
       data: { read: true, read_at: new Date() },
     });
   }

@@ -24,7 +24,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (!auth.isSuperAdmin && existing.tenant_id !== auth.tenantId) {
         return NextResponse.json({ error: "Not found." }, { status: 404 });
       }
-      await auth.store.markNotificationRead(id);
+      // CRITICAL FIX (audit A3): pass the notification's tenant_id to scope
+      // the UPDATE. For regular users this matches auth.tenantId (verified
+      // above); for super-admins we use the notification's actual tenant so
+      // cross-tenant admin actions still work.
+      await auth.store.markNotificationRead(id, existing.tenant_id);
     }
     return NextResponse.json({ ok: true });
   } catch (e: any) {

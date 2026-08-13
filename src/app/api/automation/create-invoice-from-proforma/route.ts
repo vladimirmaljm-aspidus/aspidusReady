@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
+import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
 
@@ -71,17 +72,24 @@ export async function POST(req: NextRequest) {
 
     // 2. Verify proforma is in a valid state. Proformas can be invoiced once
     //    they have been accepted by the client. We also allow invoicing from a
-    //    "sent" proforma (without an explicit accept step) as a fallback for
-    //    workflows where the verbal agreement is enough. Finally, "paid"
-    //    proformas can be invoiced for retroactive record-keeping.
+    //    "sent" or "viewed" proforma (without an explicit accept step) as a
+    //    fallback for workflows where the verbal agreement is enough.
+    //    CRITICAL FIX (audit P2-16): removed "paid" from the allowed list — a
+    //    paid proforma has already been invoiced, so allowing a re-invoice
+    //    here would silently create a duplicate receivable.
+    //    Cast to string because `ProformaStatus` doesn't formally include
+    //    "viewed" (set by the portal when a client first opens the proforma —
+    //    see lib/portal/mark-viewed.ts), but the value exists at runtime and
+    //    the state machine (status-validator.ts) explicitly allows it.
+    const proformaStatus: string = proforma.status;
     if (
-      proforma.status !== "accepted" &&
-      proforma.status !== "sent" &&
-      proforma.status !== "paid"
+      proformaStatus !== "accepted" &&
+      proformaStatus !== "sent" &&
+      proformaStatus !== "viewed"
     ) {
       return NextResponse.json(
         {
-          error: `Cannot create invoice from proforma with status "${proforma.status}". Proforma must be sent or accepted first.`,
+          error: `Cannot create invoice from proforma with status "${proformaStatus}". Proforma must be sent, viewed, or accepted first.`,
         },
         { status: 400 },
       );
@@ -91,42 +99,56 @@ export async function POST(req: NextRequest) {
     //    The `invoices` table has no `proforma_id` column, so we link via the
     //    shared `offer_id` (when present). When the proforma has no offer
     //    link, we fall back to checking by partner+subject to avoid dupes.
-    const existingInvoices = await store.listInvoices(tid, { limit: 1000 });
+    //
+    //    CRITICAL FIX (audit P1-14): use a targeted SQL query instead of
+    //    listInvoices(limit:1000) + JS .find(). Avoids the 1000-record cap
+    //    and is more efficient. We use one of two queries depending on
+    //    whether the proforma carries an offer_id.
     const pAny = proforma as any;
-    const alreadyInvoiced =
-      pAny.offer_id
-        ? existingInvoices.items.find(
-            (inv: any) => inv.offer_id === pAny.offer_id && inv.status !== "cancelled",
-          )
-        : existingInvoices.items.find(
-            (inv: any) =>
-              inv.partner_id === proforma.partner_id &&
-              inv.subject === proforma.subject &&
-              inv.status !== "cancelled",
-          );
+    let dupQuery = getSupabase()
+      .from("invoices")
+      .select("id, number")
+      .eq("tenant_id", tid)
+      .neq("status", "cancelled")
+      .limit(1);
+    if (pAny.offer_id) {
+      dupQuery = dupQuery.eq("offer_id", pAny.offer_id);
+    } else {
+      dupQuery = dupQuery
+        .eq("partner_id", proforma.partner_id)
+        .eq("subject", proforma.subject ?? "");
+    }
+    const { data: alreadyInvoiced } = await dupQuery.maybeSingle();
     if (alreadyInvoiced) {
+      const existing = alreadyInvoiced as { id: string; number?: string };
       return NextResponse.json(
         {
           error: "Invoice already exists for this proforma.",
-          existing_invoice_id: (alreadyInvoiced as any).id,
-          existing_invoice_number: (alreadyInvoiced as any).number,
+          existing_invoice_id: existing.id,
+          existing_invoice_number: existing.number,
         },
         { status: 409 },
       );
     }
 
     // 4. Auto-generate invoice number (atomic via Postgres SEQUENCE; falls
-    //    back to legacy `listInvoices().total + 1` if the RPC is unavailable).
-    //    Format: INV-<year>-<NNNN>  (4-digit sequence). We reuse the
-    //    `existingInvoices` query from step 3 only on the fallback path so we
-    //    don't issue an extra query when the RPC is available.
+    //    back to a targeted COUNT query if the RPC is unavailable).
+    //    Format: INV-<year>-<NNNN>  (4-digit sequence).
+    //    CRITICAL FIX (audit P1-13): use targeted COUNT instead of
+    //    listInvoices(limit:1).total — the year-aware count also keeps the
+    //    reset-at-year-boundary behaviour from audit P2-20.
     const year = new Date().getFullYear();
     const seqNum = await nextDocNumber("invoice");
     let invoiceNumber: string;
     if (seqNum) {
       invoiceNumber = seqNum;
     } else {
-      const nextSeq = (existingInvoices.total || 0) + 1;
+      const { count } = await getSupabase()
+        .from("invoices")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tid)
+        .like("number", `INV-${year}-%`);
+      const nextSeq = (count || 0) + 1;
       invoiceNumber = formatDocNumber("invoice", year, nextSeq);
     }
 

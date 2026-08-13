@@ -95,6 +95,28 @@ export async function POST(req: NextRequest) {
     body.commission_rate = cr;
   }
 
+  // CRITICAL FIX (audit P2-5): validate numeric inputs to prevent NaN
+  // propagation. If the client sends a string (e.g. "100") or omits the
+  // field, downstream math (`buyTotal = buy_price_per_unit * qty`) would
+  // produce NaN/undefined, silently zeroing totals.
+  const qty = Number(body.quantity);
+  if (!Number.isFinite(qty) || qty < 0) {
+    return NextResponse.json({ error: "Quantity must be a non-negative number." }, { status: 400 });
+  }
+  body.quantity = qty;
+
+  const buyPrice = Number(body.buy_price_per_unit);
+  if (!Number.isFinite(buyPrice) || buyPrice < 0) {
+    return NextResponse.json({ error: "Buy price must be a non-negative number." }, { status: 400 });
+  }
+  body.buy_price_per_unit = buyPrice;
+
+  const sellPrice = Number(body.sell_price_per_unit);
+  if (!Number.isFinite(sellPrice) || sellPrice < 0) {
+    return NextResponse.json({ error: "Sell price must be a non-negative number." }, { status: 400 });
+  }
+  body.sell_price_per_unit = sellPrice;
+
   // Persist commission tracking fields (Fix 1) — they were previously dropped
   // because the columns didn't exist on the live schema. After migration 007
   // is applied, these flow through `upsertTradeCalculation` → smartUpsert
@@ -108,9 +130,10 @@ export async function POST(req: NextRequest) {
   body.commission_type = normalizeCommissionType(body.commission_type);
 
   // Compute totals from cost lines
-  const qty = body.quantity || 0;
+  // NOTE: `qty`, `buyPrice`, `sellPrice` were already validated and coerced
+  // above (P2-5). Reuse them here instead of re-reading body fields.
   const numContainers = body.num_containers || 1;
-  const buyTotal = (body.buy_price_per_unit || 0) * qty;
+  const buyTotal = buyPrice * qty;
   // Exchange rate: sell_currency per buy_currency. When currencies differ,
   // landed cost (in buy currency) must be converted to sell currency before
   // subtracting from sell revenue to compute margin. Audit T-series.
@@ -142,14 +165,32 @@ export async function POST(req: NextRequest) {
     // when line.currency differs from buy_currency. Same currency = 1.
     const lineCurrency = (line.currency || buyCurrency).toUpperCase();
     let fxRate: number | undefined = undefined;
-    if (lineCurrency === buyCurrency) {
+    // CRITICAL FIX (audit P1-15): percent cost lines apply to landedCost,
+    // which is already in buy_currency. The amount is already in
+    // buy_currency — do NOT convert again (was double-converting).
+    if (line.basis === "percent") {
+      fxRate = 1;
+    } else if (lineCurrency === buyCurrency) {
       fxRate = 1;
     } else if (typeof line.fx_rate === "number" && line.fx_rate > 0) {
       // User-supplied (possibly manual) rate — trust it.
       fxRate = line.fx_rate;
     } else {
+      // CRITICAL FIX (audit P1-16): when the live rate provider is down,
+      // fail loudly rather than silently falling back to 1 (which would
+      // silently produce wrong totals).
       const live = await getExchangeRate(lineCurrency, buyCurrency);
-      fxRate = live && live > 0 ? live : 1;
+      if (!live || live <= 0) {
+        if (lineCurrency !== buyCurrency) {
+          return NextResponse.json(
+            { error: `Could not fetch exchange rate for ${lineCurrency} → ${buyCurrency}. Please set the rate manually or retry.` },
+            { status: 400 },
+          );
+        }
+        fxRate = 1;
+      } else {
+        fxRate = live;
+      }
     }
     const convertedAmount = Math.round(amount * fxRate * 100) / 100;
 
@@ -163,7 +204,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const sellTotal = (body.sell_price_per_unit || 0) * qty;
+  const sellTotal = sellPrice * qty;
   // Convert landed cost (buy currency) → sell currency for the margin math.
   const landedCostInSellCurrency = landedCost * effectiveFx;
   const margin = sellTotal - landedCostInSellCurrency;

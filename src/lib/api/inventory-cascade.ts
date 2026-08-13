@@ -96,22 +96,9 @@ export async function deductStockForOffer(opts: DeductStockOpts): Promise<
     const qty = Math.abs(Number(item.quantity) || 0);
     if (qty <= 0) continue;
 
-    // 1) Log the movement (delta negative = stock out).
-    const { error: moveErr } = await sb.from("inventory_movements").insert({
-      tenant_id: tenantId,
-      product_id: productId,
-      partner_id: opts.partnerId || null,
-      delta: -qty,
-      reason: `Offer ${offerNumber} accepted by ${sourceLabel}${opts.reasonSuffix ? " — " + opts.reasonSuffix : ""}`,
-      reference: offerId,
-    });
-    if (moveErr) {
-      console.error(`[inventory cascade] movement insert failed for product ${productId}:`, moveErr.message);
-      continue;
-    }
-
-    // 2) Fetch current stock + reorder_level + name (for the notifyLowStock
-    //    notification that fires after the deduction).
+    // 1) Fetch current stock + reorder_level + name (for the notifyLowStock
+    //    notification that fires after the deduction). Fetched BEFORE the
+    //    movement insert so we can record the ACTUAL deducted amount.
     const { data: productRow, error: prodErr } = await sb
       .from("products")
       .select("id, name, sku, stock, reorder_level, unit")
@@ -130,8 +117,32 @@ export async function deductStockForOffer(opts: DeductStockOpts): Promise<
 
     const currentStock = Number((productRow as any).stock ?? 0) || 0;
     const reorderLevel = Number((productRow as any).reorder_level ?? 0) || 0;
+    // CRITICAL FIX (audit P2-13): record actual deducted amount, not requested qty.
+    // If stock < qty, only 'currentStock' units are actually removed.
+    // Previously the movement recorded delta: -qty (full requested qty) while
+    // `products.stock` was clamped via Math.max(0, currentStock - qty) — so a
+    // restore (which reads the movement delta) would re-add the full qty,
+    // creating phantom stock (e.g. stock=10, qty=15 → movement says -15,
+    // restore adds +15 → final stock 15 instead of 10).
+    const actualDeducted = Math.min(qty, currentStock);
     const newStock = Math.max(0, currentStock - qty);
 
+    // 2) Log the movement (delta negative = stock out). Records the ACTUAL
+    //    units removed so restoreStockForOffer can reverse it correctly.
+    const { error: moveErr } = await sb.from("inventory_movements").insert({
+      tenant_id: tenantId,
+      product_id: productId,
+      partner_id: opts.partnerId || null,
+      delta: -actualDeducted,
+      reason: `Offer ${offerNumber} accepted by ${sourceLabel}${opts.reasonSuffix ? " — " + opts.reasonSuffix : ""}`,
+      reference: offerId,
+    });
+    if (moveErr) {
+      console.error(`[inventory cascade] movement insert failed for product ${productId}:`, moveErr.message);
+      continue;
+    }
+
+    // 3) Update product stock (clamped to 0).
     const { error: updErr } = await sb
       .from("products")
       .update({ stock: newStock, updated_at: new Date().toISOString() })

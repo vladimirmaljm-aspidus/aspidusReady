@@ -30,7 +30,11 @@ export async function PUT(
       return NextResponse.json({ error: "Notification not found." }, { status: 404 });
     }
 
-    await store.markNotificationRead(id);
+    // CRITICAL FIX (audit A3): pass tenant_id to scope the UPDATE.
+    // listNotificationsByPartner already filters by access.tenant_id, so
+    // notification.tenant_id === access.tenant_id here — but we pass it
+    // explicitly so the store layer doesn't trust the caller's prior filter.
+    await store.markNotificationRead(id, access.tenant_id);
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

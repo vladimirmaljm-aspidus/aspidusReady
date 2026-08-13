@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
+import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
 
@@ -66,17 +67,25 @@ export async function POST(req: NextRequest) {
     //     Re-Audit-2 N5: exclude cancelled invoices from the duplicate check.
     //     Previously, cancelling an invoice and then re-creating from the same
     //     offer would 409 pointing at the cancelled record.
+    //
+    //     CRITICAL FIX (audit P1-14): use a targeted SQL query instead of
+    //     listInvoices(limit:1000) + JS .find(). Avoids the 1000-record cap
+    //     and is more efficient.
     {
-      const existingInvoices = await store.listInvoices(tid, { limit: 1000 });
-      const existing = existingInvoices.items.find(
-        (inv: any) => inv.offer_id === offer_id && inv.status !== "cancelled",
-      );
+      const { data: existing } = await getSupabase()
+        .from("invoices")
+        .select("id, number")
+        .eq("tenant_id", tid)
+        .eq("offer_id", offer.id)
+        .neq("status", "cancelled")
+        .limit(1)
+        .maybeSingle();
       if (existing) {
         return NextResponse.json(
           {
             error: "An invoice already exists for this offer.",
-            existing_invoice_id: existing.id,
-            existing_invoice_number: existing.number,
+            existing_invoice_id: (existing as { id: string }).id,
+            existing_invoice_number: (existing as { number?: string }).number,
           },
           { status: 409 }
         );

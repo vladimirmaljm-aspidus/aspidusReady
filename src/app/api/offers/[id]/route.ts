@@ -77,10 +77,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (Array.isArray(body.items) && body.items.length > 0) {
       let subtotal = 0, discountTotal = 0, taxTotal = 0;
       for (const it of body.items) {
-        const line = it.quantity * it.unit_price;
-        const disc = line * (it.discount || 0) / 100;
+        // CRITICAL FIX (audit P2-15): coerce line item fields with Number() to
+        // prevent NaN propagation when the client sends strings (e.g. "10"
+        // instead of 10) or omits fields. Previously `it.quantity * it.unit_price`
+        // would yield NaN if either was a string, silently zeroing the line.
+        const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+        const disc = line * (Number(it.discount) || 0) / 100;
         const net = line - disc;
-        const tax = net * (it.tax_rate || 0) / 100;
+        const tax = net * (Number(it.tax_rate) || 0) / 100;
         subtotal += line;
         discountTotal += disc;
         taxTotal += tax;

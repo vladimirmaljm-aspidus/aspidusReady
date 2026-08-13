@@ -1210,8 +1210,10 @@ export class MockStore implements Store {
     mock.notifications.unshift(newN);
     return newN;
   }
-  async markNotificationRead(id: string): Promise<void> {
-    const n = mock.notifications.find((x) => x.id === id);
+  async markNotificationRead(id: string, tenantId: string): Promise<void> {
+    // CRITICAL FIX (audit A3): add tenant filter to prevent cross-tenant
+    // notification reads.
+    const n = mock.notifications.find((x) => x.id === id && x.tenant_id === tenantId);
     if (n && !n.read) { n.read = true; n.read_at = new Date().toISOString(); }
   }
   async markAllNotificationsRead(tenantId: string, userId: string): Promise<void> {

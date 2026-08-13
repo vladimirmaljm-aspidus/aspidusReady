@@ -161,13 +161,16 @@ export async function POST(req: NextRequest) {
       body.number = seqNum;
     } else {
       try {
-        // FIX (audit P2-20): year-aware fallback — count only offers with
-        // current year prefix so the sequence resets at year boundary.
-        const existing = await auth.store.listOffers(tid!, { limit: 1000 });
-        const yearPrefix = `${year}`;
-        const yearCount = existing.items.filter((i: any) =>
-          i.number?.startsWith(`OF-${yearPrefix}-`)
-        ).length;
+        // CRITICAL FIX (audit P1-13): use targeted COUNT instead of
+        // listOffers(limit:1000). Avoids the 1000-record cap and is more
+        // efficient. Also keeps the year-aware reset-at-year-boundary
+        // behaviour (audit P2-20) by scoping the count to `OF-<year>-%`.
+        const { count } = await getSupabase()
+          .from("offers")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tid!)
+          .like("number", `OF-${year}-%`);
+        const yearCount = count || 0;
         const nextSeq = yearCount + 1;
         body.number = formatDocNumber("offer", year, nextSeq);
       } catch (e) {
