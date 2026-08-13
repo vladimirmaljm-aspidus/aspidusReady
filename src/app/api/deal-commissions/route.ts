@@ -115,13 +115,23 @@ export async function POST(req: NextRequest) {
         body.commission_per_unit = body.commission_per_unit ?? agent.commission_per_unit;
         body.commission_custom_formula = body.commission_custom_formula ?? agent.commission_custom_formula;
         body.commission_currency = body.commission_currency || agent.commission_currency;
+        // CRITICAL FIX (audit P1-5): pass the DEAL's currency (not the agent's
+        // commission_currency) so calculateCommission can convert correctly.
+        // If deal_currency is not in the body, fetch it from the deal record.
+        let dealCurrency = body.deal_currency || "";
+        if (!dealCurrency && body.deal_id) {
+          try {
+            const deal = await auth.store.getDeal(body.deal_id);
+            if (deal) dealCurrency = deal.currency || "";
+          } catch { /* non-fatal */ }
+        }
         body.calculated_commission = await auth.store.calculateCommission(
           agent.id,
           body.deal_value || 0,
           body.deal_profit || 0,
           body.deal_quantity || 0,
           body.deal_unit || "",
-          body.commission_currency || "USD"
+          dealCurrency || "USD"
         );
       }
     }

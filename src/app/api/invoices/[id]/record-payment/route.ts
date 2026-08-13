@@ -236,8 +236,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       console.warn("[record-payment] cumulative lookup threw:", e);
     }
 
-    const isFullPayment = totalPaid >= invoiceTotal - 0.01; // 1 cent tolerance
-    const newStatus: string = isFullPayment ? "paid" : "partial";
+    // CRITICAL FIX (audit P1-2): use atomic RPC to determine + update invoice
+    // status. This eliminates the race where two concurrent payments both read
+    // the same prior-txns snapshot and both compute "partial".
+    // The RPC uses SELECT FOR UPDATE + atomic UPDATE in a single transaction.
+    // Fallback to the JS-computed values if the RPC is unavailable.
+    let isFullPayment = totalPaid >= invoiceTotal - 0.01; // 1 cent tolerance
+    let newStatus: string = isFullPayment ? "paid" : "partial";
+    try {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const sbRpc = getSupabase();
+      const { data: rpcResult, error: rpcError } = await sbRpc
+        .rpc("atomic_update_invoice_payment_status", {
+          p_invoice_id: id,
+          p_tenant_id: tid,
+        });
+      if (!rpcError && rpcResult) {
+        newStatus = rpcResult as string;
+        // Recompute isFullPayment based on the authoritative RPC result.
+        isFullPayment = newStatus === "paid";
+      }
+    } catch (e) {
+      // RPC unavailable (migration not applied) — fall back to JS-computed status.
+      console.warn("[record-payment] atomic RPC failed, using JS fallback:", e);
+    }
     const nowIso = new Date().toISOString();
 
     // ── Validate status transition (P1-6) ───────────────────────────────
@@ -569,7 +591,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           // revenue (totalPaid) — the prior partial payments were booked as advances
           // or were not booked at all. For partial payments that don't flip the
           // status, book only this payment's amount. (Audit finding E P0 #1.)
+          //
+          // FIX (audit P1-1): when totalPaid > invoiceTotal (overpayment), split
+          // the credit: invoiceTotal → Revenue, excess → Customer Prepayments
+          // (liability). Falls back to booking full amount as Revenue if no
+          // prepayment account is configured — backward compatible.
           const jeAmount = (newStatus === "paid") ? totalPaid : numericAmount;
+          const excess = (newStatus === "paid" && totalPaid > invoiceTotal)
+            ? Math.round((totalPaid - invoiceTotal) * 100) / 100
+            : 0;
+          const revenueAmount = excess > 0
+            ? Math.round((jeAmount - excess) * 100) / 100
+            : jeAmount;
+
+          // Auto-discover a "Customer Prepayments" liability account.
+          // If none exists, the full jeAmount goes to Revenue (current behavior).
+          let prepaymentAccountId: string | null = null;
+          if (excess > 0) {
+            try {
+              const { data: pa } = await sb.from("erp_accounts")
+                .select("id")
+                .eq("tenant_id", tid)
+                .eq("type", "liability")
+                .or("name.ilike.%prepay%,name.ilike.%unearned%,name.ilike.%advance%,code.ilike.%2100%,code.ilike.%2200%")
+                .limit(1)
+                .maybeSingle();
+              prepaymentAccountId = pa?.id || null;
+              if (!prepaymentAccountId) {
+                // No prepayment account found — book full amount as revenue
+                // (backward compatible with existing behavior).
+                console.warn("[record-payment] overpayment detected but no prepayment account found — booking full amount as revenue");
+              }
+            } catch {
+              // Non-fatal — fall back to current behavior
+            }
+          }
 
           const { data: je, error: jeError } = await sb
             .from("erp_journal_entries")
@@ -596,7 +652,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           if (jeError) {
             console.warn("[record-payment] auto journal header insert failed:", jeError.message);
           } else if (je) {
-            const { error: linesError } = await sb.from("erp_journal_lines").insert([
+            // Build JE lines. When overpayment exists AND a prepayment account
+            // was found, split the credit into Revenue + Prepayments.
+            // Otherwise, book the full amount as Revenue (backward compatible).
+            const jeLines: any[] = [
               {
                 journal_entry_id: (je as any).id,
                 tenant_id: tid,
@@ -614,12 +673,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 account_id: revenueAccountId,
                 description: `Revenue - ${invoice.number}`,
                 debit: 0,
-                credit: jeAmount,
+                credit: prepaymentAccountId && excess > 0 ? revenueAmount : jeAmount,
                 line_number: 2,
                 currency: jeCurrency,
                 partner_id: invoice.partner_id || null,
               },
-            ]);
+            ];
+            // Add prepayment line only when overpayment + account exists.
+            if (prepaymentAccountId && excess > 0) {
+              jeLines.push({
+                journal_entry_id: (je as any).id,
+                tenant_id: tid,
+                account_id: prepaymentAccountId,
+                description: `Customer prepayment (overpayment) - ${invoice.number}`,
+                debit: 0,
+                credit: excess,
+                line_number: 3,
+                currency: jeCurrency,
+                partner_id: invoice.partner_id || null,
+              });
+            }
+            const { error: linesError } = await sb.from("erp_journal_lines").insert(jeLines);
             if (linesError) {
               console.warn("[record-payment] auto journal lines insert failed:", linesError.message);
             }

@@ -1758,15 +1758,38 @@ export class SupabaseStore implements Store {
     }
     return summaries;
   }
-  async calculateCommission(agentId: string, dealValue: number, dealProfit: number, dealQuantity: number, _dealUnit: string, _currency: string): Promise<number> {
+  async calculateCommission(agentId: string, dealValue: number, dealProfit: number, dealQuantity: number, _dealUnit: string, dealCurrency: string): Promise<number> {
     const agent = await this.getCommissionAgent(agentId);
     if (!agent) return 0;
+
+    // CRITICAL FIX (audit P1-5): convert dealValue and dealProfit from the
+    // deal's currency to the agent's commission_currency before calculating.
+    // Without this, an agent owed €225 on a EUR deal with commission_currency=USD
+    // would get $225 instead of ~$243.
+    const agentCurrency = agent.commission_currency || dealCurrency || "USD";
+    let convertedDealValue = dealValue;
+    let convertedDealProfit = dealProfit;
+
+    if (dealCurrency && agentCurrency && dealCurrency.toUpperCase() !== agentCurrency.toUpperCase()) {
+      try {
+        const { getExchangeRate } = await import("@/lib/utils/exchange-rates");
+        const rate = await getExchangeRate(dealCurrency.toUpperCase(), agentCurrency.toUpperCase());
+        if (rate && rate > 0) {
+          convertedDealValue = Math.round(dealValue * rate * 100) / 100;
+          convertedDealProfit = Math.round(dealProfit * rate * 100) / 100;
+        }
+      } catch {
+        // Rate fetch failed — use original values (best effort).
+        // The commission will be in the deal's currency, not the agent's.
+      }
+    }
+
     switch (agent.commission_type) {
       // CRITICAL FIX (audit P1-4): never return negative commission on loss-making deals.
-      case "profit_percent": return Math.max(0, dealProfit) * (agent.commission_rate / 100);
-      case "revenue_percent": return dealValue * (agent.commission_rate / 100);
+      case "profit_percent": return Math.max(0, convertedDealProfit) * (agent.commission_rate / 100);
+      case "revenue_percent": return convertedDealValue * (agent.commission_rate / 100);
       case "fixed": return agent.commission_rate;
-      case "per_unit": return agent.commission_per_unit * dealQuantity;
+      case "per_unit": return (agent.commission_per_unit || 0) * dealQuantity;
       case "custom": return agent.commission_rate;
       default: return 0;
     }
