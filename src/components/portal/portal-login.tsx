@@ -31,7 +31,7 @@ import {
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
-import { useT } from "@/lib/i18n/store";
+import { useT, useI18nStore } from "@/lib/i18n/store";
 
 const FIRM_NAME = "Aspidus";
 
@@ -481,6 +481,11 @@ export function PortalLogin() {
           <p className="text-center text-xs text-muted-foreground mt-8">
             © {new Date().getFullYear()} {FIRM_NAME} · {t("portal-login-secure-workspace")}
           </p>
+
+          {/* Language selector on login page — lets new clients choose their
+              language before logging in. Preference is saved to localStorage
+              and picked up by the portal shell after login. */}
+          <PortalLoginLanguageSelector />
         </div>
       </div>
 
@@ -560,6 +565,35 @@ export function PortalLogin() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Language selector for the login page ─────────────────────────────────
+// Compact dropdown that lets portal clients pick their language before
+// logging in. Saves to localStorage (picked up by portal-shell on login).
+function PortalLoginLanguageSelector() {
+  const { locale, setLocale } = useI18nStore();
+  if (typeof window === "undefined") return null;
+  const flags: Record<string, string> = { en: "🇬🇧", sr: "🇷🇸", tr: "🇹🇷", de: "🇩🇪", ru: "🇷🇺" };
+  const labels: Record<string, string> = { en: "English", sr: "Srpski", tr: "Türkçe", de: "Deutsch", ru: "Русский" };
+  return (
+    <div className="flex items-center justify-center gap-1 mt-4">
+      {(Object.keys(labels)).map((loc) => (
+        <button
+          key={loc}
+          onClick={() => setLocale(loc as any)}
+          className={cn(
+            "px-2 py-1 rounded-md text-xs transition-colors",
+            locale === loc
+              ? "bg-primary/10 text-primary font-medium"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          )}
+          title={labels[loc]}
+        >
+          <span className="text-base">{flags[loc]}</span>
+        </button>
+      ))}
     </div>
   );
 }
