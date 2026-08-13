@@ -2,6 +2,29 @@ import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export interface UploadResult { url: string; path: string; }
 
+/**
+ * Whitelist of allowed file extensions, keyed by the server-verified MIME type
+ * (the result of the magic-bytes check in `verify-file.ts`). The client-supplied
+ * filename extension is NEVER trusted — an attacker can name a file `logo.aspx`
+ * or `invoice.htm` and have it stored with that extension, which some downstream
+ * systems (e.g. static file servers, antiviruses) may treat as executable or
+ * HTML. Deriving the extension from the verified MIME type closes that hole.
+ */
+const MIME_TO_EXT: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "text/plain": "txt",
+  "text/csv": "csv",
+};
+
 export async function uploadFile(bucket: string, path: string, buffer: Buffer, contentType: string, size: number): Promise<UploadResult> {
   if (size > 10 * 1024 * 1024) throw new Error("File too large. Max 10MB.");
   if (!isSupabaseConfigured()) {
@@ -19,8 +42,18 @@ export async function uploadFile(bucket: string, path: string, buffer: Buffer, c
   return { url: signedData.signedUrl, path };
 }
 
+/**
+ * Upload a KYC document.
+ *
+ * `contentType` MUST be the server-verified MIME type (i.e. the
+ * `detectedType` returned by `verifyKycUpload`), NOT the raw client-supplied
+ * `file.type`. Callers already run the magic-bytes check before calling this,
+ * so passing the verified MIME here means the stored file extension is derived
+ * from the actual file content rather than the attacker-controlled filename.
+ */
 export async function uploadKycDocument(submissionId: string, fileName: string, buffer: Buffer, contentType: string, size: number): Promise<UploadResult> {
-  const ext = fileName.split(".").pop() || "bin";
+  const detectedMime = contentType;
+  const ext = (detectedMime && MIME_TO_EXT[detectedMime]) || "bin";
   const path = `${submissionId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   return uploadFile("kyc-documents", path, buffer, contentType, size);
 }
@@ -41,7 +74,14 @@ export async function getSignedDownloadUrl(bucket: string, path: string, ttlSeco
   return data.signedUrl;
 }
 
-/** Upload any portal file. Path pattern: <tenant>/<partner>/<category>/<timestamp>-<rand>.<ext> */
+/** Upload any portal file. Path pattern: <tenant>/<partner>/<category>/<timestamp>-<rand>.<ext>
+ *
+ * `contentType` MUST be the server-verified MIME type (i.e. the
+ * `detectedType` returned by `verifyPortalUpload`), NOT the raw client-supplied
+ * `file.type`. The stored extension is derived from this verified MIME via the
+ * `MIME_TO_EXT` whitelist, so an attacker cannot influence the on-disk extension
+ * by naming their file `evil.aspx` / `evil.htm`.
+ */
 export async function uploadPortalFile(opts: {
   tenantId: string;
   partnerId: string;
@@ -53,7 +93,8 @@ export async function uploadPortalFile(opts: {
   bucket?: string;
 }): Promise<UploadResult> {
   const bucket = opts.bucket || "portal-uploads";
-  const ext = opts.fileName.split(".").pop() || "bin";
+  const detectedMime = opts.contentType;
+  const ext = (detectedMime && MIME_TO_EXT[detectedMime]) || "bin";
   const safeCat = opts.category.replace(/[^a-zA-Z0-9_-]/g, "_");
   const path = `${opts.tenantId}/${opts.partnerId}/${safeCat}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   return uploadFile(bucket, path, opts.buffer, opts.contentType, opts.size);

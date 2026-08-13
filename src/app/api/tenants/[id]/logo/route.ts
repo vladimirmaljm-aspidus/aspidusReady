@@ -43,7 +43,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!verification.isValid) {
       return NextResponse.json({ error: verification.error }, { status: 400 });
     }
-    const ext = file.name.split(".").pop() || "png";
+    // Derive extension from verified MIME type, not client filename.
+    // Audit fix P2-16: prevents logo.aspx / invoice.htm path pollution.
+    const MIME_TO_EXT: Record<string, string> = {
+      "image/png": "png",
+      "image/jpeg": "jpg",
+      "image/webp": "webp",
+    };
+    const ext = MIME_TO_EXT[file.type] || "png";
     const path = `${id}/logo.${ext}`;
 
     const result = await uploadFile("tenant-logos", path, buffer, file.type, file.size);

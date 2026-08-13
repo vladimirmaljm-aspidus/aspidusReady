@@ -2,6 +2,23 @@ import nodemailer from "nodemailer";
 import { getStore } from "@/lib/data/store";
 
 /**
+ * Escape HTML special characters to prevent XSS in email templates.
+ * User-provided values (partnerName, tenantName, docNumber, message body)
+ * are interpolated directly into HTML — without escaping, an admin could
+ * rename a tenant to `<img src=x onerror=...>` and inject it into every
+ * email body. (Audit finding P2-4.)
+ */
+function escapeHtml(str: string): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
  * Email service — multi-provider.
  *
  * Providers (selected per-tenant in Settings → Communications):
@@ -361,13 +378,13 @@ export function welcomePortalEmail(opts: {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
       <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
-        <h1 style="margin: 0; font-size: 24px; font-weight: 600;">Welcome to ${opts.tenantName}</h1>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600;">Welcome to ${escapeHtml(opts.tenantName)}</h1>
         <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">Your client portal account is ready</p>
       </div>
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="color: #333; font-size: 15px; line-height: 1.6;">Hello ${opts.partnerName},</p>
+        <p style="color: #333; font-size: 15px; line-height: 1.6;">Hello ${escapeHtml(opts.partnerName)},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.6;">
-          Your account has been created with <strong style="text-transform: capitalize;">${opts.tier}</strong> tier access.
+          Your account has been created with <strong style="text-transform: capitalize;">${escapeHtml(opts.tier)}</strong> tier access.
           You can now view your offers, download documents, browse our product catalog, and submit requests.
         </p>
         <div style="text-align: center; margin: 30px 0;">
@@ -389,7 +406,7 @@ export function welcomePortalEmail(opts: {
         </ul>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -410,26 +427,26 @@ export function documentEmail(opts: {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
       <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
-        <h1 style="margin: 0; font-size: 22px; font-weight: 600;">${typeLabel} ${opts.docNumber}</h1>
-        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">From ${opts.tenantName}</p>
+        <h1 style="margin: 0; font-size: 22px; font-weight: 600;">${typeLabel} ${escapeHtml(opts.docNumber)}</h1>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">From ${escapeHtml(opts.tenantName)}</p>
       </div>
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="color: #333; font-size: 15px; line-height: 1.6;">Hello ${opts.partnerName},</p>
+        <p style="color: #333; font-size: 15px; line-height: 1.6;">Hello ${escapeHtml(opts.partnerName)},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.6;">
-          Please find attached your ${typeLabel.toLowerCase()} <strong>${opts.docNumber}</strong>.
-          ${opts.amount ? `The total amount is <strong>${opts.currency || ''} ${opts.amount}</strong>.` : ''}
-          ${opts.dueDate ? `Due date: <strong>${opts.dueDate}</strong>.` : ''}
+          Please find attached your ${typeLabel.toLowerCase()} <strong>${escapeHtml(opts.docNumber)}</strong>.
+          ${opts.amount ? `The total amount is <strong>${escapeHtml(opts.currency || "")} ${escapeHtml(opts.amount)}</strong>.` : ''}
+          ${opts.dueDate ? `Due date: <strong>${escapeHtml(opts.dueDate)}</strong>.` : ''}
         </p>
         <p style="color: #555; font-size: 14px; line-height: 1.6;">
           The document is attached as a PDF file. Please review it and contact us if you have any questions.
         </p>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
         <p style="color: #888; font-size: 12px; line-height: 1.5;">
-          This is an automated message from ${opts.tenantName}. Please do not reply to this email.
+          This is an automated message from ${escapeHtml(opts.tenantName)}. Please do not reply to this email.
         </p>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -459,7 +476,7 @@ export function kycStatusEmail(opts: {
   const noteBlock = opts.reason
     ? `<div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;border-radius:6px;margin:16px 0;">
          <p style="color:#78350f;font-size:13px;font-weight:600;margin:0 0 6px;">${resubmit ? "What we need from you:" : "Reason:"}</p>
-         <p style="color:#78350f;font-size:14px;line-height:1.5;margin:0;white-space:pre-wrap;">${opts.reason}</p>
+         <p style="color:#78350f;font-size:14px;line-height:1.5;margin:0;white-space:pre-wrap;">${escapeHtml(opts.reason)}</p>
        </div>`
     : "";
   const cta = opts.portalUrl && !rejected
@@ -474,10 +491,10 @@ export function kycStatusEmail(opts: {
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
       <div style="background: ${headerColor}; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
         <h1 style="margin: 0; font-size: 22px;">${headerLabel}</h1>
-        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${opts.tenantName}</p>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${escapeHtml(opts.tenantName)}</p>
       </div>
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="color: #333; font-size: 15px;">Hello ${opts.partnerName},</p>
+        <p style="color: #333; font-size: 15px;">Hello ${escapeHtml(opts.partnerName)},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.6;">
           ${approved
             ? "Your KYC verification has been approved. Your account is now fully active — you can access offers, invoices and documents in the portal."
@@ -489,11 +506,11 @@ export function kycStatusEmail(opts: {
         ${cta}
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
         <p style="color: #888; font-size: 12px; line-height: 1.5;">
-          This is an automated notification from ${opts.tenantName}. If you have questions, reply to this email or message us in the portal.
+          This is an automated notification from ${escapeHtml(opts.tenantName)}. If you have questions, reply to this email or message us in the portal.
         </p>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -515,20 +532,20 @@ export function shareDocumentEmail(opts: {
   const subject = `New document shared — ${opts.documentName}`;
   const msgBlock = opts.message
     ? `<div style="background:#f0fdfa;border-left:4px solid #0f766e;padding:14px 16px;border-radius:6px;margin:16px 0;">
-         <p style="color:#134e4a;font-size:13px;font-weight:600;margin:0 0 6px;">Message from ${opts.tenantName}:</p>
-         <p style="color:#134e4a;font-size:14px;line-height:1.5;margin:0;white-space:pre-wrap;">${opts.message}</p>
+         <p style="color:#134e4a;font-size:13px;font-weight:600;margin:0 0 6px;">Message from ${escapeHtml(opts.tenantName)}:</p>
+         <p style="color:#134e4a;font-size:14px;line-height:1.5;margin:0;white-space:pre-wrap;">${escapeHtml(opts.message)}</p>
        </div>`
     : "";
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
       <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
         <h1 style="margin: 0; font-size: 22px;">New document shared</h1>
-        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${opts.tenantName}</p>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${escapeHtml(opts.tenantName)}</p>
       </div>
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="color: #333; font-size: 15px;">Hello ${opts.partnerName},</p>
+        <p style="color: #333; font-size: 15px;">Hello ${escapeHtml(opts.partnerName)},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.6;">
-          A new ${opts.documentType || "document"} <strong>${opts.documentName}</strong> is now available in your portal.
+          A new ${escapeHtml(opts.documentType || "document")} <strong>${escapeHtml(opts.documentName)}</strong> is now available in your portal.
         </p>
         ${msgBlock}
         <div style="text-align:center;margin:24px 0;">
@@ -538,7 +555,7 @@ export function shareDocumentEmail(opts: {
         </div>
       </div>
       <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
-        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -564,15 +581,15 @@ export function newMessageEmail(opts: {
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
       <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
         <h1 style="margin: 0; font-size: 22px;">New message</h1>
-        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">from ${opts.fromName}</p>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">from ${escapeHtml(opts.fromName)}</p>
       </div>
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="color: #333; font-size: 15px;">Hello ${opts.toName},</p>
+        <p style="color: #333; font-size: 15px;">Hello ${escapeHtml(opts.toName)},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.6;">
-          <strong>${opts.fromName}</strong> sent you a message.
+          <strong>${escapeHtml(opts.fromName)}</strong> sent you a message.
         </p>
         <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0;">
-          <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap;">${opts.preview.slice(0, 400)}${opts.preview.length > 400 ? "…" : ""}</p>
+          <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap;">${escapeHtml(opts.preview.slice(0, 400))}${opts.preview.length > 400 ? "…" : ""}</p>
         </div>
         <div style="text-align:center;margin:24px 0;">
           <a href="${opts.portalUrl}" style="background:#0f766e;color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;font-size:14px;">
@@ -581,7 +598,7 @@ export function newMessageEmail(opts: {
         </div>
       </div>
       <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
-        © ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -605,24 +622,24 @@ export function logisticsQuoteReadyEmail(opts: {
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
       <div style="background: #0f766e; color: white; padding: 30px; border-radius: 12px 12px 0 0;">
         <h1 style="margin: 0; font-size: 22px;">Your freight quote is ready</h1>
-        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${opts.requestNumber} · ${opts.mode.toUpperCase()}</p>
+        <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${escapeHtml(opts.requestNumber)} · ${escapeHtml(opts.mode.toUpperCase())}</p>
       </div>
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="color: #333; font-size: 15px;">Hello ${opts.partnerName},</p>
-        <p style="color: #555; font-size: 14px; line-height: 1.6;">We've prepared a quote for your shipment <strong>${opts.route}</strong>.</p>
+        <p style="color: #333; font-size: 15px;">Hello ${escapeHtml(opts.partnerName)},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">We've prepared a quote for your shipment <strong>${escapeHtml(opts.route)}</strong>.</p>
         <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
-          <tr><td style="padding:8px 0;color:#6b7280;">Route</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.route}</td></tr>
-          <tr><td style="padding:8px 0;color:#6b7280;">Mode</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.mode.toUpperCase()}</td></tr>
-          <tr><td style="padding:8px 0;color:#6b7280;">Price</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.currency} ${opts.price}</td></tr>
-          <tr><td style="padding:8px 0;color:#6b7280;">Estimated transit</td><td style="padding:8px 0;text-align:right;font-weight:600;">${opts.transitDays} days</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Route</td><td style="padding:8px 0;text-align:right;font-weight:600;">${escapeHtml(opts.route)}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Mode</td><td style="padding:8px 0;text-align:right;font-weight:600;">${escapeHtml(opts.mode.toUpperCase())}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Price</td><td style="padding:8px 0;text-align:right;font-weight:600;">${escapeHtml(opts.currency)} ${escapeHtml(String(opts.price))}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280;">Estimated transit</td><td style="padding:8px 0;text-align:right;font-weight:600;">${escapeHtml(String(opts.transitDays))} days</td></tr>
         </table>
-        ${opts.notes ? `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0;"><p style="color:#374151;font-size:13px;line-height:1.6;margin:0;white-space:pre-wrap;">${opts.notes}</p></div>` : ""}
+        ${opts.notes ? `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0;"><p style="color:#374151;font-size:13px;line-height:1.6;margin:0;white-space:pre-wrap;">${escapeHtml(opts.notes)}</p></div>` : ""}
         <div style="text-align:center;margin:24px 0;">
           <a href="${opts.portalUrl}" style="background:#0f766e;color:white;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;font-size:14px;">Review Quote</a>
         </div>
         <p style="color:#888;font-size:12px;line-height:1.5;">Sign in to your portal to accept, decline, or ask for changes.</p>
       </div>
-      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">© ${new Date().getFullYear()} ${opts.tenantName}. Powered by Aspidus.</p>
+      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">© ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.</p>
     </div>
   `;
   return { subject, html };

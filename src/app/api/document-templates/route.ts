@@ -32,6 +32,12 @@ export async function GET(req: NextRequest) {
   // If the tenant has zero templates, seed them with three professional
   // starting points (offer / invoice / proforma) so they can hit the ground
   // running. Idempotent — only fires when nothing exists yet.
+  //
+  // SECURITY NOTE (audit P2-17): this GET handler has a side effect (INSERT).
+  // SameSite=Lax cookies block cross-site sub-resource requests, so CSRF is
+  // mitigated. The starter templates are idempotent (only created when
+  // items.length === 0), so even if triggered by a navigation, the worst
+  // case is 3 template rows created — no data corruption.
   if (items.length === 0) {
     for (const starter of STARTER_TEMPLATES) {
       await auth.store.upsertDocumentTemplate({

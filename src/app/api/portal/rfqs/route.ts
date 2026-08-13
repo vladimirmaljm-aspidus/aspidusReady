@@ -49,6 +49,43 @@ export async function POST(req: NextRequest) {
   body.tenant_id = access.tenant_id;
   body.portal_access_id = access.id;
 
+  // Validate required fields
+  if (!body.product_name || typeof body.product_name !== "string" || body.product_name.trim().length === 0) {
+    return NextResponse.json({ error: "Product name is required." }, { status: 400 });
+  }
+  if (body.product_name.length > 500) {
+    return NextResponse.json({ error: "Product name is too long." }, { status: 400 });
+  }
+
+  // Validate quantity
+  const qty = Number(body.quantity);
+  if (!Number.isFinite(qty) || qty <= 0 || qty > 1000000000) {
+    return NextResponse.json({ error: "Quantity must be a positive number." }, { status: 400 });
+  }
+  body.quantity = qty;
+
+  // Validate target_price (optional, but if present must be positive)
+  if (body.target_price !== undefined && body.target_price !== null && body.target_price !== "") {
+    const price = Number(body.target_price);
+    if (!Number.isFinite(price) || price < 0 || price > 1000000000) {
+      return NextResponse.json({ error: "Target price must be a non-negative number." }, { status: 400 });
+    }
+    body.target_price = price;
+  }
+
+  // Validate delivery_date format if provided (YYYY-MM-DD)
+  if (body.delivery_date && typeof body.delivery_date === "string") {
+    const d = new Date(body.delivery_date);
+    if (isNaN(d.getTime())) {
+      return NextResponse.json({ error: "Invalid delivery date." }, { status: 400 });
+    }
+  }
+
+  // Validate notes length
+  if (body.notes && typeof body.notes === "string" && body.notes.length > 5000) {
+    return NextResponse.json({ error: "Notes are too long (max 5000 characters)." }, { status: 400 });
+  }
+
   // Auto-generate RFQ number — atomic via Postgres SEQUENCE (C-2).
   // Falls back to the legacy `listRfqsByPartner(year).length + 1` if the
   // `get_next_doc_number('rfq')` RPC isn't available (e.g. before the
