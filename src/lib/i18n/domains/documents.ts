@@ -80,6 +80,13 @@ export const DOCUMENTS: Record<Locale, Record<string, string>> = {
     "doc-added-toast": "Document added.",
     "doc-deleted-toast": "Document deleted.",
     "doc-failed-delete-toast": "Failed to delete document.",
+    "doc-choose-file": "Choose file",
+    "doc-no-file-selected": "No file selected",
+    "doc-select-file-toast": "Please select a file.",
+    "doc-subject-label": "Display name (optional)",
+    "doc-subject-placeholder": "Defaults to file name",
+    "doc-uploading": "Uploading…",
+    "doc-max-size-hint": "Max 25 MB. PDF, images, Office docs, text.",
 
     // ── document-register-view.tsx — overrides with task-specific
     //    translations (e.g. "Current" → sr "Trenutno" instead of the
@@ -455,6 +462,13 @@ export const DOCUMENTS: Record<Locale, Record<string, string>> = {
     "doc-added-toast": "Dokument dodat.",
     "doc-deleted-toast": "Dokument obrisan.",
     "doc-failed-delete-toast": "Brisanje dokumenta nije uspelo.",
+    "doc-choose-file": "Izaberi fajl",
+    "doc-no-file-selected": "Nema izabranog fajla",
+    "doc-select-file-toast": "Izaberite fajl.",
+    "doc-subject-label": "Prikazano ime (opciono)",
+    "doc-subject-placeholder": "Podrazumevano ime fajla",
+    "doc-uploading": "Otpremanje…",
+    "doc-max-size-hint": "Max 25 MB. PDF, slike, Office dokumenti, tekst.",
 
     // ── document-register-view.tsx ──
     "doc-document-register-title": "Registar dokumenata",
@@ -828,6 +842,13 @@ export const DOCUMENTS: Record<Locale, Record<string, string>> = {
     "doc-added-toast": "Belge eklendi.",
     "doc-deleted-toast": "Belge silindi.",
     "doc-failed-delete-toast": "Belge silinemedi.",
+    "doc-choose-file": "Dosya seç",
+    "doc-no-file-selected": "Dosya seçilmedi",
+    "doc-select-file-toast": "Lütfen bir dosya seçin.",
+    "doc-subject-label": "Görünen ad (isteğe bağlı)",
+    "doc-subject-placeholder": "Dosya adını kullanır",
+    "doc-uploading": "Yükleniyor…",
+    "doc-max-size-hint": "Maks 25 MB. PDF, görseller, Office belgeleri, metin.",
 
     // ── document-register-view.tsx ──
     "doc-document-register-title": "Belge kaydı",
@@ -1202,6 +1223,13 @@ export const DOCUMENTS: Record<Locale, Record<string, string>> = {
     "doc-added-toast": "Dokument hinzugefügt.",
     "doc-deleted-toast": "Dokument gelöscht.",
     "doc-failed-delete-toast": "Dokument konnte nicht gelöscht werden.",
+    "doc-choose-file": "Datei wählen",
+    "doc-no-file-selected": "Keine Datei ausgewählt",
+    "doc-select-file-toast": "Bitte eine Datei auswählen.",
+    "doc-subject-label": "Anzeigename (optional)",
+    "doc-subject-placeholder": "Standardmäßig Dateiname",
+    "doc-uploading": "Wird hochgeladen…",
+    "doc-max-size-hint": "Max 25 MB. PDF, Bilder, Office-Dokumente, Text.",
 
     // ── document-register-view.tsx ──
     "doc-document-register-title": "Dokumentenregister",
@@ -1576,6 +1604,13 @@ export const DOCUMENTS: Record<Locale, Record<string, string>> = {
     "doc-added-toast": "Документ добавлен.",
     "doc-deleted-toast": "Документ удалён.",
     "doc-failed-delete-toast": "Не удалось удалить документ.",
+    "doc-choose-file": "Выбрать файл",
+    "doc-no-file-selected": "Файл не выбран",
+    "doc-select-file-toast": "Пожалуйста, выберите файл.",
+    "doc-subject-label": "Отображаемое имя (необязательно)",
+    "doc-subject-placeholder": "По умолчанию имя файла",
+    "doc-uploading": "Загрузка…",
+    "doc-max-size-hint": "Макс 25 МБ. PDF, изображения, документы Office, текст.",
 
     // ── document-register-view.tsx ──
     "doc-document-register-title": "Реестр документов",

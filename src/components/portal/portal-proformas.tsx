@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -48,12 +48,14 @@ import { useAppStore } from "@/lib/store/app-store";
 import { useT } from "@/lib/i18n/store";
 import { fmtMoney, fmtDate, fmtMoneyDetailed } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Proforma, ProformaStatus, OfferLineItem, PortalTier } from "@/lib/supabase/types";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 
 const STATUS_STYLES: Record<ProformaStatus, string> = {
   draft: "bg-secondary text-secondary-foreground",
   sent: "border-transparent bg-chart-1 text-white",
+  viewed: "border-transparent bg-chart-1 text-white",
   accepted: "border-transparent bg-emerald-600 text-white",
   paid: "border-transparent bg-emerald-700 text-white",
   expired: "border-transparent bg-destructive text-destructive-foreground",
@@ -62,6 +64,7 @@ const STATUS_STYLES: Record<ProformaStatus, string> = {
 const STATUS_LABEL_KEYS: Record<ProformaStatus, string> = {
   draft: "portal-status-draft",
   sent: "portal-status-sent",
+  viewed: "portal-status-viewed",
   accepted: "portal-status-accepted",
   paid: "portal-status-paid",
   expired: "portal-status-expired",
@@ -70,6 +73,7 @@ const STATUS_LABEL_KEYS: Record<ProformaStatus, string> = {
 const STATUS_ICONS: Record<ProformaStatus, React.ComponentType<{ className?: string }>> = {
   draft: FileText,
   sent: Clock,
+  viewed: Eye,
   accepted: CheckCircle2,
   paid: CheckCircle2,
   expired: Hourglass,
@@ -77,6 +81,7 @@ const STATUS_ICONS: Record<ProformaStatus, React.ComponentType<{ className?: str
 
 export function PortalProformas() {
   const t = useT();
+  const qc = useQueryClient();
   const portalAccess = useAppStore((s) => s.portalAccess) as any;
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
@@ -280,6 +285,27 @@ export function PortalProformas() {
               canDownloadPdf={canDownloadPdf}
               tier={tier}
               onDownload={() => handleDownloadPdf(detailQ.data.id)}
+              onRespond={async (decision) => {
+                const note = decision === "accept"
+                  ? window.prompt(t("portal-proforma-accept-note"), "") || ""
+                  : window.prompt(t("portal-proforma-reject-note"), "") || "";
+                try {
+                  const r = await fetch(`/api/portal/proformas/${detailQ.data.id}/respond`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ decision, note }),
+                  });
+                  if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || "Request failed");
+                  }
+                  toast.success(decision === "accept" ? t("portal-proforma-accepted") : t("portal-proforma-rejected"));
+                  qc.invalidateQueries({ queryKey: ["portal-proformas"] });
+                  setDetailId(null);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Failed");
+                }
+              }}
               t={t}
             />
           ) : null}
@@ -311,15 +337,18 @@ function ProformaDetail({
   canDownloadPdf,
   tier,
   onDownload,
+  onRespond,
   t,
 }: {
   proforma: Proforma;
   canDownloadPdf: boolean;
   tier?: PortalTier;
   onDownload: () => void;
+  onRespond: (decision: "accept" | "reject") => void;
   t: (k: string) => string;
 }) {
   const StatusIcon = STATUS_ICONS[proforma.status];
+  const canRespond = proforma.status === "sent" || proforma.status === "viewed";
   return (
     <>
       <SheetHeader>
@@ -454,6 +483,25 @@ function ProformaDetail({
             </div>
           )}
         </div>
+
+        {/* Accept / Reject buttons — only when proforma is pending response */}
+        {canRespond && (
+          <div className="flex gap-2 pt-2">
+            <Button
+              onClick={() => onRespond("accept")}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white shadow-soft"
+            >
+              <CheckCircle2 className="size-4 mr-2" /> {t("portal-accept")}
+            </Button>
+            <Button
+              onClick={() => onRespond("reject")}
+              variant="outline"
+              className="flex-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
+            >
+              <XCircle className="size-4 mr-2" /> {t("portal-reject")}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );

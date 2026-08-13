@@ -127,6 +127,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // E-8: refuse to create a journal entry whose date falls inside a CLOSED
+    // fiscal period. The store-level `postErpJournalEntry` already enforces
+    // this at post-time, but without this earlier check the user could
+    // create a draft entry in a closed period (and then be confused when
+    // they can never post it). Mirroring the store's lookup: filter by
+    // tenant_id so tenant A's closed period can't block tenant B. If no
+    // period is configured for the date, we allow (don't block on missing
+    // config — same behaviour as the post-time check).
+    if (body.date) {
+      const { getSupabase } = await import("@/lib/supabase/client");
+      const { data: period, error: periodErr } = await getSupabase()
+        .from("fiscal_periods")
+        .select("id, status")
+        .eq("tenant_id", tenantId)
+        .lte("start_date", body.date)
+        .gte("end_date", body.date)
+        .maybeSingle();
+      if (periodErr) {
+        return NextResponse.json(
+          { error: `Failed to validate fiscal period: ${periodErr.message}` },
+          { status: 500 },
+        );
+      }
+      if (period && period.status === "closed") {
+        return NextResponse.json(
+          { error: "Cannot create journal entry in a closed fiscal period." },
+          { status: 409 },
+        );
+      }
+    }
+
     const created = await auth.store.upsertErpJournalEntry({
       ...body,
       tenant_id: tenantId,

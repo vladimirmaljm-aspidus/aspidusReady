@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card, CardContent,
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  Plus, Search, FileText, Trash2, Eye, EyeOff, Download, FolderOpen, Calendar, HardDrive,
+  Plus, Search, FileText, Trash2, Eye, EyeOff, Download, FolderOpen, Calendar, HardDrive, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -73,6 +73,11 @@ export function DocumentsView() {
   const [partnerFilter, setPartnerFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
+  // Bumped each time the "Add document" button is clicked so the form
+  // dialog remounts with fresh state — the React-recommended alternative
+  // to calling setState inside useEffect/useMemo to "reset on open".
+  // (See https://react.dev/reference/react/useState#storing-information-from-previous-renders)
+  const [formKey, setFormKey] = useState(0);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -128,7 +133,7 @@ export function DocumentsView() {
         title={t("doc-title")}
         description={`${data?.total ?? 0} ${t("doc-total-suffix")}`}
         actions={
-          <Button onClick={() => setShowForm(true)}>
+          <Button onClick={() => { setFormKey((k) => k + 1); setShowForm(true); }}>
             <Plus className="size-4 mr-1" /> {t("doc-add-document")}
           </Button>
         }
@@ -176,7 +181,7 @@ export function DocumentsView() {
           icon={<FileText className="size-6" />}
           title={t("doc-no-documents")}
           description={t("doc-upload-first")}
-          action={<Button onClick={() => setShowForm(true)}><Plus className="size-4 mr-1" /> {t("doc-add-document")}</Button>}
+          action={<Button onClick={() => { setFormKey((k) => k + 1); setShowForm(true); }}><Plus className="size-4 mr-1" /> {t("doc-add-document")}</Button>}
         />
       ) : (
         <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scroll pr-1 -mr-1">
@@ -217,6 +222,7 @@ export function DocumentsView() {
 
       {/* Form dialog */}
       <DocumentFormDialog
+        key={formKey}
         open={showForm}
         onOpenChange={setShowForm}
         partners={partnerList}
@@ -361,6 +367,13 @@ function DocumentDetail({
 }
 
 // ---- Form dialog ----
+//
+// DOC-1: the admin "Add document" dialog used to POST JSON metadata to
+// `/api/documents` and ask the user to type MIME / size / storage_path by
+// hand — there was no real file upload. We now mirror the portal upload
+// pattern: a real file picker + multipart POST to `/api/documents/upload`.
+// The server-side route verifies magic bytes, stores the file in Supabase
+// Storage (`shared-documents` bucket), and writes the metadata row.
 function DocumentFormDialog({
   open, onOpenChange, partners, onSaved,
 }: {
@@ -370,39 +383,35 @@ function DocumentFormDialog({
   onSaved: () => void;
 }) {
   const api = useApiUrl();
-  const tenantKey = useTenantKey();
   const t = useT();
 
-  const [form, setForm] = useState<Partial<SharedDocument>>({});
+  // The form dialog is keyed by `formKey` (see parent) so it remounts with
+  // fresh initial state every time the user clicks "Add document" — no
+  // useEffect/useMemo reset hack needed. We keep `useRef` for the file input
+  // so the "Choose file" button can trigger it imperatively.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [partnerId, setPartnerId] = useState<string>("");
+  const [category, setCategory] = useState<DocCategory>("other");
+  const [subject, setSubject] = useState<string>("");
+  const [visibleToPartner, setVisibleToPartner] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useMemo(() => {
-    if (open) {
-      setForm({
-        filename: "",
-        partner_id: "",
-        category: "other",
-        visible_to_partner: false,
-        mime_type: "application/pdf",
-        size: 0,
-        storage_path: "",
-      });
-    }
-  }, [open]);
-
-  function set<K extends keyof SharedDocument>(k: K, v: SharedDocument[K]) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
-
   async function save() {
-    if (!form.filename) { toast.error(t("doc-enter-filename-toast")); return; }
-    if (!form.partner_id) { toast.error(t("fin-select-partner-toast")); return; }
+    if (!file) { toast.error(t("doc-select-file-toast")); return; }
+    if (!partnerId) { toast.error(t("doc-select-partner-toast")); return; }
     setSaving(true);
     try {
-      const r = await fetch(api("/api/documents"), {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("partner_id", partnerId);
+      fd.append("category", category);
+      fd.append("visible_to_partner", visibleToPartner ? "true" : "false");
+      if (subject.trim()) fd.append("subject", subject.trim());
+
+      const r = await fetch(api("/api/documents/upload"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: fd,
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
@@ -427,19 +436,42 @@ function DocumentFormDialog({
 
         <div className="max-h-[70vh] overflow-y-auto pr-1">
         <div className="grid grid-cols-1 gap-3 py-2">
+          {/* File picker — replaces the manual filename/MIME/size/path inputs. */}
           <div className="space-y-1.5">
             <Label>{t("doc-file-name")} *</Label>
-            <Input
-              value={form.filename || ""}
-              onChange={(e) => set("filename", e.target.value)}
-              placeholder={t("doc-filename-placeholder")}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setFile(f);
+                  // Pre-fill the display name with the file name if the user
+                  // hasn't typed anything yet — saves a round-trip for the
+                  // common case where they want the file name as-is.
+                  if (f && !subject.trim()) setSubject(f.name);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="size-4 mr-1" /> {t("doc-choose-file")}
+              </Button>
+              <span className="text-sm text-muted-foreground truncate flex-1" title={file?.name}>
+                {file ? file.name : t("doc-no-file-selected")}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("doc-max-size-hint")}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t("fin-partner")} *</Label>
-              <Select value={form.partner_id || ""} onValueChange={(v) => set("partner_id", v)}>
+              <Select value={partnerId} onValueChange={setPartnerId}>
                 <SelectTrigger><SelectValue placeholder={t("fin-select-placeholder")} /></SelectTrigger>
                 <SelectContent>
                   {partners.map((p) => (
@@ -450,7 +482,7 @@ function DocumentFormDialog({
             </div>
             <div className="space-y-1.5">
               <Label>{t("category")}</Label>
-              <Select value={form.category || "other"} onValueChange={(v) => set("category", v as DocCategory)}>
+              <Select value={category} onValueChange={(v) => setCategory(v as DocCategory)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="contract">{t("fin-doc-type-contract")}</SelectItem>
@@ -462,42 +494,23 @@ function DocumentFormDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>{t("doc-mime-type")}</Label>
-              <Input
-                value={form.mime_type || ""}
-                onChange={(e) => set("mime_type", e.target.value)}
-                placeholder="application/pdf"
-                className="font-mono text-xs"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t("doc-size-bytes")}</Label>
-              <Input
-                type="number"
-                value={form.size ?? 0}
-                onChange={(e) => set("size", Number(e.target.value))}
-                placeholder="0"
-                className="tabular"
-              />
-            </div>
-          </div>
-
+          {/* Optional display name — overrides the on-disk filename in the
+              `shared_documents.filename` column. Useful when the original
+              file name is e.g. "scan_001.pdf" but you want to show
+              "Q1 2026 contract". */}
           <div className="space-y-1.5">
-            <Label>{t("doc-storage-path")}</Label>
+            <Label>{t("doc-subject-label")}</Label>
             <Input
-              value={form.storage_path || ""}
-              onChange={(e) => set("storage_path", e.target.value)}
-              placeholder="documents/2026/001.pdf"
-              className="font-mono text-xs"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder={t("doc-subject-placeholder")}
             />
           </div>
 
           <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
             <Switch
-              checked={!!form.visible_to_partner}
-              onCheckedChange={(v) => set("visible_to_partner", v)}
+              checked={visibleToPartner}
+              onCheckedChange={setVisibleToPartner}
             />
             <div>
               <p className="text-sm font-medium">{t("doc-visible-to-partner")}</p>
@@ -510,7 +523,7 @@ function DocumentFormDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? t("fin-saving") : t("save")}
+            {saving ? t("doc-uploading") : t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>

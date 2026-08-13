@@ -434,7 +434,7 @@ export interface Invoice {
 // "accepted" is the client's confirmation of the proforma; it unlocks
 // invoice creation. Existing proformas with status "sent" remain valid —
 // the create-invoice automation accepts either "accepted" or "sent".
-export type ProformaStatus = "draft" | "sent" | "accepted" | "paid" | "expired";
+export type ProformaStatus = "draft" | "sent" | "viewed" | "accepted" | "paid" | "expired";
 
 export interface Proforma {
   id: string;
@@ -1320,6 +1320,8 @@ export type NotificationType =
   | "invoice_overdue"
   | "invoice_paid"
   | "proforma_sent"
+  | "proforma_accepted"
+  | "proforma_rejected"
   | "document_shared"
   | "portal_access_requested"
   | "portal_access_approved"

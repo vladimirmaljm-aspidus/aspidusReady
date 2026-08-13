@@ -52,6 +52,7 @@ import { downloadPdf } from "@/lib/utils/download";
 const STATUS_LABEL_KEYS: Record<ProformaStatus, string> = {
   draft: "fin-status-draft",
   sent: "fin-status-sent",
+  viewed: "fin-status-viewed",
   accepted: "fin-status-accepted",
   paid: "fin-status-paid",
   expired: "fin-status-expired",
@@ -62,6 +63,7 @@ const STATUS_LABEL_KEYS: Record<ProformaStatus, string> = {
 const STATUS_STYLES: Record<ProformaStatus, string> = {
   draft: "bg-secondary text-secondary-foreground",
   sent: "border-transparent bg-[var(--chart-1)] text-white",
+  viewed: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
   accepted: "border-transparent bg-emerald-600 text-white",
   paid: "border-transparent bg-emerald-700 text-white",
   expired: "border-transparent bg-muted text-muted-foreground",
