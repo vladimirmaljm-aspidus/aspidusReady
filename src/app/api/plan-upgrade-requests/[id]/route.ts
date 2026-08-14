@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const requester = await auth.store.getUserById(requesterId);
       if (requester?.email) {
         const tenant = await auth.store.getTenant((current as any).tenant_id);
-        const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
+        const baseUrl = process.env.APP_BASE_URL || "https://velos.onrender.com";
         const { sendEmail } = await import("@/lib/email/service");
         const approved = decision === "approve";
         const subject = approved
@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                 ? `<p>Your request to upgrade <strong>${tenant?.name || "your workspace"}</strong> to <strong>${(current as any).requested_plan}</strong> has been approved. The new plan is active immediately.</p>`
                 : `<p>Your request to upgrade <strong>${tenant?.name || "your workspace"}</strong> to <strong>${(current as any).requested_plan}</strong> was not approved at this time.</p>`}
               ${body.admin_note ? `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:16px 0;"><p style="color:#374151;margin:0;font-size:13px;">${body.admin_note}</p></div>` : ""}
-              <p style="margin-top:16px;"><a href="${baseUrl}" style="background:#0f766e;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Open Aspidus</a></p>
+              <p style="margin-top:16px;"><a href="${baseUrl}" style="background:#0f766e;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Open VELOS</a></p>
             </div>
           </div>`;
         await sendEmail({ to: requester.email, subject, html, tenantId: (current as any).tenant_id });

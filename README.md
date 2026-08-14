@@ -1,4 +1,4 @@
-# Aspidus Trade Platform
+# VELOS Trade Platform
 
 Multi-tenant trade CRM/ERP for international commodity trading — offers,
 invoices, proformas, portal, KYC, trade calculator, ERP/accounting, 3D trade

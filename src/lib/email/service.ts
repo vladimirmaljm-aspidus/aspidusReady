@@ -98,8 +98,8 @@ export async function getEmailConfig(tenantId?: string): Promise<EmailConfig | n
   if (!comms) return null;
 
   const provider: EmailProvider = comms.email_provider || (comms.smtp_host ? "smtp" : "none");
-  const fromName = comms.from_name || "Aspidus CRM";
-  const fromEmail = comms.from_email || "noreply@aspidus.com";
+  const fromName = comms.from_name || "VELOS CRM";
+  const fromEmail = comms.from_email || "noreply@velos.trade";
 
   const config: EmailConfig = { provider, fromName, fromEmail };
 
@@ -406,7 +406,7 @@ export function welcomePortalEmail(opts: {
         </ul>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
       </p>
     </div>
   `;
@@ -446,7 +446,7 @@ export function documentEmail(opts: {
         </p>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
       </p>
     </div>
   `;
@@ -510,7 +510,7 @@ export function kycStatusEmail(opts: {
         </p>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
       </p>
     </div>
   `;
@@ -555,7 +555,7 @@ export function shareDocumentEmail(opts: {
         </div>
       </div>
       <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
       </p>
     </div>
   `;
@@ -598,7 +598,7 @@ export function newMessageEmail(opts: {
         </div>
       </div>
       <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
       </p>
     </div>
   `;
@@ -639,7 +639,7 @@ export function logisticsQuoteReadyEmail(opts: {
         </div>
         <p style="color:#888;font-size:12px;line-height:1.5;">Sign in to your portal to accept, decline, or ask for changes.</p>
       </div>
-      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">© ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.</p>
+      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">© ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.</p>
     </div>
   `;
   return { subject, html };

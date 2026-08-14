@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Subscription expired. Contact the platform administrator to renew.", subscription_expired: true }, { status: 402 });
       }
       if (String(tenant?.status) === "trial" && trialEnd && trialEnd < now) {
-        return NextResponse.json({ error: "Trial period has ended. Upgrade to continue using Aspidus.", subscription_expired: true }, { status: 402 });
+        return NextResponse.json({ error: "Trial period has ended. Upgrade to continue using VELOS.", subscription_expired: true }, { status: 402 });
       }
     }
 

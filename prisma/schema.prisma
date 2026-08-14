@@ -1,4 +1,4 @@
-// Aspidus Trade Management Platform — Prisma Schema
+// VELOS Trade Management Platform — Prisma Schema
 // SQLite-compatible: no enums, no native JSON/arrays (stored as String)
 
 generator client {

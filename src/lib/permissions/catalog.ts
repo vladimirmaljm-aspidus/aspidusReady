@@ -1,5 +1,5 @@
 /**
- * Canonical permission catalog for the Aspidus platform.
+ * Canonical permission catalog for the VELOS platform.
  *
  * Format: `resource.action` (dot-separated), e.g. `partners.read`, `erp.post`.
  *

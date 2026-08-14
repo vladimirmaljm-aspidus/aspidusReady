@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
     const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
       headers: {
-        "User-Agent": "AspidusCRM/1.0 (trade@aspidus.co)",
+        "User-Agent": "VELOSCRM/1.0 (trade@velos.trade)",
       },
       signal: AbortSignal.timeout(10_000),
     });

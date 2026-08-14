@@ -17,11 +17,11 @@ interface I18nState {
 }
 
 export const useI18nStore = create<I18nState>((set, get) => ({
-  locale: (typeof window !== "undefined" && (localStorage.getItem("aspidus-locale") as Locale)) || "en",
+  locale: (typeof window !== "undefined" && (localStorage.getItem("velos-locale") as Locale)) || "en",
   hydrated: false,
 
   setLocale: (locale) => {
-    if (typeof window !== "undefined") localStorage.setItem("aspidus-locale", locale);
+    if (typeof window !== "undefined") localStorage.setItem("velos-locale", locale);
     set({ locale });
     if (typeof window !== "undefined") {
       fetch("/api/user-preferences", {
@@ -36,7 +36,7 @@ export const useI18nStore = create<I18nState>((set, get) => ({
   // Called on logout so a second user on the same browser/tab never inherits
   // the previous user's language before their own preference loads.
   reset: () => {
-    if (typeof window !== "undefined") localStorage.removeItem("aspidus-locale");
+    if (typeof window !== "undefined") localStorage.removeItem("velos-locale");
     set({ locale: "en", hydrated: false });
   },
 
@@ -52,7 +52,7 @@ export const useI18nStore = create<I18nState>((set, get) => ({
         const data = await res.json();
         const saved = data?.map?.locale;
         if (isLocale(saved)) {
-          localStorage.setItem("aspidus-locale", saved);
+          localStorage.setItem("velos-locale", saved);
           set({ locale: saved });
           return;
         }
@@ -66,7 +66,7 @@ export const useI18nStore = create<I18nState>((set, get) => ({
         const data = await res.json();
         if (isLocale(data?.default_locale)) {
           set({ locale: data.default_locale });
-          localStorage.setItem("aspidus-locale", data.default_locale);
+          localStorage.setItem("velos-locale", data.default_locale);
         }
       }
     } catch {

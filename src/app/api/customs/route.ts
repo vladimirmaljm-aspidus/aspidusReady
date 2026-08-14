@@ -90,7 +90,7 @@ const HS_CODES = [
   { code: "9405", description: "Lamps and lighting fittings", section: "XX", dutyHint: "5-15%", vatHint: "Varies" },
   // Section XXI: Works of Art
   { code: "9701", description: "Paintings and drawings, entirely hand-made", section: "XXI", dutyHint: "0-5%", vatHint: "Varies" },
-  // Glycerin (relevant for Aspidus)
+  // Glycerin (relevant for VELOS)
   { code: "1520", description: "Crude glycerin (glycerol)", section: "III", dutyHint: "0-10%", vatHint: "Varies" },
   { code: "152000", description: "Crude glycerin (glycerol) — 6-digit", section: "III", dutyHint: "0-10%", vatHint: "Varies" },
   { code: "15200000", description: "Crude glycerin (glycerol) — 8-digit", section: "III", dutyHint: "0-10%", vatHint: "Varies" },

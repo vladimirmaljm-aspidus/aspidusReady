@@ -62,17 +62,17 @@ export async function POST(req: NextRequest) {
       user_agent: ua,
     });
 
-    const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
+    const baseUrl = process.env.APP_BASE_URL || "https://velos.onrender.com";
     const resetUrl = `${baseUrl}/portal/login?reset_token=${token}`;
 
     await sendEmail({
       to: email,
-      subject: `Password Reset — ${tenant.name || "Aspidus"}`,
+      subject: `Password Reset — ${tenant.name || "VELOS"}`,
       html: `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;">
           <div style="background:#0f766e;color:white;padding:24px 28px;border-radius:12px 12px 0 0;">
             <h1 style="margin:0;font-size:18px;font-weight:600;">Password Reset Request</h1>
-            <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">${tenant.name || "Aspidus"} Client Portal</p>
+            <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">${tenant.name || "VELOS"} Client Portal</p>
           </div>
           <div style="background:white;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
             <p style="color:#333;font-size:14px;">Hello,</p>

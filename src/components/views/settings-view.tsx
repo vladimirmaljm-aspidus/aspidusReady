@@ -636,7 +636,7 @@ function CommsTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>From name</Label>
-            <Input value={value.from_name} onChange={(e) => set("from_name", e.target.value)} placeholder="Aspidus CRM" />
+            <Input value={value.from_name} onChange={(e) => set("from_name", e.target.value)} placeholder="VELOS CRM" />
           </div>
           <div className="space-y-1.5">
             <Label>From email</Label>

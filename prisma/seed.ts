@@ -15,11 +15,11 @@ async function main() {
   console.log("→ Seeding database…");
 
   // ── 1. Tenants ────────────────────────────────────────────────────────
-  const t1Existing = await db.tenant.findFirst({ where: { name: "Aspidus Trade DOO" } });
+  const t1Existing = await db.tenant.findFirst({ where: { name: "VELOS Trade DOO" } });
   const tenant1 = t1Existing ?? await db.tenant.create({
     data: {
-      name: "Aspidus Trade DOO",
-      legal_name: "Aspidus Trade DOO Beograd",
+      name: "VELOS Trade DOO",
+      legal_name: "VELOS Trade DOO Beograd",
       country: "RS",
       currency: "EUR",
       tax_id: "108504931",
@@ -87,12 +87,12 @@ async function main() {
       },
     });
 
-  const tenantAdmin = (await db.user.findFirst({ where: { email: "admin@aspidus.com" } })) ??
+  const tenantAdmin = (await db.user.findFirst({ where: { email: "admin@velos.trade" } })) ??
     await db.user.create({
       data: {
         tenant_id: tenant1.id,
         username: "admin",
-        email: "admin@aspidus.com",
+        email: "admin@velos.trade",
         full_name: "Tenant Admin",
         role: "admin",
         password_hash: adminHash,
@@ -102,12 +102,12 @@ async function main() {
       },
     });
 
-  const tenantUser = (await db.user.findFirst({ where: { email: "user@aspidus.com" } })) ??
+  const tenantUser = (await db.user.findFirst({ where: { email: "user@velos.trade" } })) ??
     await db.user.create({
       data: {
         tenant_id: tenant1.id,
         username: "user",
-        email: "user@aspidus.com",
+        email: "user@velos.trade",
         full_name: "Regular User",
         role: "user",
         password_hash: userHash,

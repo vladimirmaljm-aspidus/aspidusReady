@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         partnerName: partner?.name || "Client",
         docType: "invoice",
         docNumber: invoice.number || id,
-        tenantName: (await auth.store.getTenant(tenantId))?.name || "Aspidus Trade",
+        tenantName: (await auth.store.getTenant(tenantId))?.name || "VELOS Trade",
         amount: invoice.total != null ? String(invoice.total) : undefined,
         currency: invoice.currency || undefined,
         dueDate: invoice.due_date || undefined,

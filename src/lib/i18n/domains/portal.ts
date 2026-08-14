@@ -25,7 +25,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-nav-my-profile": "My Profile",
     "portal-nav-company-info": "Company Info",
     "portal-brand-title": "Client Portal",
-    "portal-brand-subtitle": "Aspidus Trading",
+    "portal-brand-subtitle": "VELOS Trading",
     "portal-section-workspace": "Workspace",
     "portal-section-account": "Account",
     "portal-default-client": "Client",
@@ -651,7 +651,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-login-security-badges": "Bank-grade security · SOC 2 compliant · GDPR ready",
 
     // ─── Messages ────────────────────────────────────────────────────────
-    "portal-messages-support": "Aspidus Support",
+    "portal-messages-support": "VELOS Support",
     "portal-messages-refreshing": "Refreshing…",
     "portal-messages-replies": "Usually replies within 1 business day",
     "portal-messages-loading": "Loading conversation…",
@@ -899,7 +899,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-nav-my-profile": "Moj profil",
     "portal-nav-company-info": "Podaci o firmi",
     "portal-brand-title": "Klijentski portal",
-    "portal-brand-subtitle": "Aspidus Trading",
+    "portal-brand-subtitle": "VELOS Trading",
     "portal-section-workspace": "Radni prostor",
     "portal-section-account": "Nalog",
     "portal-default-client": "Klijent",
@@ -1525,7 +1525,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-login-security-badges": "Bank-grade bezbednost · SOC 2 usaglašeno · GDPR spreman",
 
     // ─── Messages ────────────────────────────────────────────────────────
-    "portal-messages-support": "Aspidus podrška",
+    "portal-messages-support": "VELOS podrška",
     "portal-messages-refreshing": "Osvežavanje…",
     "portal-messages-replies": "Obično odgovara u roku od 1 radnog dana",
     "portal-messages-loading": "Učitavanje razgovora…",
@@ -1773,7 +1773,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-nav-my-profile": "Profilim",
     "portal-nav-company-info": "Şirket Bilgileri",
     "portal-brand-title": "Müşteri Portalı",
-    "portal-brand-subtitle": "Aspidus Trading",
+    "portal-brand-subtitle": "VELOS Trading",
     "portal-section-workspace": "Çalışma Alanı",
     "portal-section-account": "Hesap",
     "portal-default-client": "Müşteri",
@@ -2399,7 +2399,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-login-security-badges": "Banka sınıfı güvenlik · SOC 2 uyumlu · GDPR hazır",
 
     // ─── Messages ────────────────────────────────────────────────────────
-    "portal-messages-support": "Aspidus Destek",
+    "portal-messages-support": "VELOS Destek",
     "portal-messages-refreshing": "Yenileniyor…",
     "portal-messages-replies": "Genellikle 1 iş günü içinde yanıt verir",
     "portal-messages-loading": "Konuşma yükleniyor…",
@@ -2647,7 +2647,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-nav-my-profile": "Mein Profil",
     "portal-nav-company-info": "Firmeninfo",
     "portal-brand-title": "Kundenportal",
-    "portal-brand-subtitle": "Aspidus Trading",
+    "portal-brand-subtitle": "VELOS Trading",
     "portal-section-workspace": "Arbeitsbereich",
     "portal-section-account": "Konto",
     "portal-default-client": "Kunde",
@@ -3273,7 +3273,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-login-security-badges": "Bank-grade Sicherheit · SOC 2-konform · GDPR-ready",
 
     // ─── Messages ────────────────────────────────────────────────────────
-    "portal-messages-support": "Aspidus-Support",
+    "portal-messages-support": "VELOS-Support",
     "portal-messages-refreshing": "Aktualisierung…",
     "portal-messages-replies": "Antwortet in der Regel innerhalb von 1 Werktag",
     "portal-messages-loading": "Unterhaltung wird geladen…",
@@ -3521,7 +3521,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-nav-my-profile": "Мой профиль",
     "portal-nav-company-info": "Информация о компании",
     "portal-brand-title": "Клиентский портал",
-    "portal-brand-subtitle": "Aspidus Trading",
+    "portal-brand-subtitle": "VELOS Trading",
     "portal-section-workspace": "Рабочее пространство",
     "portal-section-account": "Аккаунт",
     "portal-default-client": "Клиент",
@@ -4147,7 +4147,7 @@ export const PORTAL: Record<Locale, Record<string, string>> = {
     "portal-login-security-badges": "Безопасность банковского уровня · SOC 2 · GDPR-ready",
 
     // ─── Messages ────────────────────────────────────────────────────────
-    "portal-messages-support": "Поддержка Aspidus",
+    "portal-messages-support": "Поддержка VELOS",
     "portal-messages-refreshing": "Обновление…",
     "portal-messages-replies": "Обычно отвечает в течение 1 рабочего дня",
     "portal-messages-loading": "Загрузка переписки…",

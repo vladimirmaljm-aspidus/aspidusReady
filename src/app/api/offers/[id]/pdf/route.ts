@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Build professional filename: CompanyName_Offer_123-2026_ClientName.pdf
     const safeName = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-    const tenantName = safeName(tenant?.name || "Aspidus");
+    const tenantName = safeName(tenant?.name || "VELOS");
     const docNum = safeName(offer?.number || id);
     const partnerName = partner ? `_${safeName(partner.name)}` : "";
     const filename = `${tenantName}_Offer_${docNum}${partnerName}.pdf`;

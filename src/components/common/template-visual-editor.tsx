@@ -225,7 +225,7 @@ function getCompanyName(letterhead: TenantLetterhead | null): string {
   return (
     letterhead?.company_name ||
     letterhead?.company_legal_name ||
-    "Aspidus Trading"
+    "VELOS Trading"
   );
 }
 
@@ -254,9 +254,9 @@ function substitutePlaceholders(
     .replace(/{{company_name}}/g, getCompanyName(letterhead))
     .replace(/{{company_legal_name}}/g, letterhead?.company_legal_name || getCompanyName(letterhead))
     .replace(/{{company_address}}/g, buildCompanyAddress(letterhead))
-    .replace(/{{company_email}}/g, letterhead?.company_email || "office@aspidus.com")
+    .replace(/{{company_email}}/g, letterhead?.company_email || "office@velos.trade")
     .replace(/{{company_phone}}/g, letterhead?.company_phone || "+971 4 555 0100")
-    .replace(/{{company_website}}/g, letterhead?.company_website || "www.aspidus.com")
+    .replace(/{{company_website}}/g, letterhead?.company_website || "www.velos.trade")
     .replace(/{{company_vat}}/g, getVatNumber(letterhead) || "—")
     .replace(/{{company_reg}}/g, getRegNumber(letterhead))
     .replace(/{{company_bank}}/g, letterhead?.bank_name || "Abu Dhabi Islamic Bank")

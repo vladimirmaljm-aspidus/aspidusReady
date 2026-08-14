@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const store = await getStore();
   const tenant = await store.getTenant((lr as any).tenant_id);
   const buffer = await renderPackingListPdf({
-    tenantName: tenant?.name || "Aspidus",
+    tenantName: tenant?.name || "VELOS",
     requestNumber: (lr as any).number,
     mode: (lr as any).mode,
     containerType: (lr as any).container_type,

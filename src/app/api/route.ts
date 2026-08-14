@@ -1,5 +1,5 @@
 /**
- * API Root — Aspidus Trade API
+ * API Root — VELOS Trade API
  * Returns API version and available endpoints.
  */
 import { NextResponse } from "next/server";
@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     return NextResponse.json({
-      name: "Aspidus Trade API",
+      name: "VELOS Trade API",
       version: "1.0.0",
       description: "Trade management platform API",
       endpoints: {

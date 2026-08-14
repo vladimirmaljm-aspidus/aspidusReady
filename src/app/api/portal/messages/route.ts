@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
           toName: tenant?.name || "Team",
           fromName: partner?.name || access.portal_email || "Portal client",
           preview: body,
-          tenantName: tenant?.name || "Aspidus",
+          tenantName: tenant?.name || "VELOS",
           portalUrl: `${process.env.APP_BASE_URL || ""}/portal-access?open=${access.id}`,
           direction: "portal_to_admin",
         });

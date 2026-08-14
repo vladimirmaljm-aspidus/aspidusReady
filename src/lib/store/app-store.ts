@@ -142,7 +142,7 @@ interface AppState {
 function loadActiveTenant(): { id: string | null; name: string | null } {
   if (typeof window === "undefined") return { id: null, name: null };
   try {
-    const raw = localStorage.getItem("aspidus_active_tenant");
+    const raw = localStorage.getItem("velos_active_tenant");
     if (!raw) return { id: null, name: null };
     const parsed = JSON.parse(raw);
     return { id: parsed.id || null, name: parsed.name || null };
@@ -169,7 +169,7 @@ export const useAppStore = create<AppState>((set) => ({
   setView: (v) => {
     set({ view: v });
     if (typeof window !== "undefined") {
-      try { sessionStorage.setItem("aspidus_view", v); } catch { /* ignore */ }
+      try { sessionStorage.setItem("velos_view", v); } catch { /* ignore */ }
     }
   },
 
@@ -178,8 +178,8 @@ export const useAppStore = create<AppState>((set) => ({
     set({ selectedId: id });
     if (typeof window !== "undefined") {
       try {
-        if (id) sessionStorage.setItem("aspidus_selected_id", id);
-        else sessionStorage.removeItem("aspidus_selected_id");
+        if (id) sessionStorage.setItem("velos_selected_id", id);
+        else sessionStorage.removeItem("velos_selected_id");
       } catch { /* ignore */ }
     }
   },
@@ -198,9 +198,9 @@ export const useAppStore = create<AppState>((set) => ({
     set({ activeTenantId: id, activeTenantName: name });
     if (typeof window !== "undefined") {
       if (id) {
-        localStorage.setItem("aspidus_active_tenant", JSON.stringify({ id, name }));
+        localStorage.setItem("velos_active_tenant", JSON.stringify({ id, name }));
       } else {
-        localStorage.removeItem("aspidus_active_tenant");
+        localStorage.removeItem("velos_active_tenant");
       }
     }
   },
@@ -237,8 +237,8 @@ export function useHydrateViewState() {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const v = sessionStorage.getItem("aspidus_view");
-      const sid = sessionStorage.getItem("aspidus_selected_id");
+      const v = sessionStorage.getItem("velos_view");
+      const sid = sessionStorage.getItem("velos_selected_id");
       if (v) setView(v as ViewKey);
       if (sid) setSelectedId(sid);
     } catch { /* ignore */ }

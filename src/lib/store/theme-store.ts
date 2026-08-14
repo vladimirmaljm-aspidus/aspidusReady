@@ -1,5 +1,5 @@
 /**
- * Aspidus — Theme Customization Store
+ * VELOS — Theme Customization Store
  * Extends next-themes with custom accent colors and themes
  */
 "use client";
@@ -43,7 +43,7 @@ const DEFAULT_CONFIG: ThemeConfig = { accent: "navy", radius: 0.5, sidebarDark: 
 function loadConfig(): ThemeConfig {
   if (typeof window === "undefined") return DEFAULT_CONFIG;
   try {
-    const saved = localStorage.getItem("aspidus-theme-config");
+    const saved = localStorage.getItem("velos-theme-config");
     if (saved) {
       const parsed = JSON.parse(saved);
       // Migrate old consumer-palette accent names (emerald/ocean/sunset/rose/violet)
@@ -65,7 +65,7 @@ export const useThemeCustomStore = create<ThemeCustomState>((set, get) => ({
   config: loadConfig(),
   setConfig: (partial) => {
     const config = { ...get().config, ...partial };
-    if (typeof window !== "undefined") localStorage.setItem("aspidus-theme-config", JSON.stringify(config));
+    if (typeof window !== "undefined") localStorage.setItem("velos-theme-config", JSON.stringify(config));
     set({ config });
     // Apply immediately
     applyThemeVars(config, isDarkNow());

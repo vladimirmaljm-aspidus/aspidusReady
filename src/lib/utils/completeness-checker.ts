@@ -1,7 +1,7 @@
 import type { Offer, OfferLineItem, Partner, Tenant } from "@/lib/supabase/types";
 
 /**
- * Data completeness checker for the aspidusReady offer creation form.
+ * Data completeness checker for the velosReady offer creation form.
  *
  * The user asked (in Serbian): "moramo imati jedan automaatizovani sistem koji
  * ce u toku kreiranja ponude da jasno pokaze koje podatke nemamo originalno

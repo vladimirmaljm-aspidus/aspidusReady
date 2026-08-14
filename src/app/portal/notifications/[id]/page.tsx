@@ -3,7 +3,7 @@ import { PortalShell } from "@/components/portal/portal-shell";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Notification — Aspidus Portal",
+  title: "Notification — VELOS Portal",
 };
 
 export default function Page() {

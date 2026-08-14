@@ -43,7 +43,7 @@ const NAV_CHORDS: Record<string, ViewKey> = {
  *   g s          go to Settings
  *   g a          go to Audit Log
  *   g u          go to Users
- *   n            fires a custom event ("aspidus:new") — every list view
+ *   n            fires a custom event ("velos:new") — every list view
  *                listens and clicks its primary "New …" button
  *
  * ⌘K / Ctrl+K is registered separately by global-search.tsx.
@@ -95,7 +95,7 @@ export function KeyboardShortcuts() {
           break;
         case "n":
           e.preventDefault();
-          window.dispatchEvent(new CustomEvent("aspidus:new"));
+          window.dispatchEvent(new CustomEvent("velos:new"));
           break;
         case "g":
           e.preventDefault();

@@ -80,12 +80,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       try {
         const tenant = await auth.store.getTenant(access.tenant_id);
         const partner = access.partner_id ? await auth.store.getPartner(access.partner_id) : null;
-        const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
+        const baseUrl = process.env.APP_BASE_URL || "https://velos.onrender.com";
         const { subject, html } = welcomePortalEmail({
           partnerName: partner?.name || "Client",
           portalEmail: new_email,
           accessId: id,
-          tenantName: tenant?.name || "Aspidus",
+          tenantName: tenant?.name || "VELOS",
           baseUrl,
           tier: access.tier || "business",
         });

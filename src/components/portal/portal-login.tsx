@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +34,7 @@ import { useAppStore } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
 import { useT, useI18nStore } from "@/lib/i18n/store";
 
-const FIRM_NAME = "Aspidus";
+const FIRM_NAME = "VELOS";
 
 export function PortalLogin() {
   const t = useT();
@@ -222,10 +223,10 @@ export function PortalLogin() {
       {/* Left — login form with mesh background */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-10 bg-mesh-portal relative">
         <div className="w-full max-w-md relative z-10">
-          {/* Brand — client portal mark with emerald accent */}
+          {/* Brand — VELOS client portal mark */}
           <div className="flex items-center gap-3 mb-10">
-            <div className="size-12 rounded-xl bg-gradient-emerald text-primary-foreground flex items-center justify-center font-semibold text-lg tracking-tight shadow-soft-md">
-              A
+            <div className="size-12 rounded-xl overflow-hidden shadow-soft-md">
+              <Image src="/logo.svg" alt="VELOS" width={48} height={48} priority />
             </div>
             <div>
               <h1 className="text-xl font-semibold tracking-tight">{t("portal-brand-title")}</h1>

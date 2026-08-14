@@ -41,7 +41,7 @@ export async function onKycApproved(ctx: KycAutomationContext) {
       partnerName: partner.name,
       to: emailTarget,
       status: "approved",
-      tenantName: tenant?.name || "Aspidus",
+      tenantName: tenant?.name || "VELOS",
       portalUrl: `${baseUrl || process.env.APP_BASE_URL || ""}/portal/login`,
     });
     await sendEmail({
@@ -96,7 +96,7 @@ export async function onKycApproved(ctx: KycAutomationContext) {
       partnerName: partner.name,
       portalEmail: access.portal_email,
       accessId: access.id,
-      tenantName: tenant?.name || "Aspidus",
+      tenantName: tenant?.name || "VELOS",
       baseUrl,
       tier: access.tier,
     });
@@ -130,7 +130,7 @@ export async function onKycRejected(
     partnerName: partner.name,
     to: emailTarget,
     status: "rejected",
-    tenantName: tenant?.name || "Aspidus",
+    tenantName: tenant?.name || "VELOS",
     reason,
   });
   await sendEmail({
@@ -155,7 +155,7 @@ export async function onKycResubmit(
     partnerName: partner.name,
     to: emailTarget,
     status: "resubmit",
-    tenantName: tenant?.name || "Aspidus",
+    tenantName: tenant?.name || "VELOS",
     reason: note,
     portalUrl: `${process.env.APP_BASE_URL || ""}/portal/login`,
   });

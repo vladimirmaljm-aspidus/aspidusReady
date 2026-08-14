@@ -4,39 +4,40 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ASPIDUS — Corporate Trade Management Platform Design System
-   oklch color space · Navy primary, muted brass accent · Light sidebar
+   VELOS — Corporate Trade Management Platform Design System
+   oklch color space · Copper/amber primary (Veles: god of earth & wealth),
+   warm neutral canvas · Light sidebar
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Remap the built-in Tailwind "emerald"/"teal" scales to the platform's navy
+/* Remap the built-in Tailwind "emerald"/"teal" scales to the platform's copper
    brand color. A large number of components reference bg-emerald-*,
    text-teal-*, etc. directly rather than through the semantic --primary
    token; overriding the scale here keeps every one of those call sites in
-   sync with the corporate palette without a component-by-component rewrite. */
+   sync with the VELOS palette without a component-by-component rewrite. */
 @theme {
-  --color-emerald-50: oklch(0.975 0.006 258);
-  --color-emerald-100: oklch(0.945 0.014 258);
-  --color-emerald-200: oklch(0.895 0.025 258);
-  --color-emerald-300: oklch(0.80 0.045 258);
-  --color-emerald-400: oklch(0.68 0.07 258);
-  --color-emerald-500: oklch(0.55 0.09 258);
-  --color-emerald-600: oklch(0.42 0.095 258);
-  --color-emerald-700: oklch(0.33 0.085 258);
-  --color-emerald-800: oklch(0.26 0.07 258);
-  --color-emerald-900: oklch(0.20 0.055 258);
-  --color-emerald-950: oklch(0.14 0.035 258);
+  --color-emerald-50: oklch(0.975 0.008 55);
+  --color-emerald-100: oklch(0.945 0.018 55);
+  --color-emerald-200: oklch(0.895 0.032 55);
+  --color-emerald-300: oklch(0.80 0.058 55);
+  --color-emerald-400: oklch(0.68 0.09 55);
+  --color-emerald-500: oklch(0.55 0.12 55);
+  --color-emerald-600: oklch(0.46 0.13 55);
+  --color-emerald-700: oklch(0.395 0.115 55);
+  --color-emerald-800: oklch(0.30 0.085 55);
+  --color-emerald-900: oklch(0.22 0.06 55);
+  --color-emerald-950: oklch(0.15 0.04 55);
 
-  --color-teal-50: oklch(0.975 0.006 258);
-  --color-teal-100: oklch(0.945 0.014 258);
-  --color-teal-200: oklch(0.895 0.025 258);
-  --color-teal-300: oklch(0.80 0.045 258);
-  --color-teal-400: oklch(0.68 0.07 258);
-  --color-teal-500: oklch(0.55 0.09 258);
-  --color-teal-600: oklch(0.42 0.095 258);
-  --color-teal-700: oklch(0.33 0.085 258);
-  --color-teal-800: oklch(0.26 0.07 258);
-  --color-teal-900: oklch(0.20 0.055 258);
-  --color-teal-950: oklch(0.14 0.035 258);
+  --color-teal-50: oklch(0.975 0.008 55);
+  --color-teal-100: oklch(0.945 0.018 55);
+  --color-teal-200: oklch(0.895 0.032 55);
+  --color-teal-300: oklch(0.80 0.058 55);
+  --color-teal-400: oklch(0.68 0.09 55);
+  --color-teal-500: oklch(0.55 0.12 55);
+  --color-teal-600: oklch(0.46 0.13 55);
+  --color-teal-700: oklch(0.395 0.115 55);
+  --color-teal-800: oklch(0.30 0.085 55);
+  --color-teal-900: oklch(0.22 0.06 55);
+  --color-teal-950: oklch(0.15 0.04 55);
 }
 
 @theme inline {
@@ -108,9 +109,9 @@
   --popover: oklch(0.998 0.0005 250);
   --popover-foreground: oklch(0.141 0.005 255);
 
-  /* Primary: deep corporate navy — authoritative, financial-grade */
-  --primary: oklch(0.33 0.085 258);
-  --primary-foreground: oklch(0.98 0.004 258);
+  /* Primary: deep copper — Veles, god of earth & wealth */
+  --primary: oklch(0.395 0.115 55);
+  --primary-foreground: oklch(0.98 0.01 80);
 
   /* Secondary: ultra-subtle cool gray */
   --secondary: oklch(0.965 0.003 255);
@@ -120,9 +121,9 @@
   --muted: oklch(0.968 0.002 255);
   --muted-foreground: oklch(0.498 0.008 255);
 
-  /* Accent: navy tinted */
-  --accent: oklch(0.94 0.014 258);
-  --accent-foreground: oklch(0.26 0.06 258);
+  /* Accent: copper tinted */
+  --accent: oklch(0.94 0.018 55);
+  --accent-foreground: oklch(0.28 0.07 55);
 
   /* Semantic: Destructive */
   --destructive: oklch(0.545 0.22 25);
@@ -144,27 +145,27 @@
   --brand-gold-foreground: oklch(0.24 0.03 82);
 
   /* Borders & Input */
-  --border: oklch(0.912 0.003 255);
-  --input: oklch(0.93 0.003 255);
-  --ring: oklch(0.33 0.085 258);
+  --border: oklch(0.912 0.004 55);
+  --input: oklch(0.93 0.004 55);
+  --ring: oklch(0.395 0.115 55);
 
-  /* Chart palette — cohesive with navy primary */
-  --chart-1: oklch(0.33 0.085 258);
+  /* Chart palette — cohesive with copper primary */
+  --chart-1: oklch(0.395 0.115 55);
   --chart-2: oklch(0.685 0.105 82);
   --chart-3: oklch(0.53 0.105 235);
   --chart-4: oklch(0.44 0.1 152);
   --chart-5: oklch(0.5 0.13 25);
 
   /* ─── Light Sidebar ────────────────────────────────────────────────── */
-  /* Off-white, navy-tinted — clean corporate nav, not a dark panel */
-  --sidebar: oklch(0.973 0.004 258);
-  --sidebar-foreground: oklch(0.32 0.02 258);
-  --sidebar-primary: oklch(0.33 0.085 258);
-  --sidebar-primary-foreground: oklch(0.98 0.004 258);
-  --sidebar-accent: oklch(0.926 0.012 258);
-  --sidebar-accent-foreground: oklch(0.26 0.06 258);
-  --sidebar-border: oklch(0.902 0.006 258);
-  --sidebar-ring: oklch(0.33 0.085 258);
+  /* Off-white, copper-tinted — clean corporate nav, not a dark panel */
+  --sidebar: oklch(0.973 0.005 55);
+  --sidebar-foreground: oklch(0.32 0.025 55);
+  --sidebar-primary: oklch(0.395 0.115 55);
+  --sidebar-primary-foreground: oklch(0.98 0.01 80);
+  --sidebar-accent: oklch(0.926 0.016 55);
+  --sidebar-accent-foreground: oklch(0.28 0.07 55);
+  --sidebar-border: oklch(0.902 0.008 55);
+  --sidebar-ring: oklch(0.395 0.115 55);
 }
 
 /* ─── Dark Mode ────────────────────────────────────────────────────────── */
@@ -179,9 +180,9 @@
   --popover: oklch(0.165 0.005 255);
   --popover-foreground: oklch(0.948 0.003 255);
 
-  /* Primary: bright navy-blue for dark backgrounds */
-  --primary: oklch(0.66 0.11 258);
-  --primary-foreground: oklch(0.125 0.005 255);
+  /* Primary: bright copper for dark backgrounds */
+  --primary: oklch(0.68 0.14 58);
+  --primary-foreground: oklch(0.14 0.02 55);
 
   /* Secondary: muted slate */
   --secondary: oklch(0.215 0.005 255);
@@ -192,8 +193,8 @@
   --muted-foreground: oklch(0.635 0.008 255);
 
   /* Accent */
-  --accent: oklch(0.255 0.03 258);
-  --accent-foreground: oklch(0.9 0.025 258);
+  --accent: oklch(0.255 0.04 55);
+  --accent-foreground: oklch(0.9 0.03 55);
 
   /* Semantic: Destructive */
   --destructive: oklch(0.675 0.195 22);
@@ -217,24 +218,24 @@
   /* Borders & Input */
   --border: oklch(1 0 0 / 6%);
   --input: oklch(1 0 0 / 9%);
-  --ring: oklch(0.66 0.11 258);
+  --ring: oklch(0.68 0.14 58);
 
   /* Chart palette — brighter for dark mode */
-  --chart-1: oklch(0.66 0.11 258);
+  --chart-1: oklch(0.68 0.14 58);
   --chart-2: oklch(0.72 0.1 82);
   --chart-3: oklch(0.645 0.105 235);
   --chart-4: oklch(0.62 0.11 152);
   --chart-5: oklch(0.63 0.14 25);
 
   /* ─── Dark Sidebar (deeper) ──────────────────────────────────────── */
-  --sidebar: oklch(0.108 0.008 258);
-  --sidebar-foreground: oklch(0.875 0.006 258);
-  --sidebar-primary: oklch(0.66 0.11 258);
-  --sidebar-primary-foreground: oklch(0.125 0.005 255);
-  --sidebar-accent: oklch(0.195 0.01 258);
-  --sidebar-accent-foreground: oklch(0.9 0.025 258);
+  --sidebar: oklch(0.108 0.01 55);
+  --sidebar-foreground: oklch(0.875 0.008 55);
+  --sidebar-primary: oklch(0.68 0.14 58);
+  --sidebar-primary-foreground: oklch(0.14 0.02 55);
+  --sidebar-accent: oklch(0.195 0.014 55);
+  --sidebar-accent-foreground: oklch(0.9 0.03 55);
   --sidebar-border: oklch(1 0 0 / 5%);
-  --sidebar-ring: oklch(0.66 0.11 258);
+  --sidebar-ring: oklch(0.68 0.14 58);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

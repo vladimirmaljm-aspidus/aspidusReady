@@ -147,7 +147,7 @@ interface SearchHit {
 /*  Recent searches (localStorage)                                          */
 /* -------------------------------------------------------------------------- */
 
-const RECENT_KEY = "aspidus:global-search:recent";
+const RECENT_KEY = "velos:global-search:recent";
 const RECENT_MAX = 5;
 
 function loadRecent(): string[] {

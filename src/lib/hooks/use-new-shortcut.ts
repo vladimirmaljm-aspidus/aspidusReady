@@ -3,7 +3,7 @@
 import * as React from "react";
 
 /**
- * Bind the global "n" keyboard shortcut (dispatched as the "aspidus:new"
+ * Bind the global "n" keyboard shortcut (dispatched as the "velos:new"
  * CustomEvent by KeyboardShortcuts) to a view-local "create" handler.
  * Handler runs only while the component is mounted.
  */
@@ -17,7 +17,7 @@ export function useNewShortcut(onNew: () => void) {
   });
   React.useEffect(() => {
     function handle() { ref.current(); }
-    window.addEventListener("aspidus:new", handle);
-    return () => window.removeEventListener("aspidus:new", handle);
+    window.addEventListener("velos:new", handle);
+    return () => window.removeEventListener("velos:new", handle);
   }, []);
 }

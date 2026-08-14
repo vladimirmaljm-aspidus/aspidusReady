@@ -177,7 +177,7 @@ export function Topbar() {
             is enough context and every pixel of width matters. */}
         <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground/60 text-xs font-medium tracking-wide uppercase shrink-0">
           <PanelRight className="size-3.5" />
-          <span>Aspidus</span>
+          <span>VELOS</span>
           <span className="text-muted-foreground/30">/</span>
         </div>
         <h2 className="text-[15px] font-semibold tracking-tight text-foreground truncate smooth min-w-0 shrink">

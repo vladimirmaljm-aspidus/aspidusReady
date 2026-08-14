@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import {
   CheckCircle2,
   XCircle,
@@ -103,10 +104,10 @@ export function VerifyClient({ exists, documentType, code, cipheredRecipient = "
           <div className="verify-glow" />
           <div className="relative z-10">
             <div className="verify-logo mb-8">
-              <div className="size-12 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center mx-auto shadow-lg">
-                <span className="text-white font-bold text-lg">A</span>
+              <div className="size-12 rounded-xl overflow-hidden flex items-center justify-center mx-auto shadow-lg">
+                <Image src="/logo.svg" alt="VELOS" width={48} height={48} priority />
               </div>
-              <p className="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-2">Aspidus</p>
+              <p className="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-2">VELOS</p>
             </div>
 
             <div className="relative mb-6">
@@ -137,10 +138,10 @@ export function VerifyClient({ exists, documentType, code, cipheredRecipient = "
           <div className="verify-glow verify-glow-red" />
           <div className="relative z-10">
             <div className="verify-logo mb-8">
-              <div className="size-12 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center mx-auto shadow-lg">
-                <span className="text-white font-bold text-lg">A</span>
+              <div className="size-12 rounded-xl overflow-hidden flex items-center justify-center mx-auto shadow-lg">
+                <Image src="/logo.svg" alt="VELOS" width={48} height={48} priority />
               </div>
-              <p className="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-2">Aspidus</p>
+              <p className="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-2">VELOS</p>
             </div>
 
             <div className="size-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-5">
@@ -183,10 +184,10 @@ export function VerifyClient({ exists, documentType, code, cipheredRecipient = "
             <div className="verify-glow verify-glow-red" />
             <div className="relative z-10">
               <div className="verify-logo mb-8">
-                <div className="size-12 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center mx-auto shadow-lg">
-                  <span className="text-white font-bold text-lg">A</span>
+                <div className="size-12 rounded-xl overflow-hidden flex items-center justify-center mx-auto shadow-lg">
+                  <Image src="/logo.svg" alt="VELOS" width={48} height={48} priority />
                 </div>
-                <p className="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-2">Aspidus</p>
+                <p className="text-[10px] tracking-[0.2em] uppercase text-slate-400 mt-2">VELOS</p>
               </div>
               <div className="size-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-5">
                 <XCircle className="size-8 text-red-500" />
@@ -226,7 +227,7 @@ export function VerifyClient({ exists, documentType, code, cipheredRecipient = "
               <span className="text-white font-bold text-lg">A</span>
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-sm tracking-tight text-slate-800">Aspidus</p>
+              <p className="font-semibold text-sm tracking-tight text-slate-800">VELOS</p>
               <p className="text-[10px] tracking-[0.15em] uppercase text-slate-400">{t("misc-verify-trade-platform")}</p>
             </div>
           </div>

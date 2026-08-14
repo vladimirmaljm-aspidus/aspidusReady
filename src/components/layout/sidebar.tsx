@@ -6,6 +6,7 @@ import { useBadgeCounts } from "@/lib/hooks/use-badge-counts";
 import { useI18nStore } from "@/lib/i18n/store";
 import { t, NAV, SECTIONS as I18N_SECTIONS, type Locale } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/common/brand-logo";
 import {
   LayoutDashboard, Users, Package, Handshake, FileText, Inbox,
   FolderOpen, ListChecks, ScrollText, Settings, ShieldCheck, Key,
@@ -221,13 +222,13 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
         "h-[68px] flex items-center gap-3 px-4 border-b border-sidebar-border shrink-0",
         !sidebarCollapsed && "px-5"
       )}>
-        {/* Logo */}
+        {/* Logo — VELOS Veles symbol */}
         <div className={cn(
           "size-9 rounded-lg flex items-center justify-center shrink-0",
-          "bg-gradient-emerald shadow-soft",
+          "shadow-soft overflow-hidden",
           "transition-transform duration-300 hover:scale-105"
         )}>
-          <span className="text-white font-bold text-sm tracking-tight select-none">A</span>
+          <BrandLogo />
         </div>
 
         {/* Brand Text — animated fade */}
@@ -238,7 +239,7 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
             : "opacity-100 w-auto"
         )}>
           <p className="font-semibold text-[15px] tracking-tight text-sidebar-foreground truncate leading-tight">
-            Aspidus
+            VELOS
           </p>
           <p className="text-[10px] text-sidebar-foreground/55 truncate leading-tight mt-0.5">
             {t(locale, "trade-platform")}

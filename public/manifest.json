@@ -1,0 +1,23 @@
+{
+  "name": "VELOS CRM · Trade Platform",
+  "short_name": "VELOS",
+  "description": "Multi-tenant trade CRM/ERP platform for commodity traders. Powered by VELOS.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0a09",
+  "theme_color": "#B45309",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.svg",
+      "sizes": "180x180",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

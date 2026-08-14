@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: aspidus-trade-platform
+    name: velos-trade-platform
     runtime: node
     plan: starter
     buildCommand: npm install --legacy-peer-deps && npx prisma generate && npm run build

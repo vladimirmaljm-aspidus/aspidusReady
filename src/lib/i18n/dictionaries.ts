@@ -1,5 +1,5 @@
 /**
- * Aspidus — Multi-language Support (Serbian / English)
+ * VELOS — Multi-language Support (Serbian / English)
  * Client-side i18n using Zustand store for instant switching
  */
 

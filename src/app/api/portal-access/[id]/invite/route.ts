@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     partnerName: partner?.name || "Client",
     portalEmail: access.portal_email,
     accessId: access.id,
-    tenantName: tenant?.name || "Aspidus",
+    tenantName: tenant?.name || "VELOS",
     baseUrl,
     tier: access.tier,
   });

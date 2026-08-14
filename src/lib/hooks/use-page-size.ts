@@ -20,7 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 const OPTIONS = [10, 20, 50, 100, 200, 500] as const;
 export type PageSizeOption = (typeof OPTIONS)[number];
 
-const LS_PREFIX = "aspidus_pagesize_";
+const LS_PREFIX = "velos_pagesize_";
 
 type PrefsMap = Record<string, unknown>;
 

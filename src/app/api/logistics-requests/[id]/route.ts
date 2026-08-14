@@ -157,7 +157,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             const partner = await store.getPartner(data.partner_id);
             if (partner?.email) {
               const tenant = await store.getTenant(data.tenant_id);
-              const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
+              const baseUrl = process.env.APP_BASE_URL || "https://velos.onrender.com";
               const { logisticsQuoteReadyEmail, sendEmail } = await import("@/lib/email/service");
               const route = `${data.origin_city || data.origin_country || "?"} → ${data.destination_city || data.destination_country || "?"}`;
               const { subject, html } = logisticsQuoteReadyEmail({
@@ -169,7 +169,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                 currency: data.quoted_currency || "USD",
                 transitDays: data.quoted_transit_days ?? "—",
                 notes: data.quoted_notes || null,
-                tenantName: tenant?.name || "Aspidus",
+                tenantName: tenant?.name || "VELOS",
                 portalUrl: `${baseUrl}/portal/logistics`,
               });
               await sendEmail({ to: partner.email, subject, html, tenantId: data.tenant_id });

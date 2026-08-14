@@ -131,7 +131,7 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: "w-tasks", type: "tasks" },
 ];
 
-const STORAGE_KEY = "aspidus-custom-dashboard";
+const STORAGE_KEY = "velos-custom-dashboard";
 
 // ─── API Types ─────────────────────────────────────────────────────────────
 

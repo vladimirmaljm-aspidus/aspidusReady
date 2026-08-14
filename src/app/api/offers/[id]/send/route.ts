@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         partnerName: partner?.name || "Client",
         docType: "offer",
         docNumber: offer.number || id,
-        tenantName: (await auth.store.getTenant(tenantId))?.name || "Aspidus Trade",
+        tenantName: (await auth.store.getTenant(tenantId))?.name || "VELOS Trade",
         amount: offer.total != null ? String(offer.total) : undefined,
         currency: offer.currency || undefined,
         dueDate: offer.valid_until || undefined,

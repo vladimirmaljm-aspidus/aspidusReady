@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   const tenant = await auth.store.getTenant((lr as any).tenant_id);
-  const buffer = await renderPackingListPdf(buildPackingListInput(lr as any, tenant?.name || "Aspidus"));
+  const buffer = await renderPackingListPdf(buildPackingListInput(lr as any, tenant?.name || "VELOS"));
   const bytes = new Uint8Array(buffer);
   return new Response(bytes as any, {
     headers: {

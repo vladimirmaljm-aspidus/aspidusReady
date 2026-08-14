@@ -4,7 +4,7 @@ import { PortalLogin } from "@/components/portal/portal-login";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Client Portal — Aspidus",
+  title: "Client Portal — VELOS",
   description: "Secure client workspace",
 };
 

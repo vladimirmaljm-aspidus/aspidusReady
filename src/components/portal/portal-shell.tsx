@@ -252,7 +252,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
   // Each portal client can have their own language. On mount, if the
   // portal_access row has a locale set, apply it to the i18n store — but
   // ONLY if the user hasn't already chosen a language on the login page
-  // (stored in localStorage under "aspidus-locale"). Without this guard,
+  // (stored in localStorage under "velos-locale"). Without this guard,
   // a fresh `portalAccess.locale` (default "en") would overwrite the
   // pre-login choice on first login (P2-6).
   const setLocale = useI18nStore((s) => s.setLocale);
@@ -262,7 +262,7 @@ export function PortalShell({ initialView }: { initialView?: ViewKey } = {}) {
       if (["en", "sr", "tr", "de", "ru"].includes(saved)) {
         // Only apply if the user hasn't already chosen a language on the login page.
         const localStorageLocale = typeof window !== "undefined"
-          ? (localStorage.getItem("aspidus-locale") as Locale | null)
+          ? (localStorage.getItem("velos-locale") as Locale | null)
           : null;
         if (!localStorageLocale || localStorageLocale === "en") {
           setLocale(saved);

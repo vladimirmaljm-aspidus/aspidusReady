@@ -242,7 +242,7 @@ export function buildEmailShell(theme: EmailTheme, headerHtml: string, bodyHtml:
           ${bodyHtml}
         </div>
         <div class="footer">
-          ${footerText || `© ${new Date().getFullYear()} Aspidus. All rights reserved.`}
+          ${footerText || `© ${new Date().getFullYear()} VELOS. All rights reserved.`}
         </div>
       </div>
     </body>

@@ -6,7 +6,7 @@
  * 
  * Examples:
  *   "Marko Petrovic" → "m3op6c"
- *   "Aspidus DMCC" → "a5s3c"
+ *   "VELOS" → "a5s3c"
  *   "John Smith" → "j2n4h"
  *   "AB" → "ab" (too short to mask)
  *   "" → ""

@@ -148,10 +148,10 @@ const SEAL_DOC_TYPES: { value: string; label: string }[] = [
 
 function substituteForPreview(text: string): string {
   return (text || "")
-    .replace(/{{company_name}}/g, "Aspidus Trading")
-    .replace(/{{company_legal_name}}/g, "Aspidus Trading LLC")
+    .replace(/{{company_name}}/g, "VELOS Trading")
+    .replace(/{{company_legal_name}}/g, "VELOS Trading LLC")
     .replace(/{{company_address}}/g, "Trg Republike 5, Belgrade")
-    .replace(/{{company_email}}/g, "office@aspidus.com")
+    .replace(/{{company_email}}/g, "office@velos.trade")
     .replace(/{{company_phone}}/g, "+381 11 555 0100")
     .replace(/{{company_vat}}/g, "RS123456789")
     .replace(/{{company_bank}}/g, "Raiffeisen Bank")
@@ -166,7 +166,7 @@ function substituteForPreview(text: string): string {
 // tokens introduced by the TemplateContentEditor. The legacy {{token}}
 // syntax is handled by substituteForPreview() above.
 const PREVIEW_PLACEHOLDER_DATA = {
-  company_name: "Aspidus Trading",
+  company_name: "VELOS Trading",
   company_address: "Trg Republike 5, Belgrade",
   company_city: "Belgrade",
   company_country: "Serbia",
@@ -174,8 +174,8 @@ const PREVIEW_PLACEHOLDER_DATA = {
   company_vat: "RS123456789",
   company_tax_id: "Tax-001",
   company_phone: "+381 11 555 0100",
-  company_email: "office@aspidus.com",
-  company_website: "aspidus.com",
+  company_email: "office@velos.trade",
+  company_website: "velos.trade",
   bank_name: "Raiffeisen Bank",
   bank_iban: "RS35 2600 0560 0012 3456 78",
   bank_swift: "RAFRCSBG",

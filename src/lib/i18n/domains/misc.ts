@@ -749,8 +749,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-issued-to": "Issued To",
     "misc-verify-times-verified": "Times Verified",
     "misc-verify-hash-label": "Verification Hash",
-    "misc-verify-protected-desc": "This document is protected by Aspidus Secure Verification™. The document hash is stored on our servers and compared during forensic checks to detect any modifications.",
-    "misc-verify-copyright": "© {year} Aspidus Trade Management Platform. All rights reserved.",
+    "misc-verify-protected-desc": "This document is protected by VELOS Secure Verification™. The document hash is stored on our servers and compared during forensic checks to detect any modifications.",
+    "misc-verify-copyright": "© {year} VELOS Trade Management Platform. All rights reserved.",
 
     // ── Global search palette ───────────────────────────────────────────
     "misc-gs-search-placeholder": "Search partners, products, deals, offers, or navigate...",
@@ -906,8 +906,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-loading": "Loading document details...",
 
     // ── Subscription banner ────────────────────────────────────────────
-    "misc-sub-trial-ended": "Your trial has ended. Subscribe to keep using Aspidus.",
-    "misc-sub-expired": "Your subscription has expired. Renew to keep using Aspidus.",
+    "misc-sub-trial-ended": "Your trial has ended. Subscribe to keep using VELOS.",
+    "misc-sub-expired": "Your subscription has expired. Renew to keep using VELOS.",
     "misc-sub-trial-tomorrow": "Trial ends tomorrow.",
     "misc-sub-trial-days-left": "{days} days left on your trial.",
     "misc-sub-trial-period": "Trial period.",
@@ -1662,8 +1662,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-issued-to": "Izdato za",
     "misc-verify-times-verified": "Broj verifikacija",
     "misc-verify-hash-label": "Hash za verifikaciju",
-    "misc-verify-protected-desc": "Ovaj dokument je zaštićen Aspidus Secure Verification™. Hash dokumenta je uskladišten na našim serverima i upoređuje se tokom forenzičkih provera radi otkrivanja izmena.",
-    "misc-verify-copyright": "© {year} Aspidus Platforma za upravljanje trgovinom. Sva prava zadržana.",
+    "misc-verify-protected-desc": "Ovaj dokument je zaštićen VELOS Secure Verification™. Hash dokumenta je uskladišten na našim serverima i upoređuje se tokom forenzičkih provera radi otkrivanja izmena.",
+    "misc-verify-copyright": "© {year} VELOS Platforma za upravljanje trgovinom. Sva prava zadržana.",
 
     // ── Global search palette ───────────────────────────────────────────
     "misc-gs-search-placeholder": "Pretraži partnere, proizvode, poslove, ponude ili naviguj...",
@@ -1819,8 +1819,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-loading": "Učitavanje detalja dokumenta...",
 
     // ── Subscription banner ────────────────────────────────────────────
-    "misc-sub-trial-ended": "Vaš probni period je istekao. Pretplatite se da nastavite da koristite Aspidus.",
-    "misc-sub-expired": "Vaša pretplata je istekla. Obnovite je da nastavite da koristite Aspidus.",
+    "misc-sub-trial-ended": "Vaš probni period je istekao. Pretplatite se da nastavite da koristite VELOS.",
+    "misc-sub-expired": "Vaša pretplata je istekla. Obnovite je da nastavite da koristite VELOS.",
     "misc-sub-trial-tomorrow": "Probni period ističe sutra.",
     "misc-sub-trial-days-left": "Preostalo {days} dana probnog perioda.",
     "misc-sub-trial-period": "Probni period.",
@@ -2575,8 +2575,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-issued-to": "İhraç Edilen",
     "misc-verify-times-verified": "Doğrulama Sayısı",
     "misc-verify-hash-label": "Doğrulama Karması",
-    "misc-verify-protected-desc": "Bu belge Aspidus Secure Verification™ tarafından korunmaktadır. Belge karması sunucularımızda saklanır ve herhangi bir değişikliği tespit etmek için adli kontroller sırasında karşılaştırılır.",
-    "misc-verify-copyright": "© {year} Aspidus Ticaret Yönetim Platformu. Tüm hakları saklıdır.",
+    "misc-verify-protected-desc": "Bu belge VELOS Secure Verification™ tarafından korunmaktadır. Belge karması sunucularımızda saklanır ve herhangi bir değişikliği tespit etmek için adli kontroller sırasında karşılaştırılır.",
+    "misc-verify-copyright": "© {year} VELOS Ticaret Yönetim Platformu. Tüm hakları saklıdır.",
 
     // ── Global search palette ───────────────────────────────────────────
     "misc-gs-search-placeholder": "Ortakları, ürünleri, anlaşmaları, teklifleri ara veya gezin...",
@@ -2732,8 +2732,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-loading": "Belge detayları yükleniyor...",
 
     // ── Subscription banner ────────────────────────────────────────────
-    "misc-sub-trial-ended": "Deneme süreniz doldu. Aspidus kullanmaya devam etmek için abone olun.",
-    "misc-sub-expired": "Aboneliğinizin süresi doldu. Aspidus kullanmaya devam etmek için yenileyin.",
+    "misc-sub-trial-ended": "Deneme süreniz doldu. VELOS kullanmaya devam etmek için abone olun.",
+    "misc-sub-expired": "Aboneliğinizin süresi doldu. VELOS kullanmaya devam etmek için yenileyin.",
     "misc-sub-trial-tomorrow": "Deneme süresi yarın bitiyor.",
     "misc-sub-trial-days-left": "Deneme sürenizde {days} gün kaldı.",
     "misc-sub-trial-period": "Deneme dönemi.",
@@ -3488,8 +3488,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-issued-to": "Ausgestellt an",
     "misc-verify-times-verified": "Anzahl Verifizierungen",
     "misc-verify-hash-label": "Verifizierungs-Hash",
-    "misc-verify-protected-desc": "Dieses Dokument ist durch Aspidus Secure Verification™ geschützt. Der Dokument-Hash wird auf unseren Servern gespeichert und bei forensischen Prüfungen verglichen, um Änderungen zu erkennen.",
-    "misc-verify-copyright": "© {year} Aspidus Handelsmanagement-Plattform. Alle Rechte vorbehalten.",
+    "misc-verify-protected-desc": "Dieses Dokument ist durch VELOS Secure Verification™ geschützt. Der Dokument-Hash wird auf unseren Servern gespeichert und bei forensischen Prüfungen verglichen, um Änderungen zu erkennen.",
+    "misc-verify-copyright": "© {year} VELOS Handelsmanagement-Plattform. Alle Rechte vorbehalten.",
 
     // ── Global search palette ───────────────────────────────────────────
     "misc-gs-search-placeholder": "Partner, Produkte, Geschäfte, Angebote suchen oder navigieren...",
@@ -3645,8 +3645,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-loading": "Dokumentdetails werden geladen...",
 
     // ── Subscription banner ────────────────────────────────────────────
-    "misc-sub-trial-ended": "Ihre Testphase ist abgelaufen. Abonnieren Sie, um Aspidus weiter zu nutzen.",
-    "misc-sub-expired": "Ihr Abonnement ist abgelaufen. Verlängern Sie es, um Aspidus weiter zu nutzen.",
+    "misc-sub-trial-ended": "Ihre Testphase ist abgelaufen. Abonnieren Sie, um VELOS weiter zu nutzen.",
+    "misc-sub-expired": "Ihr Abonnement ist abgelaufen. Verlängern Sie es, um VELOS weiter zu nutzen.",
     "misc-sub-trial-tomorrow": "Testphase endet morgen.",
     "misc-sub-trial-days-left": "Noch {days} Tage Testphase.",
     "misc-sub-trial-period": "Testphase.",
@@ -4401,8 +4401,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-issued-to": "Выдан",
     "misc-verify-times-verified": "Количество проверок",
     "misc-verify-hash-label": "Хеш верификации",
-    "misc-verify-protected-desc": "Этот документ защищён Aspidus Secure Verification™. Хеш документа хранится на наших серверах и сравнивается при криминалистических проверках для обнаружения любых изменений.",
-    "misc-verify-copyright": "© {year} Платформа управления торговлей Aspidus. Все права защищены.",
+    "misc-verify-protected-desc": "Этот документ защищён VELOS Secure Verification™. Хеш документа хранится на наших серверах и сравнивается при криминалистических проверках для обнаружения любых изменений.",
+    "misc-verify-copyright": "© {year} Платформа управления торговлей VELOS. Все права защищены.",
 
     // ── Global search palette ───────────────────────────────────────────
     "misc-gs-search-placeholder": "Поиск партнёров, товаров, сделок, предложений или навигация...",
@@ -4559,8 +4559,8 @@ export const MISC: Record<Locale, Record<string, string>> = {
     "misc-verify-loading": "Загрузка деталей документа...",
 
     // ── Subscription banner ────────────────────────────────────────────
-    "misc-sub-trial-ended": "Ваш пробный период закончился. Подпишитесь, чтобы продолжить использовать Aspidus.",
-    "misc-sub-expired": "Ваша подписка истекла. Продлите, чтобы продолжить использовать Aspidus.",
+    "misc-sub-trial-ended": "Ваш пробный период закончился. Подпишитесь, чтобы продолжить использовать VELOS.",
+    "misc-sub-expired": "Ваша подписка истекла. Продлите, чтобы продолжить использовать VELOS.",
     "misc-sub-trial-tomorrow": "Пробный период заканчивается завтра.",
     "misc-sub-trial-days-left": "Осталось {days} дней пробного периода.",
     "misc-sub-trial-period": "Пробный период.",

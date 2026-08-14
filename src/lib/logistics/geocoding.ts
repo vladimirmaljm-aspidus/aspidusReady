@@ -9,7 +9,7 @@
  */
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-const USER_AGENT = "AspidusTradeGlobe/1.0 (trade@aspidus.co)";
+const USER_AGENT = "VELOSTradeGlobe/1.0 (trade@velos.trade)";
 const MIN_INTERVAL_MS = 1100; // stay under Nominatim's 1 req/s limit
 
 export interface GeocodeResult {

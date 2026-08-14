@@ -232,7 +232,7 @@ export function DashboardView() {
   ).length;
 
   const userName = user?.full_name || user?.username || t("misc-there-fallback");
-  const tenantName = activeTenantName || user?.tenant_id || "Aspidus";
+  const tenantName = activeTenantName || user?.tenant_id || "VELOS";
 
   const lowStockCount = k.low_stock_count || 0;
   const marginTone =

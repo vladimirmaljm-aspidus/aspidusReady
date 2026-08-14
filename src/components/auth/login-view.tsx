@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   Card,
   CardContent,
@@ -93,12 +94,12 @@ export function LoginView() {
           {/* Logo — always visible, compact on mobile */}
           <div className="lg:mb-14">
             <div className="inline-flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-md bg-white/10 ring-1 ring-white/15 lg:size-11">
-                <span className="text-base font-semibold text-white lg:text-xl">A</span>
+              <div className="flex size-9 items-center justify-center rounded-md bg-white/10 ring-1 ring-white/15 overflow-hidden lg:size-11">
+                <Image src="/logo.svg" alt="VELOS" width={44} height={44} priority className="w-full h-full object-cover" />
               </div>
               <div>
                 <h1 className="text-lg font-semibold tracking-tight text-white lg:text-2xl">
-                  Aspidus Trade
+                  VELOS Trade
                 </h1>
                 <p className="hidden text-sm text-white/45 lg:block">
                   Trade Management Platform
@@ -135,7 +136,7 @@ export function LoginView() {
             </div>
 
             <p className="mt-14 text-xs text-white/30">
-              © {new Date().getFullYear()} Aspidus. All rights reserved.
+              © {new Date().getFullYear()} VELOS. All rights reserved.
             </p>
           </div>
         </div>
@@ -266,7 +267,7 @@ export function LoginView() {
               {/* Copyright — shown here on mobile only; the desktop branding
                   panel already has its own copyright line. */}
               <p className="mt-4 text-center text-[11px] text-muted-foreground/40 lg:hidden">
-                © {new Date().getFullYear()} Aspidus. {t("login-rights")}
+                © {new Date().getFullYear()} VELOS. {t("login-rights")}
               </p>
             </CardContent>
           </Card>

@@ -266,10 +266,10 @@ export async function generatePdf(opts: GeneratePdfOptions): Promise<GeneratePdf
   // Build PDF metadata (visible in the PDF document properties dialog)
   const docTitleLabel = opts.docType === "offer" ? "Offer" : opts.docType === "invoice" ? "Invoice" : "Proforma";
   const pdfMeta = {
-    title: `${docTitleLabel} ${doc.number} — ${tenant?.name || "Aspidus"}`,
-    author: tenant?.name || "Aspidus CRM",
+    title: `${docTitleLabel} ${doc.number} — ${tenant?.name || "VELOS"}`,
+    author: tenant?.name || "VELOS CRM",
     subject: `${docTitleLabel} issued to ${partner?.name || "client"} on ${new Date().toLocaleDateString("en-US")}`,
-    creator: "Aspidus CRM System",
+    creator: "VELOS CRM System",
     keywords: [opts.docType, doc.number, partner?.name, doc.currency, verificationCode].filter(Boolean).join(", "),
   };
 

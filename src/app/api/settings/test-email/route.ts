@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
   if (comms) saved = comms;
 
   const provider: EmailProvider = body.provider || saved.email_provider || "smtp";
-  const fromName = body.from_name || saved.from_name || "Aspidus CRM";
-  const fromEmail = body.from_email || saved.from_email || "noreply@aspidus.com";
+  const fromName = body.from_name || saved.from_name || "VELOS CRM";
+  const fromEmail = body.from_email || saved.from_email || "noreply@velos.trade";
 
   // ── RESEND ───────────────────────────────────────────────────────────
   if (provider === "resend") {
@@ -105,17 +105,17 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           from: `${fromName} <${resendFromEmail}>`,
           to: [body.to],
-          subject: `[Aspidus] Email test — ${new Date().toISOString()}`,
+          subject: `[VELOS] Email test — ${new Date().toISOString()}`,
           html: `
             <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;">
               <div style="background:#0f766e;color:white;padding:24px 28px;border-radius:12px 12px 0 0;">
                 <h1 style="margin:0;font-size:18px;font-weight:600;">Email Configuration Test</h1>
-                <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">Aspidus CRM · Resend · ${new Date().toISOString()}</p>
+                <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">VELOS CRM · Resend · ${new Date().toISOString()}</p>
               </div>
               <div style="background:white;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
                 <p style="color:#333;font-size:14px;line-height:1.6;">Hi,</p>
                 <p style="color:#555;font-size:14px;line-height:1.6;">
-                  This is a test email sent from your Aspidus CRM settings panel via <strong>Resend</strong>.
+                  This is a test email sent from your VELOS CRM settings panel via <strong>Resend</strong>.
                   If you are reading this, your Resend integration is working correctly.
                 </p>
                 <table style="width:100%;font-size:13px;color:#555;margin:16px 0;border-collapse:collapse;">
@@ -204,17 +204,17 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           From: `${fromName} <${postmarkFromEmail}>`,
           To: body.to,
-          Subject: `[Aspidus] Email test — ${new Date().toISOString()}`,
+          Subject: `[VELOS] Email test — ${new Date().toISOString()}`,
           HtmlBody: `
             <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;">
               <div style="background:#0f766e;color:white;padding:24px 28px;border-radius:12px 12px 0 0;">
                 <h1 style="margin:0;font-size:18px;font-weight:600;">Email Configuration Test</h1>
-                <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">Aspidus CRM · Postmark · ${new Date().toISOString()}</p>
+                <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">VELOS CRM · Postmark · ${new Date().toISOString()}</p>
               </div>
               <div style="background:white;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
                 <p style="color:#333;font-size:14px;line-height:1.6;">Hi,</p>
                 <p style="color:#555;font-size:14px;line-height:1.6;">
-                  This is a test email sent from your Aspidus CRM settings panel via <strong>Postmark</strong>.
+                  This is a test email sent from your VELOS CRM settings panel via <strong>Postmark</strong>.
                   If you are reading this, your Postmark integration is working correctly.
                 </p>
                 <table style="width:100%;font-size:13px;color:#555;margin:16px 0;border-collapse:collapse;">
@@ -315,18 +315,18 @@ export async function POST(req: NextRequest) {
       const info = await transporter.sendMail({
         from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
         to: body.to,
-        subject: `[Aspidus] SMTP test — ${new Date().toISOString()}`,
-        text: `This is a test email from Aspidus CRM.\n\nSMTP server: ${smtp.host}:${smtp.port}\nUser: ${smtp.user}\nSent at: ${new Date().toISOString()}\n\nIf you received this message, your SMTP configuration is working correctly.`,
+        subject: `[VELOS] SMTP test — ${new Date().toISOString()}`,
+        text: `This is a test email from VELOS CRM.\n\nSMTP server: ${smtp.host}:${smtp.port}\nUser: ${smtp.user}\nSent at: ${new Date().toISOString()}\n\nIf you received this message, your SMTP configuration is working correctly.`,
         html: `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px;">
             <div style="background:#0f766e;color:white;padding:24px 28px;border-radius:12px 12px 0 0;">
               <h1 style="margin:0;font-size:18px;font-weight:600;">SMTP Configuration Test</h1>
-              <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">Aspidus CRM · ${new Date().toISOString()}</p>
+              <p style="margin:6px 0 0;opacity:0.9;font-size:13px;">VELOS CRM · ${new Date().toISOString()}</p>
             </div>
             <div style="background:white;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
               <p style="color:#333;font-size:14px;line-height:1.6;">Hi,</p>
               <p style="color:#555;font-size:14px;line-height:1.6;">
-                This is a test email sent from your Aspidus CRM settings panel.
+                This is a test email sent from your VELOS CRM settings panel.
                 If you are reading this, your SMTP configuration is working correctly.
               </p>
               <table style="width:100%;font-size:13px;color:#555;margin:16px 0;border-collapse:collapse;">
