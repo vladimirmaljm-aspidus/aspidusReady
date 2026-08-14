@@ -77,8 +77,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const totalSell = (calc as any).total_sell_revenue || qty * sellPrice;
 
     // ── Fetch the product catalog entry for REAL product data ────────────
-    // The calc stores product_id (catalog entry id) — use it to get the actual
-    // product name, specifications, origin country, HS code, etc.
+    // The calc.product_id can be EITHER:
+    //   - a nanoid from product_catalog (legacy rows migrated from the old
+    //     catalog table), OR
+    //   - a UUID from products (the norm going forward — Task 2 / commit
+    //     ad65507 dropped the trade_calculations.product_id FK so UUIDs from
+    //     the products table are now allowed).
+    // We try product_catalog first, then fall back to products — mirroring
+    // /api/trade-calculator/[id]/offer-preview/route.ts.
     let productName = "Product";
     let productSku = "";
     let productHsCode: string | null = null;
@@ -86,6 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let productSpecs: any = null;
     let productCategory: string | null = null;
     let catalogEntryData: any = null;
+    let productRowData: any = null;
 
     const productId = (calc as any).product_id || (calc as any).product_catalog_id;
     if (productId) {
@@ -93,15 +100,39 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         catalogEntryData = await auth.store.getProductCatalogEntry(productId);
         if (catalogEntryData) {
           productName = catalogEntryData.name;
+          // FIX (audit T-3): previously productSku was never populated, so the
+          // created offer's line item always had sku="" even when the catalog
+          // entry had one. Mirror offer-preview which sets productSku here.
+          productSku = catalogEntryData.sku || "";
           productHsCode = catalogEntryData.hs_code;
           productOrigin = catalogEntryData.origin_country;
           productSpecs = catalogEntryData.specifications;
           productCategory = catalogEntryData.category;
+        } else {
+          // FIX (audit T-3): fall back to the products table for calc rows
+          // whose product_id is a UUID from products (post-FK-drop norm).
+          // Without this, productName stayed "Product" and the created offer
+          // showed "Offer: Product — 100 MT" instead of the real product name.
+          try {
+            productRowData = await auth.store.getProduct(productId);
+            if (productRowData) {
+              productName = productRowData.name || productName;
+              productSku = productRowData.sku || "";
+              productHsCode = (productRowData as any).hs_code ?? null;
+              // products table has no origin_country column — read from
+              // attributes.origin_country (the documented workaround).
+              productOrigin = (productRowData as any).origin_country
+                ?? ((productRowData as any).attributes?.origin_country ?? null);
+              productSpecs = (productRowData as any).coa_params ?? null;
+              productCategory = (productRowData as any).category ?? null;
+            }
+          } catch { /* ignore — keep defaults */ }
         }
       } catch { /* ignore — fallback to calc data */ }
     }
 
-    // Fallback: if no catalog entry, use calc.product_name (NOT calc.name)
+    // Fallback: if no catalog entry AND no product row, use calc.product_name
+    // (NOT calc.name — calc.name is the calc title like "Q4 Cement Deal").
     if (productName === "Product" && (calc as any).product_name) {
       productName = (calc as any).product_name;
     }
@@ -125,10 +156,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // PDFs to show "—" for HS Code, Origin, Brand, Specifications.
       hs_code: productHsCode || null,
       origin_country: productOrigin || null,
-      brand: catalogEntryData?.brand ?? null,
-      detailed_spec: catalogEntryData?.detailed_spec ?? null,
+      // FIX (audit T-3): fall back to productRowData for brand/detailed_spec/
+      // description when the catalog entry wasn't found (UUID product_id case).
+      brand: catalogEntryData?.brand ?? productRowData?.brand ?? null,
+      detailed_spec: catalogEntryData?.detailed_spec ?? productRowData?.detailed_spec ?? null,
       specifications: productSpecs || null,
-      description: catalogEntryData?.description ?? null,
+      description: catalogEntryData?.description ?? productRowData?.description ?? null,
     }];
 
     // ── Build CLIENT-FACING notes ────────────────────────────────────────

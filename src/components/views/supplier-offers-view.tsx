@@ -460,7 +460,7 @@ function OfferDetail({
       </Card>
 
       <OfferSection icon={DollarSign} title={t(locale, "crm-pricing")}>
-        <OfferRow label={t(locale, "crm-unit-price")} value={`${fmtMoney(offer.unit_price, offer.currency)} / ${product?.base_unit || t(locale, "crm-unit")}`} mono />
+        <OfferRow label={t(locale, "crm-unit-price")} value={`${fmtMoney(offer.unit_price, offer.currency)} / ${product?.base_unit || (product as any)?.unit || t(locale, "crm-unit")}`} mono />
         <OfferRow label={t(locale, "currency")} value={`${cur?.code} — ${cur?.name}`} />
         <OfferRow label={t(locale, "crm-min-order-qty")} value={offer.min_order_qty ? offer.min_order_qty.toLocaleString() : null} mono />
         <OfferRow label={t(locale, "crm-price-valid-until")} value={fmtDate(offer.price_valid_until)} mono />
