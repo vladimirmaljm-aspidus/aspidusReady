@@ -1484,21 +1484,29 @@ function OfferDetail({
                 </TableCell>
               </TableRow>
             ) : (offer.items || []).map((it, i) => {
+              // FIX: normalize line item fields for legacy + new format.
+              // Old format: {productId, price, invIndex} — no product_name.
+              // New format: {product_id, product_name, unit_price, sku, unit}.
+              const productName = (it as any).product_name || (it as any).name || (it as any).description || "";
+              const productSku = (it as any).sku || "";
+              const productUnit = (it as any).unit || "";
+              const productUnitPrice = Number((it as any).unit_price ?? (it as any).price ?? 0);
+              const productQty = Number((it as any).quantity ?? (it as any).qty ?? 0);
               const cost = Number(it.cost) || 0;
-              const unitPrice = Number(it.unit_price) || 0;
+              const unitPrice = productUnitPrice;
               const marginPerUnit = unitPrice - cost;
               const marginPct = unitPrice > 0 ? (marginPerUnit / unitPrice) * 100 : 0;
               const hasCost = cost > 0;
               return (
                 <TableRow key={i}>
                   <TableCell>
-                    <div className="font-medium">{it.product_name || "—"}</div>
-                    <div className="text-xs text-muted-foreground sm:hidden">{it.sku || "—"}</div>
+                    <div className="font-medium">{productName || "—"}</div>
+                    <div className="text-xs text-muted-foreground sm:hidden">{productSku || "—"}</div>
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell font-mono text-xs tabular">{it.sku || "—"}</TableCell>
-                  <TableCell className="text-right font-mono tabular">{fmtNumber(it.quantity)}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{it.unit || "—"}</TableCell>
-                  <TableCell className="text-right font-mono tabular">{fmtMoney(it.unit_price, offer.currency)}</TableCell>
+                  <TableCell className="hidden sm:table-cell font-mono text-xs tabular">{productSku || "—"}</TableCell>
+                  <TableCell className="text-right font-mono tabular">{fmtNumber(productQty)}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{productUnit || "—"}</TableCell>
+                  <TableCell className="text-right font-mono tabular">{fmtMoney(productUnitPrice, offer.currency)}</TableCell>
                   <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.discount}%</TableCell>
                   <TableCell className="text-right font-mono tabular hidden sm:table-cell">{it.tax_rate}%</TableCell>
                   <TableCell className="text-right font-mono tabular hidden md:table-cell">

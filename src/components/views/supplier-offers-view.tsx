@@ -36,6 +36,7 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
+import { ProductPicker } from "@/components/common/product-picker";
 import { fmtMoney, fmtDate } from "@/lib/utils/format";
 import {
   SupplierOffer, SupplierOfferStatus, ProductCatalogEntry, Partner,
@@ -120,13 +121,15 @@ export function SupplierOffersView() {
     },
   });
 
-  // Catalog & partners for dropdowns + lookups
+  // Products & partners for dropdowns + lookups
+  // FIX: use /api/products instead of /api/product-catalog (which is empty —
+  // products were merged into the products table via show_in_catalog flag).
   const catalog = useQuery({
-    queryKey: ["product-catalog", tenantKey, "all"],
+    queryKey: ["products", tenantKey, "supplier-offers-all"],
     queryFn: async () => {
-      const r = await fetch(api("/api/product-catalog?limit=500"));
-      if (!r.ok) throw new Error("Failed to load product catalog");
-      return r.json() as Promise<{ items: ProductCatalogEntry[] }>;
+      const r = await fetch(api("/api/products?limit=1000"));
+      if (!r.ok) throw new Error("Failed to load products");
+      return r.json() as Promise<{ items: any[] }>;
     },
   });
   const partners = useQuery({
@@ -202,15 +205,21 @@ export function SupplierOffersView() {
               className="pl-9"
             />
           </div>
-          <Select value={productFilter} onValueChange={setProductFilter}>
-            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder={t(locale, "crm-product")} /></SelectTrigger>
-            <SelectContent className="max-h-72">
-              <SelectItem value="all">{t(locale, "crm-all-products")}</SelectItem>
-              {(catalog.data?.items || []).map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Product filter — use a simple Input for search instead of a 500+
+              item dropdown that's impossible to navigate. */}
+          <Input
+            placeholder={t(locale, "crm-product")}
+            value={productFilter === "all" ? "" : (catalogMap.get(productFilter)?.name || productFilter)}
+            onChange={(e) => {
+              const val = e.target.value.toLowerCase();
+              if (!val) { setProductFilter("all"); return; }
+              const match = (catalog.data?.items || []).find((p) =>
+                p.name?.toLowerCase().includes(val) || p.sku?.toLowerCase().includes(val)
+              );
+              setProductFilter(match ? match.id : "all");
+            }}
+            className="w-full md:w-56"
+          />
           <Select value={supplierFilter} onValueChange={setSupplierFilter}>
             <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t(locale, "crm-supplier")} /></SelectTrigger>
             <SelectContent className="max-h-72">
@@ -541,7 +550,7 @@ function OfferFormDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   offer: SupplierOffer | null;
-  catalog: ProductCatalogEntry[];
+  catalog: any[];
   supplierPartners: Partner[];
   onSaved: () => void;
 }) {
@@ -549,6 +558,7 @@ function OfferFormDialog({
   const tenantKey = useTenantKey();
   const locale = useI18nStore((s) => s.locale);
   const STATUS_VALUES = statusValues(locale);
+  const catalogMap = new Map(catalog.map((p) => [p.id, p]));
 
   const [form, setForm] = useState<Partial<SupplierOffer>>({});
   const [saving, setSaving] = useState(false);
@@ -608,14 +618,23 @@ function OfferFormDialog({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
           <div className="space-y-1.5">
             <Label>{t(locale, "crm-product-required-label")}</Label>
-            <Select value={form.product_id || ""} onValueChange={(v) => set("product_id", v)}>
-              <SelectTrigger><SelectValue placeholder={t(locale, "crm-select-product")} /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {catalog.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* FIX: use ProductPicker (searchable combobox) instead of flat Select
+                with 500+ items that was impossible to navigate. */}
+            <ProductPicker
+              value={form.product_id || ""}
+              onSelect={(p) => {
+                if (p) {
+                  set("product_id", p.id);
+                  // Auto-fill unit price and currency from product if empty
+                  if (!form.unit_price && p.price) set("unit_price", p.price);
+                  if (!form.currency && p.currency) set("currency", p.currency);
+                } else {
+                  set("product_id", "");
+                }
+              }}
+              fallbackName={form.product_id ? (catalogMap.get(form.product_id) as any)?.name : undefined}
+              placeholder={t(locale, "crm-select-product")}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>{t(locale, "crm-supplier-required-label")}</Label>
