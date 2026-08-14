@@ -99,7 +99,7 @@ export async function getEmailConfig(tenantId?: string): Promise<EmailConfig | n
 
   const provider: EmailProvider = comms.email_provider || (comms.smtp_host ? "smtp" : "none");
   const fromName = comms.from_name || "VELOS CRM";
-  const fromEmail = comms.from_email || "noreply@velos.trade";
+  const fromEmail = comms.from_email || process.env.NOREPLY_EMAIL || "noreply@aspidus.onrender.com";
 
   const config: EmailConfig = { provider, fromName, fromEmail };
 
