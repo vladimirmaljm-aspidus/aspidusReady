@@ -1172,8 +1172,9 @@ function ProformaFormDialog({
       description: (p as any).description ?? null,
       detailed_spec: (p as any).detailed_spec ?? null,
       brand: (p as any).brand ?? null,
-      origin_country: (p as any).origin_country ?? null,
-      specifications: (p as any).specifications ?? null,
+      origin_country: (p as any).origin_country
+        ?? ((p as any).attributes?.origin_country ?? null),
+      specifications: (p as any).coa_params ?? null,
     });
   }
 

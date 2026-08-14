@@ -542,6 +542,7 @@ function ProductDetail({ product }: { product: Product }) {
   ].filter((x) => x.value);
 
   // Known imported data keys that should be displayed with nice labels
+  // FIX (audit F-8): read from top-level product fields first, fall back to attributes.
   const IMPORTED_KEY_LABELS: Record<string, string> = {
     hs_code: t(locale, "crm-hs-code"),
     brand: t(locale, "crm-brand"),
@@ -550,10 +551,23 @@ function ProductDetail({ product }: { product: Product }) {
     inventory: t(locale, "inventory"),
   };
 
+  // Build a merged attributes object: top-level fields + attributes JSONB
+  // so the detail panel shows data regardless of where it's stored.
+  const mergedAttrs: Record<string, unknown> = {
+    ...(product.attributes || {}),
+    hs_code: (product as any).hs_code ?? (product.attributes as any)?.hs_code ?? null,
+    brand: (product as any).brand ?? (product.attributes as any)?.brand ?? null,
+    image_url: (product as any).image_url ?? (product.attributes as any)?.image_url ?? null,
+    tags: (product as any).tags ?? (product.attributes as any)?.tags ?? null,
+    inventory: (product as any).inventory ?? (product.attributes as any)?.inventory ?? null,
+  };
+
   // Separate imported data fields from generic attributes
-  const attributes = product.attributes || {};
-  const importedEntries = Object.entries(attributes).filter(([k]) => k in IMPORTED_KEY_LABELS);
-  const otherEntries = Object.entries(attributes).filter(([k]) => !(k in IMPORTED_KEY_LABELS));
+  // FIX (audit F-8): use mergedAttrs (top-level + attributes) so data
+  // stored in dedicated columns (hs_code, brand, etc.) is also shown.
+  const attributes = mergedAttrs;
+  const importedEntries = Object.entries(mergedAttrs).filter(([k, v]) => k in IMPORTED_KEY_LABELS && v != null);
+  const otherEntries = Object.entries(mergedAttrs).filter(([k, v]) => !(k in IMPORTED_KEY_LABELS) && v != null);
 
   // CoA params can be an array of {name, value} objects OR a key-value object
   const coaParams = (product as any).coa_params;
@@ -956,6 +970,36 @@ function ProductFormDialog({
                 </div>
 
                 {/* ── Specification fields (editable) ── */}
+                {/* FIX (audit F-2): added brand, hs_code, image_url, origin_country inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>{t(locale, "crm-brand") || "Brand"}</Label>
+                    <Input
+                      value={(form as any).brand || ""}
+                      onChange={(e) => set("brand" as any, e.target.value)}
+                      placeholder="e.g. Al Fakher"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t(locale, "crm-hs-code") || "HS Code"}</Label>
+                    <Input
+                      value={(form as any).hs_code || ""}
+                      onChange={(e) => set("hs_code" as any, e.target.value)}
+                      placeholder="e.g. 24031100"
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>{t(locale, "crm-image-url") || "Image URL"}</Label>
+                  <Input
+                    value={(form as any).image_url || ""}
+                    onChange={(e) => set("image_url" as any, e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+
                 <div className="space-y-1.5">
                   <Label>{t(locale, "crm-shelf-life")}</Label>
                   <Input

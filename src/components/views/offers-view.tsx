@@ -2112,6 +2112,12 @@ function OfferFormDialog({
       description: (p as any).description ?? null,
       detailed_spec: (p as any).detailed_spec ?? null,
       brand: (p as any).brand ?? null,
+      // FIX (audit F-11): origin_country is not a DB column on products —
+      // it's stored in attributes JSONB. Fall back to attributes.
+      origin_country: (p as any).origin_country
+        ?? ((p as any).attributes?.origin_country ?? null),
+      // FIX (audit F-11): specifications — use coa_params if available.
+      specifications: (p as any).coa_params ?? null,
     });
 
     setLoadingProductIdx(idx);

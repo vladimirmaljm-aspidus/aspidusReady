@@ -84,14 +84,25 @@ export class SupabaseStore implements Store {
       "cost_center", "account", "created_by_user", "posted_by_user",
       "commission_agent", "portal_access", "kyc_submission",
     ]);
+    // CRITICAL FIX (audit F-4): these JSONB columns hold plain objects (not
+    // JOIN results) and must NOT be stripped. Without this whitelist,
+    // sanitizePayload silently drops logistics, attributes, inventory,
+    // settings, etc. — causing silent data loss on every product save.
+    const JSONB_OBJECT_COLUMNS = new Set([
+      "logistics", "attributes", "inventory", "settings", "costs",
+      "services", "specifications", "payment_dates", "bank_accounts",
+      "social", "metadata", "notif_prefs", "supplier_bank_details",
+      "comms", "permissions", "data",
+    ]);
     const out: SupaRow = {};
     for (const [k, v] of Object.entries(row)) {
       // Skip known JOIN result keys (even if null — null still triggers
       // "column does not exist" in PostgREST)
       if (JOIN_KEYS.has(k)) continue;
       // Skip nested plain objects — they're JOIN results too
+      // UNLESS they're known JSONB columns that hold plain objects.
       if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-        continue;
+        if (!JSONB_OBJECT_COLUMNS.has(k)) continue;
       }
       if (v === "") out[k] = null;
       else out[k] = v;

@@ -85,17 +85,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let productOrigin: string | null = null;
     let productSpecs: any = null;
     let productCategory: string | null = null;
+    let catalogEntryData: any = null;
 
     const productId = (calc as any).product_id || (calc as any).product_catalog_id;
     if (productId) {
       try {
-        const catalogEntry = await auth.store.getProductCatalogEntry(productId);
-        if (catalogEntry) {
-          productName = catalogEntry.name;
-          productHsCode = catalogEntry.hs_code;
-          productOrigin = catalogEntry.origin_country;
-          productSpecs = catalogEntry.specifications;
-          productCategory = catalogEntry.category;
+        catalogEntryData = await auth.store.getProductCatalogEntry(productId);
+        if (catalogEntryData) {
+          productName = catalogEntryData.name;
+          productHsCode = catalogEntryData.hs_code;
+          productOrigin = catalogEntryData.origin_country;
+          productSpecs = catalogEntryData.specifications;
+          productCategory = catalogEntryData.category;
         }
       } catch { /* ignore — fallback to calc data */ }
     }
@@ -106,10 +107,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Build line item with real product data
+    // FIX (audit F-19): include ALL trade metadata fields so PDFs and
+    // downstream automation (proforma/invoice) have complete data.
     const items = [{
       product_id: productId || null,
       product_name: productName,
-      sku: productSku,
+      sku: productSku || "",
       quantity: qty,
       unit,
       unit_price: sellPrice,
@@ -118,6 +121,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // CRITICAL FIX (audit F-4): round to 2 decimals to avoid floating-point
       // drift (e.g. 1199.9999999998) being persisted as the line total.
       total: Math.round(totalSell * 100) / 100,
+      // FIX (audit F-19): trade metadata — previously dropped, causing
+      // PDFs to show "—" for HS Code, Origin, Brand, Specifications.
+      hs_code: productHsCode || null,
+      origin_country: productOrigin || null,
+      brand: catalogEntryData?.brand ?? null,
+      detailed_spec: catalogEntryData?.detailed_spec ?? null,
+      specifications: productSpecs || null,
+      description: catalogEntryData?.description ?? null,
     }];
 
     // ── Build CLIENT-FACING notes ────────────────────────────────────────
