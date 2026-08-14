@@ -43,7 +43,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtMoney, fmtNumber, fmtDate, fmtRelative } from "@/lib/utils/format";
 import { Product } from "@/lib/supabase/types";
-import { CURRENCIES, PRODUCT_CATEGORIES_LOCAL, PRODUCT_UNITS } from "@/lib/data/reference";
+import { CURRENCIES, PRODUCT_UNITS } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
@@ -105,6 +105,23 @@ export function ProductsView() {
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
+  });
+
+  // Distinct categories across ALL products (not just the current page) —
+  // used by the form's category datalist so the user can pick from the
+  // 12+ real categories in production (tobacco, agriculture, metals, …)
+  // instead of the 7 hardcoded PRODUCT_CATEGORIES_LOCAL.
+  const { data: allCategories } = useQuery({
+    queryKey: ["product-categories-all", tenantKey],
+    queryFn: async () => {
+      const r = await fetch(api(`/api/products?limit=10000`));
+      if (!r.ok) throw new Error("Failed to load categories");
+      const d = await r.json() as { items: Product[] };
+      return Array.from(
+        new Set(d.items.map((p) => p.category).filter(Boolean) as string[])
+      ).sort();
+    },
+    staleTime: 60_000,
   });
 
   const items = data?.items || [];
@@ -438,9 +455,11 @@ export function ProductsView() {
         open={showForm}
         onOpenChange={setShowForm}
         product={editing}
+        existingCategories={allCategories || []}
         onSaved={() => {
           setShowForm(false);
           qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+          qc.invalidateQueries({ queryKey: ["product-categories-all", tenantKey] });
           qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
         }}
       />
@@ -750,12 +769,13 @@ function generateSku(name: string): string {
 
 // ---- Form dialog ----
 function ProductFormDialog({
-  open, onOpenChange, product, onSaved,
+  open, onOpenChange, product, onSaved, existingCategories,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   product: Product | null;
   onSaved: () => void;
+  existingCategories: string[];
 }) {
   const api = useApiUrl();
   const tenantKey = useTenantKey();
@@ -867,12 +887,16 @@ function ProductFormDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>{t(locale, "crm-category")}</Label>
-                <Select value={form.category || ""} onValueChange={(v) => set("category", v)}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder={t(locale, "crm-select-category")} /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {PRODUCT_CATEGORIES_LOCAL.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input
+                  list="product-categories"
+                  value={form.category || ""}
+                  onChange={(e) => set("category", (e.target.value || null) as Product["category"])}
+                  placeholder="e.g. tobacco, agriculture, metals..."
+                  className="h-10"
+                />
+                <datalist id="product-categories">
+                  {existingCategories.map((c) => <option key={c} value={c} />)}
+                </datalist>
               </div>
             </div>
 
@@ -989,6 +1013,39 @@ function ProductFormDialog({
                       className="font-mono"
                     />
                   </div>
+                </div>
+
+                {/* Tags — stored as string[]; comma-separated input */}
+                <div className="space-y-1.5">
+                  <Label>{t(locale, "crm-tags") || "Tags"}</Label>
+                  <Input
+                    value={(form.tags || []).join(", ")}
+                    onChange={(e) => {
+                      const arr = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                      set("tags", arr.length > 0 ? arr : null);
+                    }}
+                    placeholder="e.g. organic, premium, eu-origin"
+                  />
+                  <p className="text-xs text-muted-foreground">Comma-separated tags</p>
+                </div>
+
+                {/* Origin Country — stored in attributes JSONB (origin_country key).
+                    The products table has no dedicated column yet, so attributes
+                    is the documented workaround (see Product.origin_country). */}
+                <div className="space-y-1.5">
+                  <Label>{t(locale, "crm-origin-country") || "Origin Country"}</Label>
+                  <Input
+                    value={(form.attributes as any)?.origin_country || ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const attrs = { ...((form.attributes as any) || {}) };
+                      if (v) attrs.origin_country = v;
+                      else delete attrs.origin_country;
+                      set("attributes", Object.keys(attrs).length > 0 ? attrs : null);
+                    }}
+                    placeholder="e.g. TR, BR, ID"
+                  />
+                  <p className="text-xs text-muted-foreground">ISO alpha-2 country code (stored in attributes JSONB)</p>
                 </div>
 
                 <div className="space-y-1.5">
