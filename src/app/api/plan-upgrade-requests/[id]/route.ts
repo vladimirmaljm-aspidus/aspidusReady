@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const requester = await auth.store.getUserById(requesterId);
       if (requester?.email) {
         const tenant = await auth.store.getTenant((current as any).tenant_id);
-        const baseUrl = process.env.APP_BASE_URL || "https://velos.onrender.com";
+        const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
         const { sendEmail } = await import("@/lib/email/service");
         const approved = decision === "approve";
         const subject = approved

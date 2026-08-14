@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-const siteUrl = "https://velos.onrender.com";
+const siteUrl = "https://aspidus.onrender.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

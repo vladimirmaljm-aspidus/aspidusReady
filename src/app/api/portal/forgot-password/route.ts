@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       user_agent: ua,
     });
 
-    const baseUrl = process.env.APP_BASE_URL || "https://velos.onrender.com";
+    const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
     const resetUrl = `${baseUrl}/portal/login?reset_token=${token}`;
 
     await sendEmail({

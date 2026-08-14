@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           fromName: tenant?.name || "VELOS",
           preview: body,
           tenantName: tenant?.name || "VELOS",
-          portalUrl: `${process.env.APP_BASE_URL || "https://velos.onrender.com"}/portal/login`,
+          portalUrl: `${process.env.APP_BASE_URL || "https://aspidus.onrender.com"}/portal/login`,
           direction: "admin_to_portal",
         });
         await sendEmail({ to: access.portal_email, subject, html, tenantId: access.tenant_id }).catch((e) => console.warn("[admin.message.email]", e));
