@@ -44,7 +44,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  const updated = await auth.store.upsertSupplierOffer({ ...body, id, tenant_id: existing.tenant_id });
+  let updated;
+  try {
+    updated = await auth.store.upsertSupplierOffer({ ...body, id, tenant_id: existing.tenant_id });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Failed to save supplier offer" },
+      { status: 500 },
+    );
+  }
   await audit(auth.store, auth.user, req, "supplier_offer.update", "supplier_offer", id, {});
   return NextResponse.json(updated);
 }
