@@ -45,6 +45,7 @@ import { fmtMoney, fmtDate, fmtDateTime, fmtNumber } from "@/lib/utils/format";
 import { Invoice, InvoiceStatus, OfferLineItem, Offer, Partner, Product } from "@/lib/supabase/types";
 import { CURRENCIES, INVOICE_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { UnitSelect } from "@/components/common/unit-select";
+import { ProductPicker } from "@/components/common/product-picker";
 import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
@@ -885,6 +886,7 @@ function InvoiceDetail({
               <TableHead>{t("fin-product")}</TableHead>
               <TableHead className="hidden sm:table-cell">{t("fin-sku")}</TableHead>
               <TableHead className="text-right">{t("fin-qty")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("fin-unit")}</TableHead>
               <TableHead className="text-right">{t("fin-price")}</TableHead>
               <TableHead className="text-right hidden sm:table-cell">{t("fin-disc-percent")}</TableHead>
               <TableHead className="text-right hidden sm:table-cell">{t("fin-tax-percent")}</TableHead>
@@ -894,7 +896,7 @@ function InvoiceDetail({
           <TableBody>
             {(invoice.items || []).length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-6">
                   {t("fin-no-line-items")}
                 </TableCell>
               </TableRow>
@@ -906,6 +908,7 @@ function InvoiceDetail({
                 </TableCell>
                 <TableCell className="hidden sm:table-cell font-mono text-xs">{it.sku || "—"}</TableCell>
                 <TableCell className="text-right tabular">{fmtNumber(it.quantity)}</TableCell>
+                <TableCell className="hidden sm:table-cell text-xs">{it.unit || "—"}</TableCell>
                 <TableCell className="text-right tabular">{fmtMoney(it.unit_price, invoice.currency)}</TableCell>
                 <TableCell className="text-right tabular hidden sm:table-cell">{it.discount}%</TableCell>
                 <TableCell className="text-right tabular hidden sm:table-cell">{it.tax_rate}%</TableCell>
@@ -1303,9 +1306,9 @@ function InvoiceFormDialog({
   });
 
   const products = useQuery({
-    queryKey: ["products", tenantKey, "list", "200"],
+    queryKey: ["products", tenantKey, "list", "1000"],
     queryFn: async () => {
-      const r = await fetch(api(`/api/products?limit=200`));
+      const r = await fetch(api(`/api/products?limit=1000`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
@@ -1527,10 +1530,7 @@ function InvoiceFormDialog({
     }
   }
 
-  function selectProduct(idx: number, productId: string) {
-    const p = (products.data?.items || []).find((x) => x.id === productId);
-    if (!p) return;
-
+  function selectProduct(idx: number, p: Product) {
     // Unit-conversion aware: if the user already picked a non-default unit on
     // this line (e.g. they set "MT" while the product is priced per "kg"),
     // preserve their choice and convert the product price into that unit so
@@ -1624,7 +1624,9 @@ function InvoiceFormDialog({
   }
 
   const offerList = offers.data?.items || [];
-  const productList = products.data?.items || [];
+  // `products` is kept for the unit-conversion tip lookup below
+  // (ProductPicker fetches its own copy and calls selectProduct with the
+  // full Product object).
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1837,21 +1839,25 @@ function InvoiceFormDialog({
                       <div key={idx} className="rounded-md border p-2 grid grid-cols-12 gap-1.5 items-end">
                         <div className="col-span-12 sm:col-span-3 space-y-1">
                           <Label className="text-xs">{t("fin-product")}</Label>
-                          <Select
-                            value={it.product_id || "__custom__"}
-                            onValueChange={(v) => {
-                              if (v === "__custom__") return;
-                              selectProduct(idx, v);
+                          <ProductPicker
+                            value={it.product_id || ""}
+                            fallbackName={it.product_name || ""}
+                            fallbackSku={it.sku || ""}
+                            placeholder={t("fin-select-placeholder")}
+                            onSelect={(product) => {
+                              if (product) {
+                                selectProduct(idx, product);
+                              } else {
+                                setItem(idx, { product_id: "" });
+                              }
                             }}
-                          >
-                            <SelectTrigger className="h-9"><SelectValue placeholder={t("fin-select-placeholder")} /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__custom__">{t("fin-manual-entry")}</SelectItem>
-                              {productList.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            onAddCustom={() => {
+                              // "Add custom product" — clear the product_id
+                              // but keep the current product_name so the
+                              // user can keep typing a manual entry.
+                              setItem(idx, { product_id: "" });
+                            }}
+                          />
                           <Input
                             className="h-8 text-xs"
                             placeholder={t("fin-product-name-placeholder")}

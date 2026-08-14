@@ -341,7 +341,7 @@ export function TradeCalculatorView() {
   const catalog = useQuery({
     queryKey: ["products", tenantKey, "trade-calc"],
     queryFn: async () => {
-      const r = await fetch(api("/api/products?limit=500"));
+      const r = await fetch(api("/api/products?limit=1000"));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },

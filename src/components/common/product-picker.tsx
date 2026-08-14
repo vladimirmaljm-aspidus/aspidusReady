@@ -5,7 +5,7 @@
  *
  * Replaces the legacy plain `<Select>` that listed every product in a flat
  * dropdown (hard to scan with 300+ items). This component:
- *   - Fetches ALL products for the active tenant (limit=500) once and caches
+ *   - Fetches ALL products for the active tenant (limit=1000) once and caches
  *     them via react-query.
  *   - Lets the user search by name, SKU, HS code, brand or category as they
  *     type (client-side, debounced 200ms — the server only knows about name
@@ -103,13 +103,13 @@ export function ProductPicker({
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebounced(search, 200);
 
-  // Fetch the full catalog once (limit=500 covers the ~363-product Aspidus
+  // Fetch the full catalog once (limit=1000 covers the ~363-product Aspidus
   // DB; if the catalog grows past that the server still returns the most
-  // recent 500 — combined with client-side search this stays usable).
+  // recent 1000 — combined with client-side search this stays usable).
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["products", tenantKey, "picker", "500"],
+    queryKey: ["products", tenantKey, "picker", "1000"],
     queryFn: async () => {
-      const r = await fetch(api(`/api/products`, { limit: 500 }));
+      const r = await fetch(api(`/api/products`, { limit: 1000 }));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },

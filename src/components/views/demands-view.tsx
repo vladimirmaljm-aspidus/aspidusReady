@@ -43,6 +43,7 @@ import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { Demand, DemandItem, DemandStatus, Partner, Product, PortalRfq } from "@/lib/supabase/types";
 import { CURRENCIES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
+import { ProductPicker } from "@/components/common/product-picker";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
@@ -730,17 +731,10 @@ function DemandFormDialog({
   const [loadingPartner, setLoadingPartner] = useState(false);
   const [autoNumber, setAutoNumber] = useState<string | null>(null);
 
-  const products = useQuery({
-    queryKey: ["products", tenantKey, "list", "200"],
-    queryFn: async () => {
-      const r = await fetch(api(`/api/products?limit=200`));
-      if (!r.ok) throw new Error("Failed to load products");
-      return r.json() as Promise<{ items: Product[]; total: number }>;
-    },
-    enabled: open,
-  });
-
-  const productList = products.data?.items || [];
+  // NOTE: the product list is no longer fetched here — the shared
+  // ProductPicker component fetches its own copy (limit=1000) and calls
+  // `onSelect(product)` with the full Product object, which is forwarded
+  // to `selectProductForItem` below.
 
   // Auto-generate demand number when creating new
   useEffect(() => {
@@ -835,10 +829,7 @@ function DemandFormDialog({
   }, []);
 
   // ─── Product auto-fill ───
-  const selectProductForItem = useCallback(async (idx: number, productId: string) => {
-    const p = productList.find((x) => x.id === productId);
-    if (!p) return;
-
+  const selectProductForItem = useCallback(async (idx: number, p: Product) => {
     setItem(idx, {
       product_id: p.id,
       product_name: p.name,
@@ -847,7 +838,7 @@ function DemandFormDialog({
     });
 
     try {
-      const r = await fetch(api(`/api/automation/product-context?product_id=${productId}`));
+      const r = await fetch(api(`/api/automation/product-context?product_id=${p.id}`));
       if (!r.ok) throw new Error("Failed to load product context");
       const ctx: ProductContext = await r.json();
 
@@ -859,7 +850,7 @@ function DemandFormDialog({
     } catch {
       // Basic fill already done, no need to show error
     }
-  }, [productList]);
+  }, []);
 
   const selectedPartner = form.partner_id ? partners.find((p) => p.id === form.partner_id) : undefined;
 
@@ -964,35 +955,21 @@ function DemandFormDialog({
               {/* Product (top-level) */}
               <div className="space-y-1.5">
                 <Label>{t("crm-product")}</Label>
-                <Select
-                  value={form.product_id || "__none__"}
-                  onValueChange={(v) => {
-                    if (v === "__none__") {
-                      set("product_id", null);
-                      set("product_name", null);
-                      return;
-                    }
-                    const p = productList.find((x) => x.id === v);
+                <ProductPicker
+                  value={form.product_id || ""}
+                  fallbackName={form.product_name || ""}
+                  placeholder={t("crm-select-product-item")}
+                  onSelect={(p) => {
                     if (p) {
                       set("product_id", p.id);
                       set("product_name", p.name);
                       if (p.price) set("target_price", p.price);
+                    } else {
+                      set("product_id", null);
+                      set("product_name", null);
                     }
                   }}
-                >
-                  <SelectTrigger><SelectValue placeholder={t("crm-select-product-item")} /></SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    <SelectItem value="__none__">{t("crm-none-option")}</SelectItem>
-                    {productList.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{p.name}</span>
-                          <span className="text-xs text-muted-foreground font-mono">{p.sku}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             </div>
 
@@ -1215,23 +1192,25 @@ function DemandFormDialog({
                         <div key={idx} className="rounded-md border border-border/60 p-2 grid grid-cols-12 gap-1.5 items-end">
                           <div className="col-span-12 sm:col-span-4 space-y-1">
                             <Label className="text-xs">{t("crm-product")}</Label>
-                            <Select
-                              value={it.product_id || "__custom__"}
-                              onValueChange={(v) => {
-                                if (v === "__custom__") return;
-                                selectProductForItem(idx, v);
+                            <ProductPicker
+                              value={it.product_id || ""}
+                              fallbackName={it.product_name || ""}
+                              placeholder={t("crm-select-product-item")}
+                              className="h-8"
+                              onSelect={(p) => {
+                                if (p) {
+                                  selectProductForItem(idx, p);
+                                } else {
+                                  setItem(idx, { product_id: null });
+                                }
                               }}
-                            >
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder={t("crm-select-product-item")} />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-48">
-                                <SelectItem value="__custom__">{t("crm-manual-entry")}</SelectItem>
-                                {productList.map((p) => (
-                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              onAddCustom={() => {
+                                // "Add custom product" — clear the product_id
+                                // but keep the current product_name so the
+                                // user can keep typing a manual entry.
+                                setItem(idx, { product_id: null });
+                              }}
+                            />
                             <Input
                               className="h-8 text-xs"
                               value={it.product_name || ""}

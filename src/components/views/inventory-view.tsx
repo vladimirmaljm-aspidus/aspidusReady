@@ -60,9 +60,9 @@ export function InventoryView() {
   });
 
   const products = useQuery({
-    queryKey: ["products", tenantKey, "list", "200"],
+    queryKey: ["products", tenantKey, "list", "1000"],
     queryFn: async () => {
-      const r = await fetch(api(`/api/products?limit=200`));
+      const r = await fetch(api(`/api/products?limit=1000`));
       if (!r.ok) throw new Error("Failed to load products");
       return r.json() as Promise<{ items: Product[]; total: number }>;
     },
