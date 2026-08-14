@@ -44,6 +44,7 @@ import { Demand, DemandItem, DemandStatus, Partner, Product, PortalRfq } from "@
 import { CURRENCIES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { ProductPicker } from "@/components/common/product-picker";
+import { PartnerPicker } from "@/components/common/partner-picker";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
@@ -931,25 +932,16 @@ function DemandFormDialog({
                     </Badge>
                   )}
                 </Label>
-                <Select
+                <PartnerPicker
                   value={form.partner_id || ""}
-                  onValueChange={(v) => {
-                    set("partner_id", v);
-                    fetchPartnerContext(v);
+                  fallbackName={selectedPartner?.name}
+                  placeholder={t("crm-select-a-partner")}
+                  onSelect={(p) => {
+                    const id = p?.id || "";
+                    set("partner_id", id);
+                    if (id) fetchPartnerContext(id);
                   }}
-                >
-                  <SelectTrigger><SelectValue placeholder={t("crm-select-a-partner")} /></SelectTrigger>
-                  <SelectContent>
-                    {partners.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{p.name}</span>
-                          <span className="text-xs text-muted-foreground">({p.type})</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
 
               {/* Product (top-level) */}

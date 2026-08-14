@@ -24,7 +24,7 @@ export const runtime = "nodejs";
  * the proforma via that offer_id chain.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   // Permission gate (invoices.create)

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 // Upload tenant logo — stored in Supabase Storage (or mock path in dev)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Super-admin can upload any tenant's logo; tenant admin can upload their own.
     { const { requirePermission } = await import("@/lib/permissions/can");

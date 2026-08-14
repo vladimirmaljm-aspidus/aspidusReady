@@ -372,8 +372,25 @@ export function welcomePortalEmail(opts: {
   tenantName: string;
   baseUrl: string;
   tier: string;
+  /**
+   * One-time hashed setup token (audit F-6/P1-3 portal invite TTL).
+   * When provided, the invite link is `/portal/login?setup_token=xxx`
+   * — a single-use, 7-day-expiring token from the `password_resets`
+   * table. The previous `?access_id=xxx` link used a permanent UUID
+   * that never expired; if the email leaked (forwarded, breach) the
+   * recipient could set a password at any future time as long as
+   * `must_set_password` was still true.
+   *
+   * Optional only for backward-compat with callers that haven't been
+   * updated yet — all new invites SHOULD pass a setupToken.
+   */
+  setupToken?: string | null;
 }): { subject: string; html: string } {
-  const setupUrl = `${opts.baseUrl}/portal/login?access_id=${opts.accessId}`;
+  // Prefer the token-based URL when a setupToken is available; fall back
+  // to the legacy access_id URL only when explicitly missing (older callers).
+  const setupUrl = opts.setupToken
+    ? `${opts.baseUrl}/portal/login?setup_token=${encodeURIComponent(opts.setupToken)}`
+    : `${opts.baseUrl}/portal/login?access_id=${encodeURIComponent(opts.accessId)}`;
   const subject = `Welcome to ${opts.tenantName} Client Portal`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">

@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProductPicker } from "@/components/common/product-picker";
+import { PartnerPicker } from "@/components/common/partner-picker";
 import { fmtMoney, fmtDate } from "@/lib/utils/format";
 import {
   SupplierOffer, SupplierOfferStatus, ProductCatalogEntry, Partner,
@@ -220,15 +221,14 @@ export function SupplierOffersView() {
             }}
             className="w-full md:w-56"
           />
-          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t(locale, "crm-supplier")} /></SelectTrigger>
-            <SelectContent className="max-h-72">
-              <SelectItem value="all">{t(locale, "crm-all-suppliers")}</SelectItem>
-              {supplierPartners.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={supplierFilter === "all" ? "" : supplierFilter}
+            filterType="supplier"
+            allowClear
+            placeholder={t(locale, "crm-supplier")}
+            onSelect={(p) => setSupplierFilter(p?.id || "all")}
+            className="md:w-48"
+          />
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full md:w-40"><SelectValue placeholder={t(locale, "status")} /></SelectTrigger>
             <SelectContent>
@@ -638,14 +638,12 @@ function OfferFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>{t(locale, "crm-supplier-required-label")}</Label>
-            <Select value={form.supplier_id || ""} onValueChange={(v) => set("supplier_id", v)}>
-              <SelectTrigger><SelectValue placeholder={t(locale, "crm-select-supplier")} /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {supplierPartners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PartnerPicker
+              value={form.supplier_id || ""}
+              filterType="supplier"
+              placeholder={t(locale, "crm-select-supplier")}
+              onSelect={(p) => set("supplier_id", p?.id || "")}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>{t(locale, "crm-offer-number")}</Label>

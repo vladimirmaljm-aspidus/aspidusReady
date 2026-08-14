@@ -44,6 +44,7 @@ import {
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useT } from "@/lib/i18n/store";
+import { PartnerPicker } from "@/components/common/partner-picker";
 
 // ---------- static lookups ----------
 
@@ -212,17 +213,13 @@ export function PortalRfqsView() {
               <SelectItem value="expired">{t("portal-rfqs-status-expired")}</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="w-full md:w-52">
-              <SelectValue placeholder={t("portal-rfqs-col-partner")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("portal-rfqs-all-partners")}</SelectItem>
-              {(partnersQ.data?.items || []).slice(0, 100).map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={partnerFilter === "all" ? "" : partnerFilter}
+            allowClear
+            placeholder={t("portal-rfqs-col-partner")}
+            onSelect={(p) => setPartnerFilter(p?.id || "all")}
+            className="md:w-52"
+          />
         </CardContent>
       </Card>
 

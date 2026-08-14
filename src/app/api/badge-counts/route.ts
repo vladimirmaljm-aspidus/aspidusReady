@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  * the tenant can't even see.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   const tenantId = resolveTenantId(auth, req);

@@ -316,7 +316,7 @@ const DOCUMENT_INFO: Record<string, { name: string; description: string; where: 
 
 export async function GET(req: NextRequest) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (integrations.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

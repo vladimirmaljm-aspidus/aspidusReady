@@ -8,20 +8,29 @@ export const runtime = "nodejs";
  * Cron endpoint — daily sweep that marks invoices as overdue when their
  * due_date has passed. Idempotent; safe to run daily.
  *
- * Authentication: caller must supply `?token=…` matching CRON_TOKEN env var,
- * OR a valid super_admin session (for manual runs from the browser).
+ * Authentication: caller must supply an `Authorization: Bearer <CRON_TOKEN>`
+ * header matching the CRON_TOKEN env var (preferred — F-8 security fix),
+ * OR `?token=…` URL query (legacy, kept for backward compatibility), OR a
+ * valid super_admin session (for manual runs from the browser).
  */
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const token = url.searchParams.get("token");
     const expected = process.env.CRON_TOKEN;
 
-    // Auth: either the shared cron token or a super_admin session cookie
-    let authorised = !!expected && token === expected;
+    // Auth: shared cron token (header preferred, URL query legacy) OR a
+    // super_admin session cookie (for manual runs from the browser).
+    const authHeader = req.headers.get("authorization") || "";
+    const headerToken = authHeader.toLowerCase().startsWith("bearer ")
+      ? authHeader.slice(7).trim()
+      : null;
+    const queryToken = url.searchParams.get("token");
+    const presentedToken = headerToken || queryToken;
+
+    let authorised = !!expected && !!presentedToken && presentedToken === expected;
     if (!authorised) {
       const { requireSuperAdmin } = await import("@/lib/api/helpers");
-      const sa = await requireSuperAdmin();
+      const sa = await requireSuperAdmin(req);
       if (sa instanceof NextResponse) return sa;
       authorised = true;
     }

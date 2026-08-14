@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 // Admin: look up verification by document (offer/invoice/proforma)
 export async function GET(req: NextRequest) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (document-verify.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 import { getSupabase } from "@/lib/supabase/client";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get("search") || undefined;
     const partner_id = url.searchParams.get("partner_id") || undefined;
     const status = url.searchParams.get("status") || undefined;
-    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
     const result = await auth.store.listInvoices(tid!, { search, filters: { partner_id, status }, limit, offset });
     // Defense-in-depth: even though SupabaseStore filters by tenant_id,
@@ -154,6 +155,20 @@ export async function POST(req: NextRequest) {
       }
     }
     await audit(auth.store, getAuthUser(auth), req, body.id ? "invoice.update" : "invoice.create", "invoice", created.id, { number: created.number });
+
+    // ── F-4: fire outbound webhooks (invoice.created / invoice.updated) ────
+    // Fire-and-forget — webhook delivery failures must NEVER block the
+    // invoice mutation. We pass the AFTER snapshot (created) so receivers
+    // get the persisted state including the auto-generated number.
+    void triggerWebhooks(
+      auth.store,
+      tid!,
+      body.id ? "invoice.updated" : "invoice.created",
+      "invoice",
+      created.id,
+      created as unknown as Record<string, unknown>,
+    ).catch((e) => console.error("[invoices.post] webhook trigger failed:", e));
+
     return NextResponse.json(created);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });

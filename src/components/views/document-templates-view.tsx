@@ -1454,7 +1454,7 @@ function LetterheadEditorDialog({
                         </div>
                         <Field label={t("doc-default-letterhead")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} />
+                            <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} aria-label={t("doc-default-letterhead")} />
                             <span className="text-sm text-muted-foreground">{t("doc-use-default-for-tenant")}</span>
                           </div>
                         </Field>
@@ -1596,7 +1596,7 @@ function LetterheadEditorDialog({
                         <div className="grid grid-cols-2 gap-3">
                           <Field label={t("doc-divider")}>
                             <div className="flex items-center gap-2">
-                              <Switch checked={form.header_divider} onCheckedChange={(v) => set("header_divider", v)} />
+                              <Switch checked={form.header_divider} onCheckedChange={(v) => set("header_divider", v)} aria-label={t("doc-divider")} />
                               <span className="text-sm text-muted-foreground">{t("doc-show-below-header")}</span>
                             </div>
                           </Field>
@@ -1631,7 +1631,7 @@ function LetterheadEditorDialog({
                         <div className="grid grid-cols-2 gap-3">
                           <Field label={t("doc-divider")}>
                             <div className="flex items-center gap-2">
-                              <Switch checked={form.footer_divider} onCheckedChange={(v) => set("footer_divider", v)} />
+                              <Switch checked={form.footer_divider} onCheckedChange={(v) => set("footer_divider", v)} aria-label={t("doc-divider")} />
                               <span className="text-sm text-muted-foreground">{t("doc-show-above-footer")}</span>
                             </div>
                           </Field>
@@ -1652,7 +1652,7 @@ function LetterheadEditorDialog({
                       <div className="space-y-3">
                         <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.watermark_enabled} onCheckedChange={(v) => set("watermark_enabled", v)} />
+                            <Switch checked={form.watermark_enabled} onCheckedChange={(v) => set("watermark_enabled", v)} aria-label={t("doc-enabled")} />
                             <span className="text-sm text-muted-foreground">{t("doc-watermark-overlay-desc")}</span>
                           </div>
                         </Field>
@@ -2016,7 +2016,7 @@ function SealEditorDialog({
                         </Field>
                         <Field label={t("doc-default-seal")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} />
+                            <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} aria-label={t("doc-default-seal")} />
                             <span className="text-sm text-muted-foreground">{t("doc-use-default-seal")}</span>
                           </div>
                         </Field>
@@ -2142,7 +2142,7 @@ function SealEditorDialog({
                       <div className="space-y-3">
                         <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.signature_enabled} onCheckedChange={(v) => set("signature_enabled", v)} />
+                            <Switch checked={form.signature_enabled} onCheckedChange={(v) => set("signature_enabled", v)} aria-label={t("doc-enabled")} />
                             <span className="text-sm text-muted-foreground">{t("doc-signature-line-desc")}</span>
                           </div>
                         </Field>
@@ -2445,7 +2445,7 @@ function TemplateEditorDialog({
                         </Field>
                         <Field label={t("doc-default-template")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} />
+                            <Switch checked={form.is_default} onCheckedChange={(v) => set("is_default", v)} aria-label={t("doc-default-template")} />
                             <span className="text-sm text-muted-foreground">{t("doc-use-default-for-type")}</span>
                           </div>
                         </Field>
@@ -2491,7 +2491,7 @@ function TemplateEditorDialog({
                         </Field>
                         <Field label={t("doc-stamp-seal-template")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.seal_enabled} onCheckedChange={(v) => set("seal_enabled", v)} />
+                            <Switch checked={form.seal_enabled} onCheckedChange={(v) => set("seal_enabled", v)} aria-label={t("doc-stamp-seal-template")} />
                             <span className="text-sm text-muted-foreground">
                               {form.seal_id ? t("doc-apply-selected-seal") : t("doc-select-seal-first")}
                             </span>
@@ -2532,7 +2532,7 @@ function TemplateEditorDialog({
                       <div className="space-y-3">
                         <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.header_enabled} onCheckedChange={(v) => set("header_enabled", v)} />
+                            <Switch checked={form.header_enabled} onCheckedChange={(v) => set("header_enabled", v)} aria-label={t("doc-enabled")} />
                             <span className="text-sm text-muted-foreground">{t("doc-show-header-every-page")}</span>
                           </div>
                         </Field>
@@ -2567,7 +2567,7 @@ function TemplateEditorDialog({
                       <div className="space-y-3">
                         <Field label={t("doc-enabled")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.footer_enabled} onCheckedChange={(v) => set("footer_enabled", v)} />
+                            <Switch checked={form.footer_enabled} onCheckedChange={(v) => set("footer_enabled", v)} aria-label={t("doc-enabled")} />
                             <span className="text-sm text-muted-foreground">{t("doc-show-footer-every-page")}</span>
                           </div>
                         </Field>
@@ -2698,7 +2698,7 @@ function TemplateEditorDialog({
                         <ColorField label={t("doc-border-color")} value={form.table_border_color} onChange={(v) => set("table_border_color", v)} />
                         <Field label={t("doc-striped-rows")}>
                           <div className="flex items-center gap-2">
-                            <Switch checked={form.table_stripe} onCheckedChange={(v) => set("table_stripe", v)} />
+                            <Switch checked={form.table_stripe} onCheckedChange={(v) => set("table_stripe", v)} aria-label={t("doc-striped-rows")} />
                             <span className="text-sm text-muted-foreground">{t("doc-alternate-row-bg")}</span>
                           </div>
                         </Field>
@@ -2839,7 +2839,7 @@ function NumberInput({
 function ToggleField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-border/60 px-2 py-1.5">
-      <Switch checked={checked} onCheckedChange={onChange} className="scale-90" />
+      <Switch checked={checked} onCheckedChange={onChange} className="scale-90" aria-label={label} />
       <span className="text-xs">{label}</span>
     </div>
   );

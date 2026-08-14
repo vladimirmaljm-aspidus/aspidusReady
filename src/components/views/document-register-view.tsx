@@ -40,6 +40,7 @@ import {
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useT } from "@/lib/i18n/store";
+import { PartnerPicker } from "@/components/common/partner-picker";
 
 type DocStatus = "current" | "superseded" | "archived";
 
@@ -632,19 +633,12 @@ function DocumentFormDialog({
 
           <div className="space-y-1.5">
             <Label>{t("fin-partner")}</Label>
-            <Select
-              value={form.partner_id || "__none__"}
-              onValueChange={(v) => set("partner_id", v === "__none__" ? "" : v)}
+            <PartnerPicker
+              value={form.partner_id || ""}
+              placeholder={t("fin-no-partner-option")}
               disabled={isVersion}
-            >
-              <SelectTrigger><SelectValue placeholder={t("fin-no-partner-option")} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{t("fin-no-partner-option")}</SelectItem>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onSelect={(p) => set("partner_id", p?.id || "")}
+            />
           </div>
 
           <div className="space-y-1.5">

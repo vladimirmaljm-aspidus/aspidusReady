@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, getIp } from "@/lib/api/helpers";
 import { sendEmail, welcomePortalEmail } from "@/lib/email/service";
+import { createPasswordReset } from "@/lib/auth/password-reset";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "portal.change_email"); if (_d) return _d; }
@@ -81,6 +82,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const tenant = await auth.store.getTenant(access.tenant_id);
         const partner = access.partner_id ? await auth.store.getPartner(access.partner_id) : null;
         const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
+        // Audit F-6/P1-3: mint a single-use, 7-day-expiring setup token for
+        // the NEW email address (the old invite token, if any, was tied to
+        // the old email and is invalidated by createPasswordReset). Best-
+        // effort: if minting fails, fall back to the legacy access_id link,
+        // which the setup-password route will still honour for 7 days based
+        // on invited_at.
+        let setupToken: string | null = null;
+        try {
+          const issued = await createPasswordReset({
+            targetType: "portal_access",
+            targetId: id,
+            tenantId: access.tenant_id,
+            ip: getIp(req),
+            userAgent: req.headers.get("user-agent") || null,
+            ttlMs: 7 * 24 * 60 * 60 * 1000,
+          });
+          setupToken = issued.token;
+        } catch (e) {
+          console.warn("[change-email] createPasswordReset failed, falling back to access_id link:", e);
+        }
         const { subject, html } = welcomePortalEmail({
           partnerName: partner?.name || "Client",
           portalEmail: new_email,
@@ -88,6 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           tenantName: tenant?.name || "VELOS",
           baseUrl,
           tier: access.tier || "business",
+          setupToken,
         });
         await sendEmail({ to: new_email, subject: `Portal email changed — ${subject}`, html, tenantId: access.tenant_id });
         email_sent = new_email;

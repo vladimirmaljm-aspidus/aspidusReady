@@ -1171,6 +1171,31 @@ export class PrismaStore implements Store {
   async deleteWebhook(id: string): Promise<void> {
     await db.webhook.delete({ where: { id } });
   }
+  async getWebhookById(id: string, _tenantId?: string): Promise<Webhook | null> {
+    const r: any = await db.webhook.findUnique({ where: { id } });
+    if (!r) return null;
+    return { ...r, created_at: dateToISOOrNow(r.created_at), updated_at: dateToISOOrNow(r.updated_at) };
+  }
+
+  // ─── Webhook deliveries (legacy stubs — PrismaStore is deprecated) ──────
+  // Production uses SupabaseStore. These throw so any caller accidentally
+  // hitting the legacy path fails loudly instead of silently dropping
+  // deliveries.
+  async createWebhookDelivery(_d: any): Promise<any> {
+    throw new Error("PrismaStore does not support webhook deliveries — use DB_BACKEND=supabase");
+  }
+  async updateWebhookDelivery(_id: string, _patch: any): Promise<void> {
+    throw new Error("PrismaStore does not support webhook deliveries — use DB_BACKEND=supabase");
+  }
+  async listWebhookDeliveries(_tenantId: string, _webhookId?: string, _limit?: number): Promise<any[]> {
+    return [];
+  }
+  async listFailedWebhookDeliveries(_limit?: number): Promise<any[]> {
+    return [];
+  }
+  async getWebhookDelivery(_id: string): Promise<any | null> {
+    return null;
+  }
 
   // ─── Security ───────────────────────────────────────────────────────────
 

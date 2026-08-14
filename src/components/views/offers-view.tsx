@@ -55,6 +55,7 @@ import { OfferTextBuilder } from "@/components/common/offer-text-builder";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { ProductPicker } from "@/components/common/product-picker";
+import { PartnerPicker } from "@/components/common/partner-picker";
 import { cn } from "@/lib/utils";
 import { useEffectiveTenantId, useAppStore } from "@/lib/store/app-store";
 import { checkOfferCompleteness } from "@/lib/utils/completeness-checker";
@@ -780,15 +781,13 @@ export function OffersView() {
               <SelectItem value="expired">{t("crm-expired")}</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={partnerFilter} onValueChange={(v) => { setPartnerFilter(v); setPage(0); }}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t("crm-partner")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("crm-all-partners")}</SelectItem>
-              {partnerList.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name} <span className="text-muted-foreground ml-1 text-xs">({p.type})</span></SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={partnerFilter === "all" ? "" : partnerFilter}
+            allowClear
+            placeholder={t("crm-partner")}
+            onSelect={(p) => { setPartnerFilter(p?.id || "all"); setPage(0); }}
+            className="md:w-48"
+          />
         </CardContent>
       </Card>
 
@@ -2456,27 +2455,17 @@ function OfferFormDialog({
                   {loadingPartner && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
                 </Label>
                 <MissingFieldWrap missing={isMissingField("partner_id")}>
-                  <Select
+                  <PartnerPicker
                     value={form.partner_id || ""}
-                    onValueChange={(v) => {
-                      set("partner_id", v);
-                      fetchPartnerContext(v);
+                    fallbackName={selectedPartner?.name}
+                    placeholder={t("crm-select-a-partner")}
+                    className={cn(isMissingField("partner_id") && MISSING_FIELD_CLS)}
+                    onSelect={(p) => {
+                      const id = p?.id || "";
+                      set("partner_id", id);
+                      if (id) fetchPartnerContext(id);
                     }}
-                  >
-                    <SelectTrigger className={cn(isMissingField("partner_id") && MISSING_FIELD_CLS)}>
-                      <SelectValue placeholder={t("crm-select-a-partner")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {partners.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          <div className="flex items-center gap-2">
-                            <span>{p.name}</span>
-                            <span className="text-xs text-muted-foreground">({p.type})</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </MissingFieldWrap>
               </div>
 

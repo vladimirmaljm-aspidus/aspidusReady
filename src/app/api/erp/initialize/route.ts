@@ -69,7 +69,7 @@ const UAE_ACCOUNTS = [
 // POST /api/erp/initialize — Initialize ERP with default chart of accounts
 // Body: { standard: "eu" | "uae", tenant_id?: string }
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

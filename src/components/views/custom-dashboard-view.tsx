@@ -1118,6 +1118,7 @@ export function CustomDashboardView() {
               checked={editMode}
               onCheckedChange={setEditMode}
               className="scale-90"
+              aria-label={t(locale, "edit-dashboard")}
             />
           </div>
 

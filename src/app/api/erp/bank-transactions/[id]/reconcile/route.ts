@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // POST /api/erp/bank-transactions/[id]/reconcile — Reconcile a bank transaction
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

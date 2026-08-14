@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  */
 export async function GET(req: NextRequest) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; }

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 // No platform.* permission gate — the response is scoped to the caller's own
 // tenant via resolveTenantId, so a tenant user sees only their own flags.
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   const tenantId = resolveTenantId(auth, req);
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
 // PUT: Only super-admin can modify feature flags
 export async function PUT(req: NextRequest) {
-  const auth = await requireSuperAdmin();
+  const auth = await requireSuperAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (platform.feature_flags.write)
     { const { requirePermission } = await import("@/lib/permissions/can");

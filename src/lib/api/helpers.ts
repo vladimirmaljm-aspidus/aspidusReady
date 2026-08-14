@@ -112,7 +112,7 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
     }
   }
 
-  // ── CSRF defense (P2-18) ─────────────────────────────────────────────
+  // ── CSRF defense (P2-18 / F-7) ───────────────────────────────────────
   // Reject cross-site state-changing requests. SameSite=Lax blocks cookies
   // on cross-site sub-resource requests, but top-level navigations still
   // send the cookie — an explicit Origin check closes this gap. We only
@@ -120,6 +120,13 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
   // parameter, kept optional so legacy call sites compile unchanged) AND
   // the request is cookie-authenticated (no `Authorization: Bearer` header
   // — bearer-token API-key auth is not vulnerable to CSRF and is exempt).
+  //
+  // F-7 (audit): hardened two ways —
+  //   1. Replace `origin.startsWith(appBaseUrl)` with proper URL.origin
+  //      comparison. `startsWith` is vulnerable to prefix attacks
+  //      (e.g. `https://aspidus.onrender.com.evil.com` would pass).
+  //   2. Add a Host-header fallback when APP_BASE_URL is unset so the CSRF
+  //      check is not silently disabled in dev / preview deployments.
   if (req) {
     const authHeader = req.headers.get("authorization");
     const isApiKeyRequest =
@@ -129,14 +136,51 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
       if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
         const origin = req.headers.get("origin");
         const appBaseUrl = process.env.APP_BASE_URL;
-        if (appBaseUrl && origin && !origin.startsWith(appBaseUrl)) {
-          return NextResponse.json(
-            { error: "Cross-site requests are not allowed." },
-            { status: 403 },
-          );
+        if (appBaseUrl) {
+          if (origin) {
+            try {
+              const allowedOrigin = new URL(appBaseUrl).origin;
+              const requestOrigin = new URL(origin).origin;
+              if (requestOrigin !== allowedOrigin) {
+                return NextResponse.json(
+                  { error: "Cross-site requests are not allowed." },
+                  { status: 403 },
+                );
+              }
+            } catch {
+              // Malformed APP_BASE_URL or Origin — reject defensively.
+              return NextResponse.json(
+                { error: "Invalid origin." },
+                { status: 403 },
+              );
+            }
+          }
+          // If origin is missing (same-origin requests sometimes omit it),
+          // allow — SameSite=Lax covers this case.
+        } else {
+          // Fallback when APP_BASE_URL is not configured: compare the
+          // Origin header's host to the Host header. They MUST match for
+          // same-origin requests. Without this, the entire CSRF check
+          // would be silently skipped in dev / preview environments.
+          const host = req.headers.get("host");
+          if (origin && host) {
+            try {
+              const originHost = new URL(origin).host;
+              if (originHost !== host) {
+                return NextResponse.json(
+                  { error: "Cross-site requests are not allowed." },
+                  { status: 403 },
+                );
+              }
+            } catch {
+              return NextResponse.json(
+                { error: "Invalid origin." },
+                { status: 403 },
+              );
+            }
+          }
+          // If origin is missing, allow — SameSite=Lax covers this case.
         }
-        // If origin is missing (same-origin requests sometimes omit it),
-        // allow — SameSite=Lax covers this case.
       }
     }
   }
@@ -245,15 +289,19 @@ export async function requireAuthOrApiKey(req: NextRequest): Promise<AuthContext
     }
   }
 
-  // Fall back to session auth
-  return requireAuth();
+  // Fall back to session auth (pass req through so CSRF defense runs).
+  return requireAuth(req);
 }
 
 /**
  * Require admin or super_admin role.
+ *
+ * P2-18 / F-7: callers MAY pass the inbound `req` so the CSRF Origin check
+ * inside `requireAuth` runs. The parameter is optional so legacy call sites
+ * keep compiling, but mutation routes (POST/PUT/PATCH/DELETE) SHOULD pass it.
  */
-export async function requireAdmin(): Promise<AuthContext | NextResponse> {
-  const auth = await requireAuth();
+export async function requireAdmin(req?: NextRequest): Promise<AuthContext | NextResponse> {
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
@@ -263,9 +311,13 @@ export async function requireAdmin(): Promise<AuthContext | NextResponse> {
 
 /**
  * Require super_admin role (platform-level operations: create tenants, etc.)
+ *
+ * P2-18 / F-7: callers MAY pass the inbound `req` so the CSRF Origin check
+ * inside `requireAuth` runs. The parameter is optional so legacy call sites
+ * keep compiling, but mutation routes (POST/PUT/PATCH/DELETE) SHOULD pass it.
  */
-export async function requireSuperAdmin(): Promise<AuthContext | NextResponse> {
-  const auth = await requireAuth();
+export async function requireSuperAdmin(req?: NextRequest): Promise<AuthContext | NextResponse> {
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   if (!auth.isSuperAdmin) {
     return NextResponse.json({ error: "Super-admin access required." }, { status: 403 });

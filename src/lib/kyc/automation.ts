@@ -91,7 +91,26 @@ export async function onKycApproved(ctx: KycAutomationContext) {
 
   if (access && !access.welcome_email_sent && access.portal_email) {
     // 3. Send the portal welcome email with password-setup link
+    // Audit F-6/P1-3: mint a single-use, 7-day-expiring setup token instead
+    // of embedding the permanent `access_id` UUID in the email link. Same
+    // pattern as /api/portal-access/[id]/invite. Best-effort: if token
+    // minting fails, we still send the welcome email but with the legacy
+    // access_id link (which the setup-password route will honour for 7
+    // days based on invited_at, then reject).
     const { welcomePortalEmail } = await import("@/lib/email/service");
+    let setupToken: string | null = null;
+    try {
+      const { createPasswordReset } = await import("@/lib/auth/password-reset");
+      const issued = await createPasswordReset({
+        targetType: "portal_access",
+        targetId: access.id,
+        tenantId: access.tenant_id,
+        ttlMs: 7 * 24 * 60 * 60 * 1000,
+      });
+      setupToken = issued.token;
+    } catch (e) {
+      console.error("[kyc.welcome] createPasswordReset failed, falling back to access_id link:", e);
+    }
     const { subject: wSub, html: wHtml } = welcomePortalEmail({
       partnerName: partner.name,
       portalEmail: access.portal_email,
@@ -99,6 +118,7 @@ export async function onKycApproved(ctx: KycAutomationContext) {
       tenantName: tenant?.name || "VELOS",
       baseUrl,
       tier: access.tier,
+      setupToken,
     });
     await sendEmail({
       to: access.portal_email,

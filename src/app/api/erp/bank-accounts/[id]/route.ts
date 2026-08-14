@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // DELETE /api/erp/bank-accounts/[id] — Delete bank account (requires admin)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.delete)
     { const { requirePermission } = await import("@/lib/permissions/can");

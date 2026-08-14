@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || undefined;
     const category = url.searchParams.get("category") || undefined;
-    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    // F-9-3: cap limit to 500 — see partners/route.ts for rationale.
+    const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
     const result = await auth.store.listProducts(tid!, { search, limit, offset, filters: { category } });
     // Defense-in-depth: even though SupabaseStore filters by tenant_id,

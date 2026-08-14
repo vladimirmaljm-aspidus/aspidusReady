@@ -6,7 +6,7 @@ import { randomBytes } from "crypto";
  * The QR code encodes the public verification URL.
  */
 export async function generateQrCodeDataUrl(verificationCode: string, baseUrl?: string): Promise<string> {
-  const base = baseUrl || process.env.APP_BASE_URL || "http://localhost:3000";
+  const base = baseUrl || process.env.APP_BASE_URL || "https://aspidus.onrender.com";
   const url = `${base}/verify/${verificationCode}`;
   return QRCode.toDataURL(url, {
     width: 120,

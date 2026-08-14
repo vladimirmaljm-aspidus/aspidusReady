@@ -1540,6 +1540,7 @@ export function TemplateVisualEditor({
                       onCheckedChange={(v) =>
                         updateField(selected.id, { visible: v })
                       }
+                      aria-label={t("misc-tve-visible")}
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -1556,6 +1557,7 @@ export function TemplateVisualEditor({
                       onCheckedChange={(v) =>
                         updateField(selected.id, { locked: v })
                       }
+                      aria-label={t("misc-tve-locked")}
                     />
                   </div>
                 </div>

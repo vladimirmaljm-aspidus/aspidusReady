@@ -16,7 +16,7 @@ export const runtime = "nodejs";
  */
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdmin(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (settings.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdmin(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (settings.update)
   { const { requirePermission } = await import("@/lib/permissions/can");

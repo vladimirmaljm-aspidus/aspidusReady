@@ -35,6 +35,7 @@ import { SharedDocument, Partner } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useT } from "@/lib/i18n/store";
+import { PartnerPicker } from "@/components/common/partner-picker";
 
 type DocCategory = SharedDocument["category"];
 
@@ -150,15 +151,13 @@ export function DocumentsView() {
               className="pl-9"
             />
           </div>
-          <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t("fin-partner")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("fin-all-partners")}</SelectItem>
-              {partnerList.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={partnerFilter === "all" ? "" : partnerFilter}
+            allowClear
+            placeholder={t("fin-partner")}
+            onSelect={(p) => setPartnerFilter(p?.id || "all")}
+            className="md:w-48"
+          />
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-full md:w-44"><SelectValue placeholder={t("category")} /></SelectTrigger>
             <SelectContent>
@@ -471,14 +470,11 @@ function DocumentFormDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t("fin-partner")} *</Label>
-              <Select value={partnerId} onValueChange={setPartnerId}>
-                <SelectTrigger><SelectValue placeholder={t("fin-select-placeholder")} /></SelectTrigger>
-                <SelectContent>
-                  {partners.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PartnerPicker
+                value={partnerId}
+                placeholder={t("fin-select-placeholder")}
+                onSelect={(p) => setPartnerId(p?.id || "")}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>{t("category")}</Label>
@@ -511,6 +507,7 @@ function DocumentFormDialog({
             <Switch
               checked={visibleToPartner}
               onCheckedChange={setVisibleToPartner}
+              aria-label={t("doc-visible-to-partner")}
             />
             <div>
               <p className="text-sm font-medium">{t("doc-visible-to-partner")}</p>

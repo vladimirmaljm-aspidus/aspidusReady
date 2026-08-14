@@ -42,6 +42,7 @@ import { Proforma, ProformaStatus, OfferLineItem, Offer, Partner, Product } from
 import { CURRENCIES, OFFER_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { UnitSelect } from "@/components/common/unit-select";
 import { ProductPicker } from "@/components/common/product-picker";
+import { PartnerPicker } from "@/components/common/partner-picker";
 import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useT } from "@/lib/i18n/store";
@@ -378,15 +379,13 @@ export function ProformasView() {
               <SelectItem value="expired">{t("fin-status-expired")}</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t("fin-partner")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("fin-all-partners")}</SelectItem>
-              {partnerList.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={partnerFilter === "all" ? "" : partnerFilter}
+            allowClear
+            placeholder={t("fin-partner")}
+            onSelect={(p) => setPartnerFilter(p?.id || "all")}
+            className="md:w-48"
+          />
         </CardContent>
       </Card>
 
@@ -1301,25 +1300,16 @@ function ProformaFormDialog({
                       </Badge>
                     )}
                   </Label>
-                  <Select
+                  <PartnerPicker
                     value={form.partner_id || ""}
-                    onValueChange={(v) => {
-                      set("partner_id", v);
-                      fetchPartnerContext(v);
+                    fallbackName={selectedPartner?.name}
+                    placeholder={t("fin-select-partner")}
+                    onSelect={(p) => {
+                      const id = p?.id || "";
+                      set("partner_id", id);
+                      if (id) fetchPartnerContext(id);
                     }}
-                  >
-                    <SelectTrigger><SelectValue placeholder={t("fin-select-partner")} /></SelectTrigger>
-                    <SelectContent>
-                      {partners.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          <div className="flex items-center gap-2">
-                            <span>{p.name}</span>
-                            <span className="text-xs text-muted-foreground">({p.type})</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
 
                 {/* Currency */}

@@ -680,6 +680,18 @@ export class MockStore implements Store {
   async deleteWebhook(id: string): Promise<void> {
     const idx = mock.webhooks.findIndex((w) => w.id === id); if (idx >= 0) mock.webhooks.splice(idx, 1);
   }
+  async getWebhookById(id: string, _tenantId?: string): Promise<Webhook | null> {
+    return mock.webhooks.find((w) => w.id === id) || null;
+  }
+
+  // ---- webhook deliveries (no-op stubs — MockStore has no DB to persist to) ----
+  async createWebhookDelivery(_d: any): Promise<any> {
+    return { id: "whd_" + Math.random().toString(36).slice(2), status: "pending", attempts: 0, ..._d, created_at: new Date().toISOString() };
+  }
+  async updateWebhookDelivery(_id: string, _patch: any): Promise<void> { /* no-op */ }
+  async listWebhookDeliveries(_tenantId: string, _webhookId?: string, _limit?: number): Promise<any[]> { return []; }
+  async listFailedWebhookDeliveries(_limit?: number): Promise<any[]> { return []; }
+  async getWebhookDelivery(_id: string): Promise<any | null> { return null; }
 
   // ---- security ----
   async listSessions(_tenantId: string, userId?: string): Promise<SecuritySession[]> {

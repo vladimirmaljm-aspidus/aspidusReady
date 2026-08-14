@@ -23,7 +23,7 @@ export async function GET() {
 
 /** Create a new API key */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (api-keys.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

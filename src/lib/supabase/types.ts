@@ -530,6 +530,34 @@ export interface Webhook {
   created_at: string;
 }
 
+// ---------- Webhook Deliveries ----------
+// Each row represents a single attempt to deliver a webhook payload to a
+// registered endpoint. Created by `triggerWebhooks()` in
+// src/lib/webhooks/deliver.ts; retried by /api/cron/webhook-retry.
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  tenant_id: string;
+  event: string;
+  payload: WebhookPayload;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  response_status: number | null;
+  response_body: string | null;
+  delivered_at: string | null;
+  next_attempt_at: string | null;
+  created_at: string;
+}
+
+export interface WebhookPayload {
+  event: string;
+  entity_type: string;
+  entity_id: string;
+  tenant_id: string;
+  timestamp: string;
+  data: Record<string, unknown>;
+}
+
 // ---------- Security (sessions, login history, IPs, devices) ----------
 export interface SecuritySession {
   id: string;

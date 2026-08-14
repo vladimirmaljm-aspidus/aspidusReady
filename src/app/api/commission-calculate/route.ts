@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 // Body: { agent_id, deal_value, deal_profit, deal_quantity, deal_unit, currency }
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (commissions.calculate)
     { const { requirePermission } = await import("@/lib/permissions/can");

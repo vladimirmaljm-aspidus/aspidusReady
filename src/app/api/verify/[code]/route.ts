@@ -3,6 +3,7 @@ import { getStore } from "@/lib/data/store";
 import { getSupabase } from "@/lib/supabase/client";
 import { parseUserAgent } from "@/lib/utils/device-parser";
 import { lookupIp, GeoData } from "@/lib/utils/geo-ip";
+import { getIp } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
     await store.logVerification({
       verification_id: v.id,
       code: v.verification_code,
-      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      ip: getIp(req) || null,
       user_agent: req.headers.get("user-agent") || null,
       result: logResult,
       details: null,
@@ -170,7 +171,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
       await store.logVerification({
         verification_id: v.id,
         code: v.verification_code,
-        ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+        ip: getIp(req) || null,
         user_agent: req.headers.get("user-agent") || null,
         result,
         // Stash the GPS coords (if any) into the JSON details column so
@@ -232,8 +233,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
 // prevents document data from leaking without actual GPS sharing.
 async function checkGpsVerified(req: NextRequest, code: string): Promise<boolean> {
   try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-               req.headers.get("x-real-ip") || "unknown";
+    const ip = getIp(req) || "unknown";
     const sb = getSupabase();
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { data, error } = await sb
@@ -272,12 +272,12 @@ async function logVerificationAttempt(
   } | null,
 ): Promise<void> {
   try {
-    // Resolve the caller's IP. x-forwarded-for may contain a chain
-    // (client, proxy1, proxy2) — take the first (closest to the client).
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      "unknown";
+    // Resolve the caller's IP via the shared `getIp()` helper.
+    // Audit F-6/S-1: previously this read the FIRST value of X-Forwarded-For,
+    // which is attacker-controlled. `getIp()` reads the LAST entry (appended
+    // by Render's trusted proxy), making IP-based GPS-gate keying + audit
+    // attribution unspoofable.
+    const ip = getIp(req) || "unknown";
 
     const userAgent = req.headers.get("user-agent") || null;
     const device = parseUserAgent(userAgent);

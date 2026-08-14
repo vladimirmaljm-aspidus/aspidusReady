@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  * sees everything.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   const sb = getSupabase();
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
 // A tenant user (admin or user) submits an upgrade request.
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   if (!auth.tenantId) return NextResponse.json({ error: "Tenant context required." }, { status: 400 });
 

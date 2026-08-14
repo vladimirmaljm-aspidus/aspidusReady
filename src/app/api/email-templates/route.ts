@@ -149,7 +149,7 @@ const DEFAULT_TEMPLATES: EmailTemplate[] = [
 ];
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (email-templates.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -202,7 +202,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (email-templates.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

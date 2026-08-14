@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * to minimize frontend round-trips and enable auto-fill.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (dashboard.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

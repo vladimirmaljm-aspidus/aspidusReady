@@ -22,7 +22,7 @@ export const runtime = "nodejs";
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ documentId: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(_req);
     if (auth instanceof NextResponse) return auth;
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "document-register.read"); if (_d) return _d; }

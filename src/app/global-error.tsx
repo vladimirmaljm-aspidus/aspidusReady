@@ -5,9 +5,14 @@
  * Without this, a single component crash takes down the entire app with
  * Next.js's default error page (no recovery path, no "back to dashboard").
  * (Audit finding D-1/P1-1)
+ *
+ * F-8: now reports the error to Sentry (if SENTRY_DSN is configured) via
+ * `Sentry.captureException`. If Sentry is not configured (no DSN), this is
+ * a no-op — falls through to the existing `console.error` log.
  */
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
@@ -19,8 +24,10 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log to console for now — a dedicated /api/client-error endpoint
-    // could be added to persist client-side errors to the audit log.
+    // Report to Sentry (no-op if SENTRY_DSN not set — see sentry.client.config.ts).
+    Sentry.captureException(error);
+    // Also log to console — Render captures stdout/stderr so this is the
+    // default error trail when Sentry is not configured.
     console.error("[GlobalError]", error);
   }, [error]);
 

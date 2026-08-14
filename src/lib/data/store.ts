@@ -8,7 +8,7 @@ import {
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
   DashboardInsights,
   Invoice, Proforma, DocumentRegisterEntry, DocumentRevision,
-  VaultSecret, ApiKey, Webhook,
+  VaultSecret, ApiKey, Webhook, WebhookDelivery, WebhookPayload,
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
   MailQueueEntry,
   Tenant, ProductCatalogEntry, SupplierOffer, TradeCalculation,
@@ -141,6 +141,21 @@ export interface Store {
   listWebhooks(tenantId: string): Promise<Webhook[]>;
   upsertWebhook(w: Partial<Webhook> & { id?: string }): Promise<Webhook>;
   deleteWebhook(id: string): Promise<void>;
+  getWebhookById(id: string, tenantId?: string): Promise<Webhook | null>;
+
+  // webhook deliveries (outbound delivery log + retry queue)
+  createWebhookDelivery(d: {
+    webhook_id: string;
+    tenant_id: string;
+    event: string;
+    payload: WebhookPayload;
+    status?: string;
+    attempts?: number;
+  }): Promise<WebhookDelivery>;
+  updateWebhookDelivery(id: string, patch: Partial<WebhookDelivery>): Promise<void>;
+  listWebhookDeliveries(tenantId: string, webhookId?: string, limit?: number): Promise<WebhookDelivery[]>;
+  listFailedWebhookDeliveries(limit?: number): Promise<WebhookDelivery[]>;
+  getWebhookDelivery(id: string): Promise<WebhookDelivery | null>;
 
   // security
   listSessions(tenantId: string, userId?: string): Promise<SecuritySession[]>;

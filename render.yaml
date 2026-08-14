@@ -5,6 +5,7 @@ services:
     plan: starter
     buildCommand: npm install --legacy-peer-deps && npx prisma generate && npm run build
     startCommand: HOSTNAME=0.0.0.0 NODE_ENV=production node .next/standalone/server.js
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -34,4 +35,30 @@ services:
       #     Email links (welcome, password reset, KYC notifications) will be
       #     broken if this is missing or points to localhost.
       - key: APP_BASE_URL
+        sync: false
+      # ─── F-8 (Infra P1) ────────────────────────────────────────────────────
+      # CRON_TOKEN: shared secret used to authenticate pg_cron → API calls
+      # (webhook-retry, subscription-sweep, invoice-overdue). Sent via the
+      # `Authorization: Bearer <token>` header (NOT URL query — keeps the
+      # token out of nginx access logs and pg_cron.job.command history).
+      # Generate with: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+      - key: CRON_TOKEN
+        sync: false
+      # NOREPLY_EMAIL: From: address for outbound transactional email
+      # (welcome, password reset, KYC notifications). Falls back to a
+      # noreply@<APP_BASE_URL domain> derivation if not set.
+      - key: NOREPLY_EMAIL
+        sync: false
+      # ─── Sentry (F-8) — error monitoring ──────────────────────────────────
+      # Optional: set both DSNs to the same project DSN. When unset, the
+      # Sentry SDK no-ops at runtime (no events sent, no overhead).
+      # NEXT_PUBLIC_SENTRY_DSN is exposed to the browser bundle; SENTRY_DSN
+      # is server-only. Both are safe to leave empty.
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      # SENTRY_AUTH_TOKEN: only needed if you want source-map uploads during
+      # build. Without it, source-map upload silently skips (no error).
+      - key: SENTRY_AUTH_TOKEN
         sync: false

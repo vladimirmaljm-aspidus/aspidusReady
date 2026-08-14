@@ -8,7 +8,7 @@ import { validateStatusTransition } from "@/lib/api/status-validator";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (proformas.send)
     { const { requirePermission } = await import("@/lib/permissions/can");

@@ -246,7 +246,7 @@ export function UsersView() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Switch checked={!!u.active} onCheckedChange={(v) => handleToggleActive(u.id, v)} />
+                          <Switch checked={!!u.active} onCheckedChange={(v) => handleToggleActive(u.id, v)} aria-label={`${t("admin-users-form-active")} ${u.full_name || u.email}`} />
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                           {fmtRelative((u as SafeUser & { last_login_at?: string | null }).last_login_at ?? null)}
@@ -773,7 +773,7 @@ function UserFormDialog({
                       <p className="text-sm font-medium">{t("admin-users-form-active")}</p>
                       <p className="text-xs text-muted-foreground">{t("admin-users-form-active-desc")}</p>
                     </div>
-                    <Switch checked={form.active} onCheckedChange={(v) => set("active", v)} />
+                    <Switch checked={form.active} onCheckedChange={(v) => set("active", v)} aria-label={t("admin-users-form-active")} />
                   </div>
 
                   {/* Permissions — granular checkbox tree */}

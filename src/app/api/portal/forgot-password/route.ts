@@ -3,8 +3,17 @@ import { getStore } from "@/lib/data/store";
 import { sendEmail } from "@/lib/email/service";
 import { createPasswordReset } from "@/lib/auth/password-reset";
 import { getIp } from "@/lib/api/helpers";
+import { checkRateLimit } from "@/lib/security/rate-limiter";
 
 export const runtime = "nodejs";
+
+// F-7 (Rate Limiting): 5 password-reset requests per IP per 15 minutes.
+// Tighter than login because each request triggers an outbound email — an
+// attacker could otherwise use this endpoint as an email-bomb vector
+// against arbitrary inboxes. Always returns 200 + the same message so the
+// 429 only leaks to the attacker themselves (defense-in-depth — the
+// endpoint already returns a generic "if account exists" response).
+const FORGOT_PASSWORD_RATE_LIMIT = { maxAttempts: 5, windowMs: 15 * 60 * 1000 };
 
 /**
  * POST /api/portal/forgot-password
@@ -18,6 +27,26 @@ export async function POST(req: NextRequest) {
     const { email } = await req.json();
     if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "Valid email is required." }, { status: 400 });
+    }
+
+    // ── F-7: DB-backed per-IP rate limit ──────────────────────────────────
+    // Checked BEFORE the email lookup so a flood of requests for arbitrary
+    // addresses can't be used as an email-bomb vector. The 429 response is
+    // distinct from the 200 "if account exists" message — only the attacker
+    // themselves will see it (the legitimate user who fat-fingered 5 times
+    // in 15 min will just have to wait, which is acceptable UX).
+    const ip = getIp(req);
+    const rl = await checkRateLimit(
+      `portal-forgot-password:ip:${ip}`,
+      FORGOT_PASSWORD_RATE_LIMIT.maxAttempts,
+      FORGOT_PASSWORD_RATE_LIMIT.windowMs,
+    );
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);
+      return NextResponse.json(
+        { error: "Too many password-reset requests from this address. Try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+      );
     }
 
     const store = await getStore();
@@ -40,7 +69,6 @@ export async function POST(req: NextRequest) {
 
     if (!access) return genericOk;
 
-    const ip = getIp(req);
     const ua = req.headers.get("user-agent") || null;
 
     const { token, expiresAt } = await createPasswordReset({

@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireSuperAdmin(_req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (platform.tenants.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireSuperAdmin(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (platform.tenants.write)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -143,7 +143,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireSuperAdmin(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (platform.tenants.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

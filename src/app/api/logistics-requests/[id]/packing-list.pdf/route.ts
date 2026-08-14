@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 // Admin: download the professional packing list PDF for a logistics request.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(_req);
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; }

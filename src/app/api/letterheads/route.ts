@@ -9,7 +9,7 @@ export const runtime = "nodejs";
  * Super-admin can pass ?tenant_id=xxx to manage a specific tenant.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (letterheads.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
  * The tenant_id is resolved server-side (super-admin can override via query).
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (letterheads.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

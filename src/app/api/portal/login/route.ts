@@ -3,8 +3,14 @@ import { getStore } from "@/lib/data/store";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { audit, getIp } from "@/lib/api/helpers";
 import { lookupIp } from "@/lib/utils/geo-ip";
+import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limiter";
 
 export const runtime = "nodejs";
+
+// F-7 (Rate Limiting): 20 portal login attempts per IP per 15 minutes.
+// Same layered defense as /api/auth/login — DB-backed so it survives
+// instance churn on Render's multi-instance setup.
+const PORTAL_LOGIN_RATE_LIMIT = { maxAttempts: 20, windowMs: 15 * 60 * 1000 };
 
 // Portal login — separate session type (partner, not user)
 export async function POST(req: NextRequest) {
@@ -15,6 +21,23 @@ export async function POST(req: NextRequest) {
     }
     const store = await getStore();
     const ip = getIp(req);
+
+    // ── F-7: DB-backed per-IP rate limit ──────────────────────────────────
+    // Checked early so even requests for non-existent emails consume a slot
+    // (prevents email enumeration via response-timing or status differential).
+    const rateLimitKey = `portal-login:ip:${ip}`;
+    const rl = await checkRateLimit(
+      rateLimitKey,
+      PORTAL_LOGIN_RATE_LIMIT.maxAttempts,
+      PORTAL_LOGIN_RATE_LIMIT.windowMs,
+    );
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);
+      return NextResponse.json(
+        { error: "Too many login attempts from this address. Try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+      );
+    }
 
     // ── IP → Country resolution ───────────────────────────────────────────
     // Kick off the geo lookup early (runs concurrently with the credential
@@ -202,6 +225,9 @@ export async function POST(req: NextRequest) {
       tenant_id: access.tenant_id,
     });
     await setSessionCookie(token);
+
+    // F-7: clear the per-IP rate-limit counter on successful login — best-effort.
+    void resetRateLimit(rateLimitKey).catch(() => {});
 
     // Success: reset the failed-attempt counter and record the login.
     // Also persist the resolved country on portal_access.last_login_country

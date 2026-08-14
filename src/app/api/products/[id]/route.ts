@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(_req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (products.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (products.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -48,7 +48,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (products.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

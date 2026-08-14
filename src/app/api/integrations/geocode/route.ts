@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  * so the AddressAutocomplete component works with both.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   const url = new URL(req.url);

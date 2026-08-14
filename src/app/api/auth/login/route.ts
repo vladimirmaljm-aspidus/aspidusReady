@@ -8,17 +8,30 @@ import {
 } from "@/lib/auth/session";
 import { lookupIp } from "@/lib/utils/geo-ip";
 import { createHash } from "crypto";
+import { getIp } from "@/lib/api/helpers";
+import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limiter";
 
 export const runtime = "nodejs";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// F-7 (Rate Limiting): 20 login attempts per IP per 15 minutes.
+// Combined with the in-memory middleware cap (10/min) and the per-account
+// lockout (5 fails → 15min), this gives a layered defense against:
+//   • credential stuffing from a single IP across many usernames
+//   • password brute-force on a single account
+//   • distributed attacks (the per-IP DB limit survives instance churn
+//     on Render's multi-instance setup, unlike the in-memory middleware).
+const LOGIN_RATE_LIMIT = { maxAttempts: 20, windowMs: 15 * 60 * 1000 };
+
+// NOTE (audit F-6/S-1): previously this read the FIRST value of
+// X-Forwarded-For, which is attacker-controlled and trivially spoofable.
+// `getIp()` (src/lib/api/helpers.ts) takes the LAST value of the XFF chain
+// (the one appended by Render's trusted proxy), falling back to x-real-ip
+// and then "127.0.0.1". Use `getIp(req)` everywhere IP attribution matters
+// (rate-limiting, audit logs, login history, GPS-gate keying).
 function getRequestIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "127.0.0.1"
-  );
+  return getIp(req);
 }
 
 /**
@@ -79,6 +92,24 @@ export async function POST(req: NextRequest) {
 
     const ip = getRequestIp(req);
     const userAgent = req.headers.get("user-agent") || null;
+
+    // ── F-7: DB-backed per-IP rate limit (atomic, multi-instance safe) ────
+    // Checked BEFORE the user-existence branch so a request for a
+    // non-existent username still consumes a rate-limit slot — otherwise an
+    // attacker could enumerate usernames without ever hitting the cap.
+    const rateLimitKey = `login:ip:${ip}`;
+    const rl = await checkRateLimit(
+      rateLimitKey,
+      LOGIN_RATE_LIMIT.maxAttempts,
+      LOGIN_RATE_LIMIT.windowMs,
+    );
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);
+      return NextResponse.json(
+        { error: "Too many login attempts from this address. Try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+      );
+    }
 
     // ── IP → Country resolution ───────────────────────────────────────────
     // Kick off the geo lookup early (runs concurrently with the lookup work
@@ -252,6 +283,11 @@ export async function POST(req: NextRequest) {
     // ---- SUCCESS: reset failed attempts + record login ----
     await store.upsertUser({ id: user.id, failed_attempts: 0, locked_until: null });
     await store.updateUserLastLogin(user.id, ip);
+
+    // F-7: on successful login, clear the per-IP rate-limit counter so a
+    // user who fat-fingered their password a few times doesn't carry that
+    // count forward. Best-effort — failures here don't block login.
+    void resetRateLimit(rateLimitKey).catch(() => {});
 
     await store.appendAudit({
       user_id: user.id,

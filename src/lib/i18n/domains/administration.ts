@@ -271,6 +271,22 @@ export const ADMINISTRATION: Record<Locale, Record<string, string>> = {
     "admin-webhooks-form-active": "Active",
     "admin-webhooks-form-active-desc": "Inactive webhooks do not receive events.",
 
+    // ─── Webhooks deliveries UI ───────────────────────────────────────
+    "admin-webhooks-deliveries": "Deliveries",
+    "admin-webhooks-deliveries-title": "Delivery history",
+    "admin-webhooks-deliveries-desc": "Recent delivery attempts for this webhook.",
+    "admin-webhooks-deliveries-empty": "No deliveries yet. Triggering an event will create the first one.",
+    "admin-webhooks-deliveries-retry": "Retry",
+    "admin-webhooks-deliveries-retrying": "Retrying…",
+    "admin-webhooks-deliveries-col-event": "Event",
+    "admin-webhooks-deliveries-col-status": "Status",
+    "admin-webhooks-deliveries-col-attempts": "Attempts",
+    "admin-webhooks-deliveries-col-response": "Response",
+    "admin-webhooks-deliveries-col-time": "Time",
+    "admin-webhooks-deliveries-status-delivered": "Delivered",
+    "admin-webhooks-deliveries-status-failed": "Failed",
+    "admin-webhooks-deliveries-status-pending": "Pending",
+
     // ─── Settings view (top-level + tab labels + primary CTAs) ─────────
     "admin-settings-title": "Settings",
     "admin-settings-desc": "Configure company, security, and communications.",

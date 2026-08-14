@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(_req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (commissions.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (commissions.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -44,6 +44,47 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const body = await req.json();
+
+    // ── Audit F-6/P1-7: validate commissions are approved before marking
+    //    a payout as completed ───────────────────────────────────────────
+    // Without this check, an admin could mark a payout "completed" for a
+    // batch that includes pending / cancelled commissions — bypassing the
+    // approval workflow. `markDealCommissionPaid` would then flip those
+    // commissions straight to "paid", skipping "approved". We check
+    // BEFORE the upsert so the payout row itself is never persisted in
+    // a "completed" state for an unapproved batch.
+    if (body.status === "completed" && existing.status !== "completed") {
+      const commissionIds = Array.isArray(body.commission_ids) && body.commission_ids.length > 0
+        ? body.commission_ids
+        : (Array.isArray(existing.commission_ids) ? existing.commission_ids : []);
+      if (commissionIds.length > 0) {
+        const unapproved: { id: string; status: string }[] = [];
+        for (const commissionId of commissionIds) {
+          const commission = await auth.store.getDealCommission(commissionId);
+          if (!commission) {
+            // Orphan reference — can't pay a commission that no longer exists.
+            unapproved.push({ id: commissionId, status: "missing" });
+          } else if (!auth.isSuperAdmin && commission.tenant_id !== auth.tenantId) {
+            // Defense-in-depth — should never happen (the payout row is
+            // already tenant-checked above), but a malicious body could
+            // inject commission_ids belonging to another tenant.
+            return NextResponse.json({ error: "Commission does not belong to tenant." }, { status: 403 });
+          } else if (commission.status !== "approved") {
+            unapproved.push({ id: commissionId, status: commission.status });
+          }
+        }
+        if (unapproved.length > 0) {
+          return NextResponse.json(
+            {
+              error: `${unapproved.length} commission(s) are not yet approved. Only "approved" commissions can be paid out.`,
+              unapproved,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const updated = await auth.store.upsertCommissionPayout({ ...body, id, tenant_id: existing.tenant_id });
     // FIX-P1-LOGIC Fix 3: cascade payout completion → mark all linked
     // DealCommissions as paid. Only fires on a real transition INTO
@@ -72,7 +113,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (commissions.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

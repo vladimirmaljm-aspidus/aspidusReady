@@ -1,4 +1,37 @@
-// Formatting helpers shared across views — English locale.
+// Formatting helpers shared across views.
+//
+// Date formatters (`fmtDate`, `fmtDateShort`, `fmtDateTime`) honour the user's
+// active locale from the `useI18nStore` (Serbian / Turkish / German / Russian
+// users see their native month/day names). On the server (during SSR or from
+// non-React contexts where the store isn't hydrated yet) they fall back to
+// "en-US" so rendering never throws.
+
+import { useI18nStore } from "@/lib/i18n/store";
+import type { Locale } from "@/lib/i18n/dictionaries";
+
+/** BCP-47 region tags the Intl APIs accept for each platform locale. */
+const LOCALE_TAG: Record<Locale, string> = {
+  en: "en-US",
+  sr: "sr-Latn-RS",
+  tr: "tr-TR",
+  de: "de-DE",
+  ru: "ru-RU",
+};
+
+/**
+ * Synchronously read the active user locale from the i18n store. Returns
+ * "en-US" if the store is unavailable (SSR, non-browser) or hasn't hydrated
+ * yet — call sites keep working instead of throwing.
+ */
+function activeDateLocale(): string {
+  try {
+    const l = useI18nStore.getState?.()?.locale;
+    if (l && LOCALE_TAG[l]) return LOCALE_TAG[l];
+  } catch {
+    // store unavailable (SSR or non-React context) — fall through
+  }
+  return "en-US";
+}
 
 /**
  * Format a money value with exactly 2 decimal places.
@@ -42,19 +75,19 @@ export function fmtNumber(n: number | null | undefined): string {
 
 export function fmtDate(iso: string | null | undefined, opts?: Intl.DateTimeFormatOptions): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat("en-US", opts || {
+  return new Intl.DateTimeFormat(activeDateLocale(), opts || {
     day: "2-digit", month: "short", year: "numeric",
   }).format(new Date(iso));
 }
 
 export function fmtDateShort(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat("en-US", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(iso));
+  return new Intl.DateTimeFormat(activeDateLocale(), { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(iso));
 }
 
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(activeDateLocale(), {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));

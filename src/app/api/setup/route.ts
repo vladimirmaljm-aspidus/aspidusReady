@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth/password";
+import { getIp } from "@/lib/api/helpers";
+import { checkRateLimit } from "@/lib/security/rate-limiter";
 
 export const runtime = "nodejs";
+
+// F-7 (Rate Limiting): 3 bootstrap attempts per IP per 60 minutes.
+// /api/setup is gated by SETUP_TOKEN (when configured) AND a one-time
+// "no admin exists yet" guard. Rate-limiting is defense-in-depth against:
+//   • an attacker who somehow obtains SETUP_TOKEN brute-forcing usernames
+//   • log noise / DoS from someone hitting the endpoint repeatedly
+// 3/hour is generous — bootstrap happens once in the lifetime of a deploy.
+const SETUP_RATE_LIMIT = { maxAttempts: 3, windowMs: 60 * 60 * 1000 };
 
 export async function GET() {
   try {
@@ -33,6 +43,25 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    // ── F-7: DB-backed per-IP rate limit ──────────────────────────────────
+    // Defense-in-depth on top of the SETUP_TOKEN guard. Even an attacker
+    // who somehow has SETUP_TOKEN gets capped at 3 bootstrap attempts per
+    // hour per IP — they can't brute-force the admin username or DoS the
+    // endpoint with pointless requests.
+    const ip = getIp(req);
+    const rl = await checkRateLimit(
+      `setup:ip:${ip}`,
+      SETUP_RATE_LIMIT.maxAttempts,
+      SETUP_RATE_LIMIT.windowMs,
+    );
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);
+      return NextResponse.json(
+        { error: "Too many setup attempts from this address. Try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+      );
+    }
+
     const backend = process.env.DB_BACKEND;
     if (backend !== "supabase") {
       return NextResponse.json({ error: "Setup only available when DB_BACKEND=supabase" }, { status: 400 });

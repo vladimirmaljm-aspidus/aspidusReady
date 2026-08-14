@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  * tenant context (so the UI shows an empty/disabled state instead of an error).
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   // Permission gate (memorandum_settings.read)
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
  * is set server-side.
  */
 export async function PUT(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   // Permission gate (memorandum_settings.update)

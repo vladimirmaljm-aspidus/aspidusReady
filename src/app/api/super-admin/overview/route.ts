@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 // Super-admin: system overview — all tenants, counts, activity
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireSuperAdmin(req);
     if (auth instanceof NextResponse) return auth;
     const store = auth.store;
 

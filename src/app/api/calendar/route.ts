@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * deals with expected close dates, offers with valid_until.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (calendar.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

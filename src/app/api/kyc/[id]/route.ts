@@ -5,7 +5,7 @@ import { listPortalUploads } from "@/lib/portal/uploads";
 export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(_req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (kyc.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -45,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (kyc.update)
   { const { requirePermission } = await import("@/lib/permissions/can");

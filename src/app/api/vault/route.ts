@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (vault.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (vault.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

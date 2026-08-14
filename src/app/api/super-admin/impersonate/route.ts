@@ -15,7 +15,7 @@ const MAX_DURATION_MIN = 8 * 60;
  * requireAuth() then swaps the effective user to `target_user_id`.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireSuperAdmin();
+  const auth = await requireSuperAdmin(req);
   if (auth instanceof NextResponse) return auth;
 
   // Only genuine, non-impersonated super_admins can start impersonation.

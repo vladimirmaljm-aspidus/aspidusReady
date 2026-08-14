@@ -16,7 +16,7 @@ export const runtime = "nodejs";
  * Body: { offer_id: string }
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (proformas.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

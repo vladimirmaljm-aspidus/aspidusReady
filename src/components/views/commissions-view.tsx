@@ -44,6 +44,7 @@ import { CURRENCIES as REF_CURRENCIES } from "@/lib/data/reference";
 import type { CommissionAgent, DealCommission, CommissionPayout, CommissionSummary, CommissionType, CommissionStatus } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useT } from "@/lib/i18n/store";
+import { PartnerPicker } from "@/components/common/partner-picker";
 
 const COMMISSION_TYPE_LABELS: Record<CommissionType, string> = {
   profit_percent: "% of Profit",
@@ -536,14 +537,11 @@ function AgentFormDialog({
           {/* Partner select */}
           <div className="md:col-span-2 space-y-1.5">
             <Label>{"Partner"} *</Label>
-            <Select value={form.partner_id || ""} onValueChange={(v) => set("partner_id", v)}>
-              <SelectTrigger><SelectValue placeholder={"Select partner"} /></SelectTrigger>
-              <SelectContent>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PartnerPicker
+              value={form.partner_id || ""}
+              placeholder={"Select partner"}
+              onSelect={(p) => set("partner_id", p?.id || "")}
+            />
           </div>
 
           {/* Commission type */}
@@ -620,7 +618,7 @@ function AgentFormDialog({
 
           {/* Toggles */}
           <div className="md:col-span-2 flex items-center gap-3 p-3 rounded-md bg-muted/30">
-            <Switch checked={!!form.is_default} onCheckedChange={(v) => set("is_default", v)} />
+            <Switch checked={!!form.is_default} onCheckedChange={(v) => set("is_default", v)} aria-label="Is Default" />
             <div>
               <p className="text-sm font-medium">{"Is Default"}</p>
               <p className="text-xs text-muted-foreground">
@@ -630,7 +628,7 @@ function AgentFormDialog({
           </div>
 
           <div className="md:col-span-2 flex items-center gap-3 p-3 rounded-md bg-muted/30">
-            <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} />
+            <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} aria-label="Active" />
             <div>
               <p className="text-sm font-medium">{"Active"}</p>
               <p className="text-xs text-muted-foreground">

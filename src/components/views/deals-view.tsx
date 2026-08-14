@@ -56,6 +56,7 @@ import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useT } from "@/lib/i18n/store";
+import { PartnerPicker } from "@/components/common/partner-picker";
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"];
 
@@ -313,13 +314,13 @@ export function DealsView() {
               {STAGES.map((s) => <SelectItem key={s} value={s}>{t(STAGE_LABEL_KEYS[s])}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={partnerId} onValueChange={setPartnerId}>
-            <SelectTrigger className="w-full md:w-52"><SelectValue placeholder={t("crm-partner")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("crm-all-partners")}</SelectItem>
-              {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={partnerId === "all" ? "" : partnerId}
+            allowClear
+            placeholder={t("crm-partner")}
+            onSelect={(p) => setPartnerId(p?.id || "all")}
+            className="md:w-52"
+          />
           <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
             <Button
               size="sm"
@@ -1244,12 +1245,12 @@ function DealFormDialog({
 
             <div className="space-y-1.5">
               <Label>{t("crm-partner-required-label")}</Label>
-              <Select value={form.partner_id} onValueChange={handlePartnerChange}>
-                <SelectTrigger><SelectValue placeholder={t("crm-select-a-partner")} /></SelectTrigger>
-                <SelectContent>
-                  {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <PartnerPicker
+                value={form.partner_id || ""}
+                fallbackName={selectedPartner?.name}
+                placeholder={t("crm-select-a-partner")}
+                onSelect={(p) => p?.id && handlePartnerChange(p.id)}
+              />
             </div>
 
             <div className="space-y-1.5">

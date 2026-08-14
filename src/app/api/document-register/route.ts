@@ -4,7 +4,7 @@ import { requireAuth, audit } from "@/lib/api/helpers";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (document-register.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (document-register.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

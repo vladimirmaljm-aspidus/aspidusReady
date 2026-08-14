@@ -19,7 +19,7 @@ export const runtime = "nodejs";
  *   — lets the admin override the default tier when provisioning portal access.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (kyc.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Run the full automation chain (email + portal access + welcome email)
     const tenant = await auth.store.getTenant(submission.tenant_id);
-    const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+    const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
     const { access } = await onKycApproved({
       store: auth.store,
       submission,

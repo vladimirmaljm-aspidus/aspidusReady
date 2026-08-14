@@ -696,7 +696,7 @@ function BetaRow({
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
       </div>
-      <Switch checked={enabled} disabled={disabled} onCheckedChange={onToggle} />
+      <Switch checked={enabled} disabled={disabled} onCheckedChange={onToggle} aria-label={`${t("admin-flags-toggle")} ${title}`} />
     </div>
   );
 }

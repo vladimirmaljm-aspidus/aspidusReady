@@ -28,7 +28,7 @@ export async function GET() {
 // Body: { key: string, value: unknown }
 export async function PUT(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     const body = await req.json();
     const { key, value } = body;

@@ -4,7 +4,7 @@ import { requireAuth, audit } from "@/lib/api/helpers";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
     const _d = requirePermission(auth, "document-register.update"); if (_d) return _d; }

@@ -3,15 +3,38 @@ import { getStore } from "@/lib/data/store";
 import { getSessionFromCookie, createSession, setSessionCookie } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
 import { validatePassword, PORTAL_POLICY } from "@/lib/auth/password-policy";
+import { consumePasswordReset } from "@/lib/auth/password-reset";
+import { getIp } from "@/lib/api/helpers";
+import { checkRateLimit } from "@/lib/security/rate-limiter";
 
 export const runtime = "nodejs";
 
-// Portal password setup — used two ways:
-//  1. Anonymous first-time setup: the customer follows the emailed invite
-//     link (?access_id=...), which is valid while must_set_password is still
-//     true. Once a password has been set, this path closes.
+// F-7 (Rate Limiting): 10 password-setup attempts per IP per 15 minutes.
+// Caps brute-force on the invite-link ?access_id=… parameter (an attacker
+// who somehow obtains an access_id could otherwise hammer this endpoint
+// to find a password the policy accepts and hijack the account before the
+// legit user finishes setup). 10 attempts is generous — a real user setting
+// their first password rarely fails validation more than 2-3 times.
+const SETUP_PASSWORD_RATE_LIMIT = { maxAttempts: 10, windowMs: 15 * 60 * 1000 };
+
+// Portal password setup — used three ways (audit F-6/P1-3):
+//  1. Anonymous invite redemption: the customer follows the emailed invite
+//     link (`?setup_token=xxx`), which is a single-use, 7-day-expiring
+//     token from `password_resets` (target_type="portal_access"). The
+//     token is consumed atomically; a leaked/forwarded email stops
+//     working the first time it's used OR after 7 days, whichever comes
+//     first. Previously the email embedded the bare `access_id` UUID,
+//     which is a permanent identifier that never expires — anyone who
+//     obtained it (forwarded email, breach) could set a password at any
+//     future time as long as `must_set_password` was still true.
 //  2. Staff-initiated: an authenticated admin of the same tenant (or a
 //     super-admin) sets/resets a portal account's password from the CRM.
+//     Identified by `access_id` in the body + a valid staff session.
+//  3. Backward-compat: outstanding invite emails issued BEFORE this fix
+//     shipped still arrive with `?access_id=xxx` (no setup_token). We
+//     honour them ONLY if `must_set_password` is still true AND
+//     `invited_at` is within the last 7 days — matching the new token
+//     TTL. After 7 days the link is dead and the admin must re-invite.
 //
 // Audit finding P1-7: this route previously used a permissive policy
 // (minLength: 8, no character-class requirements) that accepted "abcdefgh".
@@ -22,9 +45,27 @@ export const runtime = "nodejs";
 // symbol requirement for mobile UX) as the other portal password routes.
 export async function POST(req: NextRequest) {
   try {
-    const { access_id, password } = await req.json();
-    if (!access_id || !password) {
-      return NextResponse.json({ error: "Access ID and password are required." }, { status: 400 });
+    const { access_id, setup_token, password } = await req.json();
+    if ((!access_id && !setup_token) || !password) {
+      return NextResponse.json({ error: "Setup token (or access ID) and password are required." }, { status: 400 });
+    }
+
+    // ── F-7: DB-backed per-IP rate limit ──────────────────────────────────
+    // Checked BEFORE the token/access_id resolution so an attacker hammering
+    // random tokens doesn't get to probe the password_resets table. The 429
+    // leaks nothing about whether the token exists — it's an IP-level block.
+    const ip = getIp(req);
+    const rl = await checkRateLimit(
+      `portal-setup-password:ip:${ip}`,
+      SETUP_PASSWORD_RATE_LIMIT.maxAttempts,
+      SETUP_PASSWORD_RATE_LIMIT.windowMs,
+    );
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);
+      return NextResponse.json(
+        { error: "Too many password-setup attempts from this address. Try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+      );
     }
 
     const validation = validatePassword(password, PORTAL_POLICY);
@@ -33,7 +74,35 @@ export async function POST(req: NextRequest) {
     }
 
     const store = await getStore();
-    const access = await store.getPortalAccessById(access_id);
+
+    // ── Resolve the portal_access row + (for anonymous path) consume the
+    //    single-use setup token. The token is consumed BEFORE we hash the
+    //    password / write the new row, so a concurrent request racing on
+    //    the same token will be rejected by `consumePasswordReset`'s
+    //    atomic `WHERE used_at IS NULL` update.
+    let resolvedAccessId: string | undefined = access_id;
+    let tokenConsumed = false;
+    if (setup_token) {
+      // Primary anonymous path — token-based invite redemption.
+      const result = await consumePasswordReset(setup_token);
+      if (!result.ok || result.targetType !== "portal_access" || !result.targetId) {
+        const reason = result.reason === "expired"
+          ? "This invitation link has expired. Please ask your account manager to send a new invitation."
+          : result.reason === "already_used"
+          ? "This invitation link has already been used. Please sign in, or click 'Forgot password' if you need to reset it."
+          : "Invalid or expired setup link. Ask your account manager to re-send the invitation.";
+        return NextResponse.json({ error: reason }, { status: 401 });
+      }
+      resolvedAccessId = result.targetId;
+      tokenConsumed = true;
+    }
+
+    if (!resolvedAccessId) {
+      return NextResponse.json({ error: "Setup token (or access ID) is required." }, { status: 400 });
+    }
+    const accessIdFinal: string = resolvedAccessId;
+
+    const access = await store.getPortalAccessById(accessIdFinal);
     if (!access) {
       return NextResponse.json({ error: "Invalid or expired setup link. Ask your account manager to re-send the invitation." }, { status: 404 });
     }
@@ -67,13 +136,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Backward-compat anonymous access_id path (audit F-6/P1-3) ──────
+    // Pre-fix invite emails arrive with `?access_id=xxx` and no
+    // `setup_token`. We honour them ONLY if `invited_at` is within the
+    // last 7 days (matching the new token TTL). After that, the bare
+    // access_id is rejected — the admin must re-invite, which will mint
+    // a proper setup_token.
+    if (!staffAuthorized && !tokenConsumed && access.invited_at) {
+      const invitedAt = new Date(access.invited_at).getTime();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      if (Number.isNaN(invitedAt) || (Date.now() - invitedAt) > sevenDaysMs) {
+        return NextResponse.json(
+          { error: "This invitation link has expired. Please ask your account manager to send a new invitation." },
+          { status: 401 }
+        );
+      }
+    }
+
     if (access.status === "revoked" || access.status === "suspended") {
       return NextResponse.json({ error: "This portal account is not currently active. Contact your account manager." }, { status: 403 });
     }
 
     const passwordHash = await hashPassword(password);
     const updated = await store.upsertPortalAccess({
-      id: access_id,
+      id: accessIdFinal,
       password_hash: passwordHash,
       must_set_password: false,
       status: "active",

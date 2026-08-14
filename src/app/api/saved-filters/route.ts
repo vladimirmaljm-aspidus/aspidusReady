@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  */
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (settings.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (settings.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (settings.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

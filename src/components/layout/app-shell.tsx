@@ -9,6 +9,7 @@ import { SubscriptionBanner } from "./subscription-banner";
 import { KeyboardShortcuts } from "./keyboard-shortcuts";
 import { useAppStore, useHydrateViewState } from "@/lib/store/app-store";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/common/brand-logo";
 import {
   Sheet,
   SheetContent,
@@ -231,6 +232,28 @@ export function AppShell() {
             <ViewContent view={transitionKey} />
           </div>
         </main>
+
+        {/* ── Sticky footer ──────────────────────────────────────────────── */}
+        {/* `mt-auto` pushes the footer to the bottom of the right column. The
+            right column is `flex-1` inside a `min-h-screen` row flex, so it
+            stretches to viewport height — on short pages the footer sits at
+            the bottom of the viewport, on long pages it scrolls naturally
+            below the content. */}
+        <footer className="mt-auto border-t border-border/60 bg-background/60 px-4 md:px-6 py-3 text-xs text-muted-foreground">
+          <div className="mx-auto w-full max-w-[1600px] flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <BrandLogo size={20} className="rounded-md" />
+              <span className="font-semibold text-foreground tracking-tight">VELOS</span>
+              <span className="text-muted-foreground/40" aria-hidden>·</span>
+              <span>{t("misc-verify-trade-platform")}</span>
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground/80">
+              <span>© {new Date().getFullYear()} VELOS</span>
+              <span className="text-muted-foreground/40" aria-hidden>·</span>
+              <span>Powered by VELOS</span>
+            </div>
+          </div>
+        </footer>
       </div>
 
       {/* ── Global overlays ── */}

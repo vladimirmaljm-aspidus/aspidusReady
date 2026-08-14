@@ -27,7 +27,7 @@ async function fetchTaskForTenant(id: string, tenantId: string | null): Promise<
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (tasks.update)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -56,7 +56,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (tasks.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

@@ -86,6 +86,41 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Preserve the entity's tenant_id (regular users cannot move it to another tenant)
     body.tenant_id = (existing as any).tenant_id || tenantId;
 
+    // ── Tenant-ownership validation (audit F-6/P1-6 IDOR) ──────────────
+    // Same fix as POST /api/trade-calculator: an authenticated user could
+    // otherwise change `product_id` / `supplier_offer_id` / `supplier_id`
+    // / `buyer_id` on an existing calc to point at another tenant's
+    // records. We validate against the calc's OWN tenant_id (not the
+    // resolved tenantId, which for a super-admin could be different).
+    // Super-admins bypass.
+    if (!isSuperAdmin) {
+      const calcTenantId = (existing as any).tenant_id;
+      if (body.product_id) {
+        const product = await auth.store.getProduct(body.product_id);
+        if (!product || product.tenant_id !== calcTenantId) {
+          return NextResponse.json({ error: "Invalid product — does not belong to your tenant." }, { status: 400 });
+        }
+      }
+      if (body.supplier_offer_id) {
+        const offer = await auth.store.getSupplierOffer(body.supplier_offer_id);
+        if (!offer || offer.tenant_id !== calcTenantId) {
+          return NextResponse.json({ error: "Invalid supplier offer — does not belong to your tenant." }, { status: 400 });
+        }
+      }
+      if (body.supplier_id) {
+        const supplier = await auth.store.getPartner(body.supplier_id);
+        if (!supplier || supplier.tenant_id !== calcTenantId) {
+          return NextResponse.json({ error: "Invalid supplier — does not belong to your tenant." }, { status: 400 });
+        }
+      }
+      if (body.buyer_id) {
+        const buyer = await auth.store.getPartner(body.buyer_id);
+        if (!buyer || buyer.tenant_id !== calcTenantId) {
+          return NextResponse.json({ error: "Invalid buyer — does not belong to your tenant." }, { status: 400 });
+        }
+      }
+    }
+
     // Validate exchange_rate (Fix 8): must be positive when provided. Reuse
     // the existing value (already validated on POST) when not supplied.
     if (body.exchange_rate !== undefined && body.exchange_rate !== null) {

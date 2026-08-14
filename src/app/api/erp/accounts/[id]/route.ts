@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // GET /api/erp/accounts/[id] — Get single account
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // PUT /api/erp/accounts/[id] — Update account
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.update)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -63,7 +63,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // DELETE /api/erp/accounts/[id] — Delete account (only if not system account)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (erp.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 // GET /api/commission-summaries?tenant_id=xxx
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (commissions.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

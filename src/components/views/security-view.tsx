@@ -15,8 +15,19 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Shield, ShieldCheck, ShieldAlert, History, Network, Laptop,
-  Lock, Trash2, Ban, Globe2, Monitor, CheckCircle2, XCircle, Smartphone,
+  Lock, Trash2, Ban, Globe2, Monitor, CheckCircle2, XCircle, Smartphone, LogOut,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { KpiCard } from "@/components/common/kpi-card";
@@ -459,6 +470,7 @@ function KnownIpsTab({ items, loading }: { items: KnownIp[]; loading: boolean })
                       checked={ip.trusted}
                       onCheckedChange={(v) => trustMut.mutate({ id: ip.id, trusted: v })}
                       disabled={trustMut.isPending}
+                      aria-label={`${t("admin-trusted")} ${ip.ip}`}
                     />
                   </TableCell>
                   <TableCell className="text-right">

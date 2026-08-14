@@ -27,7 +27,7 @@ export const runtime = "nodejs";
  * POST /api/offers route strips these before persisting.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
 
   const tid = resolveTenantId(auth, req);

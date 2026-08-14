@@ -1,12 +1,18 @@
 /**
  * VELOS — Theme Customization Store
- * Extends next-themes with custom accent colors and themes
+ * Extends next-themes with custom accent colors and themes.
+ *
+ * The platform's brand identity is **copper** (Veles, god of earth & wealth —
+ * see globals.css). Copper is the DEFAULT accent so the VELOS rebrand is
+ * visible out-of-the-box, without requiring the user to opt in via the
+ * topbar accent picker. Returning users who previously chose a different
+ * accent keep their saved selection (see `loadConfig`).
  */
 "use client";
 
 import { create } from "zustand";
 
-export type ThemeAccent = "navy" | "slate" | "burgundy" | "forest";
+export type ThemeAccent = "copper" | "navy" | "slate" | "burgundy" | "forest";
 
 export interface ThemeConfig {
   accent: ThemeAccent;
@@ -15,8 +21,18 @@ export interface ThemeConfig {
 }
 
 // A restrained, corporate palette — deep, desaturated hues rather than
-// bright consumer-app colors. Navy is the platform default.
+// bright consumer-app colors. **Copper** is the VELOS platform brand
+// color (matching globals.css `--primary`); the others are alternates
+// offered in the topbar accent picker.
+//
+// Each accent exposes a light + dark primary value plus a hue `h`, which
+// `applyThemeVars` uses to derive the secondary tokens (--accent,
+// --accent-foreground, --primary-foreground, --sidebar-primary, --ring,
+// --chart-1, --sidebar-ring). All other CSS variables (--sidebar-accent,
+// --sidebar-primary-foreground, --chart-2..5, --brand-gold, ...) keep their
+// globals.css defaults, which are already copper-tinted for the brand.
 const ACCENT_MAP: Record<ThemeAccent, { light: string; dark: string; h: number }> = {
+  copper:   { light: "oklch(0.395 0.115 55)", dark: "oklch(0.68 0.14 58)",  h: 55 },
   navy:     { light: "oklch(0.33 0.085 258)", dark: "oklch(0.66 0.11 258)", h: 258 },
   slate:    { light: "oklch(0.36 0.02 255)",  dark: "oklch(0.68 0.02 255)", h: 255 },
   burgundy: { light: "oklch(0.38 0.11 18)",   dark: "oklch(0.62 0.13 18)",  h: 18 },
@@ -24,6 +40,7 @@ const ACCENT_MAP: Record<ThemeAccent, { light: string; dark: string; h: number }
 };
 
 const ACCENT_LABELS: Record<ThemeAccent, string> = {
+  copper: "Copper (VELOS)",
   navy: "Navy",
   slate: "Slate",
   burgundy: "Burgundy",
@@ -38,7 +55,13 @@ interface ThemeCustomState {
   applyTheme: (isDark?: boolean) => void;
 }
 
-const DEFAULT_CONFIG: ThemeConfig = { accent: "navy", radius: 0.5, sidebarDark: false };
+// VELOS brand default — copper. Previously "navy" (the pre-rebrand
+// platform default), which caused the copper --primary defined in
+// globals.css to be overridden on every page mount by `applyThemeVars`.
+// Copper here matches globals.css `--primary: oklch(0.395 0.115 55)` so
+// the inline-style override is now a no-op for the brand default and
+// the VELOS copper is finally visible to users.
+const DEFAULT_CONFIG: ThemeConfig = { accent: "copper", radius: 0.5, sidebarDark: false };
 
 function loadConfig(): ThemeConfig {
   if (typeof window === "undefined") return DEFAULT_CONFIG;
@@ -49,7 +72,13 @@ function loadConfig(): ThemeConfig {
       // Migrate old consumer-palette accent names (emerald/ocean/sunset/rose/violet)
       // to the new corporate palette so returning users don't get stuck on a
       // value that no longer exists in ACCENT_MAP.
-      if (!(parsed.accent in ACCENT_MAP)) parsed.accent = "navy";
+      //
+      // Migration note (F-1): previously this fell back to "navy" (the old
+      // platform default). It now falls back to "copper" (the VELOS brand
+      // default) so users with a stale/corrupt saved config land on the
+      // correct brand identity. Users with a valid saved accent (including
+      // "navy" if they explicitly chose it) keep their selection.
+      if (!(parsed.accent in ACCENT_MAP)) parsed.accent = "copper";
       return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch {}

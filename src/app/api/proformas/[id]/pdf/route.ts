@@ -5,7 +5,7 @@ import { generatePdf } from "@/lib/pdf/generator";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (proformas.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

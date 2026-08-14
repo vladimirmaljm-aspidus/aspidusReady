@@ -148,7 +148,7 @@ function rowToShipment(r: any): Shipment {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate — logistics.read matches the sidebar entry (previously
   // gated on documents.read which is a different domain).

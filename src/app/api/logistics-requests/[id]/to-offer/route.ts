@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "logistics.convert"); if (_d) return _d; }

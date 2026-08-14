@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getTierMeta } from "@/lib/portal/tiers";
+import { getIp } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -38,10 +39,10 @@ export async function POST(req: NextRequest) {
     body = {};
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown";
+  // IP attribution — use the shared `getIp()` helper which reads the LAST
+  // entry of X-Forwarded-For (appended by Render's proxy) rather than the
+  // first (attacker-controlled) entry. Audit F-6/S-1.
+  const ip = getIp(req) || "unknown";
 
   const userAgent = req.headers.get("user-agent") || null;
 

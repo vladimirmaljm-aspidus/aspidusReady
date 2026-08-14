@@ -5,7 +5,7 @@ import { STARTER_TEMPLATES } from "@/lib/data/starter-templates";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (document-templates.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (document-templates.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

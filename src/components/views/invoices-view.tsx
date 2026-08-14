@@ -46,6 +46,7 @@ import { Invoice, InvoiceStatus, OfferLineItem, Offer, Partner, Product } from "
 import { CURRENCIES, INVOICE_STATUSES, PAYMENT_TERMS_LOCAL } from "@/lib/data/reference";
 import { UnitSelect } from "@/components/common/unit-select";
 import { ProductPicker } from "@/components/common/product-picker";
+import { PartnerPicker } from "@/components/common/partner-picker";
 import { convertUnitPrice, describeConversion } from "@/lib/utils/unit-conversion";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useDebounced } from "@/lib/hooks/use-debounced";
@@ -420,15 +421,13 @@ export function InvoicesView() {
               <SelectItem value="cancelled">{t("fin-status-cancelled")}</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue placeholder={t("fin-partner")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("fin-all-partners")}</SelectItem>
-              {partnerList.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={partnerFilter === "all" ? "" : partnerFilter}
+            allowClear
+            placeholder={t("fin-partner")}
+            onSelect={(p) => setPartnerFilter(p?.id || "all")}
+            className="md:w-48"
+          />
         </CardContent>
       </Card>
 
@@ -1661,14 +1660,12 @@ function InvoiceFormDialog({
                   </span>
                 )}
               </Label>
-              <Select value={form.partner_id || ""} onValueChange={handlePartnerChange}>
-                <SelectTrigger><SelectValue placeholder={t("fin-select-partner")} /></SelectTrigger>
-                <SelectContent>
-                  {partners.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PartnerPicker
+                value={form.partner_id || ""}
+                fallbackName={partnerContext?.partner?.name}
+                placeholder={t("fin-select-partner")}
+                onSelect={(p) => p?.id && handlePartnerChange(p.id)}
+              />
             </div>
 
             <div className="space-y-1.5">

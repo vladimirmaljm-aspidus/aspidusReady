@@ -20,7 +20,7 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes — weather changes frequently
  * Used in the Logistics module to show weather conditions at ports.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (integrations.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

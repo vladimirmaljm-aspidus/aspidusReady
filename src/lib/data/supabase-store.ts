@@ -10,7 +10,7 @@ import {
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
   DashboardInsights, DealStage,
   Invoice, Proforma, DocumentRegisterEntry, DocumentRevision,
-  VaultSecret, ApiKey, Webhook,
+  VaultSecret, ApiKey, Webhook, WebhookDelivery, WebhookPayload,
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
   MailQueueEntry,
   Tenant, ProductCatalogEntry, SupplierOffer, TradeCalculation,
@@ -809,6 +809,95 @@ export class SupabaseStore implements Store {
   async deleteWebhook(id: string): Promise<void> {
     const { error } = await this.sb().from("webhooks").delete().eq("id", id);
     if (error) throw error;
+  }
+  async getWebhookById(id: string, tenantId?: string): Promise<Webhook | null> {
+    let q = this.sb().from("webhooks").select("*").eq("id", id);
+    if (tenantId) q = q.eq("tenant_id", tenantId);
+    const { data, error } = await q.maybeSingle();
+    if (error) throw error;
+    return (data as Webhook) || null;
+  }
+
+  // ---- webhook deliveries (outbound delivery log + retry queue) ----
+  //
+  // Lifecycle:
+  //   triggerWebhooks() → createWebhookDelivery(status:"pending", attempts:0)
+  //                     → HTTP POST → updateWebhookDelivery(status, attempts:1, ...)
+  //   /api/cron/webhook-retry → listFailedWebhookDeliveries()
+  //                          → retry → updateWebhookDelivery(attempts++)
+  //
+  // `payload` is JSONB — bypass sanitizePayload (which strips unknown nested
+  // objects) and write the row directly. WebhookPayload is a known shape.
+  async createWebhookDelivery(d: {
+    webhook_id: string;
+    tenant_id: string;
+    event: string;
+    payload: WebhookPayload;
+    status?: string;
+    attempts?: number;
+  }): Promise<WebhookDelivery> {
+    const row: SupaRow = {
+      webhook_id: d.webhook_id,
+      tenant_id: d.tenant_id,
+      event: d.event,
+      payload: d.payload,
+      status: d.status || "pending",
+      attempts: d.attempts ?? 0,
+    };
+    const { data, error } = await this.sb()
+      .from("webhook_deliveries")
+      .insert(row)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as WebhookDelivery;
+  }
+  async updateWebhookDelivery(id: string, patch: Partial<WebhookDelivery>): Promise<void> {
+    // Strip read-only / joined fields so we never accidentally write them.
+    const { id: _omitId, created_at: _omitCreatedAt, ...fields } = patch as any;
+    // Coerce empty strings → null for nullable timestamp / int columns
+    // (parity with sanitizePayload behaviour — Postgres refuses "" for these).
+    for (const [k, v] of Object.entries(fields)) {
+      if (v === "") (fields as any)[k] = null;
+    }
+    const { error } = await this.sb().from("webhook_deliveries").update(fields).eq("id", id);
+    if (error) throw error;
+  }
+  async listWebhookDeliveries(tenantId: string, webhookId?: string, limit?: number): Promise<WebhookDelivery[]> {
+    let q = this.sb().from("webhook_deliveries").select("*").eq("tenant_id", tenantId);
+    if (webhookId) q = q.eq("webhook_id", webhookId);
+    q = q.order("created_at", { ascending: false });
+    if (limit) q = q.limit(limit);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data as WebhookDelivery[]) || [];
+  }
+  async listFailedWebhookDeliveries(limit?: number): Promise<WebhookDelivery[]> {
+    // Retry-eligible deliveries: status='failed' AND attempts < 5 AND
+    // (next_attempt_at IS NULL OR next_attempt_at <= now()).
+    // The `or()` filter combines the two timestamp conditions; the `lt`
+    // cap on attempts ensures we give up after 5 tries.
+    let q = this.sb()
+      .from("webhook_deliveries")
+      .select("*")
+      .eq("status", "failed")
+      .lt("attempts", 5)
+      .or("next_attempt_at.is.null,next_attempt_at.lte." + new Date().toISOString())
+      .order("created_at", { ascending: true });
+    if (limit) q = q.limit(limit);
+    else q = q.limit(100);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data as WebhookDelivery[]) || [];
+  }
+  async getWebhookDelivery(id: string): Promise<WebhookDelivery | null> {
+    const { data, error } = await this.sb()
+      .from("webhook_deliveries")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as WebhookDelivery) || null;
   }
 
   // ---- security ----

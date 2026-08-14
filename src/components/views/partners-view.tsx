@@ -1809,7 +1809,7 @@ function PartnerFormDialog({
                           </div>
 
                           <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
-                            <Switch checked={!!form.portal_enabled} onCheckedChange={(v) => set("portal_enabled", v)} />
+                            <Switch checked={!!form.portal_enabled} onCheckedChange={(v) => set("portal_enabled", v)} aria-label={t("crm-portal-access-toggle")} />
                             <div>
                               <p className="text-sm font-medium">{t("crm-portal-access-toggle")}</p>
                               <p className="text-xs text-muted-foreground">{t("crm-portal-access-toggle-desc")}</p>
@@ -1817,7 +1817,7 @@ function PartnerFormDialog({
                           </div>
 
                           <div className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/20">
-                            <Switch checked={!!form.is_commissioner} onCheckedChange={(v) => set("is_commissioner", v)} />
+                            <Switch checked={!!form.is_commissioner} onCheckedChange={(v) => set("is_commissioner", v)} aria-label={t("crm-commission-agent-section")} />
                             <div>
                               <p className="text-sm font-medium text-primary">{t("crm-commission-agent-section")}</p>
                               <p className="text-xs text-muted-foreground">{t("crm-commission-agent-desc")}</p>

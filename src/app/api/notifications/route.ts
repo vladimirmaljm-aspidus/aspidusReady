@@ -4,7 +4,7 @@ import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (notifications.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (notifications.update)
   { const { requirePermission } = await import("@/lib/permissions/can");

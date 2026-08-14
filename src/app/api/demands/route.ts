@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (demands.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get("search") || undefined;
     const partner_id = url.searchParams.get("partner_id") || undefined;
     const status = url.searchParams.get("status") || undefined;
-    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
     const result = await auth.store.listDemands(tid, { search, limit, offset, filters: { partner_id, status } });
     // Defense-in-depth: even though SupabaseStore filters by tenant_id,
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (demands.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

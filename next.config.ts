@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -43,4 +44,23 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// ─── Sentry wrapper (F-8 — error monitoring) ──────────────────────────────
+// When SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN env vars are NOT set, the SDK
+// no-ops at runtime (see sentry.{client,server}.config.ts). The wrapper
+// itself is build-time only — it injects source-map upload + tree-shaking
+// hints, both of which are safe no-ops without an auth token.
+//
+// `org` and `project` are intentionally omitted — the @sentry/wizard-driven
+// `.sentryclirc` file (if present) takes precedence; if absent, source-map
+// upload silently skips.
+export default withSentryConfig(nextConfig, {
+  // Suppress Sentry SDK build logs (we don't need verbose plugin output
+  // cluttering the Render build log).
+  silent: true,
+  // Disable source map upload by default — only enable when SENTRY_AUTH_TOKEN
+  // is set on Render. Without an auth token, the upload step errors out
+  // noisily; with `disable: true`, it's a clean skip.
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+  },
+});

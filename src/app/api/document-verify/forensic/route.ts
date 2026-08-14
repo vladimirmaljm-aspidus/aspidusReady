@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 // Accepts: { verification_code, pdf_base64 }
 // Returns: { match: boolean, stored_hash, computed_hash, details }
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (document-verify.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -33,6 +33,14 @@ export async function POST(req: NextRequest) {
         result: "invalid",
         message: "Verification code not found.",
       });
+    }
+    // F-9-2: tenant ownership check — the verification row carries a
+    // tenant_id; without this gate an authenticated user from tenant A
+    // could probe another tenant's verification codes by hash. Return
+    // 404 (not 403) to avoid leaking whether the code exists across
+    // tenants.
+    if (!auth.isSuperAdmin && v.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const computed = pdf_hash.startsWith("sha256:") ? pdf_hash : `sha256:${pdf_hash}`;
     const match = computed === v.pdf_hash;

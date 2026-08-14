@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (supplier-offers.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -44,6 +44,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   body.tenant_id = tenantId;
+
+  // ── Tenant-ownership validation (audit F-6/P1-5 IDOR) ────────────────
+  // Without this check, an authenticated user could pass another tenant's
+  // `supplier_id` or `product_id` and create a supplier_offer row that
+  // cross-references another tenant's data. The DB has no FK constraint
+  // enforcing tenant scoping across these tables, so the API MUST
+  // validate ownership explicitly. Super-admins bypass (they can mix
+  // cross-tenant records for platform-level operations).
+  if (!auth.isSuperAdmin) {
+    if (body.supplier_id) {
+      const supplier = await auth.store.getPartner(body.supplier_id);
+      if (!supplier || supplier.tenant_id !== tenantId) {
+        return NextResponse.json({ error: "Invalid supplier — does not belong to your tenant." }, { status: 400 });
+      }
+    }
+    if (body.product_id) {
+      const product = await auth.store.getProduct(body.product_id);
+      if (!product || product.tenant_id !== tenantId) {
+        return NextResponse.json({ error: "Invalid product — does not belong to your tenant." }, { status: 400 });
+      }
+    }
+  }
+
   let created;
   try {
     created = await auth.store.upsertSupplierOffer(body);

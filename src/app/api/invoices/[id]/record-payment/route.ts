@@ -3,6 +3,7 @@ import { requireAuth, audit } from "@/lib/api/helpers";
 import { notify } from "@/lib/notif/helper";
 import { recordRevision } from "@/lib/api/doc-revisions";
 import { validateStatusTransition } from "@/lib/api/status-validator";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
 
     // Permission gate (invoices.update)
@@ -725,6 +726,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
     } catch (e) {
       console.error("[audit]", e);
+    }
+
+    // ── F-4: fire outbound webhook (invoice.paid) on full payment ─────────
+    // Only fire when the invoice transitions to "paid" — partial payments
+    // (newStatus="partial") don't fire invoice.paid because receivers expect
+    // that event to mean "fully settled". Partial-payment webhooks can be
+    // added later as `invoice.partial_payment` if needed.
+    //
+    // Fire-and-forget — webhook delivery failures must NEVER block the
+    // payment recording (the journal entry, proforma cascade, and commission
+    // cascade have all already run by this point).
+    if (isFullPayment && newStatus === "paid") {
+      void triggerWebhooks(
+        auth.store,
+        tid,
+        "invoice.paid",
+        "invoice",
+        id,
+        {
+          id: invoice.id,
+          number: invoice.number,
+          total: invoice.total,
+          currency: invoice.currency,
+          partner_id: invoice.partner_id,
+          paid_at: nowIso,
+          payment_amount: numericAmount,
+          payment_method: method,
+          payment_reference: reference || null,
+          cumulative_paid: totalPaid,
+          transaction_id: transactionId,
+        },
+      ).catch((e) => console.error("[record-payment] webhook trigger failed:", e));
     }
 
     return NextResponse.json({

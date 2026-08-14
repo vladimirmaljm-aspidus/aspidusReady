@@ -20,14 +20,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, Webhook, Trash2, Pencil, Lock, ShieldCheck, Link2, Zap, Clock, Activity,
+  Plus, Webhook, Trash2, Pencil, Lock, ShieldCheck, Link2, Zap, Clock, Activity, Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { fmtRelative } from "@/lib/utils/format";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
-import type { Webhook as WebhookType } from "@/lib/supabase/types";
+import type { Webhook as WebhookType, WebhookDelivery } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useT } from "@/lib/i18n/store";
 
@@ -87,6 +87,7 @@ export function WebhooksView() {
   const [editing, setEditing] = useState<WebhookType | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deliveriesFor, setDeliveriesFor] = useState<WebhookType | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["webhooks", tenantKey],
@@ -230,7 +231,17 @@ export function WebhooksView() {
                       checked={wh.active}
                       onCheckedChange={() => toggleMut.mutate(wh)}
                       disabled={toggleMut.isPending}
+                      aria-label={t("admin-webhooks-form-active")}
                     />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2"
+                      onClick={() => setDeliveriesFor(wh)}
+                      title={t("admin-webhooks-deliveries")}
+                    >
+                      <Send className="size-3.5 mr-1" /> {t("admin-webhooks-deliveries")}
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -284,6 +295,11 @@ export function WebhooksView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <WebhookDeliveriesDialog
+        webhook={deliveriesFor}
+        onOpenChange={(o) => !o && setDeliveriesFor(null)}
+      />
     </div>
   );
 }
@@ -398,7 +414,7 @@ function WebhookFormDialog({
               <p className="text-sm font-medium">{t("admin-webhooks-form-active")}</p>
               <p className="text-xs text-muted-foreground">{t("admin-webhooks-form-active-desc")}</p>
             </div>
-            <Switch checked={active} onCheckedChange={setActive} />
+            <Switch checked={active} onCheckedChange={setActive} aria-label={t("admin-webhooks-form-active")} />
           </div>
         </div>
         </div>
@@ -408,6 +424,155 @@ function WebhookFormDialog({
           <Button onClick={save} disabled={saving}>
             {saving ? t("admin-saving") : t("save")}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---- Delivery history dialog ----
+//
+// Shows the most recent delivery attempts for a webhook with status, HTTP
+// response code, attempts count, and a "Retry" button for failed deliveries.
+// The Retry button POSTs to /api/webhooks/[id]/deliveries/[deliveryId]/retry
+// — see src/app/api/webhooks/[id]/deliveries/[deliveryId]/retry/route.ts.
+function WebhookDeliveriesDialog({
+  webhook,
+  onOpenChange,
+}: {
+  webhook: WebhookType | null;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const api = useApiUrl();
+  const tenantKey = useTenantKey();
+  const t = useT();
+  const qc = useQueryClient();
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const open = !!webhook;
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["webhook-deliveries", webhook?.id, tenantKey],
+    queryFn: async () => {
+      const r = await fetch(api(`/api/webhooks/${webhook!.id}/deliveries?limit=50`));
+      if (!r.ok) throw new Error("Failed to load deliveries");
+      return r.json() as Promise<{ items: WebhookDelivery[] }>;
+    },
+    enabled: !!webhook,
+  });
+
+  const retryMut = useMutation({
+    mutationFn: async (deliveryId: string) => {
+      setRetryingId(deliveryId);
+      const r = await fetch(
+        api(`/api/webhooks/${webhook!.id}/deliveries/${deliveryId}/retry`),
+        { method: "POST" },
+      );
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || "Retry failed");
+      }
+      return r.json();
+    },
+    onSuccess: (_v, vars) => {
+      toast.success(`Delivery retried (${vars.slice(0, 8)}…)`);
+      qc.invalidateQueries({ queryKey: ["webhook-deliveries", webhook?.id, tenantKey] });
+      qc.invalidateQueries({ queryKey: ["webhooks", tenantKey] });
+    },
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : "Retry failed";
+      toast.error(msg);
+    },
+    onSettled: () => setRetryingId(null),
+  });
+
+  const items = data?.items || [];
+
+  function deliveryStatusBadge(d: WebhookDelivery) {
+    if (d.status === "delivered") {
+      return <Badge className="bg-emerald-600 text-white">{t("admin-webhooks-deliveries-status-delivered")}</Badge>;
+    }
+    if (d.status === "failed") {
+      return <Badge variant="destructive">{t("admin-webhooks-deliveries-status-failed")}</Badge>;
+    }
+    return <Badge variant="secondary">{t("admin-webhooks-deliveries-status-pending")}</Badge>;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>
+            {t("admin-webhooks-deliveries-title")}
+            {webhook ? ` — ${webhook.name}` : ""}
+          </DialogTitle>
+          <DialogDescription>
+            {t("admin-webhooks-deliveries-desc")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[70vh] overflow-y-auto custom-scroll pr-1">
+          {isLoading ? (
+            <div className="grid gap-2 py-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              {t("admin-webhooks-deliveries-empty")}
+            </div>
+          ) : (
+            <div className="grid gap-2 py-2">
+              {/* Header row (hidden on mobile — table is too wide) */}
+              <div className="hidden md:grid grid-cols-[1.5fr_1fr_0.7fr_0.7fr_1fr_0.7fr] gap-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <div>{t("admin-webhooks-deliveries-col-event")}</div>
+                <div>{t("admin-webhooks-deliveries-col-status")}</div>
+                <div>{t("admin-webhooks-deliveries-col-attempts")}</div>
+                <div>{t("admin-webhooks-deliveries-col-response")}</div>
+                <div className="truncate">{t("admin-webhooks-deliveries-col-time")}</div>
+                <div></div>
+              </div>
+              {items.map((d) => (
+                <div
+                  key={d.id}
+                  className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_0.7fr_0.7fr_1fr_0.7fr] gap-2 items-center p-2 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors text-xs"
+                >
+                  <div className="font-mono truncate" title={d.event}>{d.event}</div>
+                  <div>{deliveryStatusBadge(d)}</div>
+                  <div className="text-muted-foreground">{d.attempts}</div>
+                  <div>{statusBadge(d.response_status)}</div>
+                  <div className="text-muted-foreground truncate" title={d.response_body || ""}>
+                    {fmtRelative(d.created_at)}
+                  </div>
+                  <div className="flex justify-end">
+                    {d.status === "failed" && (d.attempts ?? 0) < 5 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={retryingId === d.id}
+                        onClick={() => retryMut.mutate(d.id)}
+                      >
+                        {retryingId === d.id
+                          ? t("admin-webhooks-deliveries-retrying")
+                          : t("admin-webhooks-deliveries-retry")}
+                      </Button>
+                    )}
+                  </div>
+                  {d.response_body && (
+                    <div className="col-span-full mt-1 px-2 py-1 rounded bg-background/60 font-mono text-[10px] text-muted-foreground whitespace-pre-wrap break-all max-h-24 overflow-y-auto custom-scroll">
+                      {d.response_body}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("close")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

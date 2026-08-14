@@ -135,7 +135,7 @@ export function TasksView() {
         actions={
           <>
             <label className="flex items-center gap-2 text-sm text-muted-foreground mr-1">
-              <Switch checked={mine} onCheckedChange={setMine} />
+              <Switch checked={mine} onCheckedChange={setMine} aria-label={t("misc-only-mine")} />
               {t("misc-only-mine")}
             </label>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
@@ -399,7 +399,7 @@ function TaskFormDialog({
               <p className="text-sm font-medium">{t("misc-done-label")}</p>
               <p className="text-xs text-muted-foreground">{t("misc-mark-completed-desc")}</p>
             </div>
-            <Switch checked={done} onCheckedChange={setDone} />
+            <Switch checked={done} onCheckedChange={setDone} aria-label={t("misc-done-label")} />
           </div>
         </div>
         </div>

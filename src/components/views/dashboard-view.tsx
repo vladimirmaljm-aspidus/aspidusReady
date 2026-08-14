@@ -28,7 +28,7 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
-import { useT } from "@/lib/i18n/store";
+import { useI18nStore, useT } from "@/lib/i18n/store";
 
 // ---------- stage lookups ----------
 const STAGE_LABELS: Record<DealStage, string> = {
@@ -70,7 +70,20 @@ function greetingKey(d = new Date()): string {
 }
 
 function todayLabel(d = new Date()): string {
-  return new Intl.DateTimeFormat("en-US", {
+  // Use the user's active locale from the i18n store (Serbian / Turkish /
+  // German / Russian users see their native weekday/month names). Falls
+  // back to "en-US" if the store isn't hydrated yet (SSR, first paint).
+  let tag = "en-US";
+  try {
+    const l = useI18nStore.getState()?.locale;
+    if (l === "sr") tag = "sr-Latn-RS";
+    else if (l === "tr") tag = "tr-TR";
+    else if (l === "de") tag = "de-DE";
+    else if (l === "ru") tag = "ru-RU";
+  } catch {
+    // store unavailable (SSR) — keep "en-US"
+  }
+  return new Intl.DateTimeFormat(tag, {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   }).format(d);
 }

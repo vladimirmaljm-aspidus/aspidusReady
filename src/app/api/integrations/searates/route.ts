@@ -21,7 +21,7 @@ const CACHE_TTL = 15 * 60 * 1000; // 15 minutes — tracking updates frequently
  * Covers 150+ shipping lines (MAERSK, MSC, CMA CGM, COSCO, Hapag-Lloyd, etc.)
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (integrations.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // GET /api/erp/bank-accounts — List bank accounts
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/erp/bank-accounts — Create/update bank account (requires admin)
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

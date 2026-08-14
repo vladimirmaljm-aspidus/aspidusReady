@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 // GET /api/commission-agents?tenant_id=xxx&search=xxx
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (commissions.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || undefined;
-    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
 
     const result = await auth.store.listCommissionAgents(tenantId, { search, limit, offset });
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 // POST /api/commission-agents
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (commissions.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

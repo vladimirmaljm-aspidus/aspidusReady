@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // Admin: list portal access for a tenant
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (portal.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
 // Admin: create/update portal access (approve, invite, set tier)
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (portal.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

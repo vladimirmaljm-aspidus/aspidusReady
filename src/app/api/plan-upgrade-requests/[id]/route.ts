@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * is stamped (12 months from now by default; caller can override).
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireSuperAdmin();
+  const auth = await requireSuperAdmin(req);
   if (auth instanceof NextResponse) return auth;
 
   const { id } = await params;

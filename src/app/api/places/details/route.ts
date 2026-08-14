@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  * If no API key is configured, returns empty result.
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (dashboard.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

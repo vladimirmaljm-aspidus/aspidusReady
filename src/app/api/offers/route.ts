@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 import { getSupabase } from "@/lib/supabase/client";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get("search") || undefined;
     const partner_id = url.searchParams.get("partner_id") || undefined;
     const status = url.searchParams.get("status") || undefined;
-    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
     const result = await auth.store.listOffers(tid!, { search, limit, offset, filters: { partner_id, status } });
     // Defense-in-depth: even though SupabaseStore filters by tenant_id,
@@ -204,6 +205,19 @@ export async function POST(req: NextRequest) {
     }
   }
   await audit(auth.store, getAuthUser(auth), req, body.id ? "offer.update" : "offer.create", "offer", created.id, { number: created.number });
+
+  // ── F-4: fire outbound webhooks (offer.created / offer.updated) ─────────
+  // Fire-and-forget — webhook delivery failures must NEVER block the offer
+  // mutation. `triggerWebhooks` already catches internally, but we double-
+  // wrap with .catch() to be safe against any unexpected throw.
+  void triggerWebhooks(
+    auth.store,
+    tid!,
+    body.id ? "offer.updated" : "offer.created",
+    "offer",
+    created.id,
+    created as unknown as Record<string, unknown>,
+  ).catch((e) => console.error("[offers.post] webhook trigger failed:", e));
 
   // ── Fix 2: Auto-track commission obligation ─────────────────────────
   // When an offer is created from a trade calc that carried commission data

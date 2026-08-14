@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  */
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     { const { requirePermission } = await import("@/lib/permissions/can");
       const _d = requirePermission(auth, "portal-uploads.read"); if (_d) return _d; }
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       category: (url.searchParams.get("category") as any) || undefined,
       search: url.searchParams.get("search") || undefined,
       includeDeleted: url.searchParams.get("include_deleted") === "1",
-      limit: Number(url.searchParams.get("limit")) || 100,
+      limit: Math.min(Number(url.searchParams.get("limit")) || 100, 500),
       offset: Number(url.searchParams.get("offset")) || 0,
     });
     return NextResponse.json({ items, total });

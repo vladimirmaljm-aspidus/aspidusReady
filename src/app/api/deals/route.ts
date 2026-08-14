@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get("search") || undefined;
     const partner_id = url.searchParams.get("partner_id") || undefined;
     const stage = url.searchParams.get("stage") || undefined;
-    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
     const result = await auth.store.listDeals(tid, { search, limit, offset, filters: { partner_id, stage } });
     // Defense-in-depth: even though SupabaseStore filters by tenant_id,

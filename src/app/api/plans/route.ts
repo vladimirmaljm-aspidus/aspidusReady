@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest) {
     // Any authenticated user (including tenant users on trial) needs to see
     // the public plan catalog so they can pick an upgrade. Non-public plans
     // and admin-only plans stay hidden for anyone who isn't super_admin.
-    const auth = await requireAuth();
+    const auth = await requireAuth(_req);
     if (auth instanceof NextResponse) return auth;
 
     if (isSupabaseConfigured()) {
@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (platform.plans.write)
   { const { requirePermission } = await import("@/lib/permissions/can");

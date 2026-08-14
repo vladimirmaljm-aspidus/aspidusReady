@@ -74,6 +74,42 @@ export async function POST(req: NextRequest) {
   body.tenant_id = tenantId;
   if (!body.created_by && "user" in auth) body.created_by = auth.user.id;
 
+  // ── Tenant-ownership validation (audit F-6/P1-6 IDOR) ────────────────
+  // The trade calculator links to products, supplier offers, suppliers
+  // (partners), and buyers (partners). Without this check, an
+  // authenticated user could pass another tenant's id for any of these
+  // and create a calculation that cross-references another tenant's
+  // data — and then use the offer-preview endpoint to read sensitive
+  // pricing fields from that other tenant's records. Super-admins
+  // bypass (they can mix cross-tenant records for platform operations).
+  const isSuperAdminPost = "user" in auth && auth.isSuperAdmin;
+  if (!isSuperAdminPost) {
+    if (body.product_id) {
+      const product = await auth.store.getProduct(body.product_id);
+      if (!product || product.tenant_id !== tenantId) {
+        return NextResponse.json({ error: "Invalid product — does not belong to your tenant." }, { status: 400 });
+      }
+    }
+    if (body.supplier_offer_id) {
+      const offer = await auth.store.getSupplierOffer(body.supplier_offer_id);
+      if (!offer || offer.tenant_id !== tenantId) {
+        return NextResponse.json({ error: "Invalid supplier offer — does not belong to your tenant." }, { status: 400 });
+      }
+    }
+    if (body.supplier_id) {
+      const supplier = await auth.store.getPartner(body.supplier_id);
+      if (!supplier || supplier.tenant_id !== tenantId) {
+        return NextResponse.json({ error: "Invalid supplier — does not belong to your tenant." }, { status: 400 });
+      }
+    }
+    if (body.buyer_id) {
+      const buyer = await auth.store.getPartner(body.buyer_id);
+      if (!buyer || buyer.tenant_id !== tenantId) {
+        return NextResponse.json({ error: "Invalid buyer — does not belong to your tenant." }, { status: 400 });
+      }
+    }
+  }
+
   // Validate exchange_rate (Fix 8): must be positive when provided. A negative
   // rate flows through to `landedCostInSellCurrency` as a negative multiplier
   // → margin wildly inflates. Zero is silently coerced to 1 below (matches

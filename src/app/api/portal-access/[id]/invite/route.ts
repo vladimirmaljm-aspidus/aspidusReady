@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, getIp } from "@/lib/api/helpers";
 import { sendEmail, welcomePortalEmail } from "@/lib/email/service";
 import { notifyPortalInviteSent } from "@/lib/notif/helper";
+import { createPasswordReset } from "@/lib/auth/password-reset";
 
 export const runtime = "nodejs";
+
+// 7-day TTL for portal invite tokens (audit F-6/P1-3).
+// Matches the "This link will expire in 7 days" copy in the welcome email.
+const PORTAL_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Send welcome email to a portal client with password setup link
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (portal.create)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -40,9 +45,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     welcome_email_sent: false,
   });
 
+  // ── Mint a single-use, 7-day-expiring setup token (audit F-6/P1-3) ──
+  // Previously the invite email embedded the bare `access_id` UUID, which is
+  // a permanent identifier that NEVER expires — a leaked/forwarded invite
+  // could be used to set a password months later as long as
+  // `must_set_password` was still true. We now reuse the existing
+  // `password_resets` table (which already supports
+  // `target_type: "portal_access"`) to mint a hashed, single-use,
+  // 7-day-expiring token. The plaintext token goes only in the email link;
+  // the database stores the SHA-256 hash so a DB leak cannot be replayed.
+  // `createPasswordReset` also invalidates any prior outstanding tokens for
+  // the same target so only the most recent invite link works.
+  let setupToken: string | null = null;
+  try {
+    const issued = await createPasswordReset({
+      targetType: "portal_access",
+      targetId: access.id,
+      tenantId: access.tenant_id,
+      ip: getIp(req),
+      userAgent: req.headers.get("user-agent") || null,
+      ttlMs: PORTAL_INVITE_TTL_MS,
+    });
+    setupToken = issued.token;
+  } catch (e) {
+    // Fail-closed: if we can't mint a token, we MUST NOT send a permanent
+    // access_id link — that's the very bug we're fixing. Surface the error
+    // to the admin so they can retry.
+    console.error("[portal.invite] createPasswordReset failed:", e);
+    return NextResponse.json(
+      { error: "Failed to issue a setup token. Please try again." },
+      { status: 500 }
+    );
+  }
+
   const tenant = await auth.store.getTenant(access.tenant_id);
   const partner = await auth.store.getPartner(access.partner_id);
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.APP_BASE_URL || "https://aspidus.onrender.com";
 
   const { subject, html } = welcomePortalEmail({
     partnerName: partner?.name || "Client",
@@ -51,6 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     tenantName: tenant?.name || "VELOS",
     baseUrl,
     tier: access.tier,
+    setupToken,
   });
 
   const result = await sendEmail({
@@ -63,6 +102,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await audit(auth.store, auth.user, req, "portal.invite", "portal_access", id, {
     email: access.portal_email,
     sent: result.success,
+    token_issued: !!setupToken,
   });
   // Notify
   await notifyPortalInviteSent(access.tenant_id, partner?.name || "Client", access.portal_email || "", id);

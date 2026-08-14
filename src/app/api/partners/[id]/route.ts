@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(_req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (partners.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -17,7 +17,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!auth.isSuperAdmin && partner.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
-    return NextResponse.json(partner);
+    // CRITICAL FIX (audit D-5 / F-9-1): strip portal_token from the API
+    // response. The list route already strips it, but this [id] route was
+    // returning the full row including the secret. `portal_token` is a
+    // legacy 32+ char secret stored on the partner row — leaking it to any
+    // partner:read principal (including API keys) is a credential exposure.
+    const { portal_token: _omit, ...safePartner } = partner as any;
+    return NextResponse.json(safePartner);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
@@ -25,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (partners.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -42,7 +48,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Preserve the entity's tenant_id — regular users cannot move it to another tenant
     const updated = await auth.store.upsertPartner({ ...body, id, tenant_id: existing.tenant_id });
     await audit(auth.store, auth.user, req, "partner.update", "partner", id, { name: updated.name });
-    return NextResponse.json(updated);
+    // Strip portal_token from response (parity with GET / list — audit D-5 / F-9-1).
+    const { portal_token: _omit, ...safeUpdated } = updated as any;
+    return NextResponse.json(safeUpdated);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
@@ -50,7 +58,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (partners.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

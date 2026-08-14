@@ -6,9 +6,17 @@ import { rotateUserSessions } from "@/lib/auth/session";
 export const runtime = "nodejs";
 
 function whitelistUserFields(body: Record<string, unknown>): Record<string, unknown> {
+  // NOTE (audit F-6/P1 password_hash backdoor): `password_hash` is
+  // intentionally NOT in this whitelist — see /api/users/route.ts for the
+  // full rationale. Clients must never set a password hash directly; the
+  // server-side `hashPassword()` result is re-attached AFTER the filter.
+  // `token_version` IS still allowed here because PUT may bump it on
+  // password change (the bump is computed from `existing.token_version`,
+  // not from client input — but a malicious bump would only log the user
+  // out, which is a harmless nuisance, not a privilege escalation).
   const allowed = new Set([
     "tenant_id", "username", "email", "full_name", "role",
-    "permissions", "active", "must_change_password", "password_hash",
+    "permissions", "active", "must_change_password",
     "token_version",
   ]);
   const result: Record<string, unknown> = {};
@@ -20,7 +28,7 @@ function whitelistUserFields(body: Record<string, unknown>): Record<string, unkn
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(_req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (users.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -45,7 +53,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (users.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -102,9 +110,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    // Hash password server-side if provided. The server-computed hash is
+    // re-attached to the sanitized body AFTER the whitelist filter so a
+    // client-supplied `password_hash` can never be persisted verbatim
+    // (audit F-6/P1 password_hash backdoor).
+    let serverHashedPassword: string | null = null;
     if (body.password) {
-      body.password_hash = await hashPassword(body.password);
+      serverHashedPassword = await hashPassword(body.password);
       delete body.password;
+      delete body.password_hash; // defense in depth — strip client-supplied hash
       body.must_change_password = false;
       // Bump token_version so every JWT issued before this password change
       // is rejected on its next request (see requireAuth's token_version
@@ -115,6 +129,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Preserve the user's tenant_id (regular users/admins cannot move users to another tenant)
     const whitelisted = whitelistUserFields(body);
     delete whitelisted.tenant_id;
+    if (serverHashedPassword) {
+      whitelisted.password_hash = serverHashedPassword;
+    }
 
     // A non-admin editing their own record must not be able to change their
     // own role, permissions, or active flag — otherwise self-service profile
@@ -134,7 +151,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // `sessions` (handled here). Without this, an attacker who stole a
     // cookie before the password reset could keep using the dashboard until
     // the JWT's natural 7-day expiry.
-    if (body.password) {
+    if (serverHashedPassword) {
       await rotateUserSessions(updated.id, updated.tenant_id);
     }
 
@@ -147,7 +164,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (users.delete) — admins pass implicitly; a non-admin
   // needs an explicit users.delete grant. No further role check needed.

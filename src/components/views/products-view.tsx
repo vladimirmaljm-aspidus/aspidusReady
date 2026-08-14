@@ -1138,7 +1138,7 @@ function ProductFormDialog({
                 </div>
 
                 <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
-                  <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} />
+                  <Switch checked={!!form.active} onCheckedChange={(v) => set("active", v)} aria-label={t(locale, "active")} />
                   <div>
                     <p className="text-sm font-medium">{t(locale, "active")}</p>
                     <p className="text-xs text-muted-foreground">{t(locale, "crm-active-products-available")}</p>
@@ -1146,7 +1146,7 @@ function ProductFormDialog({
                 </div>
 
                 <div className="flex items-center gap-3 p-3 rounded-md bg-muted/30">
-                  <Switch checked={!!form.show_in_catalog} onCheckedChange={(v) => set("show_in_catalog", v)} />
+                  <Switch checked={!!form.show_in_catalog} onCheckedChange={(v) => set("show_in_catalog", v)} aria-label={t(locale, "crm-show-in-portal-catalog")} />
                   <div>
                     <p className="text-sm font-medium">{t(locale, "crm-show-in-portal-catalog")}</p>
                     <p className="text-xs text-muted-foreground">{t(locale, "crm-portal-clients-see-desc")}</p>

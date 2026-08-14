@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 //   type=profit_and_loss&period_start=2025-01-01&period_end=2025-12-31
 //   type=general_ledger&account_id=xxx&date_from=2025-01-01&date_to=2025-12-31
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

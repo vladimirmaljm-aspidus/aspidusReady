@@ -828,7 +828,7 @@ function ChartOfAccounts() {
               <Input value={form.tax_code} onChange={(e) => setForm({ ...form, tax_code: e.target.value })} placeholder={lbl("fin-erp-tax-code-placeholder")} />
             </div>
             <div className="space-y-2 flex items-center gap-3 pt-6">
-              <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
+              <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} aria-label={lbl("is-active")} />
               <Label>{lbl("is-active")}</Label>
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -1680,7 +1680,7 @@ function BankAccounts() {
               </Select>
             </div>
             <div className="space-y-2 flex items-center gap-3 pt-6">
-              <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
+              <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} aria-label={lbl("active")} />
               <Label>{lbl("active")}</Label>
             </div>
           </div>
@@ -2112,7 +2112,7 @@ function ErpSettings() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2 flex items-center gap-3">
-              <Switch checked={form.vat_enabled} onCheckedChange={(v) => updateField("vat_enabled", v)} />
+              <Switch checked={form.vat_enabled} onCheckedChange={(v) => updateField("vat_enabled", v)} aria-label={lbl("vat-enabled")} />
               <Label>{lbl("vat-enabled")}</Label>
             </div>
             <div className="space-y-2">
@@ -2129,7 +2129,7 @@ function ErpSettings() {
               </Select>
             </div>
             <div className="space-y-2 flex items-center gap-3">
-              <Switch checked={form.auto_post_journal} onCheckedChange={(v) => updateField("auto_post_journal", v)} />
+              <Switch checked={form.auto_post_journal} onCheckedChange={(v) => updateField("auto_post_journal", v)} aria-label={lbl("auto-post-journal")} />
               <Label>{lbl("auto-post-journal")}</Label>
             </div>
           </div>

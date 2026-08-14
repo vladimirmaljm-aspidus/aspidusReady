@@ -32,7 +32,7 @@ export const runtime = "nodejs";
  *   }
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (settings.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

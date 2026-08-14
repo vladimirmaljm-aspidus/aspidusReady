@@ -19,7 +19,7 @@ const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours — rates don't change that oft
  * completely free, no key needed, but only covers ~30 currencies).
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (integrations.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

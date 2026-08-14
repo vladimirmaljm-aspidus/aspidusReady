@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (mail-queue.delete)
     { const { requirePermission } = await import("@/lib/permissions/can");

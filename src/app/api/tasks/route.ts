@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  *   deal_id=xx    — filter by linked deal
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (tasks.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
  * Regular users can only create tasks for themselves.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (tasks.create)
   { const { requirePermission } = await import("@/lib/permissions/can");

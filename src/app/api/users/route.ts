@@ -6,9 +6,23 @@ import { enforceQuota } from "@/lib/api/plan-limits";
 export const runtime = "nodejs";
 
 function whitelistUserFields(body: Record<string, unknown>): Record<string, unknown> {
+  // NOTE (audit F-6/P1 password_hash backdoor): `password_hash` is
+  // intentionally NOT in this whitelist. Previously a client could send
+  // `password_hash: "$2a$10$..."` directly to /api/users and have it
+  // persisted verbatim, bypassing the server-side `hashPassword()` step.
+  // That let any admin set an arbitrary hash on any account without
+  // knowing the plaintext password — full account hijack via the user
+  // management API.
+  //
+  // Passwords now flow exclusively through the dedicated endpoints:
+  //   - /api/auth/change-password  (CRM users, self-service)
+  //   - /api/portal/change-password (portal clients, self-service)
+  //   - /api/users POST/PUT with a plaintext `password` field (hashed
+  //     server-side and re-attached to the sanitized body AFTER the
+  //     whitelist filter, so a client-supplied hash can never survive).
   const allowed = new Set([
     "tenant_id", "username", "email", "full_name", "role",
-    "permissions", "active", "must_change_password", "password_hash",
+    "permissions", "active", "must_change_password",
   ]);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
@@ -19,7 +33,7 @@ function whitelistUserFields(body: Record<string, unknown>): Record<string, unkn
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (users.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -57,7 +71,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (users.create)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -97,17 +111,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // hash password if provided (create or reset)
+    // hash password if provided (create or reset). The server-computed
+    // hash is re-attached to the sanitized body AFTER the whitelist filter
+    // so a client-supplied `password_hash` can never be persisted verbatim
+    // (audit F-6/P1 password_hash backdoor).
+    let serverHashedPassword: string | null = null;
     if (body.password) {
-      body.password_hash = await hashPassword(body.password);
+      serverHashedPassword = await hashPassword(body.password);
+      // Strip BOTH the plaintext password AND any client-supplied hash
+      // before the whitelist runs (defense in depth — the whitelist would
+      // drop `password_hash` anyway, but explicit deletion makes the
+      // intent clear and prevents future regressions if the whitelist
+      // is ever widened).
       delete body.password;
+      delete body.password_hash;
     }
     // Plan limit — only on CREATE (updates carry a body.id).
     if (!body.id) {
       const denied = await enforceQuota(body.tenant_id, "users", auth.isSuperAdmin);
       if (denied) return denied;
     }
-    const created = await auth.store.upsertUser(whitelistUserFields(body));
+    const sanitizedBody = whitelistUserFields(body);
+    if (serverHashedPassword) {
+      sanitizedBody.password_hash = serverHashedPassword;
+    }
+    const created = await auth.store.upsertUser(sanitizedBody);
     await audit(auth.store, auth.user, req, body.id ? "user.update" : "user.create", "user", created.id, { username: created.username });
     const { password_hash, totp_secret, ...safe } = created;
     return NextResponse.json(safe);

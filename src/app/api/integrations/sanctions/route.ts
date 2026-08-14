@@ -110,7 +110,7 @@ function matchScore(query: string, entry: any): number {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (integrations.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

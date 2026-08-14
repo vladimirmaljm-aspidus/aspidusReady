@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (audit.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   const tid = auth.tenantId;
   const url = new URL(req.url);
   const search = url.searchParams.get("search") || undefined;
-  const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 100;
+  const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : 100;
   const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : 0;
   const result = await auth.store.listAudit(tid, { search, limit, offset });
   return NextResponse.json({

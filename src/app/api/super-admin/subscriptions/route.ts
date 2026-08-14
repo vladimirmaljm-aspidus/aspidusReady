@@ -13,7 +13,7 @@ export const runtime = "nodejs";
  */
 export async function GET(_req: NextRequest) {
   try {
-  const auth = await requireSuperAdmin();
+  const auth = await requireSuperAdmin(_req);
   if (auth instanceof NextResponse) return auth;
 
   const supabase = getSupabase();

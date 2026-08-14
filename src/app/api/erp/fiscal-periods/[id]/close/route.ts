@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // POST /api/erp/fiscal-periods/[id]/close — Close a fiscal period
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

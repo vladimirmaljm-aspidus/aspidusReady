@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId, audit } from "@/lib/api/helpers";
 import { validateStatusTransition } from "@/lib/api/status-validator";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(_req);
     if (auth instanceof NextResponse) return auth;
     // Permission gate (offers.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -26,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (offers.update)
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -181,6 +182,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
     await audit(auth.store, auth.user, req, "offer.update", "offer", id, { status: updated.status });
+
+    // ── F-4: fire outbound webhooks (offer.updated) ────────────────────────
+    // Fire-and-forget — webhook delivery failures must NEVER block the offer
+    // mutation. We pass the AFTER snapshot so receivers get the new state.
+    void triggerWebhooks(
+      auth.store,
+      existing.tenant_id,
+      "offer.updated",
+      "offer",
+      id,
+      updated as unknown as Record<string, unknown>,
+    ).catch((e) => console.error("[offers.put] webhook trigger failed:", e));
+
     return NextResponse.json(updated);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
@@ -189,7 +203,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     if (auth instanceof NextResponse) return auth;
   // Permission gate (offers.delete)
   { const { requirePermission } = await import("@/lib/permissions/can");

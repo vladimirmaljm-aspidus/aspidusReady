@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // POST /api/erp/journal-entries/[id]/reverse — Reverse a posted journal entry
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.create)
     { const { requirePermission } = await import("@/lib/permissions/can");

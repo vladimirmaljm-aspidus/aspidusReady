@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireSuperAdmin(req);
     if (auth instanceof NextResponse) return auth;
 
     const session = await getSessionFromCookie();

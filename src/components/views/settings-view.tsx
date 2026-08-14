@@ -1382,7 +1382,7 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between p-3 rounded-md bg-muted/30">
       <p className="text-sm font-medium">{label}</p>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
     </div>
   );
 }
@@ -1776,6 +1776,7 @@ function MemorandumTab() {
                 <Switch
                   checked={settings.header_enabled}
                   onCheckedChange={(v) => set("header_enabled", v)}
+                  aria-label="Toggle header section"
                 />
               </div>
               {settings.header_enabled && (
@@ -1830,6 +1831,7 @@ function MemorandumTab() {
                 <Switch
                   checked={settings.logo_enabled}
                   onCheckedChange={(v) => set("logo_enabled", v)}
+                  aria-label="Toggle logo"
                 />
               </div>
               {settings.logo_enabled && (
@@ -1881,6 +1883,7 @@ function MemorandumTab() {
                 <Switch
                   checked={settings.footer_enabled}
                   onCheckedChange={(v) => set("footer_enabled", v)}
+                  aria-label="Toggle footer section"
                 />
               </div>
               {settings.footer_enabled && (
@@ -1906,6 +1909,7 @@ function MemorandumTab() {
                     <Switch
                       checked={settings.qr_enabled}
                       onCheckedChange={(v) => set("qr_enabled", v)}
+                      aria-label="Toggle QR code"
                     />
                   </div>
                   {settings.qr_enabled && (

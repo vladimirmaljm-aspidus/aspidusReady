@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  * is a no-op (the response always returns `catalogEntry: null`).
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (dashboard.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

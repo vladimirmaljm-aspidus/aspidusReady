@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 // GET /api/erp/journal-entries — List journal entries
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (erp.read)
     { const { requirePermission } = await import("@/lib/permissions/can");

@@ -18,7 +18,7 @@ function requirePlatformPlans(auth: Awaited<ReturnType<typeof requireAuth>>): Ne
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     const gate = requirePlatformPlans(auth);
     if (gate) return gate;
     if (auth instanceof NextResponse) return auth;
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(req);
     const gate = requirePlatformPlans(auth);
     if (gate) return gate;
     if (auth instanceof NextResponse) return auth;

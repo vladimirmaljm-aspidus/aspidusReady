@@ -51,6 +51,10 @@ export function PortalLogin() {
   // Setup-password dialog state
   const [setupOpen, setSetupOpen] = useState(false);
   const [accessId, setAccessId] = useState("");
+  // Audit F-6/P1-3: invite emails now arrive with ?setup_token=xxx (a
+  // single-use, 7-day-expiring token) instead of the permanent ?access_id.
+  // The setup-password API accepts either; we prefer setup_token when present.
+  const [setupToken, setSetupToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -66,14 +70,23 @@ export function PortalLogin() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetResult, setResetResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-  // Pre-fill email from URL params + check for reset token
+  // Pre-fill email from URL params + check for reset token / setup token
   useEffect(() => {
     const emailParam = searchParams.get("email");
     if (emailParam) setEmail(emailParam);
-    const accessIdParam = searchParams.get("access_id");
-    if (accessIdParam) {
-      setAccessId(accessIdParam);
+    // Audit F-6/P1-3: prefer ?setup_token=xxx (single-use, 7-day-expiring)
+    // over the legacy ?access_id=xxx (permanent UUID, never expired).
+    const setupTokenParam = searchParams.get("setup_token");
+    if (setupTokenParam) {
+      setSetupToken(setupTokenParam);
+      setAccessId("");
       setSetupOpen(true);
+    } else {
+      const accessIdParam = searchParams.get("access_id");
+      if (accessIdParam) {
+        setAccessId(accessIdParam);
+        setSetupOpen(true);
+      }
     }
     const resetTokenParam = searchParams.get("reset_token");
     if (resetTokenParam) {
@@ -167,7 +180,7 @@ export function PortalLogin() {
   async function setupPassword(e: React.FormEvent) {
     e.preventDefault();
     setSetupError(null);
-    if (!accessId) {
+    if (!accessId && !setupToken) {
       setSetupError(t("portal-login-toast-missing-access-id"));
       return;
     }
@@ -184,7 +197,15 @@ export function PortalLogin() {
       const res = await fetch("/api/portal/setup-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_id: accessId, password: newPassword }),
+        // Audit F-6/P1-3: send setup_token (preferred) OR access_id (legacy).
+        // The server validates the token's hash + 7-day expiry; legacy
+        // access_id is only honoured for staff sessions or for invite
+        // emails issued before this fix (within 7 days of invited_at).
+        body: JSON.stringify(
+          setupToken
+            ? { setup_token: setupToken, password: newPassword }
+            : { access_id: accessId, password: newPassword }
+        ),
       });
       let data: any = {};
       try { data = await res.json(); } catch { /* non-JSON response */ }
@@ -198,6 +219,7 @@ export function PortalLogin() {
       // hydrate the client state and drop the user into their portal.
       setSetupOpen(false);
       setAccessId("");
+      setSetupToken("");
       setNewPassword("");
       if (data.access) {
         setPortalAccess(data.access);

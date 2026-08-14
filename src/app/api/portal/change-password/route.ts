@@ -3,6 +3,7 @@ import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
 import { verifyPassword, hashPassword } from "@/lib/auth/password";
 import { validatePassword } from "@/lib/auth/password-policy";
+import { getIp } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -100,7 +101,8 @@ export async function POST(req: NextRequest) {
       entity_type: "portal_access",
       entity_id: access.id,
       details: { email: access.portal_email },
-      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
+      // Audit F-6/S-1: use getIp() (reads last XFF entry, not the spoofable first).
+      ip: getIp(req) || "unknown",
       user_agent: req.headers.get("user-agent") || null,
     });
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,11 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get("search") || undefined;
     const status = url.searchParams.get("status") || undefined;
     const type = url.searchParams.get("type") || undefined;
-    const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined;
+    // F-9-3: cap limit to 500 to prevent ?limit=999999 style abuse that
+    // would pull the entire table into memory and serialize a multi-MB JSON
+    // response. The audit found a 100KB product name being stored — even
+    // a single malicious row would balloon the response payload.
+    const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : undefined;
     const offset = url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : undefined;
 
     const result = await auth.store.listPartners(tid!, {
@@ -109,6 +114,21 @@ export async function POST(req: NextRequest) {
     delete body.force;
     const created = await auth.store.upsertPartner(body);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "partner.update" : "partner.create", "partner", created.id, { name: created.name });
+
+    // ── F-4: fire outbound webhooks (partner.created / partner.updated) ────
+    // Fire-and-forget — webhook delivery failures must NEVER block the
+    // partner mutation. We strip `portal_token` from the payload (parity
+    // with the GET handler's defense-in-depth strip — see audit D-5).
+    const { portal_token: _omit, ...partnerSafe } = created as any;
+    void triggerWebhooks(
+      auth.store,
+      tid!,
+      body.id ? "partner.updated" : "partner.created",
+      "partner",
+      created.id,
+      partnerSafe as Record<string, unknown>,
+    ).catch((e) => console.error("[partners.post] webhook trigger failed:", e));
+
     return NextResponse.json(created);
   } catch (e: any) {
     console.error("[partners.upsert]", e);

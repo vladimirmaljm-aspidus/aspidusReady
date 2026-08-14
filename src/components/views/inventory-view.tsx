@@ -29,6 +29,7 @@ import { InventoryMovement, Partner, Product } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useI18nStore } from "@/lib/i18n/store";
 import { t } from "@/lib/i18n/dictionaries";
+import { PartnerPicker } from "@/components/common/partner-picker";
 
 export function InventoryView() {
   const api = useApiUrl();
@@ -148,15 +149,13 @@ export function InventoryView() {
               className="pl-9"
             />
           </div>
-          <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="w-full md:w-56"><SelectValue placeholder={t(locale, "crm-partner")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t(locale, "crm-all-partners")}</SelectItem>
-              {partnerList.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PartnerPicker
+            value={partnerFilter === "all" ? "" : partnerFilter}
+            allowClear
+            placeholder={t(locale, "crm-partner")}
+            onSelect={(p) => setPartnerFilter(p?.id || "all")}
+            className="md:w-56"
+          />
         </CardContent>
       </Card>
 

@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
     // Permission gate (security.read)
     { const { requirePermission } = await import("@/lib/permissions/can");
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   // Super-admin with no explicit user_id filter sees ALL login history system-wide.
   // Tenant admins/users default to their own history.
   const userId = explicitUserId ?? (auth.isSuperAdmin ? undefined : auth.user.id);
-  const limit = url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 50;
+  const limit = url.searchParams.get("limit") ? Math.min(Number(url.searchParams.get("limit")), 500) : 50;
   const items = await auth.store.listLoginHistory(tid, userId, limit);
   return NextResponse.json({ items });
   } catch (error: any) {
