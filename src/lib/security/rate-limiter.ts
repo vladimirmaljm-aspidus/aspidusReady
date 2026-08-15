@@ -119,7 +119,16 @@ export async function checkRateLimit(
       return { allowed: true, remaining: maxAttempts, count: 0 };
     }
 
-    const row = data as RateLimitRpcRow;
+    // The RPC uses `RETURN QUERY SELECT ...` which the Supabase JS client
+    // returns as an ARRAY of rows, not a single object. A single-row result
+    // looks like `[{ cnt: 1, window_start: "...", allowed: true }]`.
+    // Extract the first (and only) row. If somehow empty, fail open.
+    const row = (Array.isArray(data) ? data[0] : data) as RateLimitRpcRow | undefined;
+    if (!row) {
+      console.warn("[rate-limiter] RPC returned empty array, allowing request");
+      return { allowed: true, remaining: maxAttempts, count: 0 };
+    }
+
     const allowed = !!row.allowed;
     const currentCount = row.cnt;
     const remaining = Math.max(0, maxAttempts - currentCount);

@@ -22,8 +22,8 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
  */
 const RATE_LIMITS: Record<string, { maxRequests: number; windowMs: number }> = {
   // ── auth flows (pre-existing) ────────────────────────────────────────────
-  "/api/auth/login": { maxRequests: 10, windowMs: 60_000 },            // 10/min
-  "/api/portal/login": { maxRequests: 10, windowMs: 60_000 },         // 10/min
+  "/api/auth/login": { maxRequests: 30, windowMs: 60_000 },            // 30/min
+  "/api/portal/login": { maxRequests: 30, windowMs: 60_000 },         // 30/min
   "/api/setup": { maxRequests: 3, windowMs: 300_000 },               // 3/5min
   "/api/auth/logout": { maxRequests: 20, windowMs: 60_000 },          // 20/min
 
