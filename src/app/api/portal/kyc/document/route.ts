@@ -5,6 +5,7 @@ import { uploadKycDocument, deleteFile } from "@/lib/upload/service";
 import { audit } from "@/lib/api/helpers";
 import { verifyKycUpload } from "@/lib/upload/verify-file";
 import { getSupabase } from "@/lib/supabase/client";
+import { MAX_KYC_UPLOAD_SIZE, KYC_ALLOWED_MIME_TYPES } from "@/lib/upload/constants";
 
 export const runtime = "nodejs";
 
@@ -23,13 +24,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "File and document type required." }, { status: 400 });
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validate file size — KYC docs use the stricter 10 MB limit (audit
+    // P2-2 / task C-7: was a hard-coded inline literal; now sourced from
+    // the shared `@/lib/upload/constants` module so it can't drift out of
+    // sync with `uploadFile()` / `uploadKycDocument()`).
+    if (file.size > MAX_KYC_UPLOAD_SIZE) {
       return NextResponse.json({ error: "File too large. Max 10MB." }, { status: 400 });
     }
 
-    // Validate file type
-    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+    // Validate file type — KYC docs allow PDF + raster images only.
+    const allowedTypes = KYC_ALLOWED_MIME_TYPES;
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json({ error: "Invalid file type. Allowed: PDF, JPEG, PNG, WebP." }, { status: 400 });
     }

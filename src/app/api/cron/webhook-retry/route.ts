@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { retryFailedDeliveries } from "@/lib/webhooks/deliver";
 import { authorizeCron } from "@/lib/api/cron-auth";
+import { audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,13 @@ export const runtime = "nodejs";
  * Per-delivery cap: MAX_WEBHOOK_ATTEMPTS=5. After the 5th failed attempt,
  * the delivery stays in status='failed' with next_attempt_at=NULL and is
  * no longer picked up by this cron.
+ *
+ * P2 / task C-6 Fix 4: each successful run appends a `cron.webhook_retry`
+ * audit log entry so ops can verify the cron is firing and triage what
+ * it did. The entry is written with a system-level user (`id="system"`,
+ * `username="cron"`, `tenant_id=null`) — there is no real user behind a
+ * cron invocation, and `tenant_id=null` matches the platform-level scope
+ * used elsewhere in audit_logs.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -48,6 +56,24 @@ export async function GET(req: NextRequest) {
     console.info(
       `[cron/webhook-retry] retried=${result.retried} delivered=${result.delivered} ` +
       `stillFailing=${result.stillFailing} skipped=${result.skipped}`,
+    );
+
+    // P2 / task C-6 Fix 4: record what the cron did in the audit trail.
+    // Best-effort — the audit() helper swallows errors internally so a
+    // logging failure can never cause the cron itself to fail.
+    await audit(
+      store,
+      { id: "system", username: "cron", tenant_id: null },
+      req,
+      "cron.webhook_retry",
+      "system",
+      "cron",
+      {
+        retried: result.retried,
+        delivered: result.delivered,
+        still_failing: result.stillFailing,
+        skipped: result.skipped,
+      },
     );
 
     return NextResponse.json({ ok: true, ...result });

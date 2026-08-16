@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { uploadFile } from "@/lib/upload/service";
 import { verifyLogoUpload } from "@/lib/upload/verify-file";
+import { MAX_LOGO_UPLOAD_SIZE, LOGO_ALLOWED_MIME_TYPES } from "@/lib/upload/constants";
 
 export const runtime = "nodejs";
 
@@ -26,11 +27,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "No logo file provided." }, { status: 400 });
     }
 
-    // Validate
-    if (file.size > 2 * 1024 * 1024) {
+    // Validate — size + MIME limits come from the shared `@/lib/upload/constants`
+    // module (audit P2-2 / task C-7) so they stay in sync with `uploadFile()`.
+    if (file.size > MAX_LOGO_UPLOAD_SIZE) {
       return NextResponse.json({ error: "Logo too large. Max 2MB." }, { status: 400 });
     }
-    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+    const allowedTypes = LOGO_ALLOWED_MIME_TYPES;
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json({ error: "Invalid type. Allowed: PNG, JPEG, WebP." }, { status: 400 });
     }

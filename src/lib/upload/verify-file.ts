@@ -4,6 +4,12 @@
  * This prevents attackers from uploading malicious files with spoofed MIME types.
  */
 
+import {
+  ALLOWED_MIME_TYPES,
+  KYC_ALLOWED_MIME_TYPES,
+  LOGO_ALLOWED_MIME_TYPES,
+} from "@/lib/upload/constants";
+
 interface FileVerification {
   isValid: boolean;
   detectedType: string | null;
@@ -26,13 +32,13 @@ const MAGIC_BYTES: Record<string, { offset: number; bytes: number[]; mime: strin
   csv:     { offset: 0, bytes: [], mime: "text/csv", ext: "csv" }, // No magic bytes — check if printable
 };
 
-// Allowed MIME types per upload context
-const PORTAL_ALLOWED = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif",
-  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "text/plain", "text/csv"];
-const KYC_ALLOWED = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-const LOGO_ALLOWED = ["image/png", "image/jpeg", "image/webp"]; // SVG removed for security
+// Allowed MIME types per upload context — sourced from the shared
+// `@/lib/upload/constants` module (audit P2-2 / task C-7) so the magic-
+// bytes verifier, the route guards, and the client-side pre-flight
+// checks can never drift out of sync.
+const PORTAL_ALLOWED = ALLOWED_MIME_TYPES;
+const KYC_ALLOWED = KYC_ALLOWED_MIME_TYPES;
+const LOGO_ALLOWED = LOGO_ALLOWED_MIME_TYPES;
 
 function checkMagicBytes(buffer: Buffer, signature: { offset: number; bytes: number[] }): boolean {
   if (signature.bytes.length === 0) return true; // No magic bytes to check (txt, csv)

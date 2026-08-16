@@ -12,6 +12,7 @@ import { useAppStore } from "@/lib/store/app-store";
 import { toast } from "sonner";
 import type { PortalAccess, Partner } from "@/lib/supabase/types";
 import { useT } from "@/lib/i18n/store";
+import { MAX_UPLOAD_SIZE } from "@/lib/upload/constants";
 
 interface PortalMessage {
   id: string;
@@ -116,7 +117,7 @@ export function PortalMessages() {
   }
 
   async function handleAttach(file: File) {
-    if (file.size > 25 * 1024 * 1024) {
+    if (file.size > MAX_UPLOAD_SIZE) {
       toast.error(t("portal-messages-toast-file-too-large"));
       return;
     }

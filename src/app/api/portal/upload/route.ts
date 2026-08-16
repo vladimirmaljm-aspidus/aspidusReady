@@ -6,16 +6,12 @@ import { recordPortalUpload, PortalUploadCategory } from "@/lib/portal/uploads";
 import { getStore } from "@/lib/data/store";
 import { audit } from "@/lib/api/helpers";
 import { verifyPortalUpload } from "@/lib/upload/verify-file";
+import { MAX_UPLOAD_SIZE, ALLOWED_MIME_TYPES } from "@/lib/upload/constants";
 
 export const runtime = "nodejs";
 
-const ALLOWED = new Set([
-  "application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif",
-  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "text/plain", "text/csv",
-]);
-const MAX_SIZE = 25 * 1024 * 1024;
+const ALLOWED = new Set(ALLOWED_MIME_TYPES);
+const MAX_SIZE = MAX_UPLOAD_SIZE;
 
 /**
  * POST /api/portal/upload  (multipart/form-data)

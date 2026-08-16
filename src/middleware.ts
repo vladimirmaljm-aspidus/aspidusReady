@@ -71,11 +71,54 @@ function getIp(req: NextRequest): string {
 
 // Clean up expired entries every 5 minutes
 let lastCleanup = Date.now();
+
+/**
+ * Hard cap on the rate-limit Map's size. Without this, the Map can grow
+ * without bound under sustained traffic from many distinct IPs (DDoS,
+ * scraper botnet, cloud egress) — the 5-minute cleanup interval only
+ * runs on a request boundary, so between cleanups the Map keeps every
+ * distinct `path:ip` key it has seen. A single render.com instance has
+ * ~512MB RAM; at ~80 bytes per Map entry, 10k entries is ~800KB —
+ * negligible — but 1M entries is ~80MB which starts to matter. The cap
+ * below is deliberately generous (10k) so it never trips in normal
+ * traffic, but kicks in BEFORE memory becomes a concern.
+ */
+const MAX_RATE_LIMIT_ENTRIES = 10_000;
+
 function cleanupIfNeeded() {
   const now = Date.now();
+  // Time-based cleanup: every 5 minutes, sweep expired entries.
   if (now - lastCleanup > 5 * 60_000) {
     for (const [key, val] of rateLimitMap) {
       if (val.resetAt < now) rateLimitMap.delete(key);
+    }
+    lastCleanup = now;
+  }
+  // Size-based cleanup (P2 / task C-6 Fix 3): if the Map has grown past
+  // the cap between scheduled sweeps (a burst of distinct IPs inside 5
+  // minutes), force a sweep NOW. If even that doesn't free enough (all
+  // entries are still inside their window), evict the oldest 50% by
+  // resetAt — we'd rather drop rate-limit state for some clients than
+  // let the Map consume unbounded memory.
+  if (rateLimitMap.size > MAX_RATE_LIMIT_ENTRIES) {
+    for (const [key, val] of rateLimitMap) {
+      if (val.resetAt < now) rateLimitMap.delete(key);
+    }
+    if (rateLimitMap.size > MAX_RATE_LIMIT_ENTRIES) {
+      const entries = [...rateLimitMap.entries()].sort(
+        (a, b) => a[1].resetAt - b[1].resetAt,
+      );
+      const evictCount = Math.floor(entries.length / 2);
+      for (let i = 0; i < evictCount; i++) {
+        rateLimitMap.delete(entries[i][0]);
+      }
+      console.warn(
+        `[rate-limit] Map exceeded ${MAX_RATE_LIMIT_ENTRIES} entries ` +
+          `(${rateLimitMap.size + evictCount} before eviction); ` +
+          `evicted oldest ${evictCount} entries by resetAt. ` +
+          `This indicates sustained traffic from many distinct IPs — ` +
+          `consider Redis-backed rate limiting for production scale.`,
+      );
     }
     lastCleanup = now;
   }

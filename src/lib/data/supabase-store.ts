@@ -37,6 +37,52 @@ function paginate<T>(items: T[], params?: ListParams): ListResult<T> {
 }
 
 /**
+ * Push pagination to the database via `.range()` + `count: "exact"`.
+ *
+ * P2 / task C-6 Fix 1: replaces the legacy pattern of
+ *   `const { data } = await q; return paginate(data, params);`
+ * which fetched the ENTIRE table then sliced in memory — a query that
+ * grows linearly with table size and pulls thousands of rows over the
+ * wire on every list call.
+ *
+ * The caller MUST:
+ *   1. Pass `.select("*", { count: "exact" })` (or with explicit columns
+ *      + `{ count: "exact" }`) so PostgREST returns the total row count
+ *      in the response — without this, `count` comes back as `null` and
+ *      the caller sees `total: 0`.
+ *   2. Apply all filters / `.order()` to the builder before calling this
+ *      helper — range() must be the LAST modifier so PostgREST applies
+ *      it after filtering (otherwise the page slice is wrong).
+ *
+ * `limit` is capped at 500 to prevent a single request from pulling
+ * thousands of rows (defence-in-depth against a client that asks for
+ * `?limit=100000`). The default mirrors `paginate()`'s 50.
+ *
+ * Typing: `q` is a PostgrestFilterBuilder whose `range()` returns `this`
+ * (thenable). We model it as `PromiseLike<{data, error, count}> & {range}`
+ * so TypeScript accepts any supabase-js query builder without importing
+ * its (complex) generic type parameters.
+ */
+type PaginatableQuery = {
+  range(from: number, to: number): PromiseLike<{
+    data: unknown;
+    error: unknown;
+    count: number | null;
+  }>;
+};
+
+async function paginateQuery<T>(
+  q: PaginatableQuery,
+  params?: ListParams,
+): Promise<ListResult<T>> {
+  const limit = Math.min(params?.limit ?? 50, 500);
+  const offset = params?.offset ?? 0;
+  const { data, error, count } = await q.range(offset, offset + limit - 1);
+  if (error) throw error;
+  return { items: (data as T[]) || [], total: count ?? 0 };
+}
+
+/**
  * Sanitize a user-provided search term before interpolating it into a
  * PostgREST `.or()` filter string (audit finding A-3/P0-3).
  *
@@ -117,8 +163,23 @@ export class SupabaseStore implements Store {
    * CRITICAL SECURITY FIX (audit T-1/DEEP-3): the UPDATE path now filters
    * by BOTH id AND tenant_id, preventing cross-tenant IDOR. A caller from
    * tenant A can no longer POST body.id=<tenant-B-uuid> to overwrite
-   * tenant B's record — the UPDATE matches 0 rows and falls back to INSERT
-   * (which creates a NEW record in tenant A's scope).
+   * tenant B's record — the UPDATE matches 0 rows.
+   *
+   * CRITICAL SECURITY FIX (audit P2-1/C-7): when the UPDATE matches 0 rows
+   * in a tenant-scoped context (tenantId is set) AND `strict` is true
+   * (the default), we now THROW instead of falling back to INSERT. The
+   * previous fallback created a NEW record with the caller's tenant_id
+   * — safe from cross-tenant hijack, but it (a) silently created
+   * duplicate rows when a caller mistyped an id, (b) bypassed
+   * create-time validation in routes that gate on `if (!body.id)`, and
+   * (c) returned a confusing PK-conflict 500 when the row existed in
+   * another tenant. Throwing surfaces the failure cleanly so the caller
+   * can correct the id or POST without an id to create.
+   *
+   * `strict: false` preserves the legacy fallback-to-INSERT behaviour
+   * for callers that genuinely want "create-or-update by id" semantics
+   * (e.g. idempotent import scripts that supply a stable UUID). The
+   * default is `true` (secure).
    *
    * On UPDATE we additionally strip:
    *   • created_at — DB owns this column; sending it would silently overwrite
@@ -132,6 +193,7 @@ export class SupabaseStore implements Store {
     table: string,
     data: Partial<T> & { id?: string },
     tenantId?: string,
+    strict: boolean = true,
   ): Promise<T> {
     const payload: SupaRow = this.sanitizePayload({ ...data });
     if (data.id) {
@@ -142,23 +204,43 @@ export class SupabaseStore implements Store {
       // Let the DB default/trigger update updated_at.
       delete fields.updated_at;
       // CRITICAL: filter by tenant_id to prevent cross-tenant IDOR.
-      // If the row doesn't belong to this tenant, the UPDATE matches 0 rows
-      // and we fall back to INSERT (creating a new record instead of hijacking).
+      // If the row doesn't belong to this tenant, the UPDATE matches 0 rows.
       let query = this.sb().from(table).update(fields).eq("id", id);
       if (tenantId && "tenant_id" in fields) {
         query = query.eq("tenant_id", tenantId);
       }
       const { data: updated, error } = await query.select().single();
       if (error) {
-        // PGRK116 = "Cannot coerce result to a single JSON object" — means
-        // 0 rows matched (either row doesn't exist OR belongs to different tenant).
-        // Fall through to INSERT path.
+        // PGRST116 = "JSON object requested, multiple (or no) rows returned"
+        // — means 0 rows matched (either row doesn't exist OR belongs to a
+        // different tenant). Other errors (constraint violation, RLS denial,
+        // etc.) would also land here; we treat them the same because the
+        // UPDATE did not produce a row either way.
+        //
+        // In a tenant-scoped context with `strict: true` (default), THROW
+        // instead of falling back to INSERT. The caller supplied an id,
+        // meaning they intended to UPDATE an existing record — a 0-row
+        // match means the record is gone, was deleted, or belongs to
+        // another tenant. Silently creating a new record would bypass
+        // create-time validation in routes that gate on `if (!body.id)`.
+        //
+        // In a super-admin context (no tenantId) OR with `strict: false`,
+        // preserve the legacy fallback to INSERT so idempotent imports
+        // and "create-or-update by id" flows keep working.
+        if (strict && tenantId) {
+          throw new Error(
+            `Record not found or access denied (table=${table}, id=${id}).`,
+          );
+        }
+        // Fall through to INSERT path (legacy behaviour).
       } else if (updated) {
         return updated as T;
       }
-      // Row doesn't exist OR belongs to different tenant — fall back to insert.
-      // For cross-tenant attempts, this creates a NEW record in the caller's
-      // tenant (safe — no data hijack).
+      // Row doesn't exist OR belongs to different tenant — fall back to
+      // INSERT. For cross-tenant attempts in non-strict mode, this creates
+      // a NEW record in the caller's tenant (safe — no data hijack, but
+      // may surface as a PK-conflict 500 if the id already exists in
+      // another tenant; that's the legacy behaviour we're preserving).
       const { data: inserted, error: insErr } = await this.sb()
         .from(table)
         .insert(payload)
@@ -308,15 +390,13 @@ export class SupabaseStore implements Store {
 
   // ---- partners ----
   async listPartners(tenantId: string, params?: ListParams): Promise<ListResult<Partner>> {
-    let q = this.sb().from("partners").select("*");
+    let q = this.sb().from("partners").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,email.ilike.%${safeSearch(params.search)}%,contact_name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.type) q = q.eq("type", params.filters.type);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as Partner[]) || [], params);
+    return paginateQuery<Partner>(q, params);
   }
   async getPartner(id: string): Promise<Partner | null> {
     const { data, error } = await this.sb().from("partners").select("*").eq("id", id).maybeSingle();
@@ -333,13 +413,11 @@ export class SupabaseStore implements Store {
 
   // ---- products ----
   async listProducts(tenantId: string, params?: ListParams): Promise<ListResult<Product>> {
-    let q = this.sb().from("products").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("products").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,sku.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.category) q = q.eq("category", params.filters.category);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as Product[]) || [], params);
+    return paginateQuery<Product>(q, params);
   }
   async getProduct(id: string): Promise<Product | null> {
     const { data, error } = await this.sb().from("products").select("*").eq("id", id).maybeSingle();
@@ -356,15 +434,13 @@ export class SupabaseStore implements Store {
 
   // ---- deals ----
   async listDeals(tenantId: string, params?: ListParams): Promise<ListResult<Deal>> {
-    let q = this.sb().from("deals").select("*");
+    let q = this.sb().from("deals").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("title", `%${params.search}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.stage) q = q.eq("stage", params.filters.stage);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as Deal[]) || [], params);
+    return paginateQuery<Deal>(q, params);
   }
   async getDeal(id: string): Promise<Deal | null> {
     const { data, error } = await this.sb().from("deals").select("*").eq("id", id).maybeSingle();
@@ -381,15 +457,13 @@ export class SupabaseStore implements Store {
 
   // ---- offers ----
   async listOffers(tenantId: string, params?: ListParams): Promise<ListResult<Offer>> {
-    let q = this.sb().from("offers").select("*");
+    let q = this.sb().from("offers").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as Offer[]) || [], params);
+    return paginateQuery<Offer>(q, params);
   }
   async getOffer(id: string): Promise<Offer | null> {
     const { data, error } = await this.sb().from("offers").select("*").eq("id", id).maybeSingle();
@@ -517,14 +591,12 @@ export class SupabaseStore implements Store {
 
   // ---- demands ----
   async listDemands(tenantId: string, params?: ListParams): Promise<ListResult<Demand>> {
-    let q = this.sb().from("demands").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("demands").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as Demand[]) || [], params);
+    return paginateQuery<Demand>(q, params);
   }
   async getDemand(id: string): Promise<Demand | null> {
     const { data, error } = await this.sb().from("demands").select("*").eq("id", id).maybeSingle();
@@ -541,13 +613,11 @@ export class SupabaseStore implements Store {
 
   // ---- documents ----
   async listDocuments(tenantId: string, params?: ListParams): Promise<ListResult<SharedDocument>> {
-    let q = this.sb().from("shared_documents").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("shared_documents").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("filename", `%${params.search}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as SharedDocument[]) || [], params);
+    return paginateQuery<SharedDocument>(q, params);
   }
   async getDocument(id: string): Promise<SharedDocument | null> {
     const { data, error } = await this.sb().from("shared_documents").select("*").eq("id", id).maybeSingle();
@@ -564,13 +634,11 @@ export class SupabaseStore implements Store {
 
   // ---- audit ----
   async listAudit(tenantId: string, params?: ListParams): Promise<ListResult<AuditLog>> {
-    let q = this.sb().from("audit_logs").select("*");
+    let q = this.sb().from("audit_logs").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`action.ilike.%${safeSearch(params.search)}%,username.ilike.%${safeSearch(params.search)}%`);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as AuditLog[]) || [], params);
+    return paginateQuery<AuditLog>(q, params);
   }
   async appendAudit(entry: Omit<AuditLog, "id" | "created_at">): Promise<AuditLog> {
     const { data, error } = await this.sb()
@@ -746,13 +814,37 @@ export class SupabaseStore implements Store {
     // top partners by deal value
     const partnerValue = new Map<string, number>();
     deals.forEach((d) => partnerValue.set(d.partner_id, (partnerValue.get(d.partner_id) || 0) + (d.value || 0)));
-    const partnerNames = await Promise.all(
-      Array.from(partnerValue.keys()).slice(0, 5).map(async (pid) => {
-        const p = await this.getPartner(pid);
-        return { id: pid, name: p?.name || pid, deal_value: partnerValue.get(pid) || 0 };
-      })
-    );
-    const topPartners = partnerNames.sort((a, b) => b.deal_value - a.deal_value).slice(0, 5);
+    // P2 / task C-6 Fix 2: previously this made one `getPartner(pid)` query
+    // per top-deal partner (N+1 — up to 5 separate round-trips just to
+    // resolve names for the dashboard widget). Now batched into a single
+    // `IN` query; falls back to the partner id if the row is missing or
+    // the query itself fails (defence-in-depth — the dashboard must not
+    // 500 just because the partners lookup failed).
+    const topPartnerIds = Array.from(partnerValue.keys()).slice(0, 5);
+    let partnerNameMap = new Map<string, string>();
+    if (topPartnerIds.length > 0) {
+      try {
+        const { data: partnerRows, error: partnerErr } = await this.sb()
+          .from("partners")
+          .select("id, name")
+          .in("id", topPartnerIds);
+        if (!partnerErr && partnerRows) {
+          for (const p of partnerRows as Pick<Partner, "id" | "name">[]) {
+            partnerNameMap.set(p.id, p.name || p.id);
+          }
+        }
+      } catch {
+        // Non-fatal — fall back to using the partner id as the name.
+      }
+    }
+    const topPartners = topPartnerIds
+      .map((pid) => ({
+        id: pid,
+        name: partnerNameMap.get(pid) || pid,
+        deal_value: partnerValue.get(pid) || 0,
+      }))
+      .sort((a, b) => b.deal_value - a.deal_value)
+      .slice(0, 5);
 
     // offers last 14 days (best-effort from returned data)
     const offersLast30: { date: string; count: number }[] = [];
@@ -794,15 +886,13 @@ export class SupabaseStore implements Store {
 
   // ---- invoices ----
   async listInvoices(tenantId: string, params?: ListParams): Promise<ListResult<Invoice>> {
-    let q = this.sb().from("invoices").select("*");
+    let q = this.sb().from("invoices").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as Invoice[]) || [], params);
+    return paginateQuery<Invoice>(q, params);
   }
   async getInvoice(id: string): Promise<Invoice | null> {
     const { data, error } = await this.sb().from("invoices").select("*").eq("id", id).maybeSingle();
@@ -819,14 +909,12 @@ export class SupabaseStore implements Store {
 
   // ---- proformas ----
   async listProformas(tenantId: string, params?: ListParams): Promise<ListResult<Proforma>> {
-    let q = this.sb().from("proformas").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("proformas").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as Proforma[]) || [], params);
+    return paginateQuery<Proforma>(q, params);
   }
   async getProforma(id: string): Promise<Proforma | null> {
     const { data, error } = await this.sb().from("proformas").select("*").eq("id", id).maybeSingle();
@@ -843,15 +931,13 @@ export class SupabaseStore implements Store {
 
   // ---- document register ----
   async listDocumentRegister(tenantId: string, params?: ListParams): Promise<ListResult<DocumentRegisterEntry>> {
-    let q = this.sb().from("document_register").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("document_register").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,title.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.type) q = q.eq("type", params.filters.type);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as DocumentRegisterEntry[]) || [], params);
+    return paginateQuery<DocumentRegisterEntry>(q, params);
   }
   async upsertDocumentRegisterEntry(e: Partial<DocumentRegisterEntry> & { id?: string }): Promise<DocumentRegisterEntry> {
     return this.smartUpsert<DocumentRegisterEntry>("document_register", e, e.tenant_id ?? undefined);
@@ -881,13 +967,11 @@ export class SupabaseStore implements Store {
 
   // ---- vault ----
   async listVault(tenantId: string, params?: ListParams): Promise<ListResult<VaultSecret>> {
-    let q = this.sb().from("vault_secrets").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("vault_secrets").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`key.ilike.%${safeSearch(params.search)}%,description.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.category) q = q.eq("category", params.filters.category);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as VaultSecret[]) || [], params);
+    return paginateQuery<VaultSecret>(q, params);
   }
   async upsertVaultSecret(s: Partial<VaultSecret> & { id?: string }): Promise<VaultSecret> {
     return this.smartUpsert<VaultSecret>("vault_secrets", s, s.tenant_id ?? undefined);
@@ -1123,13 +1207,11 @@ export class SupabaseStore implements Store {
 
   // ---- mail queue ----
   async listMailQueue(tenantId: string, params?: ListParams): Promise<ListResult<MailQueueEntry>> {
-    let q = this.sb().from("mail_queue").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("mail_queue").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`subject.ilike.%${safeSearch(params.search)}%,to_email.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as MailQueueEntry[]) || [], params);
+    return paginateQuery<MailQueueEntry>(q, params);
   }
   async upsertMailQueueEntry(m: Partial<MailQueueEntry> & { id?: string }): Promise<MailQueueEntry> {
     return this.smartUpsert<MailQueueEntry>("mail_queue", m, m.tenant_id ?? undefined);
@@ -1141,14 +1223,12 @@ export class SupabaseStore implements Store {
 
   // ---- all inventory (global view) ----
   async listAllInventory(tenantId: string, params?: ListParams): Promise<ListResult<InventoryMovement>> {
-    let q = this.sb().from("inventory_movements").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("inventory_movements").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`reason.ilike.%${safeSearch(params.search)}%,reference.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.product_id) q = q.eq("product_id", params.filters.product_id);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as InventoryMovement[]) || [], params);
+    return paginateQuery<InventoryMovement>(q, params);
   }
 
   // ---- tenants (multi-tenancy) ----
@@ -1167,6 +1247,61 @@ export class SupabaseStore implements Store {
   }
   async upsertTenant(t: Partial<Tenant> & { id?: string }): Promise<Tenant> {
     return this.smartUpsert<Tenant>("tenants", t, (t as any).tenant_id ?? undefined);
+  }
+  // P3 / task C-8 — atomic tenant status transition. Single SQL UPDATE
+  // with a WHERE clause on the current status — Postgres serialises the
+  // row lock, so two concurrent calls cannot both flip the same row. The
+  // `.in("status", fromStatuses)` filter is the atomic guard: if the row
+  // is no longer in one of the `fromStatuses` (because the other call
+  // already flipped it), this UPDATE matches 0 rows and we return `null`.
+  //
+  // The `.maybeSingle()` (vs `.single()`) is intentional: when 0 rows
+  // match, PostgREST returns an empty array + no error, and `maybeSingle`
+  // returns `null` rather than throwing `PGRK116` like `.single()` would.
+  async atomicTenantStatusTransition(
+    tenantId: string,
+    fromStatuses: string[],
+    toStatus: string,
+    patch?: Partial<Tenant>,
+  ): Promise<Tenant | null> {
+    if (!tenantId) return null;
+    if (!fromStatuses || fromStatuses.length === 0) return null;
+
+    // Build the update payload. Never overwrite audit columns — let the DB
+    // default / trigger handle created_at and (the trigger-updated)
+    // updated_at. We DO set updated_at explicitly here because the
+    // supabase JS client doesn't reliably let triggers fire on `.update()`
+    // without a RETURNING clause — and we need the RETURNING for the
+    // response anyway.
+    const update: Record<string, unknown> = {
+      status: toStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (patch) {
+      const p = this.sanitizePayload({ ...patch }) as Record<string, unknown>;
+      delete p.id;
+      delete p.tenant_id;
+      delete p.created_at;
+      delete p.created_by;
+      // updated_at is already set above — don't let the patch override it
+      // with a stale value.
+      delete p.updated_at;
+      // status is already set above — don't let the patch override the
+      // transition target.
+      delete p.status;
+      Object.assign(update, p);
+    }
+
+    const { data, error } = await this.sb()
+      .from("tenants")
+      .update(update)
+      .eq("id", tenantId)
+      .in("status", fromStatuses)
+      .select("*")
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data as Tenant) || null;
   }
   async deleteTenant(id: string): Promise<void> {
     const { error } = await this.sb().from("tenants").delete().eq("id", id);
@@ -1294,14 +1429,12 @@ export class SupabaseStore implements Store {
 
   // ---- product catalog ----
   async listProductCatalog(tenantId: string, params?: ListParams): Promise<ListResult<ProductCatalogEntry>> {
-    let q = this.sb().from("product_catalog").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("product_catalog").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,hs_code.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.category) q = q.eq("category", params.filters.category);
     if (params?.filters?.active !== undefined) q = q.eq("active", params.filters.active === "true");
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as ProductCatalogEntry[]) || [], params);
+    return paginateQuery<ProductCatalogEntry>(q, params);
   }
   async getProductCatalogEntry(id: string): Promise<ProductCatalogEntry | null> {
     const { data, error } = await this.sb().from("product_catalog").select("*").eq("id", id).maybeSingle();
@@ -1318,15 +1451,13 @@ export class SupabaseStore implements Store {
 
   // ---- supplier offers ----
   async listSupplierOffers(tenantId: string, params?: ListParams): Promise<ListResult<SupplierOffer>> {
-    let q = this.sb().from("supplier_offers").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("supplier_offers").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`offer_number.ilike.%${safeSearch(params.search)}%,packaging.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.product_id) q = q.eq("product_id", params.filters.product_id);
     if (params?.filters?.supplier_id) q = q.eq("supplier_id", params.filters.supplier_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as SupplierOffer[]) || [], params);
+    return paginateQuery<SupplierOffer>(q, params);
   }
   async getSupplierOffer(id: string): Promise<SupplierOffer | null> {
     const { data, error } = await this.sb().from("supplier_offers").select("*").eq("id", id).maybeSingle();
@@ -1343,15 +1474,13 @@ export class SupabaseStore implements Store {
 
   // ---- trade calculations ----
   async listTradeCalculations(tenantId: string, params?: ListParams): Promise<ListResult<TradeCalculation>> {
-    let q = this.sb().from("trade_calculations").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("trade_calculations").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("name", `%${params.search}%`);
     if (params?.filters?.product_id) q = q.eq("product_id", params.filters.product_id);
     if (params?.filters?.supplier_id) q = q.eq("supplier_id", params.filters.supplier_id);
     if (params?.filters?.buyer_id) q = q.eq("buyer_id", params.filters.buyer_id);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as TradeCalculation[]) || [], params);
+    return paginateQuery<TradeCalculation>(q, params);
   }
   async getTradeCalculation(id: string): Promise<TradeCalculation | null> {
     const { data, error } = await this.sb().from("trade_calculations").select("*").eq("id", id).maybeSingle();
@@ -1726,13 +1855,11 @@ export class SupabaseStore implements Store {
 
   // ---- KYC submissions ----
   async listKycSubmissions(tenantId: string, params?: ListParams): Promise<ListResult<KycSubmission>> {
-    let q = this.sb().from("kyc_submissions").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("kyc_submissions").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`legal_name.ilike.%${safeSearch(params.search)}%,trade_name.ilike.%${safeSearch(params.search)}%,contact_email.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as KycSubmission[]) || [], params);
+    return paginateQuery<KycSubmission>(q, params);
   }
   async getKycSubmission(id: string): Promise<KycSubmission | null> {
     const { data, error } = await this.sb().from("kyc_submissions").select("*").eq("id", id).maybeSingle();
@@ -1851,14 +1978,12 @@ export class SupabaseStore implements Store {
 
   // ---- portal RFQs ----
   async listPortalRfqs(tenantId: string, params?: ListParams): Promise<ListResult<PortalRfq>> {
-    let q = this.sb().from("portal_rfqs").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("portal_rfqs").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,product_name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as PortalRfq[]) || [], params);
+    return paginateQuery<PortalRfq>(q, params);
   }
   async listPortalRfqsByPartner(partnerId: string): Promise<PortalRfq[]> {
     const { data, error } = await this.sb().from("portal_rfqs").select("*").eq("partner_id", partnerId).order("created_at", { ascending: false });
@@ -1972,12 +2097,10 @@ export class SupabaseStore implements Store {
 
   // ---- commission agents ----
   async listCommissionAgents(tenantId: string, params?: ListParams): Promise<ListResult<CommissionAgent>> {
-    let q = this.sb().from("commission_agents").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("commission_agents").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("partner_id", `%${params.search}%`);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as CommissionAgent[]) || [], params);
+    return paginateQuery<CommissionAgent>(q, params);
   }
   async getCommissionAgent(id: string): Promise<CommissionAgent | null> {
     const { data, error } = await this.sb().from("commission_agents").select("*").eq("id", id).maybeSingle();
@@ -1999,12 +2122,10 @@ export class SupabaseStore implements Store {
 
   // ---- deal commissions ----
   async listDealCommissions(tenantId: string, params?: ListParams): Promise<ListResult<DealCommission>> {
-    let q = this.sb().from("deal_commissions").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("deal_commissions").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("deal_id", `%${params.search}%`);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as DealCommission[]) || [], params);
+    return paginateQuery<DealCommission>(q, params);
   }
   async listDealCommissionsByDeal(dealId: string): Promise<DealCommission[]> {
     const { data, error } = await this.sb().from("deal_commissions").select("*").eq("deal_id", dealId).order("created_at", { ascending: false });
@@ -2076,12 +2197,10 @@ export class SupabaseStore implements Store {
 
   // ---- commission payouts ----
   async listCommissionPayouts(tenantId: string, params?: ListParams): Promise<ListResult<CommissionPayout>> {
-    let q = this.sb().from("commission_payouts").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("commission_payouts").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("agent_id", `%${params.search}%`);
     q = q.order("created_at", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as CommissionPayout[]) || [], params);
+    return paginateQuery<CommissionPayout>(q, params);
   }
   async getCommissionPayout(id: string): Promise<CommissionPayout | null> {
     const { data, error } = await this.sb().from("commission_payouts").select("*").eq("id", id).maybeSingle();
@@ -2220,14 +2339,12 @@ export class SupabaseStore implements Store {
 
   // ─── ERP Accounts ────────────────────────────────────────────────────────
   async listErpAccounts(tenantId: string, params?: ListParams): Promise<ListResult<ErpAccount>> {
-    let q = this.sb().from("erp_accounts").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("erp_accounts").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`code.ilike.%${safeSearch(params.search)}%,name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.account_type) q = q.eq("account_type", params.filters.account_type);
     if (params?.filters?.is_active !== undefined) q = q.eq("is_active", params.filters.is_active);
     q = q.order("code", { ascending: true });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as ErpAccount[]) || [], params);
+    return paginateQuery<ErpAccount>(q, params);
   }
 
   async getErpAccount(id: string): Promise<ErpAccount | null> {
@@ -2251,14 +2368,12 @@ export class SupabaseStore implements Store {
 
   // ─── Fiscal Periods ──────────────────────────────────────────────────────
   async listFiscalPeriods(tenantId: string, params?: ListParams): Promise<ListResult<FiscalPeriod>> {
-    let q = this.sb().from("fiscal_periods").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("fiscal_periods").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.ilike("name", `%${params.search}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.fiscal_year) q = q.eq("fiscal_year", params.filters.fiscal_year);
     q = q.order("start_date", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as FiscalPeriod[]) || [], params);
+    return paginateQuery<FiscalPeriod>(q, params);
   }
 
   async getFiscalPeriod(id: string): Promise<FiscalPeriod | null> {
@@ -2284,16 +2399,18 @@ export class SupabaseStore implements Store {
 
   // ─── Journal Entries ─────────────────────────────────────────────────────
   async listErpJournalEntries(tenantId: string, params?: ListParams): Promise<ListResult<ErpJournalEntry>> {
-    let q = this.sb().from("erp_journal_entries").select("*").eq("tenant_id", tenantId);
+    // P2 / task C-6 Fix 1: push pagination to the DB (was: fetch ALL entries
+    // then slice in memory + fetch lines for every entry — O(N×M) on every
+    // call). Now we fetch only the page slice, then batch-fetch lines for
+    // just those entry ids.
+    let q = this.sb().from("erp_journal_entries").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`entry_number.ilike.%${safeSearch(params.search)}%,description.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.reference_type) q = q.eq("reference_type", params.filters.reference_type);
     if (params?.filters?.reference_id) q = q.eq("reference_id", params.filters.reference_id);
     q = q.order("date", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    const entries = (data as ErpJournalEntry[]) || [];
-    // Attach lines for each entry
+    const { items: entries, total } = await paginateQuery<ErpJournalEntry>(q, params);
+    // Attach lines for each entry (batched — single IN query for the whole page)
     if (entries.length > 0) {
       const entryIds = entries.map(e => e.id);
       const { data: linesData, error: linesError } = await this.sb()
@@ -2313,7 +2430,7 @@ export class SupabaseStore implements Store {
         e.lines = linesByEntry.get(e.id) || [];
       }
     }
-    return paginate(entries, params);
+    return { items: entries, total };
   }
 
   async getErpJournalEntry(id: string): Promise<ErpJournalEntry | null> {
@@ -2597,13 +2714,11 @@ export class SupabaseStore implements Store {
 
   // ─── Cost Centers ────────────────────────────────────────────────────────
   async listErpCostCenters(tenantId: string, params?: ListParams): Promise<ListResult<ErpCostCenter>> {
-    let q = this.sb().from("erp_cost_centers").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("erp_cost_centers").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (params?.search) q = q.or(`code.ilike.%${safeSearch(params.search)}%,name.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.is_active !== undefined) q = q.eq("is_active", params.filters.is_active);
     q = q.order("code", { ascending: true });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as ErpCostCenter[]) || [], params);
+    return paginateQuery<ErpCostCenter>(q, params);
   }
 
   async upsertErpCostCenter(c: Partial<ErpCostCenter> & { id?: string }): Promise<ErpCostCenter> {
@@ -2637,14 +2752,12 @@ export class SupabaseStore implements Store {
 
   // ─── Bank Transactions ──────────────────────────────────────────────────
   async listErpBankTransactions(tenantId: string, bankAccountId?: string, params?: ListParams): Promise<ListResult<ErpBankTransaction>> {
-    let q = this.sb().from("erp_bank_transactions").select("*").eq("tenant_id", tenantId);
+    let q = this.sb().from("erp_bank_transactions").select("*", { count: "exact" }).eq("tenant_id", tenantId);
     if (bankAccountId) q = q.eq("bank_account_id", bankAccountId);
     if (params?.search) q = q.or(`description.ilike.%${safeSearch(params.search)}%,reference.ilike.%${safeSearch(params.search)}%,counterparty.ilike.%${safeSearch(params.search)}%`);
     if (params?.filters?.is_reconciled !== undefined) q = q.eq("is_reconciled", params.filters.is_reconciled);
     q = q.order("date", { ascending: false });
-    const { data, error } = await q;
-    if (error) throw error;
-    return paginate((data as ErpBankTransaction[]) || [], params);
+    return paginateQuery<ErpBankTransaction>(q, params);
   }
 
   async upsertErpBankTransaction(t: Partial<ErpBankTransaction> & { id?: string }): Promise<ErpBankTransaction> {

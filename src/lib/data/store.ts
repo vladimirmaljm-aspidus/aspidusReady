@@ -185,6 +185,31 @@ export interface Store {
   getTenant(id: string): Promise<Tenant | null>;
   upsertTenant(t: Partial<Tenant> & { id?: string }): Promise<Tenant>;
   deleteTenant(id: string): Promise<void>;
+  // P3 / task C-8 — atomic tenant status transition. The previous
+  // suspend/cancel path in `PUT /api/tenants/[id]` did a non-atomic
+  // read-modify-write (fetch current tenant → check status → upsert with
+  // new status). Two concurrent PUT requests could both observe the same
+  // `oldStatus`, both compute `nowSuspending=true`, and both call
+  // upsertTenant — leading to a race on the status field and a double
+  // invocation of the session-kill cascade.
+  //
+  // `atomicTenantStatusTransition` performs the status change as a single
+  // SQL UPDATE … WHERE id=? AND status IN (fromStatuses), which Postgres
+  // serialises — only one of two concurrent calls actually flips the row,
+  // the other gets `null` back and skips the cascade. The optional
+  // `patch` is merged into the same UPDATE so callers can change other
+  // fields (e.g. updated_at) atomically with the status flip.
+  //
+  // Returns the updated tenant, or `null` if the tenant was not in any of
+  // `fromStatuses` (or does not exist). Stores without a backing SQL
+  // backend (mock, prisma) implement an equivalent check + update inside
+  // their own data layer so the atomicity guarantee holds there too.
+  atomicTenantStatusTransition(
+    tenantId: string,
+    fromStatuses: string[],
+    toStatus: string,
+    patch?: Partial<Tenant>,
+  ): Promise<Tenant | null>;
   // P0 / task C-1 — safe tenant deletion. The live DB has very few FK
   // CASCADE constraints (migration 021 comment), so a naive deleteTenant
   // orphans every dependent row. `countTenantDependencies` returns a

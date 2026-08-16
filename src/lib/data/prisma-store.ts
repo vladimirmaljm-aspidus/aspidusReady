@@ -1442,6 +1442,34 @@ export class PrismaStore implements Store {
   async deleteTenant(id: string): Promise<void> {
     await db.tenant.delete({ where: { id } });
   }
+  // P3 / task C-8 — atomic tenant status transition. Prisma's
+  // `updateMany({ where: { id, status: { in: fromStatuses } }, data })`
+  // returns `{ count }` — count=1 means the transition happened, count=0
+  // means the tenant was not in any of `fromStatuses` (or doesn't exist).
+  // We then re-fetch the row to return the full updated object. The
+  // updateMany + the row lock Prisma acquires make this atomic w.r.t.
+  // concurrent calls — only one of two concurrent calls will get count=1.
+  async atomicTenantStatusTransition(
+    tenantId: string,
+    fromStatuses: string[],
+    toStatus: string,
+    patch?: Partial<Tenant>,
+  ): Promise<Tenant | null> {
+    if (!tenantId || !fromStatuses || fromStatuses.length === 0) return null;
+    const data: any = { status: toStatus, updated_at: new Date() };
+    if (patch) {
+      const { id: _id, tenant_id: _tid, created_at: _ca, updated_at: _ua, status: _s, ...rest } = patch as any;
+      void _id; void _tid; void _ca; void _ua; void _s;
+      Object.assign(data, rest);
+    }
+    const result = await db.tenant.updateMany({
+      where: { id: tenantId, status: { in: fromStatuses } },
+      data,
+    });
+    if (result.count === 0) return null;
+    const r = await db.tenant.findUnique({ where: { id: tenantId } });
+    return r ? { ...r, created_at: dateToISOOrNow(r.created_at), updated_at: dateToISOOrNow(r.updated_at) } : null;
+  }
   // P0 / task C-1 — prisma-store stubs. The prisma schema's relational
   // `User` / `Tenant` models already cascade via Prisma's `onDelete:
   // Cascade` rules (set in schema.prisma), so the app-layer cascade is a

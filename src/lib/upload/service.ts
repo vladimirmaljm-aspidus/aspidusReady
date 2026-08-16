@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { MAX_UPLOAD_SIZE, MAX_KYC_UPLOAD_SIZE } from "@/lib/upload/constants";
 
 export interface UploadResult { url: string; path: string; }
 
@@ -25,8 +26,33 @@ const MIME_TO_EXT: Record<string, string> = {
   "text/csv": "csv",
 };
 
-export async function uploadFile(bucket: string, path: string, buffer: Buffer, contentType: string, size: number): Promise<UploadResult> {
-  if (size > 10 * 1024 * 1024) throw new Error("File too large. Max 10MB.");
+/**
+ * Upload a file to a Supabase Storage bucket.
+ *
+ * Size limit: defaults to `MAX_UPLOAD_SIZE` (25 MB) — the shared constant
+ * from `@/lib/upload/constants`. Callers that need a stricter limit
+ * (e.g. `uploadKycDocument` passes `MAX_KYC_UPLOAD_SIZE` = 10 MB) can
+ * pass `maxSize` explicitly. This closes audit P2-2: previously
+ * `uploadFile` had a hard-coded 10 MB guard that conflicted with the
+ * 25 MB advertised by `documents/upload` and `portal/upload` routes,
+ * so a 20 MB file passed the route check and then failed inside
+ * `uploadFile` with a confusing 500.
+ */
+export async function uploadFile(
+  bucket: string,
+  path: string,
+  buffer: Buffer,
+  contentType: string,
+  size: number,
+  maxSize: number = MAX_UPLOAD_SIZE,
+): Promise<UploadResult> {
+  if (size > maxSize) {
+    // Compute a human-readable label for the error message. We round to
+    // the nearest MB so the message matches what the route handler
+    // advertises (e.g. "Max 25MB" / "Max 10MB").
+    const mb = Math.round(maxSize / (1024 * 1024));
+    throw new Error(`File too large. Max ${mb}MB.`);
+  }
   if (!isSupabaseConfigured()) {
     const base64 = buffer.toString("base64");
     const dataUrl = `data:${contentType};base64,${base64}`;
@@ -45,6 +71,10 @@ export async function uploadFile(bucket: string, path: string, buffer: Buffer, c
 /**
  * Upload a KYC document.
  *
+ * Enforces the stricter `MAX_KYC_UPLOAD_SIZE` (10 MB) — KYC docs are
+ * typically small scans/photos and don't need the headroom of the
+ * general 25 MB upload limit.
+ *
  * `contentType` MUST be the server-verified MIME type (i.e. the
  * `detectedType` returned by `verifyKycUpload`), NOT the raw client-supplied
  * `file.type`. Callers already run the magic-bytes check before calling this,
@@ -55,7 +85,7 @@ export async function uploadKycDocument(submissionId: string, fileName: string, 
   const detectedMime = contentType;
   const ext = (detectedMime && MIME_TO_EXT[detectedMime]) || "bin";
   const path = `${submissionId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  return uploadFile("kyc-documents", path, buffer, contentType, size);
+  return uploadFile("kyc-documents", path, buffer, contentType, size, MAX_KYC_UPLOAD_SIZE);
 }
 
 /**

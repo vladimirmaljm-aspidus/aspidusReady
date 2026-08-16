@@ -407,7 +407,6 @@ export async function audit(
   entityId?: string,
   details?: Record<string, unknown>
 ): Promise<void> {
-  try {
     await store.appendAudit({
       user_id: user.id,
       username: user.username,

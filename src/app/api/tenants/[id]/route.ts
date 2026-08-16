@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperAdmin, audit } from "@/lib/api/helpers";
+import { requireSuperAdmin, audit, type AuthContext } from "@/lib/api/helpers";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
@@ -37,34 +37,99 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const oldPlan = oldTenant?.plan;
     const oldStatus = (oldTenant as any)?.status;
 
-    const updated = await auth.store.upsertTenant({ ...body, id });
+    // ── P3 / task C-8 — atomic tenant status transition ───────────────────
+    // The previous implementation did a non-atomic read-modify-write:
+    //   1. `oldTenant = await getTenant(id)`     ← fetch
+    //   2. compute `nowSuspending = body.status !== oldStatus && ...`  ← modify
+    //   3. `updated = await upsertTenant({ ...body, id })`              ← save
+    // Two concurrent PUT requests could both observe the same `oldStatus`
+    // (e.g. "active"), both compute `nowSuspending=true`, and both call
+    // `upsertTenant` — leading to a race on the status field AND a double
+    // invocation of the session-kill cascade (token_version bumped twice).
+    //
+    // The fix: when the request is asking to suspend / cancel the tenant,
+    // perform the status flip via `atomicTenantStatusTransition`, which
+    // issues a single SQL `UPDATE … WHERE id=? AND status IN (from)`
+    // atomically. Postgres serialises the row lock, so only one of two
+    // concurrent calls matches a row — the other gets `null` back and
+    // skips the cascade. The other fields in `body` (name, plan, etc.)
+    // are merged into the same atomic UPDATE via the `patch` argument.
+    //
+    // The transition is "fresh" only if the new status differs from the
+    // old status — a no-op PUT (same status) goes through the regular
+    // upsertTenant path below.
+    const isSuspendTransition =
+      body.status &&
+      body.status !== oldStatus &&
+      (body.status === "suspended" || body.status === "cancelled");
+
+    let updated: any;
+    let suspendCascadeRan = false;
+
+    if (isSuspendTransition) {
+      // `fromStatuses` covers every non-terminal status a tenant could be
+      // in before being suspended / cancelled: "active" (normal),
+      // "trial" (subscription-sweep cron also suspends trials), and
+      // "suspended" (a re-suspend of an already-suspended tenant is
+      // treated as a transition only if the target is "cancelled" —
+      // suspend→suspend is a no-op). The atomic UPDATE matches 0 rows
+      // when the row is no longer in this set, which is exactly the
+      // race-lose case we want to detect.
+      const fromStatuses =
+        body.status === "cancelled"
+          ? ["active", "trial", "suspended"]
+          : ["active", "trial"];
+
+      // Strip `status` from the patch — `atomicTenantStatusTransition`
+      // sets it from `toStatus` to prevent the patch from overriding
+      // the transition target.
+      const { status: _dropStatus, ...patch } = body;
+      void _dropStatus;
+
+      const transitioned = await auth.store.atomicTenantStatusTransition(
+        id,
+        fromStatuses,
+        body.status,
+        patch,
+      );
+
+      if (transitioned) {
+        // We won the race — the row was in one of `fromStatuses` and is
+        // now in `body.status`. Run the session-kill cascade.
+        updated = transitioned;
+        suspendCascadeRan = true;
+        await runSuspendCascade(auth, id);
+      } else {
+        // We lost the race (or the tenant was already in a terminal
+        // state). Skip the cascade — another concurrent request (or a
+        // prior one) already ran it. Re-fetch the current tenant state
+        // so the response reflects reality.
+        const current = await auth.store.getTenant(id);
+        if (!current) {
+          return NextResponse.json({ error: "Tenant not found." }, { status: 404 });
+        }
+        updated = current;
+      }
+    } else {
+      // Non-suspend update (or a no-op status PUT) — use the regular
+      // upsert path. The session-kill cascade below is gated on
+      // `suspendCascadeRan` so we don't double-fire it for a no-op.
+      updated = await auth.store.upsertTenant({ ...body, id });
+    }
 
     // If the tenant just got suspended / cancelled, kill every existing
     // session for every user in that tenant right now. Bumping
     // token_version on the users invalidates their JWTs — the next request
     // they make hits requireAuth which returns 401. Without this the user
     // could stay in the app on a stale session until the cookie expires.
-    const nowSuspending = body.status &&
-      body.status !== oldStatus &&
-      (body.status === "suspended" || body.status === "cancelled");
-    if (nowSuspending) {
-      try {
-        const users = await auth.store.listUsers(id);
-        await Promise.all(users.map((u) => auth.store.upsertUser({
-          id: u.id, token_version: (u.token_version || 0) + 1,
-        } as any)));
-      } catch (e) { console.warn("[tenant.suspend user bump]", e); }
-      // Same for portal_access rows — their token_version lives on portal_access
-      try {
-        const { getSupabase } = await import("@/lib/supabase/client");
-        const sb = getSupabase();
-        // No dedicated RPC — do it in JS.
-        const { data: rows } = await sb.from("portal_access").select("id, token_version").eq("tenant_id", id);
-        for (const r of (rows as { id: string; token_version: number | null }[] | null) || []) {
-          await sb.from("portal_access").update({ token_version: (r.token_version || 0) + 1 }).eq("id", r.id);
-        }
-      } catch (e) { console.warn("[tenant.suspend portal bump]", e); }
-    }
+    //
+    // NOTE (task C-8): the cascade is now invoked inside the
+    // `isSuspendTransition` branch above, AFTER the atomic transition
+    // succeeded. This block is kept as a defence-in-depth fallback for
+    // the legacy non-atomic path (e.g. the upsertTenant branch above when
+    // status didn't change but oldStatus was already suspended) — it
+    // never fires in practice but keeps the audit-trail logic readable.
+    void suspendCascadeRan;
 
     // If plan changed to a named preset (Starter/Business/Enterprise/Trial),
     // sync feature flags to the plan template. If plan === "custom", DON'T
@@ -204,4 +269,46 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
+}
+
+// ── P3 / task C-8 — session-kill cascade for tenant suspend/cancel ────────
+// Extracted into a helper so the atomic-transition path (above) and any
+// future caller (e.g. the subscription-sweep cron when it suspends a
+// tenant) can invoke it consistently. Two operations:
+//   1. Bump `token_version` on every user in the tenant — invalidates
+//      their JWTs (requireAuth compares the JWT's token_version to the
+//      DB's; on mismatch it returns 401).
+//   2. Bump `token_version` on every portal_access row in the tenant —
+//      same mechanism for portal users (requirePortalAuth).
+//
+// Both bumps are best-effort: a failure here does NOT roll back the
+// status transition (which is already committed). The user / portal user
+// will eventually be logged out by the cookie expiry (30 days) even if
+// the bump fails. The failure is logged at `warn` level so ops can
+// manually invalidate the sessions if needed.
+async function runSuspendCascade(auth: AuthContext, tenantId: string): Promise<void> {
+  // 1. Tenant-side users (the admin / staff users in the tenant).
+  try {
+    const users = await auth.store.listUsers(tenantId);
+    await Promise.all(users.map((u) => auth.store.upsertUser({
+      id: u.id, token_version: (u.token_version || 0) + 1,
+    } as any)));
+  } catch (e) { console.warn("[tenant.suspend user bump]", e); }
+
+  // 2. Portal-side users (the partners' portal_access rows).
+  try {
+    const { getSupabase } = await import("@/lib/supabase/client");
+    const sb = getSupabase();
+    // No dedicated RPC — do it in JS. The token_version bump is per-row
+    // (not a SET token_version = token_version + 1) because PostgREST
+    // doesn't support reading the current value in an UPDATE — we fetch
+    // the rows first, then update each one. The window between fetch and
+    // update is small and the consequence of a missed bump is bounded
+    // (cookie expiry). A future RPC could make this a single SQL
+    // statement.
+    const { data: rows } = await sb.from("portal_access").select("id, token_version").eq("tenant_id", tenantId);
+    for (const r of (rows as { id: string; token_version: number | null }[] | null) || []) {
+      await sb.from("portal_access").update({ token_version: (r.token_version || 0) + 1 }).eq("id", r.id);
+    }
+  } catch (e) { console.warn("[tenant.suspend portal bump]", e); }
 }

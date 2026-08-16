@@ -773,6 +773,26 @@ export class MockStore implements Store {
     };
     mock.tenants.push(newT); return newT;
   }
+  // P3 / task C-8 — atomic tenant status transition. The mock store is
+  // single-threaded (no real concurrency), so the atomicity guarantee
+  // trivially holds: we check + update in the same synchronous block.
+  // The `fromStatuses.includes(current.status)` gate mirrors the SQL
+  // `.in("status", fromStatuses)` filter so the mock behaves identically
+  // to the supabase store for tests / preview.
+  async atomicTenantStatusTransition(
+    tenantId: string,
+    fromStatuses: string[],
+    toStatus: string,
+    patch?: Partial<Tenant>,
+  ): Promise<Tenant | null> {
+    const existing = mock.tenants.find((t) => t.id === tenantId);
+    if (!existing) return null;
+    if (!fromStatuses.includes(existing.status)) return null;
+    const { id: _id, tenant_id: _tid, created_at: _ca, updated_at: _ua, status: _s, ...rest } = patch ?? ({} as Partial<Tenant>);
+    void _id; void _tid; void _ca; void _ua; void _s;
+    Object.assign(existing, rest, { status: toStatus, updated_at: new Date().toISOString() });
+    return existing;
+  }
   async deleteTenant(id: string): Promise<void> {
     const idx = mock.tenants.findIndex((t) => t.id === id); if (idx >= 0) mock.tenants.splice(idx, 1);
   }

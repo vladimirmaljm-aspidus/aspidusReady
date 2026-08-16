@@ -27,6 +27,16 @@ export const dynamic = "force-dynamic";
  * network path, and service_role key are all working. We don't use a raw
  * `SELECT 1` because PostgREST doesn't expose arbitrary SQL — the table
  * query is the cheapest liveness check available via the JS client.
+ *
+ * P3 / task C-8 — Sentry status. The response now includes a `sentry`
+ * field reporting whether error monitoring is enabled. This lets uptime
+ * monitors / ops dashboards alert on a misconfigured production deploy
+ * (e.g. someone forgot to set SENTRY_DSN on Render). The field does NOT
+ * affect the HTTP status — a missing Sentry DSN is a degraded
+ * observability state, not a service outage, so we still return 200 if
+ * the DB is reachable. The startup-time warning in
+ * `sentry.server.config.ts` is the louder signal; this field is the
+ * machine-readable counterpart.
  */
 export async function GET() {
   // 1) Fail fast if env vars aren't set at all (e.g. preview deploy missing
@@ -37,6 +47,9 @@ export async function GET() {
         status: "degraded",
         db: "not_configured",
         error: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set",
+        // Still report Sentry status even when the DB is down — ops needs
+        // to know both independently.
+        sentry: getSentryStatus(),
       },
       { status: 503, headers: { "Cache-Control": "no-store" } }
     );
@@ -57,13 +70,18 @@ export async function GET() {
           status: "degraded",
           db: "error",
           error: error.message,
+          sentry: getSentryStatus(),
         },
         { status: 503, headers: { "Cache-Control": "no-store" } }
       );
     }
 
     return NextResponse.json(
-      { status: "ok", db: "connected" },
+      {
+        status: "ok",
+        db: "connected",
+        sentry: getSentryStatus(),
+      },
       { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
@@ -75,8 +93,35 @@ export async function GET() {
         status: "degraded",
         db: "error",
         error: message,
+        sentry: getSentryStatus(),
       },
       { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
+}
+
+/**
+ * Returns the current Sentry configuration status for the health response.
+ *
+ * - `"enabled"` — both server (`SENTRY_DSN`) and client
+ *   (`NEXT_PUBLIC_SENTRY_DSN`) DSNs are set in the environment. Sentry
+ *   will report both server-side and client-side errors.
+ * - `"server_only"` — only the server DSN is set. Client-side errors are
+ *   NOT being reported (the browser has no DSN to send to).
+ * - `"client_only"` — only the client DSN is set. Server-side errors are
+ *   NOT being reported.
+ * - `"disabled"` — neither DSN is set. No error monitoring at all.
+ *
+ * Note: this only reports whether the ENV VARS are set. The Sentry SDK
+ * itself may still be disabled in development (`enabled: process.env.NODE_ENV
+ * === "production"` in the config files). The health field is intended for
+ * production ops monitoring, so we don't surface the dev-mode toggle here.
+ */
+function getSentryStatus(): "enabled" | "server_only" | "client_only" | "disabled" {
+  const serverDsn = !!process.env.SENTRY_DSN;
+  const clientDsn = !!process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (serverDsn && clientDsn) return "enabled";
+  if (serverDsn) return "server_only";
+  if (clientDsn) return "client_only";
+  return "disabled";
 }

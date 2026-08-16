@@ -62,6 +62,7 @@ import { toast } from "sonner";
 import { useT } from "@/lib/i18n/store";
 import { fmtBytes, fmtDate, fmtDateTime } from "@/lib/utils/format";
 import { COUNTRIES } from "@/lib/data/reference";
+import { MAX_KYC_UPLOAD_SIZE, KYC_ALLOWED_MIME_TYPES } from "@/lib/upload/constants";
 import type {
   KycSubmission,
   KycDocument,
@@ -1652,12 +1653,14 @@ function StepDocuments({
   async function handleFileSelect(dt: DocTypeDef, file: File | null) {
     if (!file) return;
     // Client-side sanity checks before the round-trip so the user gets
-    // instant feedback instead of a 400 from the server.
-    if (file.size > 10 * 1024 * 1024) {
+    // instant feedback instead of a 400 from the server. Limits come
+    // from the shared `@/lib/upload/constants` module (audit P2-2 / C-7)
+    // so they stay in sync with the server-side route guard.
+    if (file.size > MAX_KYC_UPLOAD_SIZE) {
       toast.error(t("portal-kyc-toast-file-too-large"));
       return;
     }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+    const allowed = KYC_ALLOWED_MIME_TYPES;
     if (file.type && !allowed.includes(file.type)) {
       toast.error(t("portal-kyc-toast-file-type"));
       return;

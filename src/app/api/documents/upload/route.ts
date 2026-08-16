@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
 import { uploadFile } from "@/lib/upload/service";
 import { verifyFileContent } from "@/lib/upload/verify-file";
+import { MAX_UPLOAD_SIZE, ALLOWED_MIME_TYPES } from "@/lib/upload/constants";
 
 export const runtime = "nodejs";
 
@@ -20,21 +21,12 @@ export const runtime = "nodejs";
  * This is a SEPARATE endpoint so the existing metadata-only `POST /api/documents`
  * keeps working for callers that depend on it (e.g. automation / migrations).
  *
- * NOTE on size limit: the route advertises 25 MB (mirroring the portal route),
- * but `uploadFile` enforces its own 10 MB guard. Files between 10 MB and 25 MB
- * will be rejected by `uploadFile` — that mismatch is a separate cleanup item
- * tracked elsewhere; we mirror the portal route's contract here for parity.
+ * Size limit + allowed MIME types come from the shared `@/lib/upload/constants`
+ * module (audit P2-2 / task C-7) so they stay in sync with the portal upload
+ * route and the `uploadFile()` guard inside `service.ts`.
  */
-const ALLOWED_TYPES = [
-  "application/pdf",
-  "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "text/plain", "text/csv",
-];
-const MAX_SIZE = 25 * 1024 * 1024;
+const ALLOWED_TYPES = ALLOWED_MIME_TYPES;
+const MAX_SIZE = MAX_UPLOAD_SIZE;
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);

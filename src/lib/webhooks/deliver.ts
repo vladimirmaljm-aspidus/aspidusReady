@@ -12,6 +12,16 @@
 // Retry policy: up to 5 attempts with exponential-ish backoff (60s, 2m, 5m,
 // 15m, 30m). Failed deliveries are retried by the cron endpoint; the
 // `next_attempt_at` column gates the next retry.
+//
+// PII SANITIZATION (P3 / task C-8): `triggerWebhooks()` calls
+// `sanitizeWebhookPayload()` on the `data` field BEFORE persisting the
+// delivery row and BEFORE signing + sending the HTTP POST. This strips
+// sensitive fields (passwords, tokens, secrets, payment data) so they
+// never leave the platform. The signed body therefore contains the
+// sanitized payload — receivers cannot recover the stripped fields even
+// if they have the webhook secret (the secret only verifies integrity, it
+// doesn't decrypt anything). See `sanitizeWebhookPayload` doc for the
+// exact field list.
 
 import { createHmac, timingSafeEqual } from "crypto";
 import type { Store } from "@/lib/data/store";
@@ -31,6 +41,119 @@ const BACKOFF_MS = [
 export const MAX_WEBHOOK_ATTEMPTS = 5;
 export const WEBHOOK_HTTP_TIMEOUT_MS = 10_000;
 export const WEBHOOK_USER_AGENT = "VELOS-Webhooks/1.0";
+
+// ── P3 / task C-8 — PII sanitization for webhook payloads ────────────────
+// Webhook `data` payloads include full entity data, which may contain PII
+// (customer names, emails, prices, internal IDs, etc.) or sensitive
+// fields (passwords, tokens, secrets, payment data). Without sanitization,
+// this data is sent to external URLs — a PII leak if the webhook endpoint
+// is misconfigured (e.g. logged at the receiver, or pointed at a
+// third-party integration).
+//
+// The list below is intentionally broad — we'd rather over-strip
+// (breaking a webhook that legitimately needed a now-stripped field, which
+// the receiver can fix by using a different field name) than under-strip
+// (leaking PII). Substring matching (`.includes`) catches compound names
+// like `portal_token`, `smtp_password`, `private_key_pem`, etc. without
+// having to enumerate every variant.
+//
+// ADDING A NEW SENSITIVE FIELD: append the lowercase substring to the
+// array. Do NOT add a field name that is a common business term — e.g.
+// "name" or "email" — those are NOT stripped because they ARE the
+// payload's purpose (the receiver signed up to know that offer X was
+// sent to customer Y).
+const PII_FIELD_MARKERS = [
+  // Authentication / secrets
+  "password",
+  "password_hash",
+  "passwd",
+  "pwd",
+  "token",
+  "secret",
+  "api_key",
+  "apikey",
+  "access_key",
+  "private_key",
+  // Platform-internal auth fields
+  "portal_token",
+  "session_token",
+  "refresh_token",
+  "bearer",
+  "authorization",
+  // Email / SMTP infrastructure
+  "smtp_password",
+  "smtp_pass",
+  "mail_password",
+  // Payment / financial secrets (NOT prices — those are business data)
+  "credit_card",
+  "card_number",
+  "cvv",
+  "cvc",
+  "iban_secret",
+  // Vault / encryption keys
+  "encryption_key",
+  "master_key",
+  "vault_key",
+  // Personal identity numbers (country-specific — broad on purpose)
+  "ssn",
+  "national_id",
+  "tax_id_secret",
+];
+
+/**
+ * Returns true if the given field name matches any PII marker (case-
+ * insensitive substring match). Used by `sanitizeWebhookPayload` to decide
+ * whether to strip a field from a webhook payload before sending.
+ *
+ * Exported for tests so the marker list can be asserted against without
+ * having to round-trip through the full sanitiser.
+ */
+export function isPiiField(fieldName: string): boolean {
+  const lower = fieldName.toLowerCase();
+  return PII_FIELD_MARKERS.some((marker) => lower.includes(marker));
+}
+
+/**
+ * Recursively strip PII / secret fields from a webhook payload.
+ *
+ * Behaviour:
+ *   • Top-level + nested object keys are checked against `PII_FIELD_MARKERS`
+ *     (substring match, case-insensitive). Matching keys are dropped
+ *     entirely (their values are NOT sent).
+ *   • Arrays are sanitised element-by-element (each element is passed back
+ *     through this function).
+ *   • Primitive values (string / number / boolean / null) are passed
+ *     through unchanged.
+ *   • The function is pure — it does NOT mutate the input. A shallow copy
+ *     is made at each object level so the caller's `data` reference is
+ *     untouched (the calling route may still need the unsanitised object
+ *     for its own audit log).
+ *
+ * The returned object is what gets JSON-stringified, signed, persisted to
+ * `webhook_deliveries.payload`, and POSTed to the receiver. The signed
+ * body therefore contains the SANITISED payload — receivers cannot
+ * recover the stripped fields even if they have the webhook secret.
+ */
+export function sanitizeWebhookPayload(data: unknown): unknown {
+  if (data === null || data === undefined) return data;
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeWebhookPayload(item));
+  }
+  if (typeof data === "object") {
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      if (isPiiField(key)) {
+        // Strip — do NOT include the field at all (not even `null`, which
+        // would leak the fact that the field exists).
+        continue;
+      }
+      sanitized[key] = sanitizeWebhookPayload(value);
+    }
+    return sanitized;
+  }
+  // Primitive — pass through.
+  return data;
+}
 
 /**
  * Sign a webhook payload string with HMAC-SHA256 using the webhook secret.
@@ -107,7 +230,20 @@ export async function triggerWebhooks(
     entity_id: entityId,
     tenant_id: tenantId,
     timestamp: new Date().toISOString(),
-    data,
+    // P3 / task C-8 — sanitize the payload before sending. This strips
+    // PII / secret fields (passwords, tokens, api keys, payment data)
+    // from the entity data so they never leave the platform. The
+    // sanitiser is pure (does not mutate the caller's `data` reference)
+    // and recursive (handles nested objects + arrays). See
+    // `sanitizeWebhookPayload` doc for the field-marker list.
+    //
+    // The sanitised payload is what gets:
+    //   1. Persisted to `webhook_deliveries.payload` (audit trail)
+    //   2. JSON-stringified and signed with the webhook secret
+    //   3. POSTed to the receiver
+    // So the signed body contains the SANITISED payload — receivers
+    // cannot recover the stripped fields even if they have the secret.
+    data: sanitizeWebhookPayload(data) as Record<string, unknown>,
   };
 
   // Deliver sequentially (low traffic; avoids flooding remote endpoints if a

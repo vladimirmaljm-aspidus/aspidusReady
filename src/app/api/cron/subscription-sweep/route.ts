@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase/client";
 import { authorizeCron } from "@/lib/api/cron-auth";
+import { audit } from "@/lib/api/helpers";
+import { getStore } from "@/lib/data/store";
 
 export const runtime = "nodejs";
 
@@ -13,6 +15,11 @@ export const runtime = "nodejs";
  * header matching the CRON_TOKEN env var (preferred — F-8 security fix),
  * OR `?token=…` URL query (legacy, kept for backward compatibility), OR a
  * valid super_admin session (for manual runs from the browser).
+ *
+ * P2 / task C-6 Fix 4: each successful run appends a `cron.subscription_sweep`
+ * audit log entry so ops can verify the cron is firing and which tenants it
+ * suspended. The entry uses a system-level user (`id="system"`, `username="cron"`,
+ * `tenant_id=null`).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -53,6 +60,23 @@ export async function GET(req: NextRequest) {
       await sb.from("tenants").update({ status: "suspended", updated_at: nowIso }).eq("id", t.id);
       paidSuspended.push(t.id);
     }
+
+    // P2 / task C-6 Fix 4: audit-log the sweep outcome.
+    const store = await getStore();
+    await audit(
+      store,
+      { id: "system", username: "cron", tenant_id: null },
+      req,
+      "cron.subscription_sweep",
+      "system",
+      "cron",
+      {
+        trial_suspended: trialSuspended.length,
+        paid_suspended: paidSuspended.length,
+        trial_suspended_ids: trialSuspended,
+        paid_suspended_ids: paidSuspended,
+      },
+    );
 
     return NextResponse.json({
       ok: true,
