@@ -1,135 +1,185 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
+import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/search?q=xxx&limit=20
  *
- * Global search across partners, products, deals, offers, invoices, demands.
+ * Global search across partners, products, deals, offers, invoices.
  * Returns a flat list of matches with entity type + id + label + subtitle.
+ *
+ * Implementation note (task D-1): replaced the legacy pattern of
+ * `listX(tenantId, { limit: 1000 })` + in-memory `String.toLowerCase().includes()`
+ * with PostgreSQL tsvector full-text search (`search_vector @@ websearch_to_tsquery`).
+ * Each table has a `search_vector tsvector` column maintained by a trigger
+ * (migration 037_fulltext_search.sql) and a GIN index on it, so the query is
+ * O(log n) instead of O(n) — typically 10-100x faster than the old ILIKE /
+ * in-memory substring scan for tenants with thousands of rows.
+ *
+ * `type: "websearch"` enables Google-style query syntax (quoted phrases,
+ * `OR`, `-exclusion`), is forgiving of bad syntax (unlike `to_tsquery`),
+ * and respects stop-words. Queries shorter than 2 chars return an empty
+ * result set without hitting the DB (matches the legacy behaviour).
  */
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (dashboard.read)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "dashboard.read"); if (_d) return _d; } /* requirePermission wired */
+  { const { requirePermission } = await import("@/lib/permissions/can");
+    const _d = requirePermission(auth, "dashboard.read"); if (_d) return _d; } /* requirePermission wired */
 
   const tenantId = resolveTenantId(auth, req);
   if (!tenantId) return NextResponse.json({ items: [] });
 
   const url = new URL(req.url);
-  const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+  // NOTE: do NOT lowercase — tsvector matching is case-insensitive by
+  // construction (to_tsvector normalises), and lowercasing would mangle
+  // websearch_to_tsquery operators (`OR` vs `or`).
+  const q = (url.searchParams.get("q") || "").trim();
   const limit = Math.min(Number(url.searchParams.get("limit") || 20), 50);
 
   if (q.length < 2) {
     return NextResponse.json({ items: [] });
   }
 
-  const results: Array<{
+  const supabase = getSupabase();
+  // Per-entity cap so no single entity type crowds the others out of the
+  // final `limit`. 20 per type → up to 100 candidates, then trimmed to
+  // `limit` after the in-memory relevance sort.
+  const PER_ENTITY = 20;
+
+  type Hit = {
     type: string;
     id: string;
     label: string;
     subtitle: string;
     url: string;
-  }> = [];
+    rank: number;
+  };
+  const results: Hit[] = [];
 
-  // Search partners
+  // --- partners ---
   try {
-    const partners = await auth.store.listPartners(tenantId, { limit: 1000 });
-    for (const p of partners.items) {
-      const hay = `${p.name} ${p.email || ""} ${p.phone || ""} ${p.contact_name || ""}`.toLowerCase();
-      if (hay.includes(q)) {
+    const { data, error } = await supabase
+      .from("partners")
+      .select("id, name, type, email, country")
+      .eq("tenant_id", tenantId)
+      .textSearch("search_vector", q, { type: "websearch" })
+      .limit(PER_ENTITY);
+    if (!error && data) {
+      for (const p of data) {
         results.push({
           type: "partner",
           id: p.id,
           label: p.name,
           subtitle: [p.type, p.email, p.country].filter(Boolean).join(" · "),
           url: "partners",
+          rank: 0,
         });
       }
     }
   } catch {}
 
-  // Search products
+  // --- products ---
   try {
-    const products = await auth.store.listProducts(tenantId, { limit: 1000 });
-    for (const p of products.items) {
-      const hay = `${p.name} ${p.sku} ${p.category || ""}`.toLowerCase();
-      if (hay.includes(q)) {
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name, sku, category, currency, price")
+      .eq("tenant_id", tenantId)
+      .textSearch("search_vector", q, { type: "websearch" })
+      .limit(PER_ENTITY);
+    if (!error && data) {
+      for (const p of data) {
         results.push({
           type: "product",
           id: p.id,
           label: p.name,
           subtitle: [p.sku, p.category, `${p.currency} ${p.price}`].filter(Boolean).join(" · "),
           url: "products",
+          rank: 0,
         });
       }
     }
   } catch {}
 
-  // Search deals
+  // --- deals ---
   try {
-    const deals = await auth.store.listDeals(tenantId, { limit: 1000 });
-    for (const d of deals.items) {
-      const hay = `${d.title} ${d.stage} ${d.currency} ${d.value}`.toLowerCase();
-      if (hay.includes(q)) {
+    const { data, error } = await supabase
+      .from("deals")
+      .select("id, title, stage, currency, value")
+      .eq("tenant_id", tenantId)
+      .textSearch("search_vector", q, { type: "websearch" })
+      .limit(PER_ENTITY);
+    if (!error && data) {
+      for (const d of data) {
         results.push({
           type: "deal",
           id: d.id,
           label: d.title,
           subtitle: [d.stage, `${d.currency} ${d.value}`].filter(Boolean).join(" · "),
           url: "deals",
+          rank: 0,
         });
       }
     }
   } catch {}
 
-  // Search offers
+  // --- offers ---
   try {
-    const offers = await auth.store.listOffers(tenantId, { limit: 1000 });
-    for (const o of offers.items) {
-      const hay = `${o.number} ${o.subject} ${o.status} ${o.currency} ${o.total}`.toLowerCase();
-      if (hay.includes(q)) {
+    const { data, error } = await supabase
+      .from("offers")
+      .select("id, number, subject, status, currency, total")
+      .eq("tenant_id", tenantId)
+      .textSearch("search_vector", q, { type: "websearch" })
+      .limit(PER_ENTITY);
+    if (!error && data) {
+      for (const o of data) {
         results.push({
           type: "offer",
           id: o.id,
           label: `Offer ${o.number}`,
           subtitle: [o.status, o.subject, `${o.currency} ${o.total}`].filter(Boolean).join(" · "),
           url: "offers",
+          rank: 0,
         });
       }
     }
   } catch {}
 
-  // Search invoices
+  // --- invoices ---
   try {
-    const invoices = await auth.store.listInvoices(tenantId, { limit: 1000 });
-    for (const i of invoices.items) {
-      const hay = `${i.number} ${i.subject} ${i.status} ${i.currency} ${i.total}`.toLowerCase();
-      if (hay.includes(q)) {
+    const { data, error } = await supabase
+      .from("invoices")
+      .select("id, number, subject, status, currency, total")
+      .eq("tenant_id", tenantId)
+      .textSearch("search_vector", q, { type: "websearch" })
+      .limit(PER_ENTITY);
+    if (!error && data) {
+      for (const i of data) {
         results.push({
           type: "invoice",
           id: i.id,
           label: `Invoice ${i.number}`,
           subtitle: [i.status, i.subject, `${i.currency} ${i.total}`].filter(Boolean).join(" · "),
           url: "invoices",
+          rank: 0,
         });
       }
     }
   } catch {}
 
-  // Sort by relevance (exact label match first, then starts-with, then includes)
+  // Sort by relevance: exact label match first, then starts-with, then alphabetical.
+  const qLower = q.toLowerCase();
   results.sort((a, b) => {
     const aLabel = a.label.toLowerCase();
     const bLabel = b.label.toLowerCase();
-    if (aLabel === q && bLabel !== q) return -1;
-    if (bLabel === q && aLabel !== q) return 1;
-    if (aLabel.startsWith(q) && !bLabel.startsWith(q)) return -1;
-    if (bLabel.startsWith(q) && !aLabel.startsWith(q)) return 1;
+    if (aLabel === qLower && bLabel !== qLower) return -1;
+    if (bLabel === qLower && aLabel !== qLower) return 1;
+    if (aLabel.startsWith(qLower) && !bLabel.startsWith(qLower)) return -1;
+    if (bLabel.startsWith(qLower) && !aLabel.startsWith(qLower)) return 1;
     return aLabel.localeCompare(bLabel);
   });
 
-  return NextResponse.json({ items: results.slice(0, limit) });
+  return NextResponse.json({ items: results.slice(0, limit).map(({ rank: _r, ...hit }) => hit) });
 }

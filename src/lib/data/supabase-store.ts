@@ -397,7 +397,10 @@ export class SupabaseStore implements Store {
   async listPartners(tenantId: string, params?: ListParams): Promise<ListResult<Partner>> {
     let q = this.sb().from("partners").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,email.ilike.%${safeSearch(params.search)}%,contact_name.ilike.%${safeSearch(params.search)}%`);
+    // D-1: tsvector full-text search on (name A, email B, contact_name B, phone C)
+    // via the partners_search_idx GIN index — replaces O(n) ILIKE seq-scan.
+    // Migration 037_fulltext_search.sql adds the column + trigger + index.
+    if (params?.search) q = q.textSearch("search_vector", params.search, { type: "websearch" });
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     if (params?.filters?.type) q = q.eq("type", params.filters.type);
     q = q.order("created_at", { ascending: false });
@@ -419,7 +422,10 @@ export class SupabaseStore implements Store {
   // ---- products ----
   async listProducts(tenantId: string, params?: ListParams): Promise<ListResult<Product>> {
     let q = this.sb().from("products").select("*", { count: "exact" }).eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`name.ilike.%${safeSearch(params.search)}%,sku.ilike.%${safeSearch(params.search)}%`);
+    // D-1: tsvector full-text search on (name A, sku A, description B,
+    // category B, brand C, hs_code C) via products_search_idx GIN index —
+    // replaces the legacy name+sku ILIKE pair AND broadens match coverage.
+    if (params?.search) q = q.textSearch("search_vector", params.search, { type: "websearch" });
     if (params?.filters?.category) q = q.eq("category", params.filters.category);
     q = q.order("created_at", { ascending: false });
     return paginateQuery<Product>(q, params);
@@ -441,7 +447,10 @@ export class SupabaseStore implements Store {
   async listDeals(tenantId: string, params?: ListParams): Promise<ListResult<Deal>> {
     let q = this.sb().from("deals").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.ilike("title", `%${params.search}%`);
+    // D-1: tsvector full-text search on (title A, description B) via
+    // deals_search_idx GIN index — replaces single-column title ILIKE
+    // and adds description coverage.
+    if (params?.search) q = q.textSearch("search_vector", params.search, { type: "websearch" });
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.stage) q = q.eq("stage", params.filters.stage);
     q = q.order("created_at", { ascending: false });
@@ -464,7 +473,11 @@ export class SupabaseStore implements Store {
   async listOffers(tenantId: string, params?: ListParams): Promise<ListResult<Offer>> {
     let q = this.sb().from("offers").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
+    // D-1: tsvector full-text search on (number A, subject B, notes C)
+    // via offers_search_idx GIN index — replaces number+subject ILIKE pair
+    // and adds notes coverage. NOTE: the column is `number` not
+    // `offer_number` (see migration 037 header comment).
+    if (params?.search) q = q.textSearch("search_vector", params.search, { type: "websearch" });
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
@@ -893,7 +906,12 @@ export class SupabaseStore implements Store {
   async listInvoices(tenantId: string, params?: ListParams): Promise<ListResult<Invoice>> {
     let q = this.sb().from("invoices").select("*", { count: "exact" });
     if (tenantId) q = q.eq("tenant_id", tenantId);
-    if (params?.search) q = q.or(`number.ilike.%${safeSearch(params.search)}%,subject.ilike.%${safeSearch(params.search)}%`);
+    // D-1: tsvector full-text search on (number A, notes C) via
+    // invoices_search_idx GIN index — replaces number+subject ILIKE pair.
+    // NOTE: the legacy ILIKE included `subject` but the task D-1 spec scopes
+    // the invoice search_vector to (number, notes) only — invoice.subject is
+    // usually a short copy of offer.subject and is well-covered by `number`.
+    if (params?.search) q = q.textSearch("search_vector", params.search, { type: "websearch" });
     if (params?.filters?.partner_id) q = q.eq("partner_id", params.filters.partner_id);
     if (params?.filters?.status) q = q.eq("status", params.filters.status);
     q = q.order("created_at", { ascending: false });
