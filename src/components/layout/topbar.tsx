@@ -54,6 +54,7 @@ import {
   Info,
   Building2,
   Repeat,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { initials } from "@/lib/utils/format";
@@ -530,6 +531,26 @@ export function Topbar() {
               <ShieldCheck className="size-4 mr-2.5 text-muted-foreground" />
               {t(locale, "security")}
             </DropdownMenuItem>
+
+            {/* API Docs — admin/super-admin only.
+                This is the only entry point in the SPA to the /api-docs
+                route (a separate Next.js page that renders Swagger UI). The
+                link opens in a new tab because the docs page replaces the
+                SPA — closing the tab returns the user to where they were.
+                Visibility is enforced client-side as a UX gate; the docs
+                page itself re-checks the session and refuses non-admins. */}
+            {(admin || superAdmin) && (
+              <DropdownMenuItem
+                asChild
+                className="cursor-pointer rounded-lg mx-0.5 px-3 py-2 text-sm smooth"
+              >
+                <a href="/api-docs" target="_blank" rel="noopener noreferrer">
+                  <BookOpen className="size-4 mr-2.5 text-muted-foreground" />
+                  API Documentation
+                  <ExternalLink className="size-3 ml-auto text-muted-foreground/60" />
+                </a>
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuSeparator className="my-1 bg-border/50" />
 

@@ -793,3 +793,86 @@
 .animate-ping-slow {
   animation: verify-ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Swagger UI (served at /api-docs)
+   ───────────────────────────────────────────────────────────────────────────
+   swagger-ui.css ships its own comprehensive styling scoped to `.swagger-ui`.
+   Tailwind's preflight targets bare elements and would otherwise clobber a
+   few of swagger-ui's defaults (notably `box-sizing` on `*` is fine because
+   Tailwind already sets it, but `button` background/border and `table`
+   border-collapse need re-asserting inside the docs wrapper).
+
+   The block below:
+   1. Scopes a few resets to `.swagger-ui-wrap` so the rest of the app is
+      unaffected.
+   2. Adds a dark-mode adaptation: Swagger UI has no native dark theme, so
+      when `.dark` is on <html> we invert the canvas/text colours and tone
+      down the borders. This is a best-effort cosmetic pass — the try-it-out
+      panel still uses its own light palette, which is fine because the
+      code-editor widget is more readable on a light background.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.swagger-ui-wrap {
+  /* Contain the swagger UI so it doesn't inherit the app's max-width. */
+  width: 100%;
+  min-height: calc(100vh - 49px); /* 49px = sticky back-to-app bar height */
+}
+
+.swagger-ui-wrap .swagger-ui button,
+.swagger-ui-wrap .swagger-ui .btn {
+  background: transparent;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.swagger-ui-wrap .swagger-ui table {
+  border-collapse: collapse;
+}
+
+.swagger-ui-wrap .swagger-ui .wrapper {
+  padding: 16px 20px;
+  max-width: 1460px;
+}
+
+/* Dark-mode adaptation — driven by the `dark` class on <html> (next-themes). */
+.dark .swagger-ui-wrap .swagger-ui {
+  background: var(--background);
+  color: var(--foreground);
+}
+.dark .swagger-ui-wrap .swagger-ui .info,
+.dark .swagger-ui-wrap .swagger-ui .info *,
+.dark .swagger-ui-wrap .swagger-ui .opblock .opblock-summary,
+.dark .swagger-ui-wrap .swagger-ui .opblock .opblock-summary *,
+.dark .swagger-ui-wrap .swagger-ui .opblock-description,
+.dark .swagger-ui-wrap .swagger-ui .opblock-description *,
+.dark .swagger-ui-wrap .swagger-ui .parameters *,
+.dark .swagger-ui-wrap .swagger-ui .responses *,
+.dark .swagger-ui-wrap .swagger-ui .model-box *,
+.dark .swagger-ui-wrap .swagger-ui section.models h4,
+.dark .swagger-ui-wrap .swagger-ui .scheme-container {
+  color: var(--foreground);
+}
+.dark .swagger-ui-wrap .swagger-ui .opblock {
+  border-color: var(--border);
+  background: color-mix(in oklch, var(--background) 60%, transparent);
+}
+.dark .swagger-ui-wrap .swagger-ui .opblock .opblock-summary {
+  border-color: var(--border);
+}
+.dark .swagger-ui-wrap .swagger-ui input[type="text"],
+.dark .swagger-ui-wrap .swagger-ui input[type="password"],
+.dark .swagger-ui-wrap .swagger-ui textarea,
+.dark .swagger-ui-wrap .swagger-ui select {
+  background: color-mix(in oklch, var(--background) 80%, white 5%);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.dark .swagger-ui-wrap .swagger-ui .scheme-container {
+  background: color-mix(in oklch, var(--background) 95%, transparent);
+  border-bottom-color: var(--border);
+}
+.dark .swagger-ui-wrap .swagger-ui .topbar {
+  background: color-mix(in oklch, var(--background) 95%, transparent);
+  border-bottom-color: var(--border);
+}
