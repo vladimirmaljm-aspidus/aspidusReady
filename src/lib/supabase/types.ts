@@ -495,6 +495,13 @@ export interface VaultSecret {
   key: string;
   description: string | null;
   encrypted_value: string;
+  /**
+   * Encryption key version used for `encrypted_value`. NULL = legacy row
+   * (use wire-format detection via `parseKeyVersion()` in vault-crypto.ts).
+   * Added by migration 035 (audit P2-3 / task C-7) — purely informational;
+   * the wire format is the source of truth at decrypt time.
+   */
+  key_version?: string | null;
   category: "api" | "smtp" | "database" | "payment" | "other";
   last_accessed_at: string | null;
   created_at: string;

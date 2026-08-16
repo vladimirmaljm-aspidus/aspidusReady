@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 import { notify } from "@/lib/notif/helper";
 import { recordRevision } from "@/lib/api/doc-revisions";
 import { validateStatusTransition } from "@/lib/api/status-validator";
@@ -377,7 +377,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         );
         cascadeResults.commission = {
           ok: false,
-          error: e?.message || String(e),
+          error: sanitizeError(e),
         };
       }
     }
@@ -527,7 +527,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         );
         cascadeResults.proforma = {
           ok: false,
-          error: e?.message || String(e),
+          error: sanitizeError(e),
         };
       }
     }
@@ -788,7 +788,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         );
         cascadeResults.journal = {
           ok: false,
-          error: e?.message || String(e),
+          error: sanitizeError(e),
         };
       }
     }
@@ -858,6 +858,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   } catch (e: any) {
     console.error("[invoice.record-payment]", e);
-    return NextResponse.json({ error: e.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
   }
 }

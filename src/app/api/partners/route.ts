@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext, sanitizeError } from "@/lib/api/helpers";
 import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
   } catch (e: any) {
     console.error("[partners.list]", e);
     return NextResponse.json(
-      { error: e.message || "Internal server error" },
+      { error: sanitizeError(e) },
       { status: 500 },
     );
   }
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     console.error("[partners.upsert]", e);
     return NextResponse.json(
-      { error: e.message || "Internal server error" },
+      { error: sanitizeError(e) },
       { status: 500 },
     );
   }

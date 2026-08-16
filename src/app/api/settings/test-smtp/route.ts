@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
-import { requireAdmin, audit } from "@/lib/api/helpers";
+import { requireAdmin, audit, sanitizeError } from "@/lib/api/helpers";
 import { getStore, getStoreSync } from "@/lib/data/store";
 
 export const runtime = "nodejs";
@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        error: e?.message || "Unknown SMTP error",
+        error: sanitizeError(e),
         category,
       },
       { status: 200 }

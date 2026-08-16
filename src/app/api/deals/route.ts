@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, sanitizeError, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json(result);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[deals GET]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
     await audit(auth.store, getAuthUser(auth), req, body.id ? "deal.update" : "deal.create", "deal", created.id, { title: created.title });
     return NextResponse.json(created);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[deals POST]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

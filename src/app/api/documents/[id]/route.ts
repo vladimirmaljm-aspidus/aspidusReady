@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
@@ -30,7 +30,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (error || !data?.signedUrl) return NextResponse.json({ error: "Storage unavailable." }, { status: 502 });
     return NextResponse.redirect(data.signedUrl, 302);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[documents GET id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -74,6 +75,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await audit(auth.store, auth.user, req, "document.delete", "document", id);
     return NextResponse.json({ ok: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[documents DELETE id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

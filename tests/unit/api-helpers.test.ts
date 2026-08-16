@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
-import { hasPermission, resolveTenantId, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import { hasPermission, resolveTenantId, sanitizeError, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 
 describe("hasPermission", () => {
   it("grants access with a wildcard '*' permission", () => {
@@ -77,5 +77,111 @@ describe("resolveTenantId", () => {
     };
     const result = resolveTenantId(auth, req("http://localhost/api/deals"));
     expect(result).toBeNull();
+  });
+});
+
+// ── P2 / task C-6 Fix 5 — sanitizeError ────────────────────────────────────
+// Verifies that raw Postgres error strings (which leak schema / column /
+// constraint / SQL-syntax details an attacker can use to map the schema) are
+// stripped down to a generic message before they reach the API client. The
+// original error is still logged server-side; this only controls the
+// outbound HTTP response body.
+describe("sanitizeError", () => {
+  it("strips 'relation does not exist' (schema + table name leak)", () => {
+    const out = sanitizeError(new Error('relation "public.users" does not exist'));
+    expect(out).not.toContain("public.users");
+    expect(out).not.toContain("relation");
+    expect(out).toBe("Database error.");
+  });
+
+  it("strips 'column of relation does not exist' (column + table leak)", () => {
+    const out = sanitizeError(new Error('column "password_hash" of relation "users" does not exist'));
+    expect(out).not.toContain("password_hash");
+    expect(out).not.toContain("users");
+    expect(out).toBe("Database error.");
+  });
+
+  it("strips 'column does not exist' (bare column leak)", () => {
+    const out = sanitizeError(new Error('column "tenant_id" does not exist'));
+    expect(out).not.toContain("tenant_id");
+    expect(out).toBe("Database error.");
+  });
+
+  it("strips foreign-key constraint name leaks", () => {
+    const out = sanitizeError(new Error('update or delete on table "offers" violates foreign key constraint "fk_offers_partner_id" on table "partners"'));
+    expect(out).not.toContain("fk_offers_partner_id");
+    expect(out).not.toContain("offers");
+    expect(out).toContain("Referential integrity error");
+  });
+
+  it("strips unique-constraint + duplicate-key leaks (column-name hint)", () => {
+    const out = sanitizeError(new Error('duplicate key value violates unique constraint "users_email_key"'));
+    expect(out).not.toContain("users_email_key");
+    expect(out).toBe("Duplicate entry.");
+  });
+
+  it("strips NOT NULL constraint leaks", () => {
+    const out = sanitizeError(new Error('null value in column "name" of relation "partners" violates not-null constraint'));
+    // The column name ("name") and table name ("partners") MUST be stripped
+    // — they leak schema info. The exact wording of the replacement is
+    // flexible (a single Postgres error can match several patterns at
+    // once — here both the "null value in column of relation" prefix AND
+    // the "violates not-null constraint" suffix are stripped, leaving a
+    // composite "Database error Missing required field." message that
+    // still conveys the category to the caller).
+    expect(out).not.toContain("partners");
+    expect(out).not.toContain('"name"');
+    expect(out).toContain("Missing required field");
+  });
+
+  it("strips SQL syntax-error leaks (server-side raw SQL indicator)", () => {
+    const out = sanitizeError(new Error('syntax error at or near "FROM"'));
+    expect(out).not.toContain("FROM");
+    expect(out).toBe("Database error.");
+  });
+
+  it("strips 'invalid input syntax for type' (type-name leak)", () => {
+    const out = sanitizeError(new Error('invalid input syntax for type uuid: "not-a-uuid"'));
+    expect(out).not.toContain("uuid");
+    expect(out).toBe("Invalid input format.");
+  });
+
+  it("strips RLS policy leaks so existence of a row is not confirmed", () => {
+    const out = sanitizeError(new Error('new row for relation "vault_secrets" violates row-level security policy "vault_secrets_tenant_isolation" on INSERT'));
+    expect(out).not.toContain("vault_secrets");
+    expect(out).not.toContain("tenant_isolation");
+    expect(out).toBe("Not found.");
+  });
+
+  it("strips permission-denied-for-table leaks (table-name + existence)", () => {
+    const out = sanitizeError(new Error('permission denied for table audit_logs'));
+    expect(out).not.toContain("audit_logs");
+    expect(out).toBe("Permission denied.");
+  });
+
+  it("passes through a user-facing message that contains no DB internals", () => {
+    const out = sanitizeError(new Error("Invalid credentials."));
+    expect(out).toBe("Invalid credentials.");
+  });
+
+  it("handles a non-Error throw (string)", () => {
+    const out = sanitizeError("boom");
+    expect(out).toBe("boom");
+  });
+
+  it("handles a null / undefined throw without crashing", () => {
+    expect(sanitizeError(null)).toBe("Internal server error.");
+    expect(sanitizeError(undefined)).toBe("Internal server error.");
+    expect(sanitizeError("")).toBe("Internal server error.");
+  });
+
+  it("preserves the surrounding context when only part of the message matches a leak pattern", () => {
+    // A composite message: "Failed to upsert deal: <leak>". The leak is
+    // stripped, the human prefix is preserved — so the caller still gets
+    // something useful but no schema info.
+    const out = sanitizeError(new Error('Failed to upsert deal: duplicate key value violates unique constraint "deals_number_key"'));
+    expect(out).not.toContain("deals_number_key");
+    expect(out).toContain("Failed to upsert deal");
+    expect(out).toContain("Duplicate entry");
   });
 });

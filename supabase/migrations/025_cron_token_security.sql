@@ -19,12 +19,32 @@
 --
 --   This migration:
 --   1. Unschedules the existing jobs (which used `?token=...` in URL).
---   2. Reschedules them with the token in the `Authorization` header.
+--   2. Reschedules them with the token in the `Authorization` header,
+--      read from the Postgres setting `app.cron_token` via
+--      `current_setting('app.cron_token', true)` so the token does NOT
+--      appear in `cron.job.command` (which is visible to anyone with
+--      SELECT on cron.job).
 --   3. Schedules the previously-unscheduled `invoice-overdue-check` job.
 --
---   CRON_TOKEN is now stored as a Render env var (set via PUT
---   /v1/services/{id}/env-vars/CRON_TOKEN). It is NOT stored in this SQL
---   file (the value below is a placeholder; the live DB has the real value).
+-- CRON_TOKEN STORAGE
+--   The token is NOT hardcoded in this file. Instead, it lives in the
+--   Postgres custom setting `app.cron_token`, which is set out-of-band
+--   by the operator via:
+--     ALTER DATABASE postgres SET app.cron_token = '<actual_token>';
+--   (or via `ALTER ROLE postgres SET app.cron_token = '...';` for
+--   role-scoped settings — see migration 034 for the same pattern).
+--   The setting is NOT visible to anon/authenticated roles, and
+--   `cron.job.command` only contains the literal SQL
+--   `current_setting('app.cron_token', true)` — never the token value.
+--
+--   To rotate the token in the future:
+--     1. Generate a new token: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
+--     2. PUT it to Render: curl -X PUT https://api.render.com/v1/services/$SERVICE_ID/env-vars/CRON_TOKEN -d '{"value":"<NEW_TOKEN>"}'
+--     3. Update the Postgres setting: `ALTER DATABASE postgres SET app.cron_token = '<NEW_TOKEN>';`
+--        (and `SELECT pg_reload_conf();` to apply).
+--     4. Trigger a Render deploy so the new env var takes effect.
+--     5. No cron re-schedule needed — the jobs already read the setting
+--        dynamically, so they'll pick up the new token on the next run.
 --
 -- CRON ROUTES
 --   All three cron routes (webhook-retry, subscription-sweep, invoice-overdue)
@@ -39,7 +59,32 @@
 --   migration can be re-run safely. cron.schedule returns an error if a
 --   job with the same name already exists, so we unschedule before each
 --   schedule call.
+--
+-- NOTE (audit P2-4 / task C-7): the original version of this migration
+--   used a literal `<CRON_TOKEN>` placeholder string in the SQL command,
+--   which would schedule jobs with the literal string "<CRON_TOKEN>" as
+--   the bearer token if applied verbatim. The live DB had the real token
+--   substituted in via `sed` before applying — but the file as committed
+--   was broken. Migration 036_cron_token_setting.sql fixes the live DB
+--   by re-scheduling the jobs with `current_setting('app.cron_token', true)`.
 -- ============================================================================
+
+-- ─── 0. Pre-flight: ensure `app.cron_token` is set ────────────────────────
+--   This is a SOFT check — if the setting is missing, the migration still
+--   applies (the jobs will be scheduled, they'll just fail auth on first
+--   run with a clear "app.cron_token not set" error in the cron job log).
+--   The operator sets the setting via:
+--     ALTER DATABASE postgres SET app.cron_token = '<actual_token>';
+--   See migration 036 for the live-DB fix that wires this up.
+DO $$
+DECLARE
+  tok text;
+BEGIN
+  tok := current_setting('app.cron_token', true);
+  IF tok IS NULL OR tok = '' THEN
+    RAISE NOTICE 'app.cron_token is not set — cron jobs will fail auth until it is set via: ALTER DATABASE postgres SET app.cron_token = ''<token>'';';
+  END IF;
+END $$;
 
 -- ─── 1. subscription-sweep-hourly — token moved URL→header ────────────────
 SELECT cron.unschedule('subscription-sweep-hourly')
@@ -53,7 +98,7 @@ SELECT cron.schedule(
       url := 'https://aspidus.onrender.com/api/cron/subscription-sweep',
       headers := jsonb_build_object(
         'Authorization',
-        'Bearer <CRON_TOKEN>'
+        'Bearer ' || current_setting('app.cron_token', true)
       )
     )
   $cmd$
@@ -71,7 +116,7 @@ SELECT cron.schedule(
       url := 'https://aspidus.onrender.com/api/cron/webhook-retry',
       headers := jsonb_build_object(
         'Authorization',
-        'Bearer <CRON_TOKEN>'
+        'Bearer ' || current_setting('app.cron_token', true)
       )
     )
   $cmd$
@@ -92,7 +137,7 @@ SELECT cron.schedule(
       url := 'https://aspidus.onrender.com/api/cron/invoice-overdue',
       headers := jsonb_build_object(
         'Authorization',
-        'Bearer <CRON_TOKEN>'
+        'Bearer ' || current_setting('app.cron_token', true)
       )
     )
   $cmd$
@@ -108,18 +153,13 @@ SELECT jobname, schedule, active
   ORDER BY jobname;
 
 -- ─── 5. NOTE on token storage ─────────────────────────────────────────────
---   The placeholder `<CRON_TOKEN>` strings above are intentionally NOT the
---   real value — the live DB has the actual token (set via this migration
---   applied with `sed -e 's|<CRON_TOKEN>|0ray_lpaQYf6pV3G1Tw_8o0xNZt-...|g'`
---   or by manually re-scheduling with the real value). This keeps the
---   token out of:
+--   The token is NOT in this file. It lives in the Postgres custom setting
+--   `app.cron_token` (set via `ALTER DATABASE postgres SET app.cron_token`).
+--   The cron command reads it via `current_setting('app.cron_token', true)`
+--   so the value never appears in `cron.job.command` (which is visible to
+--   anyone with SELECT on cron.job). This keeps the token out of:
 --     • Git history (this file is committed)
 --     • GitHub search / code scanning
 --     • Anyone who clones the repo but doesn't have Render/Supabase access
---
---   To rotate the token in the future:
---     1. Generate a new token: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
---     2. PUT it to Render: curl -X PUT https://api.render.com/v1/services/$SERVICE_ID/env-vars/CRON_TOKEN -d '{"value":"<NEW_TOKEN>"}'
---     3. Re-run this migration with the new token substituted.
---     4. Trigger a Render deploy so the new env var takes effect.
+--     • The `cron.job.command` column itself (defense in depth)
 -- ============================================================================

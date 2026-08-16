@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperAdmin, audit, type AuthContext } from "@/lib/api/helpers";
+import { requireSuperAdmin, audit, sanitizeError, type AuthContext } from "@/lib/api/helpers";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
@@ -17,7 +17,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!t) return NextResponse.json({ error: "Not found." }, { status: 404 });
     return NextResponse.json(t);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[tenants GET id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -202,7 +203,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await audit(auth.store, auth.user, req, "tenant.update", "tenant", id, { name: updated.name, plan: body.plan });
     return NextResponse.json(updated);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[tenants PUT id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -267,7 +269,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await auth.store.deleteTenantCascade(id);
     return NextResponse.json({ ok: true, mode: "hard", deleted: deps });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[tenants DELETE id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 

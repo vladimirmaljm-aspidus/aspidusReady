@@ -165,21 +165,22 @@ export class SupabaseStore implements Store {
    * tenant A can no longer POST body.id=<tenant-B-uuid> to overwrite
    * tenant B's record — the UPDATE matches 0 rows.
    *
-   * CRITICAL SECURITY FIX (audit P2-1/C-7): when the UPDATE matches 0 rows
-   * in a tenant-scoped context (tenantId is set) AND `strict` is true
-   * (the default), we now THROW instead of falling back to INSERT. The
-   * previous fallback created a NEW record with the caller's tenant_id
-   * — safe from cross-tenant hijack, but it (a) silently created
-   * duplicate rows when a caller mistyped an id, (b) bypassed
-   * create-time validation in routes that gate on `if (!body.id)`, and
-   * (c) returned a confusing PK-conflict 500 when the row existed in
-   * another tenant. Throwing surfaces the failure cleanly so the caller
-   * can correct the id or POST without an id to create.
+   * CRITICAL SECURITY FIX (audit P2-1/C-7): when `data.id` is provided AND
+   * `tenantId` is set AND the UPDATE matches 0 rows, we now THROW instead
+   * of falling back to INSERT. The previous fallback created a NEW record
+   * with the caller's tenant_id — safe from cross-tenant hijack, but it
+   * (a) silently created duplicate rows when a caller mistyped an id,
+   * (b) bypassed create-time validation in routes that gate on
+   * `if (!body.id)`, and (c) returned a confusing PK-conflict 500 when
+   * the row existed in another tenant. Throwing surfaces the failure
+   * cleanly so the caller can correct the id or POST without an id to
+   * create.
    *
-   * `strict: false` preserves the legacy fallback-to-INSERT behaviour
-   * for callers that genuinely want "create-or-update by id" semantics
-   * (e.g. idempotent import scripts that supply a stable UUID). The
-   * default is `true` (secure).
+   * The INSERT fallback is reserved for TRULY NEW records only — i.e.
+   * super-admin / platform contexts where `tenantId` is unset. In that
+   * case the legacy "create-or-update by id" semantics are preserved so
+   * idempotent import scripts (e.g. seed.ts) that supply a stable UUID
+   * keep working.
    *
    * On UPDATE we additionally strip:
    *   • created_at — DB owns this column; sending it would silently overwrite
@@ -193,7 +194,6 @@ export class SupabaseStore implements Store {
     table: string,
     data: Partial<T> & { id?: string },
     tenantId?: string,
-    strict: boolean = true,
   ): Promise<T> {
     const payload: SupaRow = this.sanitizePayload({ ...data });
     if (data.id) {
@@ -217,30 +217,35 @@ export class SupabaseStore implements Store {
         // etc.) would also land here; we treat them the same because the
         // UPDATE did not produce a row either way.
         //
-        // In a tenant-scoped context with `strict: true` (default), THROW
-        // instead of falling back to INSERT. The caller supplied an id,
-        // meaning they intended to UPDATE an existing record — a 0-row
-        // match means the record is gone, was deleted, or belongs to
-        // another tenant. Silently creating a new record would bypass
-        // create-time validation in routes that gate on `if (!body.id)`.
+        // SECURITY GATE (task C-7 / audit P2-1): when `tenantId` is set
+        // (i.e. a tenant-scoped request, NOT a super-admin platform
+        // request), THROW instead of falling back to INSERT. The caller
+        // supplied an id, meaning they intended to UPDATE an existing
+        // record — a 0-row match means the record is gone, was deleted,
+        // or belongs to another tenant. Silently creating a new record
+        // would (a) bypass create-time validation in routes that gate on
+        // `if (!body.id)`, (b) create duplicate rows when a caller
+        // mistypes an id, and (c) surface a confusing PK-conflict 500
+        // when the id already exists in another tenant.
         //
-        // In a super-admin context (no tenantId) OR with `strict: false`,
-        // preserve the legacy fallback to INSERT so idempotent imports
-        // and "create-or-update by id" flows keep working.
-        if (strict && tenantId) {
+        // The INSERT fallback is reserved for the super-admin / platform
+        // context (tenantId unset) so idempotent imports and
+        // "create-or-update by id" flows keep working — those requests
+        // are explicitly NOT tenant-scoped and run with the service_role
+        // key, so there's no cross-tenant IDOR vector to defend against.
+        if (tenantId) {
           throw new Error(
             `Record not found or access denied (table=${table}, id=${id}).`,
           );
         }
-        // Fall through to INSERT path (legacy behaviour).
+        // Fall through to INSERT path (super-admin / no tenant scope only).
       } else if (updated) {
         return updated as T;
       }
-      // Row doesn't exist OR belongs to different tenant — fall back to
-      // INSERT. For cross-tenant attempts in non-strict mode, this creates
-      // a NEW record in the caller's tenant (safe — no data hijack, but
-      // may surface as a PK-conflict 500 if the id already exists in
-      // another tenant; that's the legacy behaviour we're preserving).
+      // Super-admin context (no tenantId): row doesn't exist OR was
+      // deleted — fall back to INSERT. This preserves the legacy
+      // "create-or-update by id" semantics used by idempotent import
+      // scripts (e.g. prisma/seed.ts) that supply a stable UUID.
       const { data: inserted, error: insErr } = await this.sb()
         .from(table)
         .insert(payload)

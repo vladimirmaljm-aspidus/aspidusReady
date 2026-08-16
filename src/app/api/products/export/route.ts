@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, resolveTenantId, sanitizeError } from "@/lib/api/helpers";
 import { toCSV, csvResponse, parseExportParams } from "@/lib/export/csv";
 
 export const runtime = "nodejs";
@@ -26,6 +26,6 @@ export async function GET(req: NextRequest) {
   const csv = toCSV(result.items as unknown as Record<string, unknown>[], cols);
   return csvResponse(`products-${new Date().toISOString().split("T")[0]}.csv`, csv);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

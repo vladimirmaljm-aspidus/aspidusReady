@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await audit(auth.store, auth.user, req, "document.register.delete", "document_register", id);
     return NextResponse.json({ ok: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[document-register DELETE id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const revisions = await auth.store.listDocumentRevisions(auth.tenantId ?? "", id);
     return NextResponse.json({ items: revisions });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[document-register GET id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

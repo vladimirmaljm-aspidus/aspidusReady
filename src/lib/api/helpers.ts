@@ -407,6 +407,7 @@ export async function audit(
   entityId?: string,
   details?: Record<string, unknown>
 ): Promise<void> {
+  try {
     await store.appendAudit({
       user_id: user.id,
       username: user.username,
@@ -441,4 +442,94 @@ export async function audit(
       stack: e instanceof Error ? e.stack : undefined,
     });
   }
+}
+
+/**
+ * Sanitize a thrown error before exposing it to the API client.
+ *
+ * P2 / task C-6 Fix 5: raw Postgres error messages leak database internals
+ * — table names, column names, constraint names, schema details — that an
+ * attacker can use to map the schema for follow-on attacks. Common leaks
+ * from PostgREST/Postgres:
+ *
+ *   • `relation "public.users" does not exist` → leaks schema + table name
+ *   • `column "password_hash" of relation "users" does not exist` → leaks
+ *     both the column and the table
+ *   • `violates foreign key constraint "fk_offers_partner_id"` → leaks
+ *     the constraint name (and thus the FK relationship)
+ *   • `duplicate key value violates unique constraint "users_email_key"`
+ *     → leaks the indexed column
+ *   • `syntax error at or near "FROM"` → leaks that the server is building
+ *     raw SQL (a code-injection indicator)
+ *
+ * The original error is still logged server-side via `console.error` by
+ * the caller; this helper only controls what the HTTP response body says.
+ * Returns a generic message when the input doesn't match a known pattern
+ * — fail closed (don't leak anything) rather than open.
+ *
+ * IMPORTANT: callers should still `console.error` the original error so
+ * ops can triage. This helper is for the OUTBOUND response only.
+ */
+export function sanitizeError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e ?? "");
+  if (!msg) return "Internal server error.";
+  return msg
+    // ── Schema/table/column leaks ────────────────────────────────────────
+    // PostgREST surfaces these verbatim. Order matters: the SPECIFIC patterns
+    // (column-of-relation, value-of-column-of-relation) MUST run before the
+    // general ones (relation/column/does-not-exist), otherwise the general
+    // pattern consumes a substring of the specific one and leaves the column
+    // name in the output. (Regression caught by the api-helpers test suite.)
+    .replace(/column "[^"]+" of relation "[^"]+" does not exist/gi, "Database error.")
+    .replace(/null value in column "[^"]+" of relation "[^"]+"/gi, "Database error")
+    .replace(/update or delete on table "[^"]+"/gi, "Database error")
+    .replace(/on table "[^"]+"/gi, "Database error")
+    .replace(/null value in column "[^"]+"/gi, "Database error")
+    .replace(/relation "[^"]+" does not exist/gi, "Database error.")
+    .replace(/column "[^"]+" does not exist/gi, "Database error.")
+    .replace(/schema "[^"]+" does not exist/gi, "Database error.")
+    // ── Constraint leaks ─────────────────────────────────────────────────
+    // Names hint at FK relationships + indexed columns. The constraint
+    // violation clause itself is replaced with a category-level message
+    // (Duplicate entry / Referential integrity error / etc.); the
+    // surrounding table/column references were already stripped above.
+    .replace(/violates foreign key constraint[^.]*\.?/gi, "Referential integrity error.")
+    .replace(/violates unique constraint[^.]*\.?/gi, "Duplicate entry.")
+    .replace(/duplicate key value[^.]*\.?/gi, "Duplicate entry.")
+    .replace(/violates not-null constraint[^.]*\.?/gi, "Missing required field.")
+    .replace(/violates check constraint[^.]*\.?/gi, "Value violates constraint.")
+    // ── SQL syntax errors ────────────────────────────────────────────────
+    // Leak that the server is constructing raw SQL — strip the offending
+    // token so an attacker can't tell which clause was malformed.
+    .replace(/syntax error at or near[^.]*\.?/gi, "Database error.")
+    .replace(/invalid input syntax for type[^.]*\.?/gi, "Invalid input format.")
+    // ── Permission / RLS errors ──────────────────────────────────────────
+    // Keep generic so we don't confirm the existence of a row the caller
+    // shouldn't know about. RLS denials look like "Not found." so the
+    // caller can't distinguish "row doesn't exist" from "you can't see it".
+    .replace(/permission denied for (table|sequence|function) [^.\s]+/gi, "Permission denied.")
+    .replace(/new row for relation "[^"]+" violates row-level security policy[^.]*\.?/gi, "Not found.")
+    // ── Collapse the leftover double-spaces that come from chained
+    // substitutions (e.g. "Database error Database error. Missing required
+    // field." → "Database error. Missing required field."). Cosmetic, but
+    // keeps the response body readable when the original Postgres message
+    // hit several patterns at once.
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/**
+ * Wrap an error in a sanitized message for the NextResponse body, while
+ * still logging the full original error server-side. Convenience wrapper
+ * for routes that follow the standard `catch (e: any) { return 500 }`
+ * pattern.
+ *
+ * Usage:
+ *   } catch (e: any) {
+ *     console.error("[route/name]", e);
+ *     return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
+ *   }
+ */
+export function sanitizeErrorMessage(e: unknown): string {
+  return sanitizeError(e);
 }

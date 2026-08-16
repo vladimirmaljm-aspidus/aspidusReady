@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
-import { requireAdmin, audit } from "@/lib/api/helpers";
+import { requireAdmin, audit, sanitizeError } from "@/lib/api/helpers";
 import { getStore, getStoreSync } from "@/lib/data/store";
 import type { EmailProvider } from "@/lib/email/service";
 
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
       });
     } catch (e: any) {
       return NextResponse.json(
-        { ok: false, error: e?.message || "Resend request failed", category: "network" },
+        { ok: false, error: sanitizeError(e), category: "network" },
         { status: 200 }
       );
     }
@@ -270,7 +270,7 @@ export async function POST(req: NextRequest) {
       });
     } catch (e: any) {
       return NextResponse.json(
-        { ok: false, error: e?.message || "Postmark request failed", category: "network" },
+        { ok: false, error: sanitizeError(e), category: "network" },
         { status: 200 }
       );
     }
@@ -366,7 +366,7 @@ export async function POST(req: NextRequest) {
         category = "tls";
       }
       return NextResponse.json(
-        { ok: false, error: e?.message || "Unknown SMTP error", category },
+        { ok: false, error: sanitizeError(e), category },
         { status: 200 }
       );
     }

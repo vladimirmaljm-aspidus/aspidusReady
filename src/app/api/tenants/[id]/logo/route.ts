@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 import { uploadFile } from "@/lib/upload/service";
 import { verifyLogoUpload } from "@/lib/upload/verify-file";
 import { MAX_LOGO_UPLOAD_SIZE, LOGO_ALLOWED_MIME_TYPES } from "@/lib/upload/constants";
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ url: result.url || result.path });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[tenants logo POST]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

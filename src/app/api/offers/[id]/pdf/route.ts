@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 import { generatePdf } from "@/lib/pdf/generator";
 
 export const runtime = "nodejs";
@@ -52,6 +52,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
   } catch (e: any) {
     console.error("[pdf.offer]", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: sanitizeError(e)}, { status: 500 });
   }
 }

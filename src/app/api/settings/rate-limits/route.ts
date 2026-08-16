@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperAdmin, audit } from "@/lib/api/helpers";
+import { requireSuperAdmin, audit, sanitizeError } from "@/lib/api/helpers";
 import {
   getRateLimitConfig,
   validateRateLimitConfig,
@@ -52,12 +52,12 @@ export async function PUT(req: NextRequest) {
       .from("settings")
       .update({ value: updated })
       .eq("id", existing.id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: sanitizeError(error)}, { status: 500 });
   } else {
     const { error } = await supabase
       .from("settings")
       .insert({ key: "rate_limit_config", value: updated, tenant_id: null });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: sanitizeError(error)}, { status: 500 });
   }
 
   invalidateRateLimitCache();

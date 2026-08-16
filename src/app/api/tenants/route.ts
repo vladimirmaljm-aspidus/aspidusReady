@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireSuperAdmin, audit } from "@/lib/api/helpers";
+import { requireAuth, requireSuperAdmin, audit, sanitizeError } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -24,7 +24,8 @@ export async function GET() {
     }
     return NextResponse.json({ items: [] });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[tenants GET]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
     await audit(auth.store, auth.user, req, body.id ? "tenant.update" : "tenant.create", "tenant", created.id, { name: created.name });
     return NextResponse.json(created);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[tenants POST]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

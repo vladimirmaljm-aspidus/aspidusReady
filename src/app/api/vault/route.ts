@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
-import { encrypt, decrypt } from "@/lib/api/vault-crypto";
+import { encrypt, decrypt, currentKeyVersion } from "@/lib/api/vault-crypto";
 
 export const runtime = "nodejs";
 
@@ -100,6 +100,12 @@ export async function POST(req: NextRequest) {
         ? String(body.value)
         : "";
     body.encrypted_value = encrypt(plaintextValue);
+    // Audit P2-3 / task C-7: record the key version used for this encryption
+    // on the row. The wire format (`encrypted_value`) ALSO carries the version
+    // prefix, so this column is technically redundant — but having it as a
+    // real column lets ops query "how many rows still use v1?" with a single
+    // SELECT instead of parsing the encrypted blob.
+    body.key_version = currentKeyVersion();
     // `value` is not a real column — drop it so smartUpsert doesn't send it.
     delete body.value;
 

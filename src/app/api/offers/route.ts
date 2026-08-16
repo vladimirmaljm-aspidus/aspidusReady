@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext, sanitizeError } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
 import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   } catch (e: any) {
     console.error("[offers GET]", e);
     return NextResponse.json(
-      { error: e.message || "Internal server error" },
+      { error: sanitizeError(e) },
       { status: 500 },
     );
   }
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
       created = await auth.store.createDocWithNumber("offer", body as Record<string, unknown>) as any;
     } catch (e: any) {
       console.error("[offers.post] atomic create failed:", e);
-      return NextResponse.json({ error: e.message || "Failed to create offer." }, { status: 500 });
+      return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
     }
   } else {
     try {
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
       // collision is a genuine conflict that should surface as a 500
       // (not be silently retried with a bumped number).
       console.error("[offers.post] upsert failed:", e);
-      return NextResponse.json({ error: e.message || "Failed to create offer." }, { status: 500 });
+      return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
     }
   }
   await audit(auth.store, getAuthUser(auth), req, body.id ? "offer.update" : "offer.create", "offer", created.id, { number: created.number });
@@ -340,7 +340,7 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     console.error("[offers POST]", e);
     return NextResponse.json(
-      { error: e.message || "Internal server error" },
+      { error: sanitizeError(e) },
       { status: 500 },
     );
   }

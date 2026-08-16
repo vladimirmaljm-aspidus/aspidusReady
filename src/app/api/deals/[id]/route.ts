@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 import { validateStatusTransition } from "@/lib/api/status-validator";
 
 export const runtime = "nodejs";
@@ -20,7 +20,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
     return NextResponse.json(item);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[deals GET id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -64,7 +65,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await audit(auth.store, auth.user, req, "deal.update", "deal", id, { stage: updated.stage });
     return NextResponse.json(updated);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[deals PUT id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -109,6 +111,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await audit(auth.store, auth.user, req, "deal.delete", "deal", id);
     return NextResponse.json({ ok: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[deals DELETE id]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

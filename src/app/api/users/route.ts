@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit } from "@/lib/api/helpers";
+import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 import { hashPassword } from "@/lib/auth/password";
 import { enforceQuota } from "@/lib/api/plan-limits";
 
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     const safe = visible.map(({ password_hash, totp_secret, ...u }) => u);
     return NextResponse.json({ items: safe });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -140,6 +140,6 @@ export async function POST(req: NextRequest) {
     const { password_hash, totp_secret, ...safe } = created;
     return NextResponse.json(safe);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAdmin, audit, resolveTenantId, sanitizeError } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     const all = await auth.store.getAllSettings(tenantId);
     return NextResponse.json({ items: all });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -79,6 +79,6 @@ export async function PUT(req: NextRequest) {
     });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

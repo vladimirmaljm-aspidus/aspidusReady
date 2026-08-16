@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api/helpers";
+import { requireAuth, sanitizeError } from "@/lib/api/helpers";
 import { redactDetails, TENANT_REDACT_KEYS } from "@/lib/api/redact";
 
 export const runtime = "nodejs";
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
     items: result.items.map((item) => ({ ...item, details: redactDetails(item.details, TENANT_REDACT_KEYS) })),
   });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[audit GET]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
