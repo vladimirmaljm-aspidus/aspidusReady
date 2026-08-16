@@ -3,12 +3,14 @@ import { ImageResponse } from "next/og";
 /**
  * Next.js dynamic favicon (32x32 PNG, served at /icon).
  *
- * Generated at build/runtime by Satori (next/og). Replaces the static
- * src/app/icon.svg so the favicon is a real PNG that all browsers
- * (including iOS Safari) render reliably.
+ * Faithful to the Symbol of Veles from Wikipedia — THREE SEPARATE filled
+ * segments (not connected strokes):
+ *   1. Top bar (trapezoid, widest at top)
+ *   2. Outer downward triangle (apex at bottom)
+ *   3. Inner downward triangle (smaller, centered inside outer)
  *
- * Design: Veles symbol (inverted A — downward triangle with crossbar)
- * in cream (#FFFBF5) on a multi-stop copper gradient tile.
+ * The three segments are visually disconnected, matching the original
+ * Veles symbol: https://en.wikipedia.org/wiki/Veles_(god)
  */
 export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
@@ -28,22 +30,15 @@ export default function Icon() {
           borderRadius: "22%",
         }}
       >
-        {/* Veles symbol (inverted A): two legs meeting at bottom apex + horizontal crossbar.
-            Bold 4px strokes (→ 2px at 16x16 render) with round caps/joins for crispness. */}
-        <svg width="62%" height="62%" viewBox="0 0 32 32" fill="none">
-          <path
-            d="M7 8 L16 27 L25 8"
-            stroke="#FFFBF5"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M10.5 15 L21.5 15"
-            stroke="#FFFBF5"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
+        {/* Veles symbol — 3 separate filled segments, cream on copper.
+            viewBox 0 0 32 34 (aspect ratio ~0.94, matching 560:600 original). */}
+        <svg width="60%" height="66%" viewBox="0 0 32 34" fill="#FFFBF5">
+          {/* Segment 1: Top bar (trapezoid — wider at top, narrower at bottom) */}
+          <path d="M2 2 L30 2 L27 9 L5 9 Z" />
+          {/* Segment 2: Outer downward triangle (apex at bottom center) */}
+          <path d="M4 11 L16 32 L28 11 Z" />
+          {/* Segment 3: Inner downward triangle (smaller, centered, gap between it and outer) */}
+          <path d="M10 13 L16 23 L22 13 Z" />
         </svg>
       </div>
     ),

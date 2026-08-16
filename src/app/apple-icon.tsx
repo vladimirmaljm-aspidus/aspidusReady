@@ -3,13 +3,13 @@ import { ImageResponse } from "next/og";
 /**
  * Next.js dynamic apple-touch-icon (180x180 PNG, served at /apple-icon).
  *
- * iOS Safari requires a PNG apple-touch-icon (SVG support is unreliable).
- * This file is auto-detected by Next.js App Router and served at /apple-icon
- * with Content-Type: image/png. It's referenced by the metadata.icons.apple
- * config in layout.tsx and by the manifest.json icons array.
+ * Faithful to the Symbol of Veles from Wikipedia — THREE SEPARATE filled
+ * segments (not connected strokes):
+ *   1. Top bar (trapezoid, widest at top)
+ *   2. Outer downward triangle (apex at bottom)
+ *   3. Inner downward triangle (smaller, centered inside outer)
  *
- * Design: Veles symbol (inverted A) on a polished copper gradient tile,
- * with top sheen + bottom inner shadow for a 3D premium look at 180x180.
+ * iOS Safari requires PNG (SVG support is unreliable for home screen icons).
  */
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
@@ -56,27 +56,21 @@ export default function AppleIcon() {
             borderRadius: "22%",
           }}
         />
-        {/* Veles symbol (inverted A) — bold strokes scaled for 180x180 */}
+        {/* Veles symbol — 3 separate filled segments, cream on copper.
+            viewBox 0 0 32 34 (aspect ratio ~0.94, matching 560:600 original). */}
         <svg
           width="58%"
-          height="58%"
-          viewBox="0 0 32 32"
-          fill="none"
+          height="64%"
+          viewBox="0 0 32 34"
+          fill="#FFFBF5"
           style={{ position: "relative" }}
         >
-          <path
-            d="M7 8 L16 27 L25 8"
-            stroke="#FFFBF5"
-            strokeWidth="4.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M10.5 15 L21.5 15"
-            stroke="#FFFBF5"
-            strokeWidth="4.2"
-            strokeLinecap="round"
-          />
+          {/* Segment 1: Top bar (trapezoid — wider at top, narrower at bottom) */}
+          <path d="M2 2 L30 2 L27 9 L5 9 Z" />
+          {/* Segment 2: Outer downward triangle (apex at bottom center) */}
+          <path d="M4 11 L16 32 L28 11 Z" />
+          {/* Segment 3: Inner downward triangle (smaller, centered, gap between it and outer) */}
+          <path d="M10 13 L16 23 L22 13 Z" />
         </svg>
       </div>
     ),
