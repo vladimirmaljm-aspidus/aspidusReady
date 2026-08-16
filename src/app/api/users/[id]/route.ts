@@ -194,9 +194,56 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       }
     }
 
-    await auth.store.deleteUser(id);
-    await audit(auth.store, auth.user, req, "user.delete", "user", id);
-    return NextResponse.json({ ok: true });
+    // ── GDPR Article 17 — right to erasure ─────────────────────────────────
+    // audit_logs is append-only (migration 010) for tamper-evidence, but it
+    // stores PII (username, ip, user_agent) for every action this user ever
+    // took. We cannot DELETE those rows (trigger blocks it, and we want to
+    // preserve the audit trail), but we MUST strip the PII before the user
+    // row goes away — otherwise the PII persists forever and GDPR Article 17
+    // is violated.
+    //
+    // The anonymisation happens BEFORE `deleteUserCascade` because the
+    // function matches audit_logs rows by `WHERE user_id = p_user_id`; if we
+    // deleted the user first there would be nothing to join on
+    // (audit_logs.user_id has no FK to users, so it isn't cascaded).
+    //
+    // ── P0 / task C-1 — orphan prevention cascade ─────────────────────────
+    // The live DB has no FK CASCADE from sessions / user_tasks /
+    // entity_notes / user_preferences / login_history / known_ips /
+    // trusted_devices / notifications → users.id, so a plain
+    // `DELETE FROM users WHERE id=?` orphans every row that references
+    // this user. `deleteUserCascade` walks those tables in dependency
+    // order and then deletes the user row last. The list is a superset —
+    // any table that doesn't exist in a given env is skipped silently
+    // (the per-table delete is wrapped in try/catch inside the store).
+    //
+    // The append-only `audit_logs` table is NOT in that list — it is
+    // handled separately by `anonymizeUserAuditLogs` above (migration
+    // 030), which strips PII but preserves the audit trail per GDPR
+    // Article 17 / financial-audit retention rules.
+    let auditRowsAnonymised = 0;
+    try {
+      auditRowsAnonymised = await auth.store.anonymizeUserAuditLogs(id);
+    } catch (e: any) {
+      // A failed right-to-erasure is a GDPR violation — surface it as a
+      // 500 with a clear message rather than silently continuing with the
+      // user deletion and leaving PII behind. Operators must investigate
+      // (most likely cause: migration 030 not yet applied to this env).
+      return NextResponse.json(
+        {
+          error:
+            "User deletion aborted: failed to anonymise audit_logs PII " +
+            "(GDPR Article 17). " + (e?.message ?? String(e)),
+        },
+        { status: 500 },
+      );
+    }
+
+    await auth.store.deleteUserCascade(id);
+    await audit(auth.store, auth.user, req, "user.delete", "user", id, {
+      gdpr_audit_logs_anonymised: auditRowsAnonymised,
+    });
+    return NextResponse.json({ ok: true, auditRowsAnonymised });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }

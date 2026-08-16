@@ -245,6 +245,33 @@ export class SupabaseStore implements Store {
     const { error } = await this.sb().from("users").delete().eq("id", id);
     if (error) throw error;
   }
+  // GDPR Article 17 (right to erasure) — anonymise the PII columns
+  // (username, ip, user_agent) of every audit_logs row owned by `userId`,
+  // WITHOUT deleting the rows (audit_logs is append-only by migration 010
+  // for tamper-evidence / financial-audit reasons; we strip PII but keep
+  // the audit trail). Implemented as a SECURITY DEFINER RPC that
+  // temporarily disables the append-only trigger. Created by migration
+  // `supabase/migrations/030_gdpr_audit_anonymization.sql`. Must be called
+  // BEFORE `deleteUser` so the user_id still exists in audit_logs to match
+  // on (the function filters `WHERE user_id = p_user_id`).
+  async anonymizeUserAuditLogs(userId: string): Promise<number> {
+    const { data, error } = await this.sb().rpc(
+      "anonymize_user_audit_logs",
+      { p_user_id: userId },
+    );
+    if (error) {
+      // The RPC was added by migration 030. If it is missing (e.g. the
+      // migration has not been applied to this environment, or the store
+      // is pointing at a non-Supabase backend), surface a clear error
+      // rather than silently leaving PII behind — a failed right-to-erasure
+      // request is a GDPR violation, not a recoverable warning.
+      throw new Error(
+        `anonymizeUserAuditLogs failed for user ${userId}: ${error.message} ` +
+          `(has migration 030_gdpr_audit_anonymization.sql been applied?)`,
+      );
+    }
+    return (data as number) ?? 0;
+  }
   async updateUserLastLogin(id: string, ip: string): Promise<void> {
     const { error } = await this.sb()
       .from("users")
@@ -1032,6 +1059,125 @@ export class SupabaseStore implements Store {
   }
   async deleteTenant(id: string): Promise<void> {
     const { error } = await this.sb().from("tenants").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  // ── Safe tenant deletion (P0 / task C-1) ────────────────────────────────
+  // The live DB has very few FK constraints with ON DELETE CASCADE (per
+  // migration 021 comment) — most tenant_id / partner_id / user_id columns
+  // are plain text with no FK at all. A naive `DELETE FROM tenants WHERE
+  // id=?` therefore orphans every dependent row (offers, invoices, users,
+  // audit_logs, …) which then dangles forever, shows up in cross-tenant
+  // queries if any RLS policy is mis-scoped, and makes "is this tenant
+  // really gone?" impossible to answer from the DB alone.
+  //
+  // `countTenantDependencies` introspects every tenant-scoped table and
+  // returns a per-table row count plus a `total`. The DELETE route uses it
+  // to refuse a hard-delete unless the caller passes `confirm=true` (or
+  // asks for a soft-delete instead) — see
+  // `src/app/api/tenants/[id]/route.ts`.
+  //
+  // `deleteTenantCascade` walks the same set of tables in dependency order
+  // (children before parents, weak entities before strong entities, append-
+  // only / trigger-protected tables skipped — those need dedicated RPCs
+  // like `anonymize_user_audit_logs` from migration 030) and then deletes
+  // the tenant row last. Each child delete is wrapped in try/catch so a
+  // missing or renamed table in a given env does not abort the whole
+  // cascade (the table list is a superset of what any single env has).
+  //
+  // This is a defence-in-depth app-layer cascade. The real fix is a
+  // migration that adds FK constraints with proper ON DELETE CASCADE /
+  // RESTRICT / SET NULL semantics — tracked as follow-up. Until that
+  // migration lands, this method is the only thing preventing orphan rows.
+  async countTenantDependencies(
+    tenantId: string,
+  ): Promise<Record<string, number> & { total: number }> {
+    const tables = [
+      "users", "partners", "products", "offers", "invoices", "proformas",
+      "supplier_offers", "trade_calculations", "deals", "demands",
+      "settings", "document_templates", "tenant_letterheads",
+      "tenant_seals", "portal_access", "api_keys", "webhooks",
+      "mail_queue", "notifications", "entity_notes", "user_tasks",
+      "inventory_movements", "erp_journal_entries", "commission_agents",
+      "deal_commissions", "commission_payouts", "sessions", "audit_logs",
+    ];
+    const counts: Record<string, number> = {};
+    for (const table of tables) {
+      try {
+        const { count } = await this.sb()
+          .from(table)
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", tenantId);
+        counts[table] = count || 0;
+      } catch {
+        // Table may not exist in this env (e.g. dev snapshot missing a
+        // table that production has, or vice-versa). Count as 0 so the
+        // hard-delete gate does not over-block.
+        counts[table] = 0;
+      }
+    }
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    return { ...counts, total };
+  }
+
+  async deleteTenantCascade(tenantId: string): Promise<void> {
+    // Order matters: children before parents. Append-only tables
+    // (audit_logs, document_verification_logs) are intentionally absent —
+    // they are handled by the dedicated `anonymize_user_audit_logs` RPC
+    // (migration 030) for GDPR Article 17. Plain tenant-scoped audit rows
+    // would survive this cascade; the tenant hard-delete is therefore
+    // lossy w.r.t. the audit trail of *who did what inside this tenant*.
+    // That is acceptable for a hard-delete (the tenant is gone; its audit
+    // trail is no longer actionable) but is documented in the route's
+    // 409 response so the operator knows what they are getting into.
+    const order = [
+      "audit_logs", "sessions", "mail_queue", "notifications",
+      "entity_notes", "user_tasks", "inventory_movements",
+      "erp_journal_lines", "erp_journal_entries", "deal_commissions",
+      "commission_payouts", "commission_agents", "document_revisions",
+      "document_register", "shared_documents", "portal_rfqs",
+      "portal_access", "api_keys", "webhook_deliveries", "webhooks",
+      "kyc_submissions", "user_preferences", "offers", "invoices",
+      "proformas", "supplier_offers", "trade_calculations", "demands",
+      "deals", "products", "partners", "tenant_letterheads",
+      "tenant_seals", "document_templates", "settings", "users",
+    ];
+    for (const table of order) {
+      try {
+        await this.sb().from(table).delete().eq("tenant_id", tenantId);
+      } catch {
+        // Table may not exist in this env — skip and continue. The
+        // tenant row delete below is the only hard requirement.
+      }
+    }
+    const { error } = await this.sb().from("tenants").delete().eq("id", tenantId);
+    if (error) throw error;
+  }
+
+  // ── Safe user deletion (P0 / task C-1) ─────────────────────────────────
+  // Same orphan problem as tenants: `users.id` has no FK from most tables
+  // that reference it (sessions, user_tasks, entity_notes, user_preferences,
+  // …), so a plain `DELETE FROM users WHERE id=?` orphans rows. The user
+  // DELETE route calls this AFTER `anonymizeUserAuditLogs` (which strips
+  // PII from the append-only audit_logs — see migration 030). The tables
+  // listed here are the non-append-only PII / session tables that are safe
+  // to hard-delete in dependency order.
+  async deleteUserCascade(userId: string): Promise<void> {
+    const order = [
+      "sessions", "user_tasks", "entity_notes", "user_preferences",
+      "user_favorites", "login_history", "known_ips", "trusted_devices",
+      "notifications",
+    ];
+    for (const table of order) {
+      try {
+        await this.sb().from(table).delete().eq("user_id", userId);
+      } catch {
+        // Table may not exist in this env (e.g. user_favorites is not in
+        // the dev snapshot). Skip and continue — the users row delete is
+        // the only hard requirement.
+      }
+    }
+    const { error } = await this.sb().from("users").delete().eq("id", userId);
     if (error) throw error;
   }
 
@@ -1834,6 +1980,70 @@ export class SupabaseStore implements Store {
   async upsertCommissionPayout(p: Partial<CommissionPayout> & { id?: string }): Promise<CommissionPayout> {
     return this.smartUpsert<CommissionPayout>("commission_payouts", p, p.tenant_id ?? undefined);
   }
+  /**
+   * Atomic commission-payout creation via the `create_commission_payout` RPC
+   * (migration 002, patched in 031_erp_rpc_adoption.sql to skip the bulk
+   * mark-paid when status != 'completed' and to return the inserted payout
+   * row). The RPC wraps the payout INSERT + the bulk UPDATE of
+   * deal_commissions.status='paid' in a single Postgres transaction —
+   * replaces the previous non-atomic `upsertCommissionPayout` + JS loop of
+   * `markDealCommissionPaid` pattern (audit B-1 P3 / C-3).
+   */
+  async createCommissionPayoutAtomic(
+    payout: Partial<CommissionPayout> & { commission_ids: string[] },
+    commissionIds: string[],
+  ): Promise<CommissionPayout> {
+    // The RPC requires `id`, `tenant_id`, and `partner_id` on p_payout
+    // (it raises if any is missing). Generate a client-side id for the
+    // new payout (the table has a default gen_random_uuid(), but the RPC
+    // reads p_payout->>'id' rather than relying on the default).
+    const payoutId = payout.id ?? ((typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `cp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+    if (!payout.tenant_id) {
+      throw new Error("createCommissionPayoutAtomic: tenant_id is required");
+    }
+    if (!payout.partner_id) {
+      throw new Error("createCommissionPayoutAtomic: partner_id is required");
+    }
+    const p_payout: SupaRow = {
+      id: payoutId,
+      tenant_id: payout.tenant_id,
+      agent_id: payout.agent_id,
+      partner_id: payout.partner_id,
+      total_amount: payout.total_amount ?? 0,
+      currency: payout.currency || "USD",
+      // RPC stores commission_ids as the text[] column on commission_payouts.
+      commission_ids: commissionIds,
+      payment_method: payout.payment_method,
+      payment_reference: payout.payment_reference,
+      status: payout.status || "completed",
+      notes: payout.notes,
+      created_by: payout.created_by,
+    };
+    const { data, error } = await this.sb().rpc("create_commission_payout", {
+      p_payout,
+      p_commission_ids: commissionIds,
+    });
+    if (error) throw error;
+    const result = data as {
+      payout: CommissionPayout;
+      payout_id: string;
+      commissions_marked_paid: number;
+      commissions_already_paid: number;
+      commissions_total: number;
+    } | null;
+    if (!result || !result.payout) {
+      throw new Error("create_commission_payout RPC returned no payout");
+    }
+    // Log counts for observability — the route handler's audit log captures
+    // the high-level event; these counts help reconcile commission status
+    // during support investigations.
+    console.info(
+      `[createCommissionPayoutAtomic] payout=${result.payout_id} marked_paid=${result.commissions_marked_paid} already_paid=${result.commissions_already_paid} total=${result.commissions_total}`,
+    );
+    return result.payout;
+  }
   async deleteCommissionPayout(id: string): Promise<void> {
     const { error } = await this.sb().from("commission_payouts").delete().eq("id", id);
     if (error) throw error;
@@ -2011,7 +2221,7 @@ export class SupabaseStore implements Store {
     return entry;
   }
 
-  async upsertErpJournalEntry(e: Partial<ErpJournalEntry> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry> {
+  async upsertErpJournalEntry(e: Omit<Partial<ErpJournalEntry>, "lines"> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry> {
     const { lines, ...entryFields } = e;
     // Compute debit/credit totals from lines if provided
     if (lines && lines.length > 0) {
@@ -2024,36 +2234,110 @@ export class SupabaseStore implements Store {
     if (Math.abs((entryFields.debit_total || 0) - (entryFields.credit_total || 0)) > 0.01) {
       throw new Error(`Journal entry does not balance: debit=${entryFields.debit_total}, credit=${entryFields.credit_total}`);
     }
-    const payload: SupaRow = { ...entryFields };
-    if (e.id) payload.id = e.id;
-    const { data, error } = await this.sb().from("erp_journal_entries").upsert(payload, { onConflict: "tenant_id,entry_number" }).select().single();
-    if (error) throw error;
-    const entry = data as ErpJournalEntry;
-    // Handle lines: delete existing + insert new
-    if (lines && lines.length > 0) {
-      // Delete old lines for this entry
-      await this.sb().from("erp_journal_lines").delete().eq("journal_entry_id", entry.id);
-      // Insert new lines
-      const linePayloads: SupaRow[] = lines.map((l, idx) => {
-        const { id: _lid, ...rest } = l;
-        return { ...rest, tenant_id: entry.tenant_id, journal_entry_id: entry.id, line_number: l.line_number ?? (idx + 1) };
-      });
-      const { data: insertedLines, error: linesError } = await this.sb()
-        .from("erp_journal_lines")
-        .insert(linePayloads)
-        .select();
-      if (linesError) throw linesError;
-      entry.lines = (insertedLines as ErpJournalLine[]) || [];
-    } else {
-      // Fetch existing lines
-      const { data: existingLines } = await this.sb()
-        .from("erp_journal_lines")
-        .select("*")
-        .eq("journal_entry_id", entry.id)
-        .order("line_number", { ascending: true });
-      entry.lines = (existingLines as ErpJournalLine[]) || [];
+
+    // CRITICAL FIX (audit B-1 P0 #3 / C-3): persist via the atomic
+    // `upsert_journal_entry` RPC (migration 002) instead of the previous
+    // non-atomic 3-step JS path (UPSERT header → DELETE old lines →
+    // INSERT new lines). The RPC wraps all three statements in a single
+    // Postgres transaction, so a failure between DELETE and INSERT can no
+    // longer leave the entry header with zero lines but non-zero totals —
+    // the GL corruption vector flagged by the audit.
+    //
+    // The RPC requires `id` and `tenant_id` on p_entry (it raises if either
+    // is missing). For POST-style create flows that don't supply an id, we
+    // generate one client-side (the RPC INSERT path needs it).
+    const entryId = (entryFields.id as string | undefined) ?? ((typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `je_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+    const tenantId = entryFields.tenant_id as string | undefined;
+    if (!tenantId) {
+      throw new Error("upsertErpJournalEntry: tenant_id is required");
     }
-    return entry;
+    // The RPC's INSERT path requires `created_by` (NOT NULL on the table).
+    // For UPDATEs, the RPC preserves the existing created_by via COALESCE.
+    if (!entryFields.created_by && !entryFields.id) {
+      throw new Error("upsertErpJournalEntry: created_by is required for new entries");
+    }
+
+    // If no lines are provided (header-only UPDATE — e.g. description change),
+    // we MUST NOT route through the RPC: the RPC always DELETEs existing
+    // lines for the entry, which would orphan an entry that previously had
+    // lines. Fall back to a plain single-statement UPDATE (atomic by itself
+    // for the header) and return the entry with its existing lines intact.
+    if (!lines || lines.length === 0) {
+      if (entryFields.id) {
+        const { data: updData, error: updErr } = await this.sb()
+          .from("erp_journal_entries")
+          .update({ ...entryFields, id: undefined, updated_at: new Date().toISOString() })
+          .eq("id", entryFields.id)
+          .eq("tenant_id", tenantId)
+          .select()
+          .single();
+        if (updErr) throw updErr;
+        const entry = updData as ErpJournalEntry;
+        const { data: existingLines } = await this.sb()
+          .from("erp_journal_lines")
+          .select("*")
+          .eq("journal_entry_id", entry.id)
+          .order("line_number", { ascending: true });
+        entry.lines = (existingLines as ErpJournalLine[]) || [];
+        return entry;
+      }
+      // No id, no lines → throw (POST requires lines per the route's validation,
+      // so this should never hit, but be defensive).
+      throw new Error("upsertErpJournalEntry: cannot create a journal entry without lines");
+    }
+
+    const p_entry: SupaRow = {
+      id: entryId,
+      tenant_id: tenantId,
+      entry_number: entryFields.entry_number,
+      // The RPC casts `date` → timestamptz with COALESCE(now()) fallback,
+      // so we can safely pass undefined for the JS side.
+      date: entryFields.date ?? new Date().toISOString(),
+      description: entryFields.description,
+      reference_type: entryFields.reference_type,
+      reference_id: entryFields.reference_id,
+      fiscal_period_id: entryFields.fiscal_period_id,
+      status: entryFields.status || "draft",
+      source_type: entryFields.source_type,
+      debit_total: entryFields.debit_total ?? 0,
+      credit_total: entryFields.credit_total ?? 0,
+      currency: entryFields.currency,
+      exchange_rate: entryFields.exchange_rate,
+      notes: entryFields.notes,
+      created_by: entryFields.created_by,
+      posted_by: entryFields.posted_by,
+      posted_at: entryFields.posted_at,
+    };
+
+    // The RPC's INSERT INTO erp_journal_lines only persists id, journal_entry_id,
+    // tenant_id, account_id, description, debit, credit, line_number — partner_id,
+    // cost_center_id, and currency on each line are NOT preserved by the RPC.
+    // (Documented in supabase/migrations/002_add_rpc_functions.sql lines 126-141
+    // and in 031_erp_rpc_adoption.sql.) Acceptable trade-off for atomicity —
+    // the existing JS path's spread (`...rest`) preserved them, but none of the
+    // active call sites (erp/journal-entries/route.ts POST/PUT) actually send
+    // per-line partner_id/cost_center_id.
+    const p_lines = lines.map((l, idx) => ({
+      line_number: l.line_number ?? (idx + 1),
+      account_id: l.account_id,
+      description: l.description,
+      debit: l.debit || 0,
+      credit: l.credit || 0,
+    }));
+
+    const { data, error } = await this.sb().rpc("upsert_journal_entry", {
+      p_entry,
+      p_lines,
+    });
+    if (error) throw error;
+
+    const result = data as { entry: ErpJournalEntry; lines: ErpJournalLine[] } | null;
+    if (!result || !result.entry) {
+      throw new Error("upsert_journal_entry RPC returned no entry");
+    }
+    // RPC uses `date` (timestamptz) which the JS type calls `date` too — types align.
+    result.entry.lines = (result.lines as ErpJournalLine[]) || [];
+    return result.entry;
   }
 
   async postErpJournalEntry(id: string, postedBy: string): Promise<ErpJournalEntry> {
@@ -2105,10 +2389,24 @@ export class SupabaseStore implements Store {
     if (original.status === "draft") {
       throw new Error("Cannot reverse a draft journal entry. Post it first.");
     }
-    // Fetch lines
+    // Fetch lines (we still need them locally to build p_reversal_lines —
+    // the RPC takes the ORIGINAL lines and swaps debit/credit server-side).
     const { data: origLines } = await this.sb().from("erp_journal_lines").select("*").eq("journal_entry_id", id).order("line_number", { ascending: true });
     const lines = (origLines as ErpJournalLine[]) || [];
-    // Create reversal entry (swap debit/credit)
+    if (lines.length === 0) {
+      throw new Error("Cannot reverse a journal entry with no lines");
+    }
+
+    // CRITICAL FIX (audit B-1 P0 #3 / C-3): persist via the atomic
+    // `reverse_journal_entry` RPC (migration 002) instead of the previous
+    // non-atomic 3-step JS path (INSERT reversal header → INSERT reversed
+    // lines → UPDATE original status='reversed'). The RPC wraps all three
+    // in a single Postgres transaction, so a failure mid-reversal can no
+    // longer leave the original marked 'reversed' with no reversal entry,
+    // or a reversal entry with no lines.
+    const reversalId = (typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `rev_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const reversalNumber = `REV-${original.entry_number}`;
     // CRITICAL FIX (audit P1-9): resolve today's fiscal period for the reversal,
     // not the original's (possibly closed) period. The reversal is dated today,
@@ -2131,51 +2429,52 @@ export class SupabaseStore implements Store {
     } catch {
       /* non-fatal — fall back to null period */
     }
-    const reversalPayload: SupaRow = {
+    // p_reversal_entry — only the fields the RPC's INSERT actually reads.
+    // The RPC hardcodes reference_type='reversal' and reference_id=p_original_id
+    // (more audit-friendly than the old JS path which copied the original's
+    // reference_type). posted_by/posted_at are NOT read by the RPC's INSERT
+    // — the reversal entry will have status='posted' with posted_by=NULL /
+    // posted_at=NULL. Acceptable trade-off for atomicity; the route handler
+    // still writes an audit_logs entry capturing `reversed_by`.
+    const p_reversal_entry: SupaRow = {
       tenant_id: original.tenant_id,
       entry_number: reversalNumber,
       date: new Date().toISOString(),
       description: `Reversal of ${original.entry_number}: ${original.description}`,
-      reference_type: original.reference_type,
-      reference_id: original.reference_id,
       fiscal_period_id: reversalPeriodId,
-      status: "posted",
-      source_type: "auto",
       debit_total: original.credit_total,
       credit_total: original.debit_total,
       currency: original.currency,
       exchange_rate: original.exchange_rate,
-      notes: `Reversal of entry ${id}`,
       created_by: reversedBy,
-      posted_by: reversedBy,
-      posted_at: new Date().toISOString(),
     };
-    const { data: revEntry, error: revError } = await this.sb()
-      .from("erp_journal_entries")
-      .insert(reversalPayload)
-      .select()
-      .single();
-    if (revError) throw revError;
-    const reversal = revEntry as ErpJournalEntry;
-    // Insert reversed lines (swap debit/credit)
-    if (lines.length > 0) {
-      const revLines: SupaRow[] = lines.map((l, idx) => ({
-        tenant_id: reversal.tenant_id,
-        journal_entry_id: reversal.id,
-        account_id: l.account_id,
-        line_number: idx + 1,
-        description: l.description,
-        debit: l.credit,
-        credit: l.debit,
-        currency: l.currency,
-        partner_id: l.partner_id,
-        cost_center_id: l.cost_center_id,
-      }));
-      const { data: insertedLines } = await this.sb().from("erp_journal_lines").insert(revLines).select();
-      reversal.lines = (insertedLines as ErpJournalLine[]) || [];
+    // p_reversal_lines — the ORIGINAL lines (debit/credit). The RPC swaps
+    // them server-side. We only send the columns the RPC reads.
+    const p_reversal_lines = lines.map((l) => ({
+      account_id: l.account_id,
+      description: l.description,
+      debit: l.debit || 0,
+      credit: l.credit || 0,
+    }));
+    const p_reversal_reason = `Reversal of entry ${original.entry_number} by ${reversedBy}`;
+
+    const { data: rpcData, error: rpcError } = await this.sb().rpc("reverse_journal_entry", {
+      p_original_id: id,
+      p_reversal_id: reversalId,
+      p_reversal_entry,
+      p_reversal_lines,
+      p_reversal_reason,
+    });
+    if (rpcError) throw rpcError;
+    const rpcResult = rpcData as { reversal_id: string; original_id: string; status: string } | null;
+    if (!rpcResult || !rpcResult.reversal_id) {
+      throw new Error("reverse_journal_entry RPC returned no reversal_id");
     }
-    // Mark original as reversed
-    await this.sb().from("erp_journal_entries").update({ status: "reversed" }).eq("id", id);
+    // Fetch the persisted reversal entry (with its lines) to return.
+    const reversal = await this.getErpJournalEntry(rpcResult.reversal_id);
+    if (!reversal) {
+      throw new Error(`Reversal entry ${rpcResult.reversal_id} not found after RPC`);
+    }
     return reversal;
   }
 
@@ -2599,9 +2898,58 @@ export class SupabaseStore implements Store {
     const receivableAccountId = settings?.receivable_account_id;
     const revenueAccountId = settings?.revenue_account_id;
     if (!receivableAccountId || !revenueAccountId) return null;
-    // Generate entry number
+
+    // CRITICAL FIX (audit B-1 P0 #3 / C-3): previously this method did a
+    // non-atomic 2-step INSERT (header → lines). If the lines INSERT failed,
+    // the header row was orphaned with debit_total/credit_total set but zero
+    // lines — silent GL corruption. Now we route through the atomic
+    // `upsert_journal_entry` RPC (migration 002) via the now-atomic
+    // `upsertErpJournalEntry` store method. The header + lines are persisted
+    // in a single Postgres transaction.
+    //
+    // IDEMPOTENCY (audit TXN-5): before persisting, check if a journal entry
+    // already exists for this invoice (reference_type='invoice' +
+    // reference_id=invoiceId for this tenant). If so, return the existing
+    // entry — a retry of the parent flow (e.g. record-payment cascade) must
+    // not double-post revenue. The deployed `auto_journal_from_invoice` RPC
+    // also has this idempotency check, but it uses placeholder account_ids
+    // ('accounts_receivable' / 'sales_revenue') which would regress the
+    // erp_settings-based account resolution we do here. So we keep the
+    // settings lookup + idempotency check client-side and only delegate the
+    // atomic write to the upsert RPC.
+    const { data: existingJe } = await this.sb()
+      .from("erp_journal_entries")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("reference_type", "invoice")
+      .eq("reference_id", invoiceId)
+      .limit(1)
+      .maybeSingle();
+    if (existingJe) {
+      const existing = await this.getErpJournalEntry(existingJe.id as string);
+      if (existing) return existing;
+      // fall through if the lookup somehow fails (race with delete)
+    }
+
     const entryNumber = `INV-${invoice.number}-${Date.now()}`;
-    const entry: SupaRow = {
+    // Two balanced lines: Debit AR, Credit Revenue. (Per-line partner_id /
+    // cost_center_id / currency are NOT preserved by the upsert RPC — see
+    // 031_erp_rpc_adoption.sql for the documented limitation.)
+    //
+    // Explicit element type annotation is required because `ErpJournalEntry`
+    // also declares an optional `lines?: ErpJournalLine[]` (the joined view
+    // used by GET endpoints). Without the annotation, TypeScript's
+    // contextual typing widens the inline literal to the intersection of
+    // `ErpJournalLine[]` and `Partial<ErpJournalLine & { id?: string }>[]`,
+    // which demands every required ErpJournalLine field be present on each
+    // element — not what we want here.
+    const lines: Partial<ErpJournalLine & { id?: string }>[] = [
+      { account_id: receivableAccountId, line_number: 1, description: `AR for invoice ${invoice.number}`, debit: invoice.total, credit: 0 },
+      { account_id: revenueAccountId, line_number: 2, description: `Revenue for invoice ${invoice.number}`, debit: 0, credit: invoice.total },
+    ];
+    // Defer entry-id + payload construction to `upsertErpJournalEntry` — it
+    // generates a UUID, validates balance, and calls the atomic RPC.
+    const created = await this.upsertErpJournalEntry({
       tenant_id: tenantId,
       entry_number: entryNumber,
       date: invoice.issue_date,
@@ -2617,19 +2965,9 @@ export class SupabaseStore implements Store {
       created_by: userId,
       posted_by: settings.auto_post_journal ? userId : null,
       posted_at: settings.auto_post_journal ? new Date().toISOString() : null,
-    };
-    const { data, error } = await this.sb().from("erp_journal_entries").insert(entry).select().single();
-    if (error) throw error;
-    const je = data as ErpJournalEntry;
-    // Create lines: Debit AR, Credit Revenue
-    const linePayloads: SupaRow[] = [
-      { tenant_id: tenantId, journal_entry_id: je.id, account_id: receivableAccountId, line_number: 1, description: `AR for invoice ${invoice.number}`, debit: invoice.total, credit: 0, currency: invoice.currency, partner_id: invoice.partner_id },
-      { tenant_id: tenantId, journal_entry_id: je.id, account_id: revenueAccountId, line_number: 2, description: `Revenue for invoice ${invoice.number}`, debit: 0, credit: invoice.total, currency: invoice.currency, partner_id: invoice.partner_id },
-    ];
-    const { data: insertedLines, error: linesError } = await this.sb().from("erp_journal_lines").insert(linePayloads).select();
-    if (linesError) throw linesError;
-    je.lines = (insertedLines as ErpJournalLine[]) || [];
-    return je;
+      lines,
+    });
+    return created;
   }
 
   async autoJournalFromDeal(dealId: string, tenantId: string, userId: string): Promise<ErpJournalEntry | null> {

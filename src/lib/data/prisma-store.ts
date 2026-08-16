@@ -26,6 +26,7 @@ import {
   ErpCostCenter, ErpBankAccount, ErpBankTransaction, ErpSetting,
   TrialBalance, BalanceSheet, ProfitAndLoss, GeneralLedger,
   UserPreference,
+  CommissionPayout,
 } from "@/lib/supabase/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -319,6 +320,16 @@ export class PrismaStore implements Store {
 
   async deleteUser(id: string): Promise<void> {
     await db.user.delete({ where: { id } });
+  }
+
+  // GDPR Article 17 — no-op in the prisma store (no audit_logs table mapped
+  // in the prisma schema). Returns 0 so the user-deletion cascade can invoke
+  // this unconditionally across all store implementations. If/when the prisma
+  // schema gains an audit_logs model, this should issue the same pseudonymising
+  // UPDATE as the Supabase store (or call the same RPC if the prisma backend
+  // is pointed at the same Postgres DB).
+  async anonymizeUserAuditLogs(_userId: string): Promise<number> {
+    return 0;
   }
 
   async updateUserLastLogin(id: string, ip: string): Promise<void> {
@@ -1431,6 +1442,18 @@ export class PrismaStore implements Store {
   async deleteTenant(id: string): Promise<void> {
     await db.tenant.delete({ where: { id } });
   }
+  // P0 / task C-1 — prisma-store stubs. The prisma schema's relational
+  // `User` / `Tenant` models already cascade via Prisma's `onDelete:
+  // Cascade` rules (set in schema.prisma), so the app-layer cascade is a
+  // no-op here. Returning 0 / void lets the tenant / user DELETE routes
+  // call these unconditionally across all store implementations.
+  async countTenantDependencies(
+    _tenantId: string,
+  ): Promise<Record<string, number> & { total: number }> {
+    return { total: 0 };
+  }
+  async deleteTenantCascade(_tenantId: string): Promise<void> {}
+  async deleteUserCascade(_userId: string): Promise<void> {}
 
   // ─── Product Catalog ────────────────────────────────────────────────────
 
@@ -2467,7 +2490,7 @@ export class PrismaStore implements Store {
   async closeFiscalPeriod(_id: string, _closedBy: string): Promise<FiscalPeriod> { throw new Error("Not implemented"); }
   async listErpJournalEntries(_tenantId: string, _params?: ListParams): Promise<ListResult<ErpJournalEntry>> { return { items: [], total: 0 }; }
   async getErpJournalEntry(_id: string): Promise<ErpJournalEntry | null> { return null; }
-  async upsertErpJournalEntry(_e: Partial<ErpJournalEntry> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry> { throw new Error("Not implemented"); }
+  async upsertErpJournalEntry(_e: Omit<Partial<ErpJournalEntry>, "lines"> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry> { throw new Error("Not implemented"); }
   async postErpJournalEntry(_id: string, _postedBy: string): Promise<ErpJournalEntry> { throw new Error("Not implemented"); }
   async reverseErpJournalEntry(_id: string, _reversedBy: string): Promise<ErpJournalEntry> { throw new Error("Not implemented"); }
   async deleteErpJournalEntry(_id: string): Promise<void> { throw new Error("Not implemented"); }
@@ -2489,6 +2512,13 @@ export class PrismaStore implements Store {
   async autoJournalFromInvoice(_invoiceId: string, _tenantId: string, _userId: string): Promise<ErpJournalEntry | null> { return null; }
   async autoJournalFromDeal(_dealId: string, _tenantId: string, _userId: string): Promise<ErpJournalEntry | null> { return null; }
   async autoJournalFromCommission(_commissionId: string, _tenantId: string, _userId: string): Promise<ErpJournalEntry | null> { return null; }
+  // PrismaStore does not implement commission payouts (legacy backend).
+  // Production uses SupabaseStore which calls the `create_commission_payout`
+  // RPC for atomic payout creation. These stubs satisfy the Store interface.
+  async createCommissionPayoutAtomic(
+    _payout: Partial<CommissionPayout> & { commission_ids: string[] },
+    _commissionIds: string[],
+  ): Promise<CommissionPayout> { throw new Error("Not implemented"); }
 
   // ─── User Preferences ──────────────────────────────────────────────────
   async getUserPreference(userId: string, key: string): Promise<UserPreference | null> {

@@ -150,9 +150,57 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const _d = requirePermission(auth, "platform.tenants.delete"); if (_d) return _d; } /* requirePermission wired */
 
     const { id } = await params;
-    await auth.store.deleteTenant(id);
-    await audit(auth.store, auth.user, req, "tenant.delete", "tenant", id);
-    return NextResponse.json({ ok: true });
+    const existing = await auth.store.getTenant(id);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+
+    // The DELETE body is OPTIONAL — callers may send an empty body, a JSON
+    // body with `{ confirm: true }` to hard-delete despite existing
+    // dependent rows, or `{ soft: true }` to flip the tenant's status to
+    // `cancelled` instead of deleting anything. `req.json()` throws on an
+    // empty body, hence the try/catch fallback to an empty object.
+    let body: { confirm?: boolean; soft?: boolean } = {};
+    try { body = await req.json(); } catch { /* empty body — treat as default */ }
+
+    // ── P0 / task C-1 — orphan prevention gate ────────────────────────────
+    // The live DB has very few FK CASCADE constraints (migration 021
+    // comment). A naive `DELETE FROM tenants WHERE id=?` orphans every
+    // dependent row (users, offers, invoices, audit_logs, …) which then
+    // dangles forever. We refuse the hard-delete unless the caller
+    // explicitly confirms they understand the cascade, OR they ask for a
+    // soft-delete instead (status → cancelled, no data loss).
+    const deps = await auth.store.countTenantDependencies(id);
+
+    if (deps.total > 0 && !body.confirm) {
+      return NextResponse.json({
+        error: "Tenant has existing data. Pass confirm=true to hard delete, or soft=true for soft delete.",
+        dependencies: deps,
+      }, { status: 409 });
+    }
+
+    // Soft-delete: keep all data, flip status to `cancelled`. Reversible
+    // by a subsequent PUT to status=active. The tenant's users keep their
+    // sessions until the next request (the session-invalidation on status
+    // change happens in PUT, not here — soft-delete is meant to be a
+    // "deactivate" rather than a true delete).
+    if (body.soft) {
+      await auth.store.upsertTenant({ id, status: "cancelled" });
+      await audit(auth.store, auth.user, req, "tenant.soft_delete", "tenant", id, { name: existing.name });
+      return NextResponse.json({ ok: true, mode: "soft" });
+    }
+
+    // Hard-delete: walk every tenant-scoped table in dependency order and
+    // DELETE the rows, then DELETE the tenant row last. The dependency
+    // snapshot is captured in the audit entry so the audit trail records
+    // what was destroyed (the rows themselves go away). Note: append-only
+    // audit_logs rows that belong to this tenant are NOT cascade-deleted
+    // here (the trigger from migration 010 blocks DELETE); for tenant PII
+    // in audit_logs, run `anonymize_user_audit_logs` per user first.
+    await audit(auth.store, auth.user, req, "tenant.delete", "tenant", id, {
+      name: existing.name,
+      dependencies: deps,
+    });
+    await auth.store.deleteTenantCascade(id);
+    return NextResponse.json({ ok: true, mode: "hard", deleted: deps });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }

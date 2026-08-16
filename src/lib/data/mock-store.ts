@@ -99,6 +99,12 @@ export class MockStore implements Store {
     const idx = mock.users.findIndex((u) => u.id === id);
     if (idx >= 0) mock.users.splice(idx, 1);
   }
+  // GDPR Article 17 — no-op in the mock store (mock has no audit_logs table).
+  // Returns 0 so callers in the user-deletion cascade can invoke this
+  // unconditionally without checking which store implementation is active.
+  async anonymizeUserAuditLogs(_userId: string): Promise<number> {
+    return 0;
+  }
   async updateUserLastLogin(id: string, ip: string): Promise<void> {
     const u = mock.users.find((x) => x.id === id);
     if (u) {
@@ -770,6 +776,17 @@ export class MockStore implements Store {
   async deleteTenant(id: string): Promise<void> {
     const idx = mock.tenants.findIndex((t) => t.id === id); if (idx >= 0) mock.tenants.splice(idx, 1);
   }
+  // P0 / task C-1 — mock-store stubs. The mock store has no orphan-row
+  // problem (it deletes by array filter), so these are no-ops / counters
+  // that let the tenant / user DELETE routes call them unconditionally
+  // across all store implementations.
+  async countTenantDependencies(
+    _tenantId: string,
+  ): Promise<Record<string, number> & { total: number }> {
+    return { total: 0 };
+  }
+  async deleteTenantCascade(_tenantId: string): Promise<void> {}
+  async deleteUserCascade(_userId: string): Promise<void> {}
 
   // ---- product catalog ----
   async listProductCatalog(tenantId: string, params?: ListParams): Promise<ListResult<ProductCatalogEntry>> {
@@ -1411,6 +1428,28 @@ export class MockStore implements Store {
     const idx = mock.commissionPayouts.findIndex((p) => p.id === id);
     if (idx >= 0) mock.commissionPayouts.splice(idx, 1);
   }
+  /**
+   * Mock-store implementation of the atomic commission-payout creation.
+   * Mock has no Postgres RPC, so we fall back to the non-atomic pattern
+   * (upsert + loop mark-paid). Mock is for dev only — production uses
+   * SupabaseStore which calls the real `create_commission_payout` RPC.
+   */
+  async createCommissionPayoutAtomic(
+    payout: Partial<CommissionPayout> & { commission_ids: string[] },
+    commissionIds: string[],
+  ): Promise<CommissionPayout> {
+    const created = await this.upsertCommissionPayout(payout);
+    if (created.status === "completed") {
+      for (const commissionId of commissionIds) {
+        try {
+          await this.markDealCommissionPaid(commissionId, created.id);
+        } catch (e) {
+          console.warn(`[mock createCommissionPayoutAtomic] markDealCommissionPaid failed for ${commissionId}:`, e);
+        }
+      }
+    }
+    return created;
+  }
 
   // ---- commission summaries ----
   async getCommissionSummaries(tenantId: string): Promise<CommissionSummary[]> {
@@ -1578,7 +1617,7 @@ export class MockStore implements Store {
     return { ...entry, lines: [...this.erpJournalLines.values()].filter((l) => l.journal_entry_id === id) };
   }
 
-  async upsertErpJournalEntry(e: Partial<ErpJournalEntry> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry> {
+  async upsertErpJournalEntry(e: Omit<Partial<ErpJournalEntry>, "lines"> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry> {
     const existing = e.id ? this.erpJournalEntries.get(e.id) : undefined;
     if (existing) {
       Object.assign(existing, e, { updated_at: new Date().toISOString() });

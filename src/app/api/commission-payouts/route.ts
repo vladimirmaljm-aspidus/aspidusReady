@@ -78,14 +78,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const created = await auth.store.upsertCommissionPayout(body);
+    // CRITICAL FIX (audit B-1 P3 / C-3): use the atomic
+    // `createCommissionPayoutAtomic` store method, which calls the
+    // `create_commission_payout` RPC (migration 002) — the payout INSERT
+    // and the bulk mark-paid UPDATE run in a single Postgres transaction.
+    // Previously, the route did `upsertCommissionPayout` (INSERT) followed
+    // by a JS loop of `markDealCommissionPaid`; if the loop failed mid-way,
+    // the payout row existed but only some commissions were marked paid.
+    // The RPC also skips the mark-paid step when status != 'completed'
+    // (patched in 031_erp_rpc_adoption.sql), so pending payouts no longer
+    // accidentally transition commissions to 'paid'.
+    const commissionIds: string[] = Array.isArray(body.commission_ids) ? body.commission_ids : [];
+    const created = await auth.store.createCommissionPayoutAtomic(
+      { ...body, commission_ids: commissionIds },
+      commissionIds,
+    );
     await audit(auth.store, auth.user, req, "commission_payout.create", "commission_payout", created.id, { agent_id: created.agent_id, total_amount: created.total_amount });
-
-    if (created.commission_ids && created.status === "completed") {
-      for (const commissionId of created.commission_ids) {
-        await auth.store.markDealCommissionPaid(commissionId, created.payment_reference || undefined);
-      }
-    }
+    // No follow-up mark-paid loop — the RPC handled it atomically when
+    // created.status === 'completed'. For 'pending' payouts, no mark-paid
+    // is desired (the payout row is just reserved for later completion via
+    // the PUT route, which still uses the non-atomic upsertCommissionPayout
+    // + markDealCommissionPaid loop — out of scope for this fix).
 
     return NextResponse.json(created);
   } catch (error: any) {

@@ -43,6 +43,14 @@ export interface Store {
   listUsers(tenantId: string): Promise<User[]>;
   upsertUser(u: Partial<User> & { id?: string }): Promise<User>;
   deleteUser(id: string): Promise<void>;
+  // GDPR Article 17 — anonymise PII in audit_logs (username, ip, user_agent)
+  // for the given user_id BEFORE the user row is deleted. Returns the number
+  // of audit_logs rows anonymised. Implemented via a SECURITY DEFINER RPC
+  // (migration 030) that temporarily disables the append-only trigger from
+  // migration 010. Stores without a backing audit_logs table (mock, prisma)
+  // return 0 as a no-op so callers can invoke this unconditionally during
+  // the user-deletion cascade.
+  anonymizeUserAuditLogs(userId: string): Promise<number>;
   updateUserLastLogin(id: string, ip: string): Promise<void>;
   bumpUserTokenVersion(id: string): Promise<number>;
 
@@ -177,6 +185,22 @@ export interface Store {
   getTenant(id: string): Promise<Tenant | null>;
   upsertTenant(t: Partial<Tenant> & { id?: string }): Promise<Tenant>;
   deleteTenant(id: string): Promise<void>;
+  // P0 / task C-1 — safe tenant deletion. The live DB has very few FK
+  // CASCADE constraints (migration 021 comment), so a naive deleteTenant
+  // orphans every dependent row. `countTenantDependencies` returns a
+  // per-table row count + total for the DELETE route's confirm gate;
+  // `deleteTenantCascade` walks the same tables in dependency order and
+  // then deletes the tenant row last. Stores whose backend already
+  // cascades (prisma) return 0 / no-op so callers can invoke them
+  // unconditionally.
+  countTenantDependencies(
+    tenantId: string,
+  ): Promise<Record<string, number> & { total: number }>;
+  deleteTenantCascade(tenantId: string): Promise<void>;
+  // P0 / task C-1 — safe user deletion. Same orphan problem as tenants.
+  // Called by the users DELETE route AFTER `anonymizeUserAuditLogs`
+  // (which strips PII from the append-only audit_logs — migration 030).
+  deleteUserCascade(userId: string): Promise<void>;
 
   // ---- product catalog ----
   listProductCatalog(tenantId: string, params?: ListParams): Promise<ListResult<ProductCatalogEntry>>;
@@ -308,6 +332,25 @@ export interface Store {
   getCommissionPayout(id: string): Promise<CommissionPayout | null>;
   upsertCommissionPayout(p: Partial<CommissionPayout> & { id?: string }): Promise<CommissionPayout>;
   deleteCommissionPayout(id: string): Promise<void>;
+  /**
+   * Atomic commission-payout creation: inserts the payout row AND marks the
+   * linked DealCommissions as 'paid' in a single Postgres transaction (via
+   * the `create_commission_payout` RPC from migration 002). Replaces the
+   * previous non-atomic pattern of `upsertCommissionPayout` + a JS loop of
+   * `markDealCommissionPaid` — if the loop failed mid-way, the payout row
+   * existed but only some commissions were marked paid (audit B-1 P3 / C-3).
+   *
+   * The bulk mark-paid ONLY runs when `payout.status === 'completed'`. For
+   * 'pending' / 'cancelled' payouts, only the payout row is inserted (the
+   * approval gate in the route handler still runs first).
+   *
+   * Returns the inserted payout row. The count of commissions marked paid
+   * is logged via console.info for observability.
+   */
+  createCommissionPayoutAtomic(
+    payout: Partial<CommissionPayout> & { commission_ids: string[] },
+    commissionIds: string[],
+  ): Promise<CommissionPayout>;
 
   // ---- commission summaries ----
   getCommissionSummaries(tenantId: string): Promise<CommissionSummary[]>;
@@ -329,7 +372,7 @@ export interface Store {
   // Journal Entries
   listErpJournalEntries(tenantId: string, params?: ListParams): Promise<ListResult<ErpJournalEntry>>;
   getErpJournalEntry(id: string): Promise<ErpJournalEntry | null>;
-  upsertErpJournalEntry(e: Partial<ErpJournalEntry> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry>;
+  upsertErpJournalEntry(e: Omit<Partial<ErpJournalEntry>, "lines"> & { id?: string; lines?: Partial<ErpJournalLine & { id?: string }>[] }): Promise<ErpJournalEntry>;
   postErpJournalEntry(id: string, postedBy: string): Promise<ErpJournalEntry>;
   reverseErpJournalEntry(id: string, reversedBy: string): Promise<ErpJournalEntry>;
   deleteErpJournalEntry(id: string): Promise<void>;
