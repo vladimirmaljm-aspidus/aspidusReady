@@ -403,6 +403,73 @@ export interface DashboardInsights {
   low_stock_products: { id: string; name: string; sku: string; stock: number; reorder_level: number }[];
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard analytics charts (task D-2)
+// Aggregated datasets powering the five analytics charts on the dashboard:
+//   1. SalesTrendChart       — `salesData`     (monthly revenue, last 12 months)
+//   2. TopProductsChart      — `topProducts`   (top N products by offer revenue)
+//   3. OfferStatusChart      — `offerStatus`   (count by OfferStatus)
+//   4. MarginByCategoryChart — `marginByCategory` (avg profit margin by Product.category)
+//   5. PaymentTrendChart     — `paymentTrend`  (monthly payments received)
+//
+// All series are pre-aggregated server-side so the client only renders.
+// `period` is an opaque string echoed back for cache-keying — currently only
+// "12m" is implemented; unknown values fall back to 12 months.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface DashboardChartPoint {
+  label: string;
+  value: number;
+}
+export interface DashboardSalesPoint {
+  /** ISO month bucket, e.g. "2026-01" */
+  month: string;
+  /** Short display label, e.g. "Jan 2026" (locale-neutral, pre-formatted server-side) */
+  label: string;
+  /** Revenue recognised in this month (sum of paid-invoice totals) */
+  revenue: number;
+  /** Number of paid invoices in this month */
+  count: number;
+}
+export interface DashboardTopProduct {
+  product_id: string;
+  name: string;
+  sku: string;
+  /** Sum of line-item totals across all offers (any status) */
+  revenue: number;
+  /** Number of offer line-items this product appears on */
+  count: number;
+}
+export interface DashboardOfferStatusSlice {
+  status: OfferStatus;
+  count: number;
+  /** Aggregate offer `total` for this status, for tooltip context */
+  value: number;
+}
+export interface DashboardMarginByCategory {
+  /** Product.category (or "Uncategorised" when null) */
+  category: string;
+  /** Volume-weighted average margin % across products in this category */
+  marginPct: number;
+  /** Number of products in this category (for tooltip context) */
+  productCount: number;
+}
+export interface DashboardPaymentPoint {
+  /** ISO month bucket, e.g. "2026-01" */
+  month: string;
+  label: string;
+  /** Sum of `invoices.total` where `paid_at` falls in this month */
+  payments: number;
+  count: number;
+}
+export interface DashboardCharts {
+  period: string;
+  salesData: DashboardSalesPoint[];
+  topProducts: DashboardTopProduct[];
+  offerStatus: DashboardOfferStatusSlice[];
+  marginByCategory: DashboardMarginByCategory[];
+  paymentTrend: DashboardPaymentPoint[];
+}
+
 // ---------- Invoices ----------
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 

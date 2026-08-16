@@ -11,13 +11,21 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { KpiCard } from "@/components/common/kpi-card";
 import {
+  SalesTrendChart,
+  TopProductsChart,
+  OfferStatusChart,
+  MarginByCategoryChart,
+  PaymentTrendChart,
+} from "@/components/dashboard/charts";
+import {
   Users, Handshake, TrendingUp, Trophy, Receipt, AlertTriangle,
   Percent, Calculator, Inbox, FileText, ArrowUpRight, ScrollText,
   Package, ShieldCheck, Clock, ChevronRight, ArrowRight,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store/app-store";
 import {
-  DashboardInsights, DealStage, Deal, SupplierOffer,
+  DashboardInsights, DashboardCharts,
+  DealStage, Deal, SupplierOffer,
   PortalRfq, TradeCalculation, AuditLog,
 } from "@/lib/supabase/types";
 import {
@@ -172,8 +180,25 @@ export function DashboardView() {
     },
   });
 
+  // ── Analytics charts (task D-2) ─────────────────────────────────────────
+  // Single round-trip fetch for all five chart datasets. Query key includes
+  // the tenant so caches stay isolated per tenant (and per super-admin
+  // tenant-context switch). `staleTime: 60s` keeps the dashboard snappy on
+  // re-focus without re-running the aggregations on every tab switch — the
+  // data is aggregated monthly so a 60s staleness window is plenty.
+  const chartsQ = useQuery<DashboardCharts>({
+    queryKey: ["dashboard-charts", tenantKey, "12m", 5],
+    queryFn: async () => {
+      const r = await fetch(api("/api/dashboard/charts", { period: "12m", topN: 5 }));
+      if (!r.ok) throw new Error("Failed to load dashboard charts");
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
+
   const isLoading = dashQ.isLoading;
   const data = dashQ.data;
+  const charts = chartsQ.data;
 
   // ---------- derived ----------
   const avgMarginPct = useMemo(() => {
@@ -530,6 +555,107 @@ export function DashboardView() {
         </Card>
       </div>
 
+      {/* ---------- Analytics Charts (task D-2) ---------- */}
+      {/* Five pre-aggregated analytics charts fed by a single round-trip
+          fetch to /api/dashboard/charts. Layout:
+            Row 1 (lg:grid-cols-2): Sales Trend | Payment Trend
+              — both 12-month time series, paired so sales vs. cash
+                received can be eyeballed side-by-side.
+            Row 2 (lg:grid-cols-3): Top Products | Offer Status | Margin
+              — categorical breakdowns (product / status / category).
+          Each chart degrades gracefully to an empty-state message when
+          its slice has no data — a sparse series in one chart doesn't
+          hide the others. */}
+      <div className="space-y-4">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
+              {t("misc-charts-section-title")}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t("misc-charts-section-desc")}
+            </p>
+          </div>
+          {chartsQ.isFetching && charts && (
+            <span className="text-xs text-muted-foreground/70 tabular">
+              ···
+            </span>
+          )}
+        </div>
+
+        {/* Row 1: time series — Sales Trend | Payment Trend */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard
+            title={t("misc-charts-sales-trend")}
+            description={t("misc-charts-sales-trend-desc")}
+            loading={chartsQ.isLoading && !charts}
+          >
+            {charts ? (
+              <SalesTrendChart data={charts.salesData} />
+            ) : (
+              <ChartSkeleton />
+            )}
+          </ChartCard>
+          <ChartCard
+            title={t("misc-charts-payment-trend")}
+            description={t("misc-charts-payment-trend-desc")}
+            loading={chartsQ.isLoading && !charts}
+          >
+            {charts ? (
+              <PaymentTrendChart data={charts.paymentTrend} />
+            ) : (
+              <ChartSkeleton />
+            )}
+          </ChartCard>
+        </div>
+
+        {/* Row 2: categorical — Top Products | Offer Status | Margin */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <ChartCard
+            title={t("misc-charts-top-products")}
+            description={t("misc-charts-top-products-desc")}
+            loading={chartsQ.isLoading && !charts}
+          >
+            {charts ? (
+              <TopProductsChart data={charts.topProducts} />
+            ) : (
+              <ChartSkeleton />
+            )}
+          </ChartCard>
+          <ChartCard
+            title={t("misc-charts-offer-status")}
+            description={t("misc-charts-offer-status-desc")}
+            loading={chartsQ.isLoading && !charts}
+          >
+            {charts ? (
+              <OfferStatusChart data={charts.offerStatus} />
+            ) : (
+              <ChartSkeleton />
+            )}
+          </ChartCard>
+          <ChartCard
+            title={t("misc-charts-margin-category")}
+            description={t("misc-charts-margin-category-desc")}
+            loading={chartsQ.isLoading && !charts}
+          >
+            {charts ? (
+              <MarginByCategoryChart data={charts.marginByCategory} />
+            ) : (
+              <ChartSkeleton />
+            )}
+          </ChartCard>
+        </div>
+
+        {/* Soft error banner — the dashboard stays usable when the charts
+            endpoint fails (KPIs, funnel, activity, action items all still
+            render). The banner surfaces the failure so ops can triage. */}
+        {chartsQ.error && !charts && (
+          <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning-foreground">
+            {t("misc-dashboard-load-failed")}
+          </div>
+        )}
+      </div>
+
       {/* ---------- Two columns: Activity + Action items ---------- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent Activity */}
@@ -709,6 +835,54 @@ export function DashboardView() {
 // ============================================================
 // Sub-components
 // ============================================================
+
+/**
+ * ChartCard — presentational wrapper for the five analytics charts.
+ *
+ * Mirrors the visual style of the existing Revenue & Margin Trend card
+ * (CardHeader with title + description, CardContent with a fixed-height
+ * chart surface). The fixed `h-72` height matches the existing chart
+ * cards so the dashboard grid rows align cleanly.
+ *
+ * `loading` is advisory — when true, the children are still rendered
+ * (they may already be visible from a stale cache). The parent uses
+ * `loading && !charts` to decide whether to render the chart or a
+ * ChartSkeleton placeholder.
+ */
+function ChartCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  loading?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="card-premium">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-72">{children}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * ChartSkeleton — placeholder shown while the chart payload is in flight
+ * on first paint. Subsequent refetches keep the previous chart visible
+ * (TanStack Query's `keepPreviousData`-like behaviour via the query
+ * cache), so this skeleton is only seen on the very first load or after
+ * a hard refetch with no cached data.
+ */
+function ChartSkeleton() {
+  return <Skeleton className="h-full w-full" />;
+}
+
 function ActionRow({
   icon: Icon, label, count, hint, onClick,
 }: {
@@ -806,6 +980,36 @@ function DashboardSkeleton() {
         <Card className="card-premium">
           <CardContent className="h-80 p-4"><Skeleton className="h-full w-full" /></CardContent>
         </Card>
+      </div>
+      {/* Analytics section skeleton (task D-2) — two time-series cards
+          above three categorical cards, mirroring the live layout. */}
+      <div className="space-y-4">
+        <div>
+          <Skeleton className="h-6 w-32 mb-2" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Card key={i} className="card-premium">
+              <CardContent className="p-4">
+                <Skeleton className="h-4 w-32 mb-2" />
+                <Skeleton className="h-3 w-48 mb-4" />
+                <Skeleton className="h-64 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="card-premium">
+              <CardContent className="p-4">
+                <Skeleton className="h-4 w-32 mb-2" />
+                <Skeleton className="h-3 w-40 mb-4" />
+                <Skeleton className="h-64 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   );

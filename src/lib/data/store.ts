@@ -6,7 +6,7 @@
 import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
-  DashboardInsights,
+  DashboardInsights, DashboardCharts,
   Invoice, Proforma, DocumentRegisterEntry, DocumentRevision,
   VaultSecret, ApiKey, Webhook, WebhookDelivery, WebhookPayload,
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
@@ -334,6 +334,36 @@ export interface Store {
 
   // dashboard
   getInsights(tenantId?: string): Promise<DashboardInsights>;
+
+  /**
+   * Aggregated analytics datasets for the dashboard charts (task D-2).
+   *
+   * Returns five pre-aggregated series in a single round-trip:
+   *   • salesData         — monthly revenue (paid invoices) for the last 12 months
+   *   • topProducts        — top N products by offer line-item revenue
+   *   • offerStatus        — count + aggregate value grouped by OfferStatus
+   *   • marginByCategory   — volume-weighted avg margin % by Product.category
+   *   • paymentTrend       — monthly payments received (paid_at bucket)
+   *
+   * Implementations should keep the wire payload small — only the columns
+   * needed for aggregation should be selected (mirrors the getInsights()
+   * pattern of `select("id, status, total, ...")` rather than `select("*")`).
+   *
+   * `tenantId` is optional — when null/undefined, the call is super-admin /
+   * platform-scoped and the implementation should aggregate across ALL
+   * tenants (mirrors getInsights).
+   *
+   * `period` is an opaque string (currently only "12m" is honoured; any
+   * other value falls back to 12 months). It is echoed back in the
+   * response so the client can key its cache correctly.
+   *
+   * `topN` defaults to 5 — caps the TopProducts series.
+   */
+  getDashboardCharts(
+    tenantId: string | null | undefined,
+    period?: string,
+    topN?: number,
+  ): Promise<DashboardCharts>;
 
   // ---- commission agents ----
   listCommissionAgents(tenantId: string, params?: ListParams): Promise<ListResult<CommissionAgent>>;

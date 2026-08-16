@@ -11,7 +11,7 @@ import { ensureStarterTemplates } from "./starter-templates";
 import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
-  DashboardInsights, DealStage,
+  DashboardInsights, DashboardCharts, DealStage,
   Invoice, Proforma, DocumentRegisterEntry, DocumentRevision,
   VaultSecret, ApiKey, Webhook,
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
@@ -2505,6 +2505,46 @@ export class PrismaStore implements Store {
       top_partners: [],
       low_stock_products: [],
     } as DashboardInsights;
+  }
+
+  // ── Dashboard analytics charts (task D-2) ───────────────────────────────
+  // PrismaStore is the DEPRECATED legacy backend (DB_BACKEND=prisma). The
+  // Prisma schema has drifted from the multi-tenant types in
+  // supabase/types.ts, so a full aggregation would need bespoke Prisma
+  // queries. To keep the dashboard charts renderable in legacy mode
+  // without investing in prisma-specific aggregation, we return a
+  // zero-filled payload with the same trailing-12-month bucket layout
+  // that SupabaseStore produces. Production uses SupabaseStore — this
+  // stub only needs to not crash.
+  async getDashboardCharts(
+    _tenantId: string | null | undefined,
+    period: string = "12m",
+    _topN: number = 5,
+  ): Promise<DashboardCharts> {
+    const months = period === "6m" ? 6 : 12;
+    const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = new Date();
+    const buckets: { key: string; label: string }[] = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      buckets.push({ key, label: `${MONTH_LABELS[d.getUTCMonth()]} ${d.getUTCFullYear()}` });
+    }
+    return {
+      period,
+      salesData: buckets.map((b) => ({ month: b.key, label: b.label, revenue: 0, count: 0 })),
+      topProducts: [],
+      offerStatus: [
+        { status: "draft", count: 0, value: 0 },
+        { status: "sent", count: 0, value: 0 },
+        { status: "accepted", count: 0, value: 0 },
+        { status: "rejected", count: 0, value: 0 },
+        { status: "expired", count: 0, value: 0 },
+      ],
+      marginByCategory: [],
+      paymentTrend: buckets.map((b) => ({ month: b.key, label: b.label, payments: 0, count: 0 })),
+    } as DashboardCharts;
   }
 
   // ─── ERP stubs (not yet implemented for Prisma) ──────────────────────────

@@ -12,6 +12,7 @@ import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
   DashboardInsights,
+  DashboardCharts,
   Invoice, Proforma, DocumentRegisterEntry, DocumentRevision,
   VaultSecret, ApiKey, Webhook,
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
@@ -533,6 +534,46 @@ export class MockStore implements Store {
   // ---- dashboard ----
   async getInsights(): Promise<DashboardInsights> {
     return mock.computeInsights();
+  }
+
+  // ── Dashboard analytics charts (task D-2) ───────────────────────────────
+  // MockStore is the dev/test backend (DB_BACKEND=mock). It ships with no
+  // seed data, so we return zero-filled series matching the trailing-12-
+  // month bucket layout that SupabaseStore produces. This keeps the
+  // dashboard charts renderable in mock mode (empty state) instead of
+  // throwing "auth.store.getDashboardCharts is not a function".
+  //
+  // If a future task seeds the mock store with sample invoices / offers,
+  // swap this stub for a real aggregation over `mock.invoices` etc.
+  async getDashboardCharts(
+    _tenantId: string | null | undefined,
+    period: string = "12m",
+    _topN: number = 5,
+  ): Promise<DashboardCharts> {
+    const months = period === "6m" ? 6 : 12;
+    const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = new Date();
+    const buckets: { key: string; label: string }[] = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      buckets.push({ key, label: `${MONTH_LABELS[d.getUTCMonth()]} ${d.getUTCFullYear()}` });
+    }
+    return {
+      period,
+      salesData: buckets.map((b) => ({ month: b.key, label: b.label, revenue: 0, count: 0 })),
+      topProducts: [],
+      offerStatus: [
+        { status: "draft", count: 0, value: 0 },
+        { status: "sent", count: 0, value: 0 },
+        { status: "accepted", count: 0, value: 0 },
+        { status: "rejected", count: 0, value: 0 },
+        { status: "expired", count: 0, value: 0 },
+      ],
+      marginByCategory: [],
+      paymentTrend: buckets.map((b) => ({ month: b.key, label: b.label, payments: 0, count: 0 })),
+    };
   }
 
   // ---- invoices ----

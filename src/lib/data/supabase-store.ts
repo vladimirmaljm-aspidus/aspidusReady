@@ -8,7 +8,11 @@ import { ensureStarterTemplates } from "./starter-templates";
 import {
   User, Partner, Product, Deal, Offer, Demand, SharedDocument,
   AuditLog, Setting, UserTask, InventoryMovement, EntityNote,
-  DashboardInsights, DealStage,
+  DashboardInsights, DashboardCharts,
+  DashboardSalesPoint, DashboardTopProduct, DashboardOfferStatusSlice,
+  DashboardMarginByCategory, DashboardPaymentPoint,
+  OfferStatus,
+  DealStage,
   Invoice, Proforma, DocumentRegisterEntry, DocumentRevision,
   VaultSecret, ApiKey, Webhook, WebhookDelivery, WebhookPayload,
   SecuritySession, LoginHistoryEntry, KnownIp, TrustedDevice,
@@ -899,6 +903,260 @@ export class SupabaseStore implements Store {
       recent_activity: recent,
       top_partners: topPartners,
       low_stock_products: lowStockProducts,
+    };
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Dashboard analytics charts (task D-2).
+  //
+  // Five pre-aggregated series returned in ONE round-trip so the dashboard
+  // can render every chart from a single fetch. The wire payload is kept
+  // small by selecting only the columns needed for aggregation (mirrors
+  // the getInsights() pattern — never `select("*")` for analytics).
+  //
+  // Series semantics:
+  //   • salesData       — monthly revenue from invoices ISSUED
+  //                       (issue_date bucket, excludes cancelled invoices)
+  //   • topProducts     — top N products by aggregate offer line-item total
+  //   • offerStatus     — count + total value grouped by OfferStatus
+  //   • marginByCategory — volume-weighted avg (price-cost)/price %
+  //                       grouped by Product.category
+  //   • paymentTrend    — monthly CASH received from PAID invoices
+  //                       (paid_at bucket, status=paid only)
+  //
+  // `period` is currently advisory — only "12m" is implemented. Any other
+  // value (or undefined) falls back to 12 months so the endpoint stays
+  // usable for new tenants with sparse data.
+  // ────────────────────────────────────────────────────────────────────────
+  async getDashboardCharts(
+    tenantId: string | null | undefined,
+    period: string = "12m",
+    topN: number = 5,
+  ): Promise<DashboardCharts> {
+    const sb = this.sb();
+    const months = period === "6m" ? 6 : 12; // only 12m / 6m honoured; default 12
+
+    // ── Time bucket helpers ────────────────────────────────────────────────
+    // Build the list of trailing month buckets (oldest → newest) so empty
+    // months still appear in the series with zero values. Buckets are keyed
+    // by "YYYY-MM" (ISO) and labelled with a short, locale-neutral
+    // "Mon YYYY" string (pre-formatted server-side so the client doesn't
+    // need a date lib to render the axis).
+    const now = new Date();
+    const buckets: { key: string; label: string; year: number; month: number }[] = [];
+    const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      buckets.push({
+        key,
+        label: `${MONTH_LABELS[d.getUTCMonth()]} ${d.getUTCFullYear()}`,
+        year: d.getUTCFullYear(),
+        month: d.getUTCMonth(),
+      });
+    }
+    const earliest = Date.UTC(buckets[0].year, buckets[0].month, 1);
+
+    // ── Parallel column-projected queries ─────────────────────────────────
+    // Only select the columns needed for aggregation — fetching `items`
+    // (jsonb) on every offer would balloon the payload (offers carry the
+    // full line-item array). We pull items separately ONLY for the top-N
+    // computation to keep memory + wire cost bounded.
+    const invoicesQ = sb.from("invoices")
+      .select("id, status, total, issue_date, paid_at");
+    const offersStatusQ = sb.from("offers")
+      .select("id, status, total");
+    const offersItemsQ = sb.from("offers")
+      .select("id, status, items");
+    const productsQ = sb.from("products")
+      .select("id, name, sku, category, price, cost");
+
+    if (tenantId) {
+      invoicesQ.eq("tenant_id", tenantId);
+      offersStatusQ.eq("tenant_id", tenantId);
+      offersItemsQ.eq("tenant_id", tenantId);
+      productsQ.eq("tenant_id", tenantId);
+    }
+
+    const [invoicesR, offersStatusR, offersItemsR, productsR] = await Promise.all([
+      invoicesQ,
+      offersStatusQ,
+      offersItemsQ,
+      productsQ,
+    ]);
+
+    type InvoiceLite = { id: string; status: string; total: number | null;
+                         issue_date: string | null; paid_at: string | null };
+    type OfferLite = { id: string; status: OfferStatus; total: number | null };
+    type OfferWithItems = { id: string; status: OfferStatus;
+                            items: Offer["items"] | null };
+    type ProductLite = { id: string; name: string; sku: string;
+                         category: string | null;
+                         price: number | null; cost: number | null };
+
+    const invoices = (invoicesR.data as InvoiceLite[]) || [];
+    const offersStatusRows = (offersStatusR.data as OfferLite[]) || [];
+    const offersItemsRows = (offersItemsR.data as OfferWithItems[]) || [];
+    const products = (productsR.data as ProductLite[]) || [];
+
+    // ── 1. Sales trend (monthly invoices issued, excl. cancelled) ─────────
+    // Buckets by `issue_date` (the date the invoice was raised to the
+    // customer). "Cancelled" invoices are excluded — they represent
+    // voided sales, not actual revenue.
+    const salesByMonth = new Map<string, { revenue: number; count: number }>();
+    for (const b of buckets) salesByMonth.set(b.key, { revenue: 0, count: 0 });
+
+    for (const inv of invoices) {
+      if (inv.status === "cancelled") continue;
+      if (!inv.issue_date) continue;
+      const d = new Date(inv.issue_date);
+      if (isNaN(d.getTime())) continue;
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      const bucket = salesByMonth.get(key);
+      if (!bucket) continue; // outside the trailing window
+      const t = Number(inv.total) || 0;
+      bucket.revenue += t;
+      bucket.count += 1;
+    }
+
+    const salesData: DashboardSalesPoint[] = buckets.map((b) => ({
+      month: b.key,
+      label: b.label,
+      revenue: Math.round((salesByMonth.get(b.key)?.revenue || 0) * 100) / 100,
+      count: salesByMonth.get(b.key)?.count || 0,
+    }));
+
+    // ── 2. Top products by offer line-item revenue ────────────────────────
+    // Walks every offer's `items` jsonb array and aggregates `total` per
+    // `product_id`. Skips line items with no product_id (free-text lines
+    // aren't attributable to a catalogue product). Caps at `topN` after
+    // sorting by revenue desc.
+    type Acc = { product_id: string; name: string; sku: string;
+                 revenue: number; count: number };
+    const productAgg = new Map<string, Acc>();
+    for (const o of offersItemsRows) {
+      if (!o.items || !Array.isArray(o.items)) continue;
+      for (const line of o.items) {
+        const pid = (line as { product_id?: string | null }).product_id;
+        if (!pid) continue;
+        const total = Number((line as { total?: number | null }).total) || 0;
+        const name = (line as { product_name?: string | null }).product_name || pid;
+        const sku = (line as { sku?: string | null }).sku || "";
+        const prev = productAgg.get(pid) ||
+          { product_id: pid, name, sku, revenue: 0, count: 0 };
+        prev.revenue += total;
+        prev.count += 1;
+        // Prefer the most recent non-empty name/sku seen (offers may
+        // rename products over time — keep the latest label).
+        if (name && name !== pid) prev.name = name;
+        if (sku) prev.sku = sku;
+        productAgg.set(pid, prev);
+      }
+    }
+    const topProducts: DashboardTopProduct[] = Array.from(productAgg.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, Math.max(1, Math.min(topN, 20)))
+      .map((p) => ({
+        product_id: p.product_id,
+        name: p.name,
+        sku: p.sku,
+        revenue: Math.round(p.revenue * 100) / 100,
+        count: p.count,
+      }));
+
+    // ── 3. Offer status distribution ──────────────────────────────────────
+    // Counts every offer (no time filter — status is current state, not a
+    // time series). Slices are emitted in the canonical OfferStatus order
+    // so the donut chart legend reads top-to-bottom: draft → sent →
+    // accepted → rejected → expired. Zero-count slices are still emitted
+    // so the legend stays stable.
+    const STATUS_ORDER: OfferStatus[] =
+      ["draft", "sent", "accepted", "rejected", "expired"];
+    const statusAgg = new Map<OfferStatus, { count: number; value: number }>();
+    for (const s of STATUS_ORDER) statusAgg.set(s, { count: 0, value: 0 });
+    for (const o of offersStatusRows) {
+      const s = (o.status || "draft") as OfferStatus;
+      if (!statusAgg.has(s)) statusAgg.set(s, { count: 0, value: 0 });
+      const entry = statusAgg.get(s)!;
+      entry.count += 1;
+      entry.value += Number(o.total) || 0;
+    }
+    const offerStatus: DashboardOfferStatusSlice[] = STATUS_ORDER.map((s) => ({
+      status: s,
+      count: statusAgg.get(s)?.count || 0,
+      value: Math.round((statusAgg.get(s)?.value || 0) * 100) / 100,
+    }));
+
+    // ── 4. Margin by category ─────────────────────────────────────────────
+    // For each product, margin % = (price - cost) / price * 100 (when both
+    // are positive). Aggregated per category using a SIMPLE average (not
+    // volume-weighted — we don't have a reliable quantity signal on the
+    // products table; volume-weighting would have to come from trade
+    // calculations or offer line items, which is a different aggregation
+    // level). Products with no `cost`, no `price`, or `price <= 0` are
+    // skipped (margin undefined). Products with no category fall under
+    // "Uncategorised".
+    const catAgg = new Map<string, { sum: number; count: number }>();
+    for (const p of products) {
+      const price = Number(p.price) || 0;
+      const cost = Number(p.cost) || 0;
+      if (price <= 0) continue; // margin undefined without a sell price
+      const marginPct = ((price - cost) / price) * 100;
+      const cat = (p.category && String(p.category).trim()) || "Uncategorised";
+      const prev = catAgg.get(cat) || { sum: 0, count: 0 };
+      prev.sum += marginPct;
+      prev.count += 1;
+      catAgg.set(cat, prev);
+    }
+    const marginByCategory: DashboardMarginByCategory[] = Array.from(catAgg.entries())
+      .map(([category, v]) => ({
+        category,
+        marginPct: Math.round((v.sum / v.count) * 10) / 10,
+        productCount: v.count,
+      }))
+      .sort((a, b) => b.marginPct - a.marginPct)
+      .slice(0, 10); // cap at 10 categories for legibility
+
+    // ── 5. Payment trend (monthly cash received from paid invoices) ───────
+    // Buckets by `paid_at` (the date the payment was recorded). Only
+    // status=paid invoices contribute. Same trailing-month window as the
+    // sales series so the two charts align on the x-axis.
+    const paymentsByMonth = new Map<string, { payments: number; count: number }>();
+    for (const b of buckets) paymentsByMonth.set(b.key, { payments: 0, count: 0 });
+
+    for (const inv of invoices) {
+      if (inv.status !== "paid") continue;
+      if (!inv.paid_at) continue;
+      const d = new Date(inv.paid_at);
+      if (isNaN(d.getTime())) continue;
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      const bucket = paymentsByMonth.get(key);
+      if (!bucket) continue; // outside the trailing window
+      bucket.payments += Number(inv.total) || 0;
+      bucket.count += 1;
+    }
+
+    const paymentTrend: DashboardPaymentPoint[] = buckets.map((b) => ({
+      month: b.key,
+      label: b.label,
+      payments: Math.round((paymentsByMonth.get(b.key)?.payments || 0) * 100) / 100,
+      count: paymentsByMonth.get(b.key)?.count || 0,
+    }));
+
+    // `earliest` is currently unused for filtering (the trailing buckets
+    // already restrict the series), but it's referenced here to silence
+    // "declared but never used" for future time-window logic. Drop when
+    // a real filter is added.
+    void earliest;
+
+    return {
+      period,
+      salesData,
+      topProducts,
+      offerStatus,
+      marginByCategory,
+      paymentTrend,
     };
   }
 
