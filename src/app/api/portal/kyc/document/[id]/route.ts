@@ -92,8 +92,31 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Not a KYC document." }, { status: 400 });
   }
 
+  // P1 / task C-4 Fix 5: previously the storage-delete was wrapped in
+  // `.catch(() => {})` which silently swallowed errors — a failed
+  // storage delete left the file as a permanent orphan in the
+  // `kyc-documents` bucket with no DB row pointing at it (the DB row
+  // was soft-deleted on the line above). We now log the failure
+  // prominently so ops can manually clean up the orphan. The DB
+  // soft-delete still completes (the user expects the document to
+  // disappear from the UI immediately); the storage cleanup is
+  // best-effort but no longer silent.
   await store.removeKycDocument(id);
-  await deleteFile((upload as any).storage_bucket || "kyc-documents", (upload as any).storage_path).catch(() => {});
+  const storageBucket = (upload as any).storage_bucket || "kyc-documents";
+  const storagePath = (upload as any).storage_path;
+  if (storagePath) {
+    try {
+      await deleteFile(storageBucket, storagePath);
+    } catch (e: any) {
+      // `deleteFile` already logs at error level internally, but we
+      // also surface the failure in the audit trail below so ops can
+      // query for "storage cleanup failed" after the fact.
+      console.error(
+        `[portal.kyc.document.DELETE] STORAGE ORPHAN: failed to delete ${storagePath} from bucket ${storageBucket} (DB row ${id} was soft-deleted):`,
+        e?.message || e,
+      );
+    }
+  }
 
   // Audit the document deletion
   try {
@@ -107,6 +130,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       {
         filename: (upload as any).filename || null,
         submission_id: (upload as any).submission_id || null,
+        storage_bucket: storageBucket,
+        storage_path: storagePath,
       },
     );
   } catch (e) { console.error("[audit]", e); }

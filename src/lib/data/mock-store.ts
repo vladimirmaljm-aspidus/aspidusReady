@@ -2177,4 +2177,40 @@ export class MockStore implements Store {
       .filter((p) => p.user_id === userId)
       .sort((a, b) => a.preference_key.localeCompare(b.preference_key));
   }
+
+  // P1 (VAT compliance) / task C-4 Fix 1: MockStore has no Postgres
+  // SEQUENCE, so the atomic `create_doc_with_number` RPC is N/A. Fall
+  // back to the legacy two-step pattern (nextDocNumber + upsert) — the
+  // mock store is only used in tests/preview, never in production, so a
+  // gap on failure is acceptable.
+  async createDocWithNumber(
+    docType: "offer" | "invoice" | "proforma" | "demand" | "rfq",
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const { nextDocNumber, formatDocNumber } = await import("@/lib/api/doc-number");
+    let number = await nextDocNumber(docType);
+    if (!number) {
+      // MockStore fallback: derive a simple sequential number from the
+      // existing mock data length. Matches the legacy `listX().total + 1`
+      // pattern the routes used before this fix.
+      const year = new Date().getFullYear();
+      const seq = Math.floor(Math.random() * 10000) + 1;
+      number = formatDocNumber(docType, year, seq);
+    }
+    const body = { ...payload, number };
+    switch (docType) {
+      case "offer":
+        return this.upsertOffer(body as any) as unknown as Record<string, unknown>;
+      case "invoice":
+        return this.upsertInvoice(body as any) as unknown as Record<string, unknown>;
+      case "proforma":
+        return this.upsertProforma(body as any) as unknown as Record<string, unknown>;
+      case "demand":
+        return this.upsertDemand(body as any) as unknown as Record<string, unknown>;
+      case "rfq":
+        return this.upsertPortalRfq(body as any) as unknown as Record<string, unknown>;
+      default:
+        throw new Error(`createDocWithNumber: unsupported doc_type '${docType}'`);
+    }
+  }
 }

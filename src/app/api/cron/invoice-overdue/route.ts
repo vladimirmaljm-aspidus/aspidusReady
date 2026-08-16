@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { getSupabase } from "@/lib/supabase/client";
+import { authorizeCron } from "@/lib/api/cron-auth";
 
 export const runtime = "nodejs";
 
@@ -15,26 +16,12 @@ export const runtime = "nodejs";
  */
 export async function GET(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const expected = process.env.CRON_TOKEN;
-
     // Auth: shared cron token (header preferred, URL query legacy) OR a
     // super_admin session cookie (for manual runs from the browser).
-    const authHeader = req.headers.get("authorization") || "";
-    const headerToken = authHeader.toLowerCase().startsWith("bearer ")
-      ? authHeader.slice(7).trim()
-      : null;
-    const queryToken = url.searchParams.get("token");
-    const presentedToken = headerToken || queryToken;
-
-    let authorised = !!expected && !!presentedToken && presentedToken === expected;
-    if (!authorised) {
-      const { requireSuperAdmin } = await import("@/lib/api/helpers");
-      const sa = await requireSuperAdmin(req);
-      if (sa instanceof NextResponse) return sa;
-      authorised = true;
-    }
-    if (!authorised) return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+    // P1 timing-attack fix (task C-5 Fix 1): token comparison is now
+    // constant-time via `crypto.timingSafeEqual` — see `authorizeCron`.
+    const unauth = await authorizeCron(req);
+    if (unauth) return unauth;
 
     const sb = getSupabase();
     const today = new Date().toISOString().split("T")[0];

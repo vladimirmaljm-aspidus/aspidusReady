@@ -8,11 +8,48 @@
  *   currency, so the client can convert many currencies in one shot.
  *
  * The free open.er-api.com endpoint is reachable from the sandbox and prod.
+ *
+ * P1 stale-fallback fix (task C-5 Fix 5): previously, when the live rate
+ * fetch failed, `getRateMap` returned a hardcoded `FALLBACK_USD` table
+ * (USD:1, EUR:0.92, JPY:149, …) that was frozen at whatever values were
+ * committed to source control. FX rates move daily; a hardcoded table is
+ * always stale by definition and silently produces wrong totals in the
+ * trade calculator (the only place that consumes `getRateMap`). We now
+ * keep a persistent "last known good" cache of the most recent successful
+ * rate map per base currency, and:
+ *
+ *   1. If the live fetch succeeds, we cache the result (with timestamp).
+ *   2. If the live fetch fails, we serve the cached result IF it is less
+ *      than 24 hours old (clearly marked `source: "open.er-api.com
+ *      (stale fallback)"` so the UI can warn the user).
+ *   3. If the cache is older than 24h OR has never been populated (cold
+ *      start + first call fails), we throw — the caller's catch block
+ *      surfaces a 502 to the client rather than silently returning
+ *      years-stale numbers.
  */
 
 const cache = new Map<string, { rate: number; expiresAt: number }>();
 const mapCache = new Map<string, { rates: Record<string, number>; fetchedAt: number }>();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour — primary cache, hot path
+
+/**
+ * Persistent "last known good" cache for the stale-fallback path. Survives
+ * across requests (in-process) but is NOT shared across replicas. Each
+ * replica maintains its own; that's fine for staleness — the worst case is
+ * that two replicas serve slightly different stale rates during an upstream
+ * outage, which is acceptable for a trade-calculator preview.
+ *
+ * Keyed by base currency. The `fetchedAt` timestamp is when the live API
+ * returned the rate, NOT when this cache entry was created.
+ */
+const lastGoodMap = new Map<string, { rates: Record<string, number>; fetchedAt: number }>();
+
+/**
+ * Maximum age (in ms) of a "last known good" rate map before we refuse to
+ * serve it as a stale fallback. 24 hours matches the ECB daily fix cycle —
+ * longer than that and the rate is more likely to mislead than to inform.
+ */
+const STALE_FALLBACK_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type RateMapResult = {
   base: string;
@@ -60,6 +97,10 @@ export async function getExchangeRate(from: string, to: string): Promise<number 
  * `rates[X]` means "1 base = rates[X] X".
  * Used by the trade calculator UI to convert all cost lines + show a live
  * "View totals in <currency>" preview without re-fetching per pair.
+ *
+ * Throws when the live fetch fails AND no usable cached rate map exists
+ * (cold start, or cache older than 24h). The HTTP route handler catches
+ * and returns 502 — see `src/app/api/exchange-rates/route.ts`.
  */
 export async function getRateMap(base: string): Promise<RateMapResult> {
   const b = (base || "USD").toUpperCase();
@@ -88,7 +129,10 @@ export async function getRateMap(base: string): Promise<RateMapResult> {
     }
     rates[b] = 1;
     const fetchedAt = Date.now();
+    // Update both caches: the hot 1h cache (for the success path) and the
+    // persistent last-known-good cache (for the stale-fallback path).
     mapCache.set(b, { rates, fetchedAt });
+    lastGoodMap.set(b, { rates: { ...rates }, fetchedAt });
     return {
       base: b,
       rates,
@@ -97,33 +141,37 @@ export async function getRateMap(base: string): Promise<RateMapResult> {
     };
   } catch (e) {
     console.warn("[exchange-rates] getRateMap failed:", e);
-    // Fallback: minimal hardcoded USD-anchored rates (covers the most common
-    // trade currencies). If the base isn't USD, we cross through USD.
-    const FALLBACK_USD: Record<string, number> = {
-      USD: 1, EUR: 0.92, GBP: 0.79, JPY: 149, CHF: 0.88, CAD: 1.36, AUD: 1.52,
-      CNY: 7.1, INR: 83, AED: 3.67, SAR: 3.75, EGP: 48, RUB: 92, ZAR: 18,
-      TRY: 32, BRL: 5.4, MXN: 17, HKD: 7.8, SGD: 1.34, KRW: 1350, MYR: 4.7,
-      THB: 36, IDR: 15700, PHP: 56, NZD: 1.64, SEK: 10.5, NOK: 10.7, DKK: 6.85,
-      PLN: 4.0, CZK: 23, HUF: 350, RON: 4.5, BGN: 1.8, ILS: 3.7, RSD: 107,
-    };
-    let rates: Record<string, number>;
-    if (b === "USD") {
-      rates = { ...FALLBACK_USD };
-    } else {
-      const usdBase = FALLBACK_USD[b];
-      rates = usdBase
-        ? Object.fromEntries(
-            Object.entries(FALLBACK_USD).map(([q, r]) => [q, r / usdBase]),
-          )
-        : { [b]: 1 };
+
+    // P1 stale-fallback fix (task C-5 Fix 5): serve the last known good
+    // rate map if it's less than 24h old. Older than that, or never
+    // cached at all, and we throw — the route handler returns 502 so the
+    // UI can show "rates unavailable" rather than silently rendering
+    // wrong totals based on a frozen hardcoded table.
+    const lastGood = lastGoodMap.get(b);
+    if (lastGood) {
+      const ageMs = Date.now() - lastGood.fetchedAt;
+      if (ageMs < STALE_FALLBACK_MAX_AGE_MS) {
+        const ageHours = Math.round(ageMs / (60 * 60 * 1000));
+        return {
+          base: b,
+          rates: { ...lastGood.rates },
+          fetchedAt: new Date(lastGood.fetchedAt).toISOString(),
+          source: `open.er-api.com (stale fallback, ${ageHours}h old)`,
+        };
+      }
+      // Cache exists but is too stale — fall through to throw.
+      throw new Error(
+        `Exchange rate provider is unavailable and the last known good rate for ${b} ` +
+        `is older than 24h (fetched ${new Date(lastGood.fetchedAt).toISOString()}). ` +
+        `Refusing to serve potentially misleading rates.`,
+      );
     }
-    rates[b] = rates[b] ?? 1;
-    return {
-      base: b,
-      rates,
-      fetchedAt: new Date().toISOString(),
-      source: "fallback (hardcoded)",
-    };
+
+    // No cache at all (cold start + first call failed) — surface the error.
+    throw new Error(
+      `Exchange rate provider is unavailable and no cached rate exists for ${b}. ` +
+      `Original error: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 }
 

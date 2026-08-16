@@ -178,34 +178,54 @@ export async function createCommissionOnOfferAccepted(
  * "earned" as "approved" since the CommissionStatus enum has no `earned`
  * state; admins then mark paid via the payouts screen.)
  *
- * Fire-and-forget — failures are logged but do not block the caller.
+ * P1 / task C-4 Fix 3: previously fire-and-forget — the caller in
+ * `record-payment` invoked this with `.catch((e) => console.warn(...))`,
+ * so a failure here was silently swallowed and the commissions stayed
+ * "pending" forever while the invoice showed "paid". The caller now
+ * AWAITS this function and surfaces failures in the HTTP response so
+ * ops can investigate. This function therefore THROWS on error rather
+ * than catching internally — the caller is responsible for deciding
+ * whether to fail the request or log + continue.
+ *
+ * Returns `{ updated: number }` so the caller can include the count in
+ * its response/audit trail.
  */
 export async function markCommissionsEarnedOnInvoicePaid(
   dealId: string | null | undefined,
   tenantId: string,
-): Promise<void> {
-  if (!dealId || !tenantId) return;
-  try {
-    const sb = getSupabase();
-    const { data } = await sb
-      .from("deal_commissions")
-      .select("id, status")
-      .eq("tenant_id", tenantId)
-      .eq("deal_id", dealId)
-      .in("status", ["pending"]);
-    if (!data || data.length === 0) return;
-    for (const row of data as Array<{ id: string; status: string }>) {
-      await sb
-        .from("deal_commissions")
-        .update({
-          status: "approved",
-          approved_at: new Date().toISOString(),
-          notes: `Auto-approved: linked invoice paid at ${new Date().toISOString()}`,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", row.id);
-    }
-  } catch (e) {
-    console.warn("[commission-cascade:invoice-paid]", e);
+): Promise<{ updated: number }> {
+  if (!dealId || !tenantId) return { updated: 0 };
+  const sb = getSupabase();
+  const { data, error: selectError } = await sb
+    .from("deal_commissions")
+    .select("id, status")
+    .eq("tenant_id", tenantId)
+    .eq("deal_id", dealId)
+    .in("status", ["pending"]);
+  if (selectError) {
+    throw new Error(
+      `markCommissionsEarnedOnInvoicePaid: select failed for deal ${dealId}: ${selectError.message}`,
+    );
   }
+  if (!data || data.length === 0) return { updated: 0 };
+  let updated = 0;
+  const nowIso = new Date().toISOString();
+  for (const row of data as Array<{ id: string; status: string }>) {
+    const { error: updateError } = await sb
+      .from("deal_commissions")
+      .update({
+        status: "approved",
+        approved_at: nowIso,
+        notes: `Auto-approved: linked invoice paid at ${nowIso}`,
+        updated_at: nowIso,
+      })
+      .eq("id", row.id);
+    if (updateError) {
+      throw new Error(
+        `markCommissionsEarnedOnInvoicePaid: update failed for commission ${row.id} (deal ${dealId}): ${updateError.message}`,
+      );
+    }
+    updated += 1;
+  }
+  return { updated };
 }

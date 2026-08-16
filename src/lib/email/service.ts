@@ -153,12 +153,29 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ success: bool
   ) {
     console.log(`[email:dev] To: ${opts.to} | Subject: ${opts.subject}`);
     const store = await getStore();
+    // P1 mail_queue orphan fix (task C-5 Fix 3): previously this insert
+    // omitted `tenant_id`, producing orphaned mail_queue rows that no
+    // tenant-scoped listMailQueue query could ever surface — they
+    // accumulated forever in the table with status='queued' and no
+    // visible owner. The `notifications` table has a NOT NULL constraint
+    // on tenant_id, so the in-app notification path (below in the catch
+    // block) already required a tenant_id and was silently skipped when
+    // it was missing — but the mail_queue insert itself was not gated,
+    // which is exactly how the orphans accumulated.
+    //
+    // Resolution: always set tenant_id. If the caller genuinely has no
+    // tenant context (e.g. a system-level cron job that emails a global
+    // admin address), fall back to the literal sentinel "SYSTEM" so the
+    // row is still visible in a super-admin "all mail queue" listing
+    // (filtered as `tenant_id = 'SYSTEM'`) rather than being a NULL
+    // orphan that no query surfaces.
     await store.upsertMailQueueEntry({
       to_email: opts.to,
       subject: opts.subject,
       body: opts.html,
       status: "queued",
-    });
+      tenant_id: opts.tenantId || "SYSTEM",
+    } as any);
     return { success: true, messageId: "dev-queued", provider: "none" };
   }
 
@@ -194,7 +211,14 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ success: bool
         status: "failed",
         attempts: 1,
         error: e.message,
-        tenant_id: opts.tenantId,
+        // P1 mail_queue orphan fix (task C-5 Fix 3): same sentinel
+        // pattern as the no-provider branch above — a NULL tenant_id
+        // here would create an invisible orphan row. The notification
+        // broadcast below only fires when `opts.tenantId` is set (the
+        // notifications table has a NOT NULL constraint on tenant_id),
+        // but the mail_queue row should NOT silently depend on that
+        // same gate.
+        tenant_id: opts.tenantId || "SYSTEM",
       } as any);
       queueEntryId = (entry as any)?.id;
     } catch (queueErr) {

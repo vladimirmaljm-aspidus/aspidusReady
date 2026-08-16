@@ -406,6 +406,21 @@ export interface Store {
   autoJournalFromInvoice(invoiceId: string, tenantId: string, userId: string): Promise<ErpJournalEntry | null>;
   autoJournalFromDeal(dealId: string, tenantId: string, userId: string): Promise<ErpJournalEntry | null>;
   autoJournalFromCommission(commissionId: string, tenantId: string, userId: string): Promise<ErpJournalEntry | null>;
+
+  // ---- Atomic document creation with auto-generated sequence number ----
+  // P1 (VAT compliance) / task C-4 Fix 1: generates the document number
+  // INSIDE the same DB operation as the record creation, so the sequence
+  // value is allocated only when the INSERT is actually attempted. This
+  // minimises VAT-sequence gaps that occur when the legacy two-step
+  // pattern (nextDocNumber() → upsertX()) fails between the nextval() and
+  // the INSERT. Returns the inserted row. The SupabaseStore implementation
+  // delegates to the `create_doc_with_number` RPC (migration 032); the
+  // mock/prisma backends fall back to the legacy two-step pattern (they
+  // have no SEQUENCE object).
+  createDocWithNumber(
+    docType: "offer" | "invoice" | "proforma" | "demand" | "rfq",
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
 }
 
 let _impl: Store | null = null;

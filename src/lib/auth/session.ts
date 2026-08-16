@@ -11,6 +11,22 @@ export interface ImpersonationClaim {
   target_user_id: string;
   target_tenant_id: string | null;
   expires_at: string; // ISO
+  /**
+   * Snapshot of `users.token_version` for the impersonation target at the
+   * time the claim was minted. P1 ghost-JWT hardening (task C-5 Fix 6):
+   * if the target's password is reset (or their token_version is bumped
+   * for any other reason) while a super_admin is impersonating them, the
+   * next request will detect the mismatch and revoke the impersonation.
+   * Without this snapshot, the super_admin's own JWT (which carries the
+   * super_admin's token_version, NOT the target's) would keep working
+   * for up to MAX_DURATION_MIN minutes after the target was supposed to
+   * be revoked — a narrow but real ghost-JWT window for the target user.
+   *
+   * Optional for backward compatibility — sessions issued before this
+   * field was added simply omit it, and `requireAuth` falls back to the
+   * expiry-only check for those.
+   */
+  target_token_version?: number;
 }
 
 export interface SessionPayload {

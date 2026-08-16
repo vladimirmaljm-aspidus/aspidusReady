@@ -47,6 +47,14 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
   if (!baseUser || !baseUser.active) {
     return NextResponse.json({ error: "Account not active." }, { status: 401 });
   }
+  // ── P1 ghost-JWT check (task C-5 Fix 6) ────────────────────────────────
+  // The JWT carries `token_version` at issue time. The DB-side
+  // `users.token_version` is bumped whenever the user's password is
+  // changed, their account is force-logged-out, or their sessions are
+  // rotated — so a mismatch here means the JWT was issued BEFORE the
+  // invalidation event and must be rejected. This is the primary
+  // defence against "ghost JWTs" continuing to authenticate after a
+  // password reset / logout-all / admin-initiated session revoke.
   if (baseUser.token_version !== session.token_version) {
     return NextResponse.json({ error: "Session expired." }, { status: 401 });
   }
@@ -62,8 +70,35 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
     if (!expired) {
       const target = await store.getUserById(session.impersonating.target_user_id);
       if (target && target.active) {
-        effectiveUser = target;
-        impersonation = session.impersonating;
+        // P1 ghost-JWT hardening (task C-5 Fix 6): the impersonation claim
+        // snapshots the target's token_version at impersonation start. If
+        // the target's password is reset (or their token_version is bumped
+        // for any other reason) while the super_admin is impersonating
+        // them, the snapshot no longer matches and the impersonation is
+        // revoked — the super_admin falls back to their own identity.
+        // Without this check, the super_admin's own JWT (whose
+        // token_version was checked above) would keep the impersonation
+        // alive for up to MAX_DURATION_MIN minutes after the target was
+        // supposed to be revoked.
+        //
+        // `target_token_version` is optional for backward compatibility
+        // with sessions minted before this field was added — for those,
+        // we fall back to the expiry-only check (the original behaviour).
+        const snap = session.impersonating.target_token_version;
+        if (snap !== undefined && snap !== target.token_version) {
+          console.warn(
+            `[requireAuth] impersonation revoked — target token_version changed ` +
+            `(expected ${snap}, current ${target.token_version}). ` +
+            `super_admin=${baseUser.id} target=${target.id}`,
+          );
+          // Fall through as the original super_admin — do NOT set
+          // effectiveUser = target. The next /api/super-admin/impersonate/end
+          // call (or the client banner's timer) will explicitly restore
+          // the cookie.
+        } else {
+          effectiveUser = target;
+          impersonation = session.impersonating;
+        }
       }
     }
     // else: expired → fall through as the original super_admin. The next
@@ -385,6 +420,26 @@ export async function audit(
       user_agent: req.headers.get("user-agent") || null,
     });
   } catch (e) {
-    console.error("[audit]", e);
+    // P1 audit-trail fix (task C-5 Fix 2): previously the error was
+    // swallowed with a generic `console.error("[audit]", e)` line that
+    // gave ops no way to triage WHERE the audit gap occurred. The audit
+    // trail is the compliance record of "who did what to which entity" —
+    // a silent gap is itself a compliance violation (GDPR Art. 5(2)
+    // integrity + accountability; SOC 2 CC7.2). We still don't throw —
+    // the main operation must succeed even if audit logging fails — but
+    // we DO log prominently with enough context to investigate.
+    console.error("[AUDIT FAILED]", {
+      action,
+      entityType: entityType || null,
+      entityId: entityId || null,
+      userId: user.id,
+      tenantId: user.tenant_id || null,
+      ip: getIp(req),
+      error: e instanceof Error ? e.message : String(e),
+      // Include the stack for non-trivial errors so the log entry points
+      // at the call site. `String(e)` covers non-Error throws (e.g. a
+      // string thrown by a legacy code path).
+      stack: e instanceof Error ? e.stack : undefined,
+    });
   }
 }

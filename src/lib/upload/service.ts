@@ -58,11 +58,31 @@ export async function uploadKycDocument(submissionId: string, fileName: string, 
   return uploadFile("kyc-documents", path, buffer, contentType, size);
 }
 
+/**
+ * Delete a file from Supabase Storage.
+ *
+ * P1 / task C-4 Fix 5: previously this function logged storage-delete
+ * failures at `console.warn` level and returned silently, so callers
+ * had no way to know the delete failed — producing silent storage
+ * orphans (DB row soft-deleted but the file in the `kyc-documents`
+ * bucket lives on forever). We now log at `console.error` level with
+ * the bucket + path so ops can spot orphan patterns. The function
+ * still does NOT throw (callers in the portal-delete path prefer to
+ * complete the DB soft-delete and log the storage failure rather than
+ * fail the whole request) — but the error is now visible.
+ */
 export async function deleteFile(bucket: string, path: string): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const sb = getSupabase();
   const { error } = await sb.storage.from(bucket).remove([path]);
-  if (error) console.warn(`[upload] Failed to delete ${path}:`, error.message);
+  if (error) {
+    // P1 Fix 5: log at error level (not warn) so orphaned storage
+    // objects are visible in error monitoring. The path + bucket are
+    // included so ops can manually clean up the orphan if needed.
+    console.error(
+      `[upload] STORAGE ORPHAN: failed to delete ${path} from bucket ${bucket}: ${error.message}`,
+    );
+  }
 }
 
 /** Fresh short-lived signed URL for admin download. */

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
-import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 import { getSupabase } from "@/lib/supabase/client";
 import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
@@ -151,55 +150,41 @@ export async function POST(req: NextRequest) {
   }
 
   // Auto-generate document number if not provided (e.g. manual "Create" click).
-  // Atomic: tries the `get_next_doc_number` Postgres SEQUENCE RPC first;
-  // falls back to the legacy `listOffers().total + 1` if the RPC is
-  // unavailable (e.g. before the 004 migration has been applied).
+  // P1 (VAT compliance) / task C-4 Fix 1: use the atomic
+  // `createDocWithNumber` path which calls `nextval()` and INSERTs the row
+  // in a single Postgres function call (migration 032 RPC), so the
+  // sequence value is allocated only when the INSERT is actually
+  // attempted — minimising VAT-sequence gaps that the legacy two-step
+  // pattern (nextDocNumber() → upsertOffer()) produced whenever the
+  // upsert failed after nextval().
   //   Format: OF-<year>-<NNNN>  (4-digit sequence)
-  if (!body.id && !body.number) {
-    const year = new Date().getFullYear();
-    const seqNum = await nextDocNumber("offer");
-    if (seqNum) {
-      body.number = seqNum;
-    } else {
-      try {
-        // CRITICAL FIX (audit P1-13): use targeted COUNT instead of
-        // listOffers(limit:1000). Avoids the 1000-record cap and is more
-        // efficient. Also keeps the year-aware reset-at-year-boundary
-        // behaviour (audit P2-20) by scoping the count to `OF-<year>-%`.
-        const { count } = await getSupabase()
-          .from("offers")
-          .select("id", { count: "exact", head: true })
-          .eq("tenant_id", tid!)
-          .like("number", `OF-${year}-%`);
-        const yearCount = count || 0;
-        const nextSeq = yearCount + 1;
-        body.number = formatDocNumber("offer", year, nextSeq);
-      } catch (e) {
-        console.error("[offers.post] number auto-gen failed:", e);
-        return NextResponse.json({ error: "Failed to auto-generate offer number." }, { status: 500 });
-      }
-    }
-  }
+  // When the client supplied an explicit `number` (rare, e.g. an admin
+  // overriding the auto-gen), or when updating an existing record
+  // (body.id present), we skip the atomic path and use the regular
+  // upsertOffer so the client's number is respected.
+  const useAtomicCreate = !body.id && !body.number;
 
   let created;
-  try {
-    created = await auth.store.upsertOffer(body);
-  } catch (e: any) {
-    // Retry once with bumped sequence in case of unique-collision race.
-    if (!body.id && body.number) {
-      try {
-        const m = body.number.match(/^(OF-\d{4}-)(\d+)$/);
-        if (m) {
-          body.number = `${m[1]}${String(Number(m[2]) + 1).padStart(4, "0")}`;
-          created = await auth.store.upsertOffer(body);
-        } else {
-          throw e;
-        }
-      } catch (e2: any) {
-        console.error("[offers.post] upsert retry failed:", e2);
-        return NextResponse.json({ error: e2.message || "Failed to create offer." }, { status: 500 });
-      }
-    } else {
+  if (useAtomicCreate) {
+    // Atomic path: nextval() + INSERT in a single RPC. Removes the
+    // unique-collision retry loop (the legacy loop bumped `body.number`
+    // by +1 on collision, which could collide with the next legitimate
+    // nextval() and burn another sequence value — cascading gaps).
+    try {
+      created = await auth.store.createDocWithNumber("offer", body as Record<string, unknown>) as any;
+    } catch (e: any) {
+      console.error("[offers.post] atomic create failed:", e);
+      return NextResponse.json({ error: e.message || "Failed to create offer." }, { status: 500 });
+    }
+  } else {
+    try {
+      created = await auth.store.upsertOffer(body);
+    } catch (e: any) {
+      // Legacy retry-on-collision removed: the atomic path above handles
+      // the auto-number case; this branch only runs when the client
+      // supplied an explicit `number` or `id`, in which case a unique
+      // collision is a genuine conflict that should surface as a 500
+      // (not be silently retried with a bumped number).
       console.error("[offers.post] upsert failed:", e);
       return NextResponse.json({ error: e.message || "Failed to create offer." }, { status: 500 });
     }

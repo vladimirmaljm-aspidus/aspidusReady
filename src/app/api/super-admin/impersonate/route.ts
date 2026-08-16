@@ -70,6 +70,15 @@ export async function POST(req: NextRequest) {
       target_user_id: target.id,
       target_tenant_id: target.tenant_id,
       expires_at: expiresAt,
+      // P1 ghost-JWT hardening (task C-5 Fix 6): snapshot the target's
+      // token_version at impersonation start. requireAuth() compares this
+      // snapshot to the target's current token_version on every request,
+      // so if the target's password is reset mid-impersonation (bumping
+      // their token_version), the impersonation is immediately revoked.
+      // Without this, the super_admin's own JWT would keep working for
+      // up to MAX_DURATION_MIN minutes after the target was supposed to
+      // be logged out.
+      target_token_version: target.token_version ?? 0,
     },
   });
   await setSessionCookie(token);

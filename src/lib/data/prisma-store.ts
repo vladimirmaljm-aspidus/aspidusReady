@@ -2520,6 +2520,16 @@ export class PrismaStore implements Store {
     _commissionIds: string[],
   ): Promise<CommissionPayout> { throw new Error("Not implemented"); }
 
+  // P1 (VAT compliance) / task C-4 Fix 1: PrismaStore is a legacy backend
+  // and does not implement the atomic `create_doc_with_number` RPC. The
+  // mock/supabase backends cover the live paths; PrismaStore callers get
+  // an explicit "Not implemented" so they fail fast rather than silently
+  // degrading to the non-atomic two-step pattern.
+  async createDocWithNumber(
+    _docType: "offer" | "invoice" | "proforma" | "demand" | "rfq",
+    _payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> { throw new Error("Not implemented"); }
+
   // ─── User Preferences ──────────────────────────────────────────────────
   async getUserPreference(userId: string, key: string): Promise<UserPreference | null> {
     const row = await db.userPreference.findUnique({ where: { user_id_preference_key: { user_id: userId, preference_key: key } } });

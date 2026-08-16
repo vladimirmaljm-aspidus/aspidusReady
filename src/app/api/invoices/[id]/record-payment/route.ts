@@ -333,18 +333,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Issue #7 step 2: when an invoice is paid in full, the commissions on
     // the originating deal transition from "pending" → "approved" (a.k.a.
     // "earned"). We resolve deal_id via the invoice's offer link.
+    //
+    // P1 / task C-4 Fix 3: previously fire-and-forget — the call was
+    // `markCommissionsEarnedOnInvoicePaid(dealId, tid).catch((e) =>
+    // console.warn(...))`, so a failure here was silently swallowed and
+    // the commissions stayed "pending" forever while the invoice showed
+    // "paid". We now AWAIT the cascade and surface failures in the
+    // response so ops can investigate. The cascade function THROWS on
+    // error (no internal try/catch) — we catch here and record the
+    // failure in `cascadeResults.commission` rather than failing the
+    // whole request, because the invoice status update has already
+    // committed and failing now would leave the caller unable to retry
+    // the cascade without re-recording the payment.
+    const cascadeResults: {
+      commission?: { ok: boolean; updated?: number; error?: string };
+      proforma?: { ok: boolean; updated?: boolean; error?: string };
+      journal?: { ok: boolean; skipped?: boolean; error?: string };
+    } = {};
+
     if (isFullPayment && invoice.offer_id) {
       try {
         const offer = await auth.store.getOffer(invoice.offer_id);
         const dealId = (offer as any)?.deal_id;
         if (dealId) {
           const { markCommissionsEarnedOnInvoicePaid } = await import("@/lib/api/commission-cascade");
-          markCommissionsEarnedOnInvoicePaid(dealId, tid).catch((e) =>
-            console.warn("[record-payment] commission cascade failed:", e),
-          );
+          const result = await markCommissionsEarnedOnInvoicePaid(dealId, tid);
+          cascadeResults.commission = { ok: true, updated: result.updated };
+          if (result.updated > 0) {
+            console.log(
+              `[record-payment] commission cascade: marked ${result.updated} commission(s) as approved for deal ${dealId}`,
+            );
+          }
         }
-      } catch (e) {
-        console.warn("[record-payment] commission cascade lookup failed:", e);
+      } catch (e: any) {
+        // P1 Fix 3: log prominently (error level, not warn) and record
+        // the failure in the response so the caller knows the cascade
+        // failed. The invoice is already marked paid — we don't roll
+        // back, but ops must investigate why the commission cascade
+        // failed (DB issue, RLS policy, etc.).
+        console.error(
+          `[record-payment] commission cascade FAILED for invoice ${invoice.number} — commissions remain "pending" and must be manually approved:`,
+          e,
+        );
+        cascadeResults.commission = {
+          ok: false,
+          error: e?.message || String(e),
+        };
       }
     }
 
@@ -405,6 +439,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
           if (proformaNow && (proformaNow as any).status === "paid") {
             console.log("[proforma auto-paid] already paid, skipping cascade");
+            cascadeResults.proforma = { ok: true, updated: false };
           } else {
           // Fetch the BEFORE snapshot so we can record a proper revision.
           const { data: beforeProforma } = await sb
@@ -431,7 +466,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .neq("status", "paid")
             .select("id");
           if (updErr) {
-            console.warn("[proforma auto-paid] update failed:", updErr.message);
+            // P1 Fix 2: log prominently and record the failure — the
+            // proforma cascade is a downstream consistency write, so we
+            // don't fail the whole request, but ops need to know.
+            console.error(
+              `[proforma auto-paid] update FAILED for proforma ${proformaId} (invoice ${invoice.number}):`,
+              updErr.message,
+            );
+            cascadeResults.proforma = { ok: false, error: updErr.message };
           } else if (updatedRows && updatedRows.length > 0) {
             // Update succeeded → record revision + audit. The `updatedRows.length > 0`
             // guard prevents the double-fire when a concurrent call already
@@ -470,11 +512,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 paid_at: paidAtIso,
               },
             ).catch(() => {});
+            cascadeResults.proforma = { ok: true, updated: true };
+          } else {
+            // 0 rows affected — a concurrent call already flipped it.
+            cascadeResults.proforma = { ok: true, updated: false };
           }
           }
         }
-      } catch (e) {
-        console.error("[proforma auto-paid] failed:", e);
+      } catch (e: any) {
+        // P1 Fix 2: log prominently and record the failure in the response.
+        console.error(
+          `[proforma auto-paid] cascade FAILED for invoice ${invoice.number}:`,
+          e,
+        );
+        cascadeResults.proforma = {
+          ok: false,
+          error: e?.message || String(e),
+        };
       }
     }
 
@@ -518,6 +572,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         if (existingJE) {
           console.log("[record-payment] journal entry already exists, skipping");
+          cascadeResults.journal = { ok: true, skipped: true };
         } else {
         // Resolve the real erp_accounts IDs (FK-constrained, can't use string
         // literals like "bank" / "sales_revenue"). The settings row holds the
@@ -651,7 +706,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .maybeSingle();
 
           if (jeError) {
-            console.warn("[record-payment] auto journal header insert failed:", jeError.message);
+            // P1 Fix 2: log prominently and record the failure — the
+            // journal entry is a downstream consistency write, so we
+            // don't fail the whole request, but ops need to know.
+            console.error(
+              `[record-payment] auto journal header insert FAILED for invoice ${invoice.number}:`,
+              jeError.message,
+            );
+            cascadeResults.journal = { ok: false, error: jeError.message };
           } else if (je) {
             // Build JE lines. When overpayment exists AND a prepayment account
             // was found, split the credit into Revenue + Prepayments.
@@ -696,7 +758,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             }
             const { error: linesError } = await sb.from("erp_journal_lines").insert(jeLines);
             if (linesError) {
-              console.warn("[record-payment] auto journal lines insert failed:", linesError.message);
+              // P1 Fix 2: log prominently — a journal entry with no
+              // lines is GL corruption, not a warning.
+              console.error(
+                `[record-payment] auto journal lines insert FAILED for invoice ${invoice.number} (journal entry ${(je as any).id} has a header but no lines — GL corruption):`,
+                linesError.message,
+              );
+              cascadeResults.journal = { ok: false, error: `lines insert failed: ${linesError.message}` };
+            } else {
+              cascadeResults.journal = { ok: true };
             }
           }
         } else {
@@ -707,10 +777,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             "[record-payment] auto journal skipped: revenue_account_id unset or account_ids invalid",
             { bankAccountIdResolved, revenueAccountId, bankAccountValid, revenueAccountValid }
           );
+          cascadeResults.journal = { ok: true, skipped: true };
         }
         } // end of `else` (no existing JE) branch
-      } catch (e) {
-        console.error("[record-payment] auto journal failed:", e);
+      } catch (e: any) {
+        // P1 Fix 2: log prominently and record the failure in the response.
+        console.error(
+          `[record-payment] auto journal cascade FAILED for invoice ${invoice.number}:`,
+          e,
+        );
+        cascadeResults.journal = {
+          ok: false,
+          error: e?.message || String(e),
+        };
       }
     }
 
@@ -723,6 +802,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         transaction_id: transactionId,
         bank_account_id: bankAccountId,
         new_status: newStatus,
+        // P1 Fix 2: include the cascade results in the audit trail so
+        // ops can see at a glance whether the downstream consistency
+        // writes (commission, proforma, journal) succeeded or failed
+        // for this payment. Failed cascades require manual follow-up.
+        cascade_results: cascadeResults,
       });
     } catch (e) {
       console.error("[audit]", e);
@@ -760,11 +844,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ).catch((e) => console.error("[record-payment] webhook trigger failed:", e));
     }
 
+    // P1 Fix 2: include the cascade results in the HTTP response so the
+    // caller (and ops dashboard) can see whether the downstream consistency
+    // writes succeeded. A non-OK cascade entry means manual follow-up is
+    // required — the invoice is marked paid but the corresponding
+    // commission/proforma/journal write failed.
     return NextResponse.json({
       ok: true,
       status: newStatus,
       transaction_id: transactionId,
       bank_account_id: bankAccountId,
+      cascade_results: cascadeResults,
     });
   } catch (e: any) {
     console.error("[invoice.record-payment]", e);

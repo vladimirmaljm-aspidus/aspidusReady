@@ -404,6 +404,117 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
 
+  /**
+   * Atomic document creation with auto-generated sequence number.
+   *
+   * P1 (VAT compliance) / task C-4 Fix 1: delegates to the
+   * `create_doc_with_number` Postgres RPC (migration 032), which calls
+   * `nextval()` on the per-doc-type SEQUENCE and INSERTs the row in a
+   * single function call. This minimises VAT-sequence gaps that occur
+   * when the legacy two-step pattern (`nextDocNumber()` → `upsertX()`)
+   * fails between the nextval() and the INSERT.
+   *
+   * IMPORTANT: this method is for the INSERT path only (new records with
+   * no client-supplied `id` or `number`). Callers MUST have already:
+   *   - validated the payload (required fields, FK targets, etc.)
+   *   - stripped non-column fields (e.g. `_`-prefixed trade-calc metadata)
+   *   - verified tenant_id is set
+   * The RPC will OVERRIDE any client-supplied `number` field with the
+   * server-generated value.
+   *
+   * Falls back to the legacy two-step pattern (`nextDocNumber()` +
+   * `smartUpsert`) if the RPC is unavailable (e.g. before migration 032
+   * has been applied, or Supabase unreachable). The fallback is NOT
+   * atomic — a gap can still occur — but it preserves backward
+   * compatibility.
+   */
+  async createDocWithNumber(
+    docType: "offer" | "invoice" | "proforma" | "demand" | "rfq",
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    // Sanitize the payload through the same path used by smartUpsert so
+    // JOIN keys, empty strings, and nested objects are stripped before
+    // the RPC sees them (the RPC's jsonb_populate_record would otherwise
+    // raise "column does not exist" on unknown keys for some schemas).
+    const sanitized = this.sanitizePayload({ ...payload });
+
+    try {
+      const { data, error } = await this.sb().rpc("create_doc_with_number", {
+        p_doc_type: docType,
+        p_payload: sanitized,
+      });
+      if (error) {
+        // PGRST errors (constraint violations, etc.) surface here. Throw
+        // so the route handler can return a 500 and the gap is at least
+        // logged (the nextval value is still consumed — Postgres SEQUENCE
+        // limitation — but the failure is visible, not silent).
+        throw new Error(
+          `create_doc_with_number RPC failed for '${docType}': ${error.message}`,
+        );
+      }
+      if (!data || typeof data !== "object") {
+        throw new Error(
+          `create_doc_with_number RPC returned no data for '${docType}'`,
+        );
+      }
+      return data as Record<string, unknown>;
+    } catch (e: any) {
+      // If the RPC itself is missing (migration 032 not applied yet) the
+      // supabase-js client returns a PGRST error like "Could not find the
+      // function public.create_doc_with_number". Fall back to the legacy
+      // two-step pattern so the app keeps working on un-migrated deploys.
+      const msg = String(e?.message || e);
+      if (
+        msg.includes("create_doc_with_number") &&
+        (msg.includes("Could not find") || msg.includes("does not exist") || msg.includes("not found"))
+      ) {
+        console.warn(
+          `[createDocWithNumber] RPC unavailable (migration 032 not applied?), falling back to legacy two-step pattern for '${docType}':`,
+          msg,
+        );
+        return this.createDocWithNumberLegacy(docType, payload);
+      }
+      // Genuine insert failure (constraint violation, etc.) — re-throw so
+      // the route handler returns a 500 and the failure is visible.
+      throw e;
+    }
+  }
+
+  /**
+   * Legacy two-step fallback: nextDocNumber() → smartUpsert(). Used when
+   * the `create_doc_with_number` RPC is unavailable. NOT atomic — a gap
+   * can occur if the upsert fails after nextval(). Kept for backward
+   * compatibility with deployments that haven't applied migration 032.
+   */
+  private async createDocWithNumberLegacy(
+    docType: "offer" | "invoice" | "proforma" | "demand" | "rfq",
+    payload: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const { nextDocNumber } = await import("@/lib/api/doc-number");
+    const seqNum = await nextDocNumber(docType);
+    if (seqNum) {
+      payload.number = seqNum;
+    }
+    // Delegate to the existing per-doc-type upsert. We map doc_type →
+    // method rather than dispatching through smartUpsert directly so the
+    // per-table behaviour (e.g. offer items handling, totals recomputation)
+    // is preserved.
+    switch (docType) {
+      case "offer":
+        return this.smartUpsert<Offer>("offers", payload as Partial<Offer> & { id?: string }, (payload as any).tenant_id) as unknown as Record<string, unknown>;
+      case "invoice":
+        return this.smartUpsert<Invoice>("invoices", payload as Partial<Invoice> & { id?: string }, (payload as any).tenant_id) as unknown as Record<string, unknown>;
+      case "proforma":
+        return this.smartUpsert<Proforma>("proformas", payload as Partial<Proforma> & { id?: string }, (payload as any).tenant_id) as unknown as Record<string, unknown>;
+      case "demand":
+        return this.smartUpsert<Demand>("demands", payload as Partial<Demand> & { id?: string }, (payload as any).tenant_id) as unknown as Record<string, unknown>;
+      case "rfq":
+        return this.smartUpsert<PortalRfq>("portal_rfqs", payload as Partial<PortalRfq> & { id?: string }, (payload as any).tenant_id) as unknown as Record<string, unknown>;
+      default:
+        throw new Error(`createDocWithNumberLegacy: unsupported doc_type '${docType}'`);
+    }
+  }
+
   // ---- demands ----
   async listDemands(tenantId: string, params?: ListParams): Promise<ListResult<Demand>> {
     let q = this.sb().from("demands").select("*").eq("tenant_id", tenantId);

@@ -48,13 +48,40 @@ export async function POST(req: NextRequest) {
 
   const store = await getStore();
   try {
-    // Resolve the effective source BEFORE writing the audit row, so we can
-    // both record it in the audit details AND use it to decide whether to
-    // bump gps_verified_at. "browser" = the navigator.geolocation API gave
-    // us a real fix (precise GPS); "ip" = we only have a coarse IP-derived
-    // location as a fallback when the browser denied or didn't prompt.
-    const effectiveSource =
-      body.source || (typeof body.latitude === "number" && typeof body.longitude === "number" ? "browser" : "ip");
+    // P1 / task C-4 Fix 4: the previous implementation trusted the
+    // client-supplied `body.source` field to decide whether to bump
+    // `gps_verified_at`. A malicious client could POST
+    // `{"source":"browser"}` (with NO lat/lng) and the server would
+    // treat it as a valid precise-GPS verification, unlocking all
+    // portal data endpoints without the browser ever sharing its real
+    // location. The `requireGpsVerified()` gate on portal routes only
+    // checks the server-side `portal_access.gps_verified_at` column —
+    // it has no way to know the column was bumped by a spoofed source.
+    //
+    // Fix: derive `effectiveSource` ONLY from the presence of valid
+    // latitude AND longitude (both finite numbers within the geometric
+    // range). The client-supplied `source` field is now informational
+    // only (recorded in the audit trail) and never gates the
+    // `gps_verified_at` bump. A "browser" source without real lat/lng
+    // is downgraded to "ip" so the gate stays closed.
+    const lat = typeof body.latitude === "number" ? body.latitude : NaN;
+    const lng = typeof body.longitude === "number" ? body.longitude : NaN;
+    const latValid = Number.isFinite(lat) && lat >= -90 && lat <= 90;
+    const lngValid = Number.isFinite(lng) && lng >= -180 && lng <= 180;
+    const hasRealFix = latValid && lngValid;
+    // `effectiveSource` is the SOURCE OF TRUTH for whether to bump
+    // `gps_verified_at`. Derived from real coordinates only — the
+    // client-supplied `body.source` is NOT trusted for this decision.
+    const effectiveSource = hasRealFix ? "browser" : "ip";
+
+    // If the client lied about the source (claimed "browser" but sent
+    // no/invalid coordinates), log it so ops can spot the bypass
+    // attempt pattern in the audit trail.
+    if (body.source === "browser" && !hasRealFix) {
+      console.warn(
+        `[portal.log-location] client claimed source="browser" but provided no valid lat/lng (lat=${body.latitude}, lng=${body.longitude}) — downgraded to "ip", gps_verified_at NOT bumped`,
+      );
+    }
 
     // Append to the audit log with a structured details blob so admins can
     // review the full location history of any portal client.
@@ -66,9 +93,14 @@ export async function POST(req: NextRequest) {
       entity_type: "portal_access",
       entity_id: access.id,
       details: {
-        latitude: typeof body.latitude === "number" ? body.latitude : null,
-        longitude: typeof body.longitude === "number" ? body.longitude : null,
+        latitude: hasRealFix ? lat : null,
+        longitude: hasRealFix ? lng : null,
         accuracy: typeof body.accuracy === "number" ? body.accuracy : null,
+        // Record BOTH the client-claimed source AND the server-derived
+        // effectiveSource so a spoofing attempt is visible in the audit
+        // trail (client_claimed_source="browser" + effectiveSource="ip"
+        // = bypass attempt).
+        client_claimed_source: body.source || null,
         source: effectiveSource,
         ip,
         user_agent: userAgent,
@@ -79,11 +111,12 @@ export async function POST(req: NextRequest) {
       user_agent: userAgent,
     });
 
-    // Only precise GPS ("browser") counts as a real location verification.
-    // IP-derived location is too coarse (city/region level) to satisfy the
-    // requireGpsVerified() gate on portal data endpoints. Bumping
-    // gps_verified_at here is what unlocks /api/portal/{offers,invoices,
-    // proformas,documents,catalog} for non-premium, non-exempt clients.
+    // Only precise GPS ("browser" derived from real lat/lng) counts as a
+    // real location verification. IP-derived location is too coarse
+    // (city/region level) to satisfy the requireGpsVerified() gate on
+    // portal data endpoints. Bumping gps_verified_at here is what
+    // unlocks /api/portal/{offers,invoices,proformas,documents,catalog}
+    // for non-premium, non-exempt clients.
     //
     // Wrapped in its own try/catch and best-effort: the audit row above is
     // the source of truth for the full location history; the gps_verified_at
