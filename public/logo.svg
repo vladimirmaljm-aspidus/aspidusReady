@@ -1,26 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- VELOS logo — Veles symbol (inverted A) on copper/amber gradient tile.
-     Veles: Slavic god of earth, waters, and wealth. Symbol source:
-     https://en.wikipedia.org/wiki/Veles_(god)#/media/File:Symbol_of_Veles.svg -->
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<!-- VELOS logo — Veles symbol (inverted A) on a polished copper gradient tile.
+     Multi-stop gradient + top sheen + bottom inner shadow + symbol drop shadow
+     for a premium 3D look. Bold strokes (4px) keep it crisp from 16x16 up. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="VELOS">
   <defs>
+    <!-- Multi-stop copper gradient (amber → copper → dark copper) -->
     <linearGradient id="velos-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#D97706"/>
-      <stop offset="55%" stop-color="#B45309"/>
-      <stop offset="100%" stop-color="#92400E"/>
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="30%" stop-color="#D97706"/>
+      <stop offset="65%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#7C2D12"/>
     </linearGradient>
-    <linearGradient id="velos-sheen" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>
-      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0"/>
+    <!-- Top sheen: subtle white highlight at the top of the tile -->
+    <linearGradient id="velos-sheen" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.30"/>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
+    <!-- Bottom inner shadow: darkens the bottom edge for depth -->
+    <linearGradient id="velos-shadow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="60%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.28"/>
+    </linearGradient>
+    <!-- Soft drop shadow under the Veles symbol -->
+    <filter id="velos-drop" x="-10%" y="-10%" width="120%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.5"/>
+      <feOffset dx="0" dy="0.6" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.45"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
+
   <!-- Rounded copper tile -->
-  <rect x="0.5" y="0.5" width="31" height="31" rx="8" ry="8" fill="url(#velos-grad)" stroke="#78350F" stroke-width="0.5"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="8" ry="8"
+        fill="url(#velos-grad)" stroke="#5B240A" stroke-width="0.75"/>
+  <!-- Top sheen -->
   <rect x="0.5" y="0.5" width="31" height="31" rx="8" ry="8" fill="url(#velos-sheen)"/>
-  <!-- Veles symbol (inverted A): downward triangle with crossbar -->
-  <g fill="none" stroke="#FFFBF5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M7.5 8 L16 26.5"/>
-    <path d="M24.5 8 L16 26.5"/>
-    <path d="M10.3 14.5 L21.7 14.5"/>
+  <!-- Bottom inner shadow -->
+  <rect x="0.5" y="0.5" width="31" height="31" rx="8" ry="8" fill="url(#velos-shadow)"/>
+
+  <!-- Veles symbol (inverted A): two legs meeting at bottom apex + horizontal crossbar.
+       Bold strokes (4px) with round caps & joins for crisp rendering at 16x16. -->
+  <g filter="url(#velos-drop)" fill="none" stroke="#FFFBF5"
+     stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Two legs: top-left → bottom-apex → top-right (continuous stroke) -->
+    <path d="M7 8 L16 27 L25 8"/>
+    <!-- Crossbar (upper third) -->
+    <path d="M10.5 15 L21.5 15"/>
   </g>
 </svg>

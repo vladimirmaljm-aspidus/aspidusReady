@@ -4,13 +4,13 @@ import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { audit, getIp } from "@/lib/api/helpers";
 import { lookupIp } from "@/lib/utils/geo-ip";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limiter";
+import { getRateLimitConfig } from "@/lib/security/rate-limit-config";
 
 export const runtime = "nodejs";
 
-// F-7 (Rate Limiting): 20 portal login attempts per IP per 15 minutes.
-// Same layered defense as /api/auth/login — DB-backed so it survives
-// instance churn on Render's multi-instance setup.
-const PORTAL_LOGIN_RATE_LIMIT = { maxAttempts: 20, windowMs: 15 * 60 * 1000 };
+// F-7 (Rate Limiting): portal login attempts per IP are now configurable by
+// super-admins via the Settings UI (src/lib/security/rate-limit-config.ts).
+// Defaults: 20 attempts / 15 min. Same layered defense as /api/auth/login.
 
 // Portal login — separate session type (partner, not user)
 export async function POST(req: NextRequest) {
@@ -26,10 +26,11 @@ export async function POST(req: NextRequest) {
     // Checked early so even requests for non-existent emails consume a slot
     // (prevents email enumeration via response-timing or status differential).
     const rateLimitKey = `portal-login:ip:${ip}`;
+    const config = await getRateLimitConfig();
     const rl = await checkRateLimit(
       rateLimitKey,
-      PORTAL_LOGIN_RATE_LIMIT.maxAttempts,
-      PORTAL_LOGIN_RATE_LIMIT.windowMs,
+      config.portalLoginMaxAttempts,
+      config.portalLoginWindowMs,
     );
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);

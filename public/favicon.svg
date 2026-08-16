@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- VELOS favicon — Veles symbol on copper gradient -->
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<!-- VELOS favicon — simplified Veles symbol on a 2-stop copper gradient tile.
+     Optimized for 16x16 rendering: no filters, no sheen, just bold strokes (4.5px)
+     with round caps/joins. The extra-thick strokes guarantee legibility in browser tabs. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="VELOS">
   <defs>
     <linearGradient id="fav-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#D97706"/>
-      <stop offset="100%" stop-color="#92400E"/>
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="50%" stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#7C2D12"/>
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="7" fill="url(#fav-grad)"/>
-  <g fill="none" stroke="#FFFBF5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M7.5 8 L16 26.5"/>
-    <path d="M24.5 8 L16 26.5"/>
-    <path d="M10.3 14.5 L21.7 14.5"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="7" ry="7"
+        fill="url(#fav-grad)" stroke="#5B240A" stroke-width="0.5"/>
+  <g fill="none" stroke="#FFFBF5"
+     stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 8 L16 27 L25 8"/>
+    <path d="M10.5 15 L21.5 15"/>
   </g>
 </svg>

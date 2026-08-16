@@ -37,6 +37,7 @@ import { CURRENCIES, COUNTRIES } from "@/lib/data/reference";
 import { toast } from "sonner";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useT } from "@/lib/i18n/store";
+import { RateLimitsCard } from "@/components/views/rate-limits-card";
 
 type Plan = Tenant["plan"];
 type TenantStatus = Tenant["status"];
@@ -766,6 +767,13 @@ export function SuperAdminOverviewView({ embedded = false }: { embedded?: boolea
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">{t("pf-open-platform-health")}</CardContent>
         </Card>
+      </div>
+
+      {/* Platform-wide rate-limit configuration (super-admin only).
+          Lets the platform owner tune login / forgot-password / setup-password
+          rate limits without a redeploy. Backed by the settings table. */}
+      <div className="mt-4">
+        <RateLimitsCard />
       </div>
 
       {/* Footer note */}

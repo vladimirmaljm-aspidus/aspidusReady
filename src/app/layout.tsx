@@ -45,9 +45,19 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon", sizes: "32x32", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.svg", sizes: "180x180" }],
+    apple: [
+      { url: "/apple-icon", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "VELOS",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
   },
   openGraph: {
     type: "website",
@@ -79,6 +89,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* iOS / Android PWA "Add to Home Screen" support.
+            The Next.js Metadata API (appleWebApp config above) already
+            generates apple-mobile-web-app-* tags; these are added
+            explicitly as belt-and-suspenders for older iOS Safari
+            versions and legacy Android Chrome (mobile-web-app-capable). */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="VELOS" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground`}
       >

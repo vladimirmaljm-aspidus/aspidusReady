@@ -6,16 +6,17 @@ import { validatePassword, PORTAL_POLICY } from "@/lib/auth/password-policy";
 import { consumePasswordReset } from "@/lib/auth/password-reset";
 import { getIp } from "@/lib/api/helpers";
 import { checkRateLimit } from "@/lib/security/rate-limiter";
+import { getRateLimitConfig } from "@/lib/security/rate-limit-config";
 
 export const runtime = "nodejs";
 
-// F-7 (Rate Limiting): 10 password-setup attempts per IP per 15 minutes.
+// F-7 (Rate Limiting): password-setup attempts per IP are now configurable
+// by super-admins via the Settings UI. Defaults: 10 / 15 min.
 // Caps brute-force on the invite-link ?access_id=… parameter (an attacker
 // who somehow obtains an access_id could otherwise hammer this endpoint
 // to find a password the policy accepts and hijack the account before the
 // legit user finishes setup). 10 attempts is generous — a real user setting
 // their first password rarely fails validation more than 2-3 times.
-const SETUP_PASSWORD_RATE_LIMIT = { maxAttempts: 10, windowMs: 15 * 60 * 1000 };
 
 // Portal password setup — used three ways (audit F-6/P1-3):
 //  1. Anonymous invite redemption: the customer follows the emailed invite
@@ -55,10 +56,11 @@ export async function POST(req: NextRequest) {
     // random tokens doesn't get to probe the password_resets table. The 429
     // leaks nothing about whether the token exists — it's an IP-level block.
     const ip = getIp(req);
+    const config = await getRateLimitConfig();
     const rl = await checkRateLimit(
       `portal-setup-password:ip:${ip}`,
-      SETUP_PASSWORD_RATE_LIMIT.maxAttempts,
-      SETUP_PASSWORD_RATE_LIMIT.windowMs,
+      config.setupPasswordMaxAttempts,
+      config.setupPasswordWindowMs,
     );
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);

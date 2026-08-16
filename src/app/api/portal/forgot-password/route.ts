@@ -4,16 +4,17 @@ import { sendEmail } from "@/lib/email/service";
 import { createPasswordReset } from "@/lib/auth/password-reset";
 import { getIp } from "@/lib/api/helpers";
 import { checkRateLimit } from "@/lib/security/rate-limiter";
+import { getRateLimitConfig } from "@/lib/security/rate-limit-config";
 
 export const runtime = "nodejs";
 
-// F-7 (Rate Limiting): 5 password-reset requests per IP per 15 minutes.
+// F-7 (Rate Limiting): password-reset requests per IP are now configurable
+// by super-admins via the Settings UI. Defaults: 5 / 15 min.
 // Tighter than login because each request triggers an outbound email — an
 // attacker could otherwise use this endpoint as an email-bomb vector
 // against arbitrary inboxes. Always returns 200 + the same message so the
 // 429 only leaks to the attacker themselves (defense-in-depth — the
 // endpoint already returns a generic "if account exists" response).
-const FORGOT_PASSWORD_RATE_LIMIT = { maxAttempts: 5, windowMs: 15 * 60 * 1000 };
 
 /**
  * POST /api/portal/forgot-password
@@ -36,10 +37,11 @@ export async function POST(req: NextRequest) {
     // themselves will see it (the legitimate user who fat-fingered 5 times
     // in 15 min will just have to wait, which is acceptable UX).
     const ip = getIp(req);
+    const config = await getRateLimitConfig();
     const rl = await checkRateLimit(
       `portal-forgot-password:ip:${ip}`,
-      FORGOT_PASSWORD_RATE_LIMIT.maxAttempts,
-      FORGOT_PASSWORD_RATE_LIMIT.windowMs,
+      config.forgotPasswordMaxAttempts,
+      config.forgotPasswordWindowMs,
     );
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);

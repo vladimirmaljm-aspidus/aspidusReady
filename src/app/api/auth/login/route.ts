@@ -10,19 +10,15 @@ import { lookupIp } from "@/lib/utils/geo-ip";
 import { createHash } from "crypto";
 import { getIp } from "@/lib/api/helpers";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limiter";
+import { getRateLimitConfig } from "@/lib/security/rate-limit-config";
 
 export const runtime = "nodejs";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// F-7 (Rate Limiting): 20 login attempts per IP per 15 minutes.
-// Combined with the in-memory middleware cap (10/min) and the per-account
-// lockout (5 fails → 15min), this gives a layered defense against:
-//   • credential stuffing from a single IP across many usernames
-//   • password brute-force on a single account
-//   • distributed attacks (the per-IP DB limit survives instance churn
-//     on Render's multi-instance setup, unlike the in-memory middleware).
-const LOGIN_RATE_LIMIT = { maxAttempts: 20, windowMs: 15 * 60 * 1000 };
+// F-7 (Rate Limiting): login attempts per IP are now configurable by
+// super-admins via the Settings UI (see src/lib/security/rate-limit-config.ts
+// and GET/PUT /api/settings/rate-limits). Defaults: 20 attempts / 15 min.
 
 // NOTE (audit F-6/S-1): previously this read the FIRST value of
 // X-Forwarded-For, which is attacker-controlled and trivially spoofable.
@@ -98,10 +94,11 @@ export async function POST(req: NextRequest) {
     // non-existent username still consumes a rate-limit slot — otherwise an
     // attacker could enumerate usernames without ever hitting the cap.
     const rateLimitKey = `login:ip:${ip}`;
+    const config = await getRateLimitConfig();
     const rl = await checkRateLimit(
       rateLimitKey,
-      LOGIN_RATE_LIMIT.maxAttempts,
-      LOGIN_RATE_LIMIT.windowMs,
+      config.loginMaxAttempts,
+      config.loginWindowMs,
     );
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);

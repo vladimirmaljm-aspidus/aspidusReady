@@ -1,16 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- VELOS apple-touch-icon — for iOS home screen -->
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+<!-- VELOS apple-touch-icon — Veles symbol on solid copper gradient tile (no transparency
+     for iOS). SVG fallback for the dynamically-generated PNG at /apple-icon.
+     Stroke-width 14 on 180 canvas = ~2.5px at 32px, scaled for visual weight at 180x180. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="VELOS">
   <defs>
     <linearGradient id="at-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#D97706"/>
-      <stop offset="100%" stop-color="#92400E"/>
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="30%" stop-color="#D97706"/>
+      <stop offset="65%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#7C2D12"/>
+    </linearGradient>
+    <linearGradient id="at-sheen" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.30"/>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="at-shadow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="60%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.28"/>
     </linearGradient>
   </defs>
-  <rect width="180" height="180" rx="40" fill="url(#at-grad)"/>
-  <g fill="none" stroke="#FFFBF5" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M42 45 L90 150"/>
-    <path d="M138 45 L90 150"/>
-    <path d="M58 82 L122 82"/>
+  <rect x="2" y="2" width="176" height="176" rx="40" ry="40"
+        fill="url(#at-grad)" stroke="#5B240A" stroke-width="3"/>
+  <rect x="2" y="2" width="176" height="176" rx="40" ry="40" fill="url(#at-sheen)"/>
+  <rect x="2" y="2" width="176" height="176" rx="40" ry="40" fill="url(#at-shadow)"/>
+  <!-- Veles symbol (scaled from 32-canvas: stroke 4px → 4*180/32 = 22.5; use 22 for cleaner integer) -->
+  <g fill="none" stroke="#FFFBF5"
+     stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Two legs (top-left → bottom-apex → top-right). Scaled coords: x=7→39.4, x=25→140.6, x=16→90, y=8→45, y=27→151.9 -->
+    <path d="M39 45 L90 152 L141 45"/>
+    <!-- Crossbar. x=10.5→59, x=21.5→121, y=15→84.4 -->
+    <path d="M59 84 L121 84"/>
   </g>
 </svg>
