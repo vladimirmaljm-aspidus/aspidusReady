@@ -4,6 +4,7 @@ import {
   resolveTenantId,
   sanitizeError,
 } from "@/lib/api/helpers";
+import { withApm } from "@/lib/monitoring/apm";
 
 export const runtime = "nodejs";
 
@@ -32,7 +33,7 @@ export const runtime = "nodejs";
 // up to 20 product rows). The client just renders.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function GET(req: NextRequest) {
+async function _get(req: NextRequest) {
   try {
     const auth = await requireAuthOrApiKey(req);
     if (auth instanceof NextResponse) return auth;
@@ -86,3 +87,8 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+// ── APM wrapper (task D-8) ───────────────────────────────────────────────
+// Wraps GET with response-time, slow-request, and error-rate metrics.
+// See src/lib/monitoring/apm.ts for the buffer + dashboard wiring.
+export const GET = withApm(_get, "GET /api/dashboard/charts");

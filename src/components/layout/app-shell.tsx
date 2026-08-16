@@ -71,6 +71,7 @@ const PlatformAuditView = dynamic(() => import("@/components/views/platform-audi
 const PlatformUsersView = dynamic(() => import("@/components/views/platform-users-view").then((m) => m.PlatformUsersView), { ssr: false });
 const PlatformHealthView = dynamic(() => import("@/components/views/platform-health-view").then((m) => m.PlatformHealthView), { ssr: false });
 const VerificationLogsView = dynamic(() => import("@/components/views/verification-logs-view").then((m) => m.VerificationLogsView), { ssr: false });
+const PerformanceView = dynamic(() => import("@/components/views/admin/performance-view").then((m) => m.PerformanceView), { ssr: false });
 const TradeGlobeView = dynamic(() => import("@/components/views/trade-globe-view").then((m) => m.TradeGlobeView), { ssr: false });
 
 /* -------------------------------------------------------------------------- */
@@ -128,6 +129,7 @@ function ViewContent({ view }: { view: string }) {
     case "platform-users":       return <PlatformUsersView />;
     case "platform-health":      return <PlatformHealthView />;
     case "verification-logs":   return <VerificationLogsView />;
+    case "performance":         return <PerformanceView />;
     case "trade-globe":         return <TradeGlobeView />;
     default:                     return <DashboardView />;
   }

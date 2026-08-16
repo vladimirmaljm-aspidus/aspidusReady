@@ -60,6 +60,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     commissions: "Commissions",
     erp: "ERP / Accounting",
     "verification-logs": "Verification Logs",
+    "performance": "Performance",
   },
   sr: {
     dashboard: "Kontrolna tabla",
@@ -113,6 +114,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     commissions: "Provizije",
     erp: "ERP / Knjigovodstvo",
     "verification-logs": "Evidencija verifikacija",
+    "performance": "Performanse",
   },
   tr: {
     dashboard: "Gösterge Paneli",
@@ -166,6 +168,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     commissions: "Komisyonlar",
     erp: "ERP / Muhasebe",
     "verification-logs": "Doğrulama Kayıtları",
+    "performance": "Performans",
   },
   de: {
     dashboard: "Übersicht",
@@ -219,6 +222,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     commissions: "Provisionen",
     erp: "ERP / Buchhaltung",
     "verification-logs": "Verifizierungsprotokoll",
+    "performance": "Leistung",
   },
   ru: {
     dashboard: "Панель управления",
@@ -272,6 +276,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     commissions: "Комиссии",
     erp: "ERP / Бухгалтерия",
     "verification-logs": "Журнал верификаций",
+    "performance": "Производительность",
   },
 };
 

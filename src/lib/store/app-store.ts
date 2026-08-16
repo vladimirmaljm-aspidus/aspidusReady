@@ -63,6 +63,8 @@ export type ViewKey =
   | "portal-locations"
   // Verification logs (super-admin only — fraud prevention)
   | "verification-logs"
+  // Performance dashboard (super-admin only — task D-8 APM)
+  | "performance"
   // Portal (client-facing, separate mode)
   | "portal-dashboard"
   | "portal-offers"

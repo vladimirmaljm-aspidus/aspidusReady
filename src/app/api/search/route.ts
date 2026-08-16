@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
+import { withApm } from "@/lib/monitoring/apm";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,7 @@ export const runtime = "nodejs";
  * and respects stop-words. Queries shorter than 2 chars return an empty
  * result set without hitting the DB (matches the legacy behaviour).
  */
-export async function GET(req: NextRequest) {
+async function _get(req: NextRequest) {
   const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   { const { requirePermission } = await import("@/lib/permissions/can");
@@ -183,3 +184,8 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ items: results.slice(0, limit).map(({ rank: _r, ...hit }) => hit) });
 }
+
+// ── APM wrapper (task D-8) ───────────────────────────────────────────────
+// Wraps GET with response-time, slow-request, and error-rate metrics.
+// See src/lib/monitoring/apm.ts for the buffer + dashboard wiring.
+export const GET = withApm(_get, "GET /api/search");

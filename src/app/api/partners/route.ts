@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext, sanitizeError } from "@/lib/api/helpers";
 import { triggerWebhooks } from "@/lib/webhooks/deliver";
+import { withApm } from "@/lib/monitoring/apm";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,7 @@ function getAuthUser(auth: AuthContext | ApiKeyAuthContext) {
   return { id: `api:${auth.apiKeyId}`, username: auth.apiKeyName, tenant_id: auth.tenantId };
 }
 
-export async function GET(req: NextRequest) {
+async function _get(req: NextRequest) {
   try {
     const auth = await requireAuthOrApiKey(req);
     if (auth instanceof NextResponse) return auth;
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function _post(req: NextRequest) {
   try {
     const auth = await requireAuthOrApiKey(req);
     if (auth instanceof NextResponse) return auth;
@@ -138,3 +139,9 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// ── APM wrappers (task D-8) ──────────────────────────────────────────────
+// Wraps GET/POST with response-time, slow-request, and error-rate metrics.
+// See src/lib/monitoring/apm.ts for the buffer + dashboard wiring.
+export const GET = withApm(_get, "GET /api/partners");
+export const POST = withApm(_post, "POST /api/partners");
