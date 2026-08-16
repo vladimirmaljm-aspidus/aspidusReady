@@ -65,8 +65,22 @@
 --   which would schedule jobs with the literal string "<CRON_TOKEN>" as
 --   the bearer token if applied verbatim. The live DB had the real token
 --   substituted in via `sed` before applying — but the file as committed
---   was broken. Migration 036_cron_token_setting.sql fixes the live DB
---   by re-scheduling the jobs with `current_setting('app.cron_token', true)`.
+--   was broken. This file now uses `current_setting('app.cron_token',
+--   true)` per the task C-7 spec.
+--
+--   SUPABASE CAVEAT: on Supabase, `current_setting('app.cron_token',
+--   true)` returns NULL because custom GUC parameters require SUPERUSER
+--   to set via `ALTER DATABASE` / `ALTER ROLE`, and the `postgres` role
+--   on Supabase is NOT a superuser. Migration 036_cron_token_setting.sql
+--   is the LIVE-DB FIX — it creates a `public.app_config` table as a
+--   fallback and re-schedules these three jobs with a hybrid COALESCE:
+--     COALESCE(
+--       nullif(current_setting('app.cron_token', true), ''),
+--       (SELECT value FROM public.app_config WHERE key = 'cron_token')
+--     )
+--   The hybrid tries the GUC first (per spec) and falls back to the
+--   table when the GUC is unset (the Supabase case). Either way, the
+--   literal token NEVER appears in `cron.job.command`.
 -- ============================================================================
 
 -- ─── 0. Pre-flight: ensure `app.cron_token` is set ────────────────────────
@@ -75,14 +89,16 @@
 --   run with a clear "app.cron_token not set" error in the cron job log).
 --   The operator sets the setting via:
 --     ALTER DATABASE postgres SET app.cron_token = '<actual_token>';
---   See migration 036 for the live-DB fix that wires this up.
+--   On Supabase, this requires superuser (the `supabase_admin` role) —
+--   see migration 036 for the table-based fallback that works without
+--   superuser.
 DO $$
 DECLARE
   tok text;
 BEGIN
   tok := current_setting('app.cron_token', true);
   IF tok IS NULL OR tok = '' THEN
-    RAISE NOTICE 'app.cron_token is not set — cron jobs will fail auth until it is set via: ALTER DATABASE postgres SET app.cron_token = ''<token>'';';
+    RAISE NOTICE 'app.cron_token is not set — cron jobs will fail auth until it is set via: ALTER DATABASE postgres SET app.cron_token = ''<token>''; (Supabase: see migration 036 for the table fallback.)';
   END IF;
 END $$;
 
