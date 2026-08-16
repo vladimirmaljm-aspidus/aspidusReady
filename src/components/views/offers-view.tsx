@@ -40,7 +40,7 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, ArrowLeftRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save, Truck,
+  Plus, Search, FileText, Pencil, Trash2, Eye, ChevronDown, ChevronRight, X, Calendar, Send, CheckCircle2, XCircle, Clock, Download, Loader2, Sparkles, Building2, Receipt, FileSpreadsheet, ArrowRight, ArrowLeftRight, Info, Landmark, MapPin, Hash, Globe, CreditCard, Handshake, Package, Ship, Container, Banknote, FileCheck, Timer, History, GitBranch, Save, Truck, Ban, FileDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -699,6 +699,67 @@ export function OffersView() {
     onError: () => toast.error(t("crm-bulk-send-failed")),
   });
 
+  // ── Server-side bulk status mutations ────────────────────────────────
+  // The accept / reject / cancel / delete actions hit the new
+  // POST /api/offers/bulk endpoint so the loop runs server-side (one
+  // round-trip, one audit log entry, atomic-ish state transitions validated
+  // by the status-validator state machine).
+  const bulkStatusMut = useMutation({
+    mutationFn: async ({ ids, action }: { ids: string[]; action: "accept" | "reject" | "cancel" | "delete" }) => {
+      const r = await fetch(api("/api/offers/bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, action }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || "Bulk operation failed");
+      }
+      return (await r.json()) as { successCount: number; failureCount: number };
+    },
+    onSuccess: (data, vars) => {
+      const labelKey =
+        vars.action === "accept" ? "crm-bulk-accept-success"
+        : vars.action === "reject" ? "crm-bulk-reject-success"
+        : vars.action === "cancel" ? "crm-bulk-cancel-success"
+        : "crm-bulk-delete-success";
+      const partialKey =
+        vars.action === "accept" ? "crm-bulk-accept-partial"
+        : vars.action === "reject" ? "crm-bulk-reject-partial"
+        : vars.action === "cancel" ? "crm-bulk-cancel-partial"
+        : "crm-bulk-delete-partial";
+      if (data.failureCount === 0) {
+        toast.success(t(labelKey).replace("${n}", String(data.successCount)));
+      } else {
+        toast.warning(
+          t(partialKey)
+            .replace("${ok}", String(data.successCount))
+            .replace("${fail}", String(data.failureCount)),
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+      rowSel.clear();
+    },
+    onError: (e: any, vars) => {
+      const labelKey =
+        vars.action === "accept" ? "crm-bulk-accept-failed"
+        : vars.action === "reject" ? "crm-bulk-reject-failed"
+        : vars.action === "cancel" ? "crm-bulk-cancel-failed"
+        : "crm-bulk-delete-failed";
+      toast.error(e?.message || t(labelKey));
+    },
+  });
+
+  // Bulk export selected — opens the unified /api/export endpoint with the
+  // selected IDs in the query string. Server returns a CSV blob; the browser
+  // handles the download via window.open (no client-side CSV marshalling).
+  const bulkExportSelected = () => {
+    if (rowSel.ids.length === 0) return;
+    const url = `/api/export?type=offers&format=csv&ids=${encodeURIComponent(rowSel.ids.join(","))}`;
+    window.open(url, "_blank");
+  };
+
   // Bulk download — trigger PDF download for each selected offer.
   const bulkDownloadMut = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -719,25 +780,11 @@ export function OffersView() {
     onError: () => toast.error(t("crm-bulk-download-failed")),
   });
 
-  const bulkDeleteMut = useMutation({
-    mutationFn: async (ids: string[]) => {
-      let ok = 0, fail = 0;
-      for (const id of ids) {
-        try {
-          const r = await fetch(api(`/api/offers/${id}`), { method: "DELETE" });
-          if (r.ok) ok++; else fail++;
-        } catch { fail++; }
-      }
-      return { ok, fail };
-    },
-    onSuccess: ({ ok, fail }) => {
-      if (fail === 0) toast.success(t("crm-bulk-delete-success").replace("${n}", String(ok)));
-      else toast.warning(t("crm-bulk-delete-partial").replace("${ok}", String(ok)).replace("${fail}", String(fail)));
-      qc.invalidateQueries({ queryKey: ["offers", tenantKey] });
-      rowSel.clear();
-    },
-    onError: () => toast.error(t("crm-bulk-delete-failed")),
-  });
+  // The legacy client-side bulkDeleteMut was replaced by the server-side
+  // /api/offers/bulk endpoint — see bulkStatusMut above. It runs the deletes
+  // server-side, with a single audit log entry and the same status guard
+  // as DELETE /api/offers/[id] (only draft/cancelled/rejected can be
+  // hard-deleted).
 
   return (
     <div>
@@ -995,6 +1042,41 @@ export function OffersView() {
             onClick: () => bulkSendMut.mutate(rowSel.ids),
           },
           {
+            key: "accept",
+            label: t("crm-bulk-accept-label"),
+            icon: <CheckCircle2 className="size-4" />,
+            variant: "outline",
+            disabled: bulkStatusMut.isPending,
+            confirm: t("crm-bulk-accept-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkStatusMut.mutate({ ids: rowSel.ids, action: "accept" }),
+          },
+          {
+            key: "reject",
+            label: t("crm-bulk-reject-label"),
+            icon: <XCircle className="size-4" />,
+            variant: "outline",
+            disabled: bulkStatusMut.isPending,
+            confirm: t("crm-bulk-reject-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkStatusMut.mutate({ ids: rowSel.ids, action: "reject" }),
+          },
+          {
+            key: "cancel",
+            label: t("crm-bulk-cancel-label"),
+            icon: <Ban className="size-4" />,
+            variant: "outline",
+            disabled: bulkStatusMut.isPending,
+            confirm: t("crm-bulk-cancel-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkStatusMut.mutate({ ids: rowSel.ids, action: "cancel" }),
+          },
+          {
+            key: "export-selected",
+            label: t("crm-bulk-export-selected"),
+            icon: <FileDown className="size-4" />,
+            variant: "outline",
+            disabled: rowSel.count === 0,
+            onClick: bulkExportSelected,
+          },
+          {
             key: "download",
             label: t("crm-download-pdfs"),
             icon: <Download className="size-4" />,
@@ -1007,9 +1089,9 @@ export function OffersView() {
             label: t("delete"),
             icon: <Trash2 className="size-4" />,
             variant: "destructive",
-            disabled: bulkDeleteMut.isPending,
+            disabled: bulkStatusMut.isPending,
             confirm: t("fin-bulk-delete-confirm").replace("${n}", String(rowSel.count)),
-            onClick: () => bulkDeleteMut.mutate(rowSel.ids),
+            onClick: () => bulkStatusMut.mutate({ ids: rowSel.ids, action: "delete" }),
           },
         ]}
       />

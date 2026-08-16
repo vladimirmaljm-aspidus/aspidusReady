@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/pagination";
 import {
   Plus, Search, Package, Pencil, Trash2, Eye, AlertTriangle, CheckCircle2,
-  ChevronDown, ChevronRight, Wand2, Download, Info,
+  ChevronDown, ChevronRight, Wand2, Download, Info, Upload, FileDown, Power, PowerOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -133,48 +133,133 @@ export function ProductsView() {
   // Bulk mutations
   const bulkCatalogMut = useMutation({
     mutationFn: async ({ ids, show }: { ids: string[]; show: boolean }) => {
-      let ok = 0, fail = 0;
-      for (const id of ids) {
-        const p = items.find((x) => x.id === id);
-        if (!p) { fail++; continue; }
-        try {
-          const r = await fetch(api("/api/products"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...p, show_in_catalog: show, force: true }),
-          });
-          if (r.ok) ok++; else fail++;
-        } catch { fail++; }
+      const r = await fetch(api("/api/products/bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, action: show ? "show_in_portal" : "hide_from_portal" }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || "Bulk operation failed");
       }
-      return { ok, fail };
+      return (await r.json()) as { successCount: number; failureCount: number };
     },
-    onSuccess: ({ ok, fail }) => {
-      if (fail === 0) toast.success(`${ok} ${t(locale, "crm-products-updated")}`);
-      else toast.warning(`${ok} ${t(locale, "crm-updated-lower")} · ${fail} ${t(locale, "crm-failed-lower")}`);
+    onSuccess: (data, vars) => {
+      if (data.failureCount === 0) {
+        toast.success(`${data.successCount} ${t(locale, "crm-products-updated")}`);
+      } else {
+        toast.warning(
+          `${data.successCount} ${t(locale, "crm-updated-lower")} · ${data.failureCount} ${t(locale, "crm-failed-lower")}`,
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["portal-catalog"] });
+      // intentionally not invalidating variants.selected to avoid stale
+      // closure warnings — rowSel.clear() drops the selection.
+      rowSel.clear();
+    },
+    onError: (e: any) => toast.error(e?.message || t(locale, "crm-bulk-update-failed")),
+  });
+
+  // Bulk activate / deactivate — toggles `products.active` via the bulk endpoint.
+  const bulkActiveMut = useMutation({
+    mutationFn: async ({ ids, activate }: { ids: string[]; activate: boolean }) => {
+      const r = await fetch(api("/api/products/bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, action: activate ? "activate" : "deactivate" }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || "Bulk operation failed");
+      }
+      return (await r.json()) as { successCount: number; failureCount: number };
+    },
+    onSuccess: (data, vars) => {
+      const key = vars.activate ? "crm-bulk-activate-success" : "crm-bulk-deactivate-success";
+      if (data.failureCount === 0) {
+        toast.success(t(locale, key).replace("${n}", String(data.successCount)));
+      } else {
+        toast.warning(
+          `${data.successCount} ${t(locale, "crm-updated-lower")} · ${data.failureCount} ${t(locale, "crm-failed-lower")}`,
+        );
+      }
       qc.invalidateQueries({ queryKey: ["products", tenantKey] });
       rowSel.clear();
     },
-    onError: () => toast.error(t(locale, "crm-bulk-update-failed")),
+    onError: (e: any, vars) => {
+      const key = vars.activate ? "crm-bulk-activate-failed" : "crm-bulk-deactivate-failed";
+      toast.error(e?.message || t(locale, key));
+    },
   });
 
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids: string[]) => {
-      let ok = 0, fail = 0;
-      for (const id of ids) {
-        try {
-          const r = await fetch(api(`/api/products/${id}`), { method: "DELETE" });
-          if (r.ok) ok++; else fail++;
-        } catch { fail++; }
+      const r = await fetch(api("/api/products/bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, action: "delete" }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || "Bulk delete failed");
       }
-      return { ok, fail };
+      return (await r.json()) as { successCount: number; failureCount: number };
     },
-    onSuccess: ({ ok, fail }) => {
-      if (fail === 0) toast.success(`${ok} ${t(locale, "crm-products-deleted")}`);
-      else toast.warning(`${ok} ${t(locale, "crm-deleted-lower")} · ${fail} ${t(locale, "crm-failed-lower")}`);
+    onSuccess: (data) => {
+      if (data.failureCount === 0) {
+        toast.success(`${data.successCount} ${t(locale, "crm-products-deleted")}`);
+      } else {
+        toast.warning(
+          `${data.successCount} ${t(locale, "crm-deleted-lower")} · ${data.failureCount} ${t(locale, "crm-failed-lower")}`,
+        );
+      }
       qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
       rowSel.clear();
     },
-    onError: () => toast.error(t(locale, "crm-bulk-delete-failed")),
+    onError: (e: any) => toast.error(e?.message || t(locale, "crm-bulk-delete-failed")),
+  });
+
+  // Bulk export selected — opens the unified /api/export endpoint with the
+  // selected IDs in the query string.
+  const bulkExportSelected = () => {
+    if (rowSel.ids.length === 0) return;
+    const url = `/api/export?type=products&format=csv&ids=${encodeURIComponent(rowSel.ids.join(","))}`;
+    window.open(url, "_blank");
+  };
+
+  // ── CSV import ───────────────────────────────────────────────────────
+  // Hidden <input type="file"> triggered by the "Import CSV" button. The
+  // selected file is POSTed as FormData to /api/import?type=products, which
+  // parses the CSV and upserts each row. The response carries per-row
+  // success/failure counts so we can surface a useful toast.
+  const importFileRef = useRef<HTMLInputElement | null>(null);
+  const importMut = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(api("/api/import?type=products"), { method: "POST", body: fd });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || t(locale, "crm-import-failed"));
+      }
+      return (await r.json()) as { successCount: number; failureCount: number; totalRows: number };
+    },
+    onSuccess: (data) => {
+      if (data.failureCount === 0) {
+        toast.success(t(locale, "crm-import-success").replace("${n}", String(data.successCount)).replace("${fail}", "0"));
+      } else {
+        toast.warning(
+          t(locale, "crm-import-success")
+            .replace("${n}", String(data.successCount))
+            .replace("${fail}", String(data.failureCount)),
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["products", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["product-categories-all", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e?.message || t(locale, "crm-import-failed")),
   });
 
   const categories = useMemo(() => {
@@ -236,14 +321,79 @@ export function ProductsView() {
         description={`${total} ${t(locale, "crm-total-lower")}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => window.open("/api/products/export?format=csv", "_blank")}>
-              <Download className="size-4 mr-1" /> {t(locale, "crm-export-csv")}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open("/api/products/export?format=csv", "_blank")}
+              title={t(locale, "crm-export-csv")}
+            >
+              <Download className="size-4" /> {t(locale, "crm-export-csv")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => importFileRef.current?.click()}
+              disabled={importMut.isPending}
+              title={t(locale, "crm-import-csv-tooltip")}
+            >
+              <Upload className="size-4" /> {t(locale, "crm-import-csv")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // CSV template — opens a data: URL so the user gets a
+                // starter file with the correct headers. No server round-trip
+                // needed; the columns mirror /api/export?type=products.
+                const headers = [
+                  "sku", "name", "category", "unit", "price", "currency",
+                  "cost", "stock", "reorder_level", "active", "show_in_catalog",
+                  "hs_code", "brand", "description",
+                ];
+                const sample = [
+                  "DEMO-001", "Demo Product", "tobacco", "MT", "1500", "USD",
+                  "1200", "100", "20", "true", "true", "24011000", "DemoBrand",
+                  '"Sample description, commas are OK when quoted"',
+                ];
+                const csv = `${headers.join(",")}\n${sample.join(",")}\n`;
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "products-template.csv";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+              title={t(locale, "crm-import-template-tooltip")}
+              className="text-muted-foreground"
+            >
+              {t(locale, "crm-import-template")}
             </Button>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
               <Plus className="size-4 mr-1" /> {t(locale, "crm-new-product")}
             </Button>
           </div>
         }
+      />
+
+      {/* Hidden file input for CSV import. The button triggers .click() on
+          this input; the change handler uploads the file via the importMut
+          mutation. Accept is restricted to CSV-like MIME types so the OS
+          file picker filters out non-CSV files. */}
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".csv,text/csv,text/plain"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) importMut.mutate(file);
+          // Reset the input so selecting the same file twice in a row
+          // still fires onChange (otherwise the second pick is a no-op).
+          e.target.value = "";
+        }}
       />
 
       {/* Explanatory banner — Products is now the single source of truth.
@@ -512,10 +662,26 @@ export function ProductsView() {
         label={rowSel.count === 1 ? t(locale, "crm-product-selected") : t(locale, "crm-products-selected")}
         actions={[
           {
+            key: "activate",
+            label: t(locale, "crm-bulk-activate-label"),
+            icon: <Power className="size-4" />,
+            variant: "default",
+            disabled: bulkActiveMut.isPending,
+            onClick: () => bulkActiveMut.mutate({ ids: rowSel.ids, activate: true }),
+          },
+          {
+            key: "deactivate",
+            label: t(locale, "crm-bulk-deactivate-label"),
+            icon: <PowerOff className="size-4" />,
+            variant: "outline",
+            disabled: bulkActiveMut.isPending,
+            onClick: () => bulkActiveMut.mutate({ ids: rowSel.ids, activate: false }),
+          },
+          {
             key: "show-in-portal",
             label: t(locale, "crm-show-in-portal"),
             icon: <Eye className="size-4" />,
-            variant: "default",
+            variant: "outline",
             disabled: bulkCatalogMut.isPending,
             onClick: () => bulkCatalogMut.mutate({ ids: rowSel.ids, show: true }),
           },
@@ -526,6 +692,14 @@ export function ProductsView() {
             variant: "outline",
             disabled: bulkCatalogMut.isPending,
             onClick: () => bulkCatalogMut.mutate({ ids: rowSel.ids, show: false }),
+          },
+          {
+            key: "export-selected",
+            label: t(locale, "crm-bulk-export-selected"),
+            icon: <FileDown className="size-4" />,
+            variant: "outline",
+            disabled: rowSel.count === 0,
+            onClick: bulkExportSelected,
           },
           {
             key: "delete",

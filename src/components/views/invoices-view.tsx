@@ -35,7 +35,7 @@ import {
   Collapsible, CollapsibleTrigger, CollapsibleContent,
 } from "@/components/ui/collapsible";
 import {
-  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, ChevronRight, Sparkles, Zap, FileDown, DollarSign, Loader2, ArrowLeftRight, Info, History,
+  Plus, Search, FileText, Pencil, Trash2, Eye, X, Calendar, Send, CheckCircle2, Clock, Download, AlertTriangle, Wallet, Receipt, ChevronDown, ChevronRight, Sparkles, Zap, FileDown, DollarSign, Loader2, ArrowLeftRight, Info, History, Ban, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -54,6 +54,8 @@ import { downloadPdf } from "@/lib/utils/download";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
 import { useT } from "@/lib/i18n/store";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar, useRowSelection } from "@/components/common/bulk-action-bar";
 
 const STATUS_LABEL_KEYS: Record<InvoiceStatus, string> = {
   draft: "fin-status-draft",
@@ -330,6 +332,67 @@ export function InvoicesView() {
   const items = data?.items || [];
   const partnerList = partners.data?.items || [];
   const partnerName = (id: string) => partnerList.find((p) => p.id === id)?.name || "—";
+  const rowSel = useRowSelection(items);
+
+  // ── Bulk invoice mutations ──────────────────────────────────────────
+  // All bulk invoice operations route through /api/invoices/bulk so the
+  // loop runs server-side (one round-trip, one audit log entry, state
+  // machine enforced by validateStatusTransition).
+  const bulkInvoiceMut = useMutation({
+    mutationFn: async ({ ids, action }: {
+      ids: string[];
+      action: "mark_sent" | "mark_paid" | "cancel" | "delete";
+    }) => {
+      const r = await fetch(api("/api/invoices/bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, action }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || "Bulk operation failed");
+      }
+      return (await r.json()) as { successCount: number; failureCount: number };
+    },
+    onSuccess: (data, vars) => {
+      const labelKey =
+        vars.action === "mark_sent" ? "fin-bulk-mark-sent-success"
+        : vars.action === "mark_paid" ? "fin-bulk-mark-paid-success"
+        : vars.action === "cancel" ? "fin-bulk-cancel-success"
+        : "fin-bulk-delete-invoices-success";
+      const partialKey =
+        vars.action === "mark_sent" ? "fin-bulk-mark-sent-partial"
+        : vars.action === "mark_paid" ? "fin-bulk-mark-paid-partial"
+        : vars.action === "cancel" ? "fin-bulk-cancel-partial"
+        : "fin-bulk-delete-invoices-partial";
+      if (data.failureCount === 0) {
+        toast.success(t(labelKey).replace("${n}", String(data.successCount)));
+      } else {
+        toast.warning(
+          t(partialKey)
+            .replace("${ok}", String(data.successCount))
+            .replace("${fail}", String(data.failureCount)),
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["invoices", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+      rowSel.clear();
+    },
+    onError: (e: any, vars) => {
+      const labelKey =
+        vars.action === "mark_sent" ? "fin-bulk-mark-sent-failed"
+        : vars.action === "mark_paid" ? "fin-bulk-mark-paid-failed"
+        : vars.action === "cancel" ? "fin-bulk-cancel-failed"
+        : "fin-bulk-delete-invoices-failed";
+      toast.error(e?.message || t(labelKey));
+    },
+  });
+
+  const bulkExportSelected = () => {
+    if (rowSel.ids.length === 0) return;
+    const url = `/api/export?type=invoices&format=csv&ids=${encodeURIComponent(rowSel.ids.join(","))}`;
+    window.open(url, "_blank");
+  };
 
   // KPI computations
   const kpis = useMemo(() => {
@@ -456,6 +519,13 @@ export function InvoicesView() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
+                    <TableHead className="w-8">
+                      <Checkbox
+                        checked={rowSel.allOnPageSelected}
+                        onCheckedChange={rowSel.toggleAllOnPage}
+                        aria-label={t("fin-select-all-on-page-label")}
+                      />
+                    </TableHead>
                     <TableHead>{t("fin-number")}</TableHead>
                     <TableHead className="hidden md:table-cell">{t("fin-subject")}</TableHead>
                     <TableHead className="hidden lg:table-cell">{t("fin-partner")}</TableHead>
@@ -470,7 +540,19 @@ export function InvoicesView() {
                   {items.map((inv) => {
                     const overdue = isOverdue(inv);
                     return (
-                      <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailId(inv.id)}>
+                      <TableRow
+                        key={inv.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setDetailId(inv.id)}
+                        data-state={rowSel.isSelected(inv.id) ? "selected" : undefined}
+                      >
+                        <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={rowSel.isSelected(inv.id)}
+                            onCheckedChange={() => rowSel.toggle(inv.id)}
+                            aria-label={t("fin-select-invoice-aria").replace("${number}", inv.number || inv.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono text-xs">{inv.number}</TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="font-medium truncate max-w-[200px]">{inv.subject || "—"}</div>
@@ -652,6 +734,58 @@ export function InvoicesView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BulkActionBar
+        count={rowSel.count}
+        onClear={rowSel.clear}
+        label={rowSel.count === 1 ? t("fin-invoice-selected") : t("fin-invoices-selected")}
+        actions={[
+          {
+            key: "mark-sent",
+            label: t("fin-bulk-mark-sent-label"),
+            icon: <Send className="size-4" />,
+            variant: "default",
+            disabled: bulkInvoiceMut.isPending,
+            confirm: t("fin-bulk-mark-sent-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkInvoiceMut.mutate({ ids: rowSel.ids, action: "mark_sent" }),
+          },
+          {
+            key: "mark-paid",
+            label: t("fin-bulk-mark-paid-label"),
+            icon: <CheckCircle2 className="size-4" />,
+            variant: "outline",
+            disabled: bulkInvoiceMut.isPending,
+            confirm: t("fin-bulk-mark-paid-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkInvoiceMut.mutate({ ids: rowSel.ids, action: "mark_paid" }),
+          },
+          {
+            key: "cancel",
+            label: t("fin-bulk-cancel-label"),
+            icon: <Ban className="size-4" />,
+            variant: "outline",
+            disabled: bulkInvoiceMut.isPending,
+            confirm: t("fin-bulk-cancel-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkInvoiceMut.mutate({ ids: rowSel.ids, action: "cancel" }),
+          },
+          {
+            key: "export-selected",
+            label: t("fin-bulk-export-selected"),
+            icon: <FileDown className="size-4" />,
+            variant: "outline",
+            disabled: rowSel.count === 0,
+            onClick: bulkExportSelected,
+          },
+          {
+            key: "delete",
+            label: t("delete"),
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            disabled: bulkInvoiceMut.isPending,
+            confirm: t("fin-bulk-delete-invoices-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkInvoiceMut.mutate({ ids: rowSel.ids, action: "delete" }),
+          },
+        ]}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNewShortcut } from "@/lib/hooks/use-new-shortcut";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -40,7 +40,7 @@ import {
   Building2, ShieldCheck, Star, Maximize2, DollarSign,
   ChevronDown, ChevronRight,
   ExternalLink, Send, Zap, CheckCircle2, Clock, AlertCircle, XCircle, KeyRound,
-  Loader2, Copy, Check, Link as LinkIcon, Download, MessageSquare,
+  Loader2, Copy, Check, Link as LinkIcon, Download, MessageSquare, Upload, FileDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -56,6 +56,8 @@ import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { usePageSize } from "@/lib/hooks/use-page-size";
 import { PageSizeSelector } from "@/components/common/page-size-selector";
 import { useT } from "@/lib/i18n/store";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar, useRowSelection } from "@/components/common/bulk-action-bar";
 
 const TYPE_LABEL_KEYS: Record<PartnerType, string> = {
   buyer: "crm-type-buyer",
@@ -268,6 +270,66 @@ export function PartnersView() {
   const items = data?.items || [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rowSel = useRowSelection(items);
+
+  // Bulk delete — loop through DELETE /api/partners/[id] for each selected
+  // partner. (No server-side bulk endpoint for partners exists yet — they
+  // don't have status transitions, so a client-side loop is acceptable.)
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let ok = 0, fail = 0;
+      for (const id of ids) {
+        try {
+          const r = await fetch(api(`/api/partners/${id}`), { method: "DELETE" });
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      }
+      return { ok, fail };
+    },
+    onSuccess: ({ ok, fail }) => {
+      if (fail === 0) toast.success(t("crm-partner-bulk-delete-success").replace("${n}", String(ok)));
+      else toast.warning(t("crm-partner-bulk-delete-partial").replace("${ok}", String(ok)).replace("${fail}", String(fail)));
+      qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
+      qc.invalidateQueries({ queryKey: ["dashboard", tenantKey] });
+      rowSel.clear();
+    },
+    onError: () => toast.error(t("crm-partner-bulk-delete-failed")),
+  });
+
+  const bulkExportSelected = () => {
+    if (rowSel.ids.length === 0) return;
+    const url = `/api/export?type=partners&format=csv&ids=${encodeURIComponent(rowSel.ids.join(","))}`;
+    window.open(url, "_blank");
+  };
+
+  // CSV import — POST FormData to /api/import?type=partners. The server
+  // parses the CSV, coerces types, and upserts each row via the store.
+  const importFileRef = useRef<HTMLInputElement | null>(null);
+  const importMut = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(api("/api/import?type=partners"), { method: "POST", body: fd });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || t("crm-import-failed"));
+      }
+      return (await r.json()) as { successCount: number; failureCount: number; totalRows: number };
+    },
+    onSuccess: (data) => {
+      if (data.failureCount === 0) {
+        toast.success(t("crm-import-success").replace("${n}", String(data.successCount)).replace("${fail}", "0"));
+      } else {
+        toast.warning(
+          t("crm-import-success")
+            .replace("${n}", String(data.successCount))
+            .replace("${fail}", String(data.failureCount)),
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["partners", tenantKey] });
+    },
+    onError: (e: any) => toast.error(e?.message || t("crm-import-failed")),
+  });
 
   return (
     <div>
@@ -276,14 +338,76 @@ export function PartnersView() {
         description={t("crm-total-count").replace("${n}", String(total))}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => window.open("/api/partners/export?format=csv", "_blank")}>
-              <Download className="size-4 mr-1" /> {t("crm-export-csv")}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open("/api/partners/export?format=csv", "_blank")}
+              title={t("crm-export-csv")}
+            >
+              <Download className="size-4" /> {t("crm-export-csv")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => importFileRef.current?.click()}
+              disabled={importMut.isPending}
+              title={t("crm-partner-import-csv-tooltip")}
+            >
+              <Upload className="size-4" /> {t("crm-partner-import-csv")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // CSV template — same column set as /api/export?type=partners.
+                const headers = [
+                  "name", "type", "entity_type", "email", "phone", "country", "city",
+                  "state", "postal_code", "address_line", "tax_id", "vat_number",
+                  "contact_name", "contact_email", "contact_phone", "status", "risk_score",
+                  "preferred_currency", "preferred_incoterm", "preferred_payment_terms",
+                  "industry", "website", "bank_name", "bank_account", "bank_swift", "bank_iban",
+                ];
+                const sample = [
+                  '"Demo Buyer Ltd"', "buyer", "legal_entity", "buyer@example.com", "+1 555 0100",
+                  "US", "New York", "NY", "10001", '"123 Main St"', "US123456789", "",
+                  '"Jane Doe"', "jane@example.com", "+1 555 0101", "active", "10",
+                  "USD", "FOB", "net30", "trading", "https://example.com",
+                  '"Bank of America"', "000123456789", "BOFAUS3N", "",
+                ];
+                const csv = `${headers.join(",")}\n${sample.join(",")}\n`;
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "partners-template.csv";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+              title={t("crm-import-template-tooltip")}
+              className="text-muted-foreground"
+            >
+              {t("crm-partner-import-template")}
             </Button>
             <Button onClick={() => { setEditing(null); setShowForm(true); }}>
               <Plus className="size-4 mr-1" /> {t("crm-new-partner")}
             </Button>
           </div>
         }
+      />
+
+      {/* Hidden file input for CSV import — same pattern as products-view. */}
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".csv,text/csv,text/plain"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) importMut.mutate(file);
+          e.target.value = "";
+        }}
       />
 
       <Card className="mb-4 border-border/60 shadow-soft rounded-xl">
@@ -342,6 +466,13 @@ export function PartnersView() {
                 <Table>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
+                      <TableHead className="w-8">
+                        <Checkbox
+                          checked={rowSel.allOnPageSelected}
+                          onCheckedChange={rowSel.toggleAllOnPage}
+                          aria-label={t("crm-select-all-on-page")}
+                        />
+                      </TableHead>
                       <TableHead>{t("name")}</TableHead>
                       <TableHead className="hidden md:table-cell">{t("type")}</TableHead>
                       <TableHead className="hidden lg:table-cell">{t("crm-contact-person")}</TableHead>
@@ -358,7 +489,15 @@ export function PartnersView() {
                         key={p.id}
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => setDetailId(p.id)}
+                        data-state={rowSel.isSelected(p.id) ? "selected" : undefined}
                       >
+                        <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={rowSel.isSelected(p.id)}
+                            onCheckedChange={() => rowSel.toggle(p.id)}
+                            aria-label={`${t("crm-select")} ${p.name}`}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="font-medium flex items-center gap-1.5">
                             {p.name}
@@ -535,6 +674,31 @@ export function PartnersView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BulkActionBar
+        count={rowSel.count}
+        onClear={rowSel.clear}
+        label={rowSel.count === 1 ? t("crm-partner-selected") : t("crm-partners-selected")}
+        actions={[
+          {
+            key: "export-selected",
+            label: t("crm-partner-bulk-export-selected"),
+            icon: <FileDown className="size-4" />,
+            variant: "outline",
+            disabled: rowSel.count === 0,
+            onClick: bulkExportSelected,
+          },
+          {
+            key: "delete",
+            label: t("delete"),
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            disabled: bulkDeleteMut.isPending,
+            confirm: t("crm-partner-bulk-delete-confirm").replace("${n}", String(rowSel.count)),
+            onClick: () => bulkDeleteMut.mutate(rowSel.ids),
+          },
+        ]}
+      />
     </div>
   );
 }
