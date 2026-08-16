@@ -3,6 +3,8 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
+import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
+import { PushNotificationsPrompt } from "@/components/pwa/push-notifications";
 import { ThemeProvider } from "next-themes";
 
 const inter = Inter({
@@ -107,6 +109,8 @@ export default function RootLayout({
           <Providers>
             {children}
             <Toaster richColors position="top-right" />
+            <ServiceWorkerRegister />
+            <PushNotificationsPrompt />
           </Providers>
         </ThemeProvider>
       </body>
