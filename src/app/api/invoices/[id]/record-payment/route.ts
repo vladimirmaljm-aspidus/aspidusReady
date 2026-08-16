@@ -4,6 +4,7 @@ import { notify } from "@/lib/notif/helper";
 import { recordRevision } from "@/lib/api/doc-revisions";
 import { validateStatusTransition } from "@/lib/api/status-validator";
 import { triggerWebhooks } from "@/lib/webhooks/deliver";
+import { notifyInvoicePayment } from "@/lib/realtime/notify";
 
 export const runtime = "nodejs";
 
@@ -843,6 +844,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         },
       ).catch((e) => console.error("[record-payment] webhook trigger failed:", e));
     }
+
+    // ── D-4: real-time push to tenant admins ───────────────────────────────
+    // Fire-and-forget. Pushed on every payment (full OR partial) so the
+    // invoices view can live-update the "paid" badge and the bell badge can
+    // increment. The persisted notification (above) is the source of truth;
+    // this push just makes the UI feel instant.
+    void notifyInvoicePayment(tid, {
+      invoiceId: id,
+      invoiceNumber: invoice.number,
+      amount: numericAmount,
+      method,
+      reference: reference || null,
+      status: newStatus,
+      isFullPayment,
+      partnerId: invoice.partner_id || null,
+      paidAt: nowIso,
+    });
 
     // P1 Fix 2: include the cascade results in the HTTP response so the
     // caller (and ops dashboard) can see whether the downstream consistency

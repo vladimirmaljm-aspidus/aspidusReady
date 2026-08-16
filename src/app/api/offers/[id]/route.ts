@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, resolveTenantId, audit, sanitizeError } from "@/lib/api/helpers";
 import { validateStatusTransition } from "@/lib/api/status-validator";
 import { triggerWebhooks } from "@/lib/webhooks/deliver";
+import { notifyOfferUpdate } from "@/lib/realtime/notify";
 
 export const runtime = "nodejs";
 
@@ -194,6 +195,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       id,
       updated as unknown as Record<string, unknown>,
     ).catch((e) => console.error("[offers.put] webhook trigger failed:", e));
+
+    // ── D-4: real-time push to tenant admins ───────────────────────────────
+    // Only emit when the status actually changed — a pure line-item edit
+    // (e.g. typos, qty tweak) doesn't warrant a bell-badge ping. The push is
+    // fire-and-forget so a gateway outage doesn't block the response.
+    if (updated.status !== existing.status) {
+      void notifyOfferUpdate(existing.tenant_id, {
+        offerId: id,
+        offerNumber: (updated as any).number || null,
+        oldStatus: existing.status,
+        newStatus: updated.status,
+        partnerId: (updated as any).partner_id || existing.partner_id || null,
+        total: (updated as any).total ?? null,
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (error: any) {

@@ -90,6 +90,7 @@
     "react-syntax-highlighter": "^15.6.1",
     "recharts": "^2.15.4",
     "sharp": "^0.34.3",
+    "socket.io-client": "^4.8.3",
     "sonner": "^2.0.6",
     "swagger-ui-react": "^5.32.13",
     "tailwind-merge": "^3.3.1",

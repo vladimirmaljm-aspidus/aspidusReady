@@ -3,6 +3,7 @@ import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
 import { notifyRfqReceived } from "@/lib/notif/helper";
+import { notifyPortalActivity } from "@/lib/realtime/notify";
 import { audit } from "@/lib/api/helpers";
 import { nextDocNumber } from "@/lib/api/doc-number";
 
@@ -131,6 +132,21 @@ export async function POST(req: NextRequest) {
     // Notify tenant admins
     const partner = await store.getPartner(access.partner_id);
     await notifyRfqReceived(access.tenant_id, partner?.name || "A client", body.product_name || "a product", created.id);
+
+    // ── D-4: real-time push to tenant admins ───────────────────────────────
+    // Fire-and-forget. The persisted notification above is the source of
+    // truth; this push just makes the bell badge increment instantly so an
+    // admin watching the SPA sees the new RFQ without waiting for the next
+    // 30s poll (now disabled — see topbar.tsx).
+    void notifyPortalActivity(access.tenant_id, {
+      type: "rfq",
+      rfqId: created.id,
+      rfqNumber: body.number,
+      partnerId: access.partner_id,
+      partnerName: partner?.name || null,
+      productName: body.product_name || null,
+      quantity: body.quantity,
+    });
 
     return NextResponse.json(created);
   } catch (e: any) {

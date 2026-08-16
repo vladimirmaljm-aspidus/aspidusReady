@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
 import { insertMessage, sanitizeMessageBody, markThreadRead, listThread } from "@/lib/portal/messages";
 import { sendEmail, newMessageEmail } from "@/lib/email/service";
+import { notifyNewMessage } from "@/lib/realtime/notify";
 
 export const runtime = "nodejs";
 
@@ -105,6 +106,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
 
       await audit(auth.store, auth.user, req, "admin.message.sent", "portal_access", id, { partner_id: access.partner_id, preview: body.slice(0, 200) });
+
+      // ── D-4: real-time push to the portal client ──────────────────────────
+      // Fire-and-forget — the notification row has already been created above
+      // (the `createNotification` call). This push just pings any open portal
+      // tab so the partner sees the new message without a manual refresh.
+      // `access.id` is the portal_access id which the portal-side realtime
+      // hook will use as its socket identity (when wired up — admin SPA uses
+      // `user.id` instead, see `src/hooks/use-realtime.ts`).
+      void notifyNewMessage(access.tenant_id, access.id, {
+        messageId: msg.id,
+        partnerId: access.partner_id,
+        direction: "admin_to_portal",
+        preview: body.slice(0, 200),
+        sender: auth.user.username,
+      });
+
       return NextResponse.json(msg);
     } catch (e: any) {
       return NextResponse.json({ error: e.message }, { status: 500 });

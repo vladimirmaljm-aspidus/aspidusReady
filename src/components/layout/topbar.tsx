@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useAppStore, isAdmin, isSuperAdmin } from "@/lib/store/app-store";
+import { useRealtime, disconnectRealtime } from "@/hooks/use-realtime";
 import { useI18nStore } from "@/lib/i18n/store";
 import { t, LOCALE_LABELS, LOCALE_FLAGS, type Locale } from "@/lib/i18n/dictionaries";
 import { useThemeCustomStore, type ThemeAccent, ACCENT_MAP, ACCENT_LABELS } from "@/lib/store/theme-store";
@@ -96,6 +97,10 @@ export function Topbar() {
   const [notifications, setNotifications] = React.useState<NotifItem[]>([]);
   const [unreadTotal, setUnreadTotal] = React.useState(0);
   const [notifOpen, setNotifOpen] = React.useState(false);
+  // D-4: brief pulse on the bell when a new notification arrives via WS.
+  // Cleared after ~1.2s by the timeout in `flashBell`.
+  const [bellPulse, setBellPulse] = React.useState(false);
+  const pulseTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadNotifications = React.useCallback(() => {
     if (!user) return;
@@ -110,14 +115,113 @@ export function Topbar() {
       .catch(() => {});
   }, [user]);
 
-  // Load on mount/user change, then poll every 30s so new notifications
-  // (KYC submitted, RFQ received, offer accepted, etc.) show up without a
-  // hard refresh.
+  // Load once on mount / user change. The 30-second polling that previously
+  // lived here has been replaced by the WebSocket subscription below — the
+  // initial fetch is kept so a freshly-loaded tab shows the user's existing
+  // unread notifications without waiting for the next WS event.
   React.useEffect(() => {
     loadNotifications();
-    const id = setInterval(loadNotifications, 30_000);
-    return () => clearInterval(id);
   }, [loadNotifications]);
+
+  // ── D-4: WebSocket real-time subscription ────────────────────────────────
+  // Replaces the 30s polling. Handlers are recreated on every render (cheap)
+  // but the hook internally keeps the socket subscription stable across
+  // renders via a ref (see `src/hooks/use-realtime.ts`).
+  const flashBell = React.useCallback(() => {
+    setBellPulse(true);
+    if (pulseTimer.current) clearTimeout(pulseTimer.current);
+    pulseTimer.current = setTimeout(() => setBellPulse(false), 1_200);
+  }, []);
+
+  useRealtime({
+    "message:new": React.useCallback((data: any) => {
+      // Admin-sent message to portal — admin bell doesn't show portal
+      // notifications, but we flash the bell anyway so the admin gets
+      // visual confirmation that the send landed.
+      flashBell();
+      toast.message("Message sent", {
+        description: data?.preview ? String(data.preview).slice(0, 80) : undefined,
+      });
+    }, [flashBell]),
+
+    "offer:updated": React.useCallback((data: any) => {
+      // A status change on any offer in this tenant — flash + toast.
+      setUnreadTotal((c) => c + 1);
+      setNotifications((prev) => [{
+        id: `rt:offer:${data?.offerId ?? ""}:${Date.now()}`,
+        title: `Offer ${data?.offerNumber || ""} → ${data?.newStatus || "updated"}`,
+        message: data?.offerNumber
+          ? `Status changed from ${data?.oldStatus || "—"} to ${data?.newStatus || "—"}.`
+          : "Offer status updated.",
+        type: `offer_${data?.newStatus || "updated"}`,
+        read: false,
+        created_at: new Date().toISOString(),
+        entity_type: "offer",
+      }, ...prev].slice(0, 10));
+      flashBell();
+      const isNewAccepted = String(data?.newStatus || "").toLowerCase() === "accepted";
+      const isNewRejected = String(data?.newStatus || "").toLowerCase() === "rejected";
+      if (isNewAccepted) {
+        toast.success(`Offer ${data?.offerNumber || ""} accepted`);
+      } else if (isNewRejected) {
+        toast.error(`Offer ${data?.offerNumber || ""} ${data?.newStatus}`);
+      } else {
+        toast.message(`Offer ${data?.offerNumber || ""} → ${data?.newStatus || "updated"}`);
+      }
+    }, [flashBell]),
+
+    "invoice:paid": React.useCallback((data: any) => {
+      // A payment was recorded against an invoice in this tenant.
+      setUnreadTotal((c) => c + 1);
+      setNotifications((prev) => [{
+        id: `rt:invoice:${data?.invoiceId ?? ""}:${Date.now()}`,
+        title: data?.isFullPayment
+          ? `Invoice ${data?.invoiceNumber || ""} paid`
+          : `Partial payment on ${data?.invoiceNumber || ""}`,
+        message: data?.invoiceNumber
+          ? `${data?.isFullPayment ? "Paid in full" : "Partial payment"} — ${data?.method || ""}${data?.reference ? ` (ref: ${data.reference})` : ""}.`
+          : "Payment recorded.",
+        type: data?.isFullPayment ? "invoice_paid" : "invoice_partial",
+        read: false,
+        created_at: new Date().toISOString(),
+        entity_type: "invoice",
+      }, ...prev].slice(0, 10));
+      flashBell();
+      toast.success(
+        data?.isFullPayment
+          ? `Invoice ${data?.invoiceNumber || ""} paid`
+          : `Partial payment recorded`,
+        { description: data?.method ? `via ${data.method}` : undefined }
+      );
+    }, [flashBell]),
+
+    "portal:activity": React.useCallback((data: any) => {
+      // Something happened on the portal side (RFQ submitted, etc.).
+      setUnreadTotal((c) => c + 1);
+      const label =
+        data?.type === "rfq" ? `New RFQ: ${data?.productName || "product"}` :
+        data?.type === "portal_message" ? "Portal message" :
+        "Portal activity";
+      setNotifications((prev) => [{
+        id: `rt:portal:${data?.type ?? ""}:${data?.rfqId ?? ""}:${Date.now()}`,
+        title: label,
+        message: data?.partnerName ? `From ${data.partnerName}.` : "",
+        type: `portal_${data?.type || "activity"}`,
+        read: false,
+        created_at: new Date().toISOString(),
+        entity_type: data?.type === "rfq" ? "portal_rfq" : "portal_access",
+      }, ...prev].slice(0, 10));
+      flashBell();
+      toast.message(label, {
+        description: data?.partnerName ? `From ${data.partnerName}` : undefined,
+      });
+    }, [flashBell]),
+  });
+
+  // Cleanup the pulse timer on unmount.
+  React.useEffect(() => () => {
+    if (pulseTimer.current) clearTimeout(pulseTimer.current);
+  }, []);
 
   const unreadCount = unreadTotal;
 
@@ -157,6 +261,10 @@ export function Topbar() {
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
+    // D-4: tear down the WebSocket so a logged-out tab doesn't keep an open
+    // connection under a stale identity. The next login will reconnect with
+    // the new user's rooms.
+    disconnectRealtime();
     setUser(null);
     setView("dashboard");
     useI18nStore.getState().reset();
@@ -216,9 +324,18 @@ export function Topbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="relative size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 smooth"
+              className={cn(
+                "relative size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 smooth",
+                bellPulse && "animate-pulse",
+              )}
             >
               <Bell className="size-4" />
+              {/* D-4: brief ping ring when a new WS notification arrives.
+                  Renders ABOVE the unread-count badge so the two don't
+                  collide visually. */}
+              {bellPulse && (
+                <span className="absolute inset-0 rounded-lg ring-2 ring-emerald-500/70 animate-ping" aria-hidden />
+              )}
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-emerald-500 text-white text-[9px] font-semibold leading-none ring-2 ring-background">
                   {unreadCount}
