@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { ShieldAlert, Building2, ShieldCheck, Mail, Upload, Loader2, UserCog, X, ImageIcon, Send, CheckCircle2, XCircle, Zap, AlertTriangle, Globe, Info, FileText, Palette, QrCode, Save } from "lucide-react";
 import { useAppStore, isAdmin } from "@/lib/store/app-store";
+import { TwoFactorSetup } from "@/components/auth/two-factor-setup";
 import { CURRENCIES } from "@/lib/data/reference";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import type { MemorandumSettings, Tenant } from "@/lib/supabase/types";
@@ -124,6 +125,7 @@ async function fetchSetting<T>(key: string, fallback: T, api: (path: string) => 
 export function SettingsView() {
   const currentUser = useAppStore((s) => s.user);
   const admin = isAdmin(currentUser);
+  const isSuperAdmin = !!currentUser && currentUser.role === "super_admin";
   const t = useT();
 
   if (!admin) {
@@ -159,8 +161,9 @@ export function SettingsView() {
           <CompanyTab />
           <DefaultLanguageCard />
         </TabsContent>
-        <TabsContent value="security" className="mt-4">
+        <TabsContent value="security" className="mt-4 space-y-4">
           <SecurityTab />
+          <TwoFactorSetup isSuperAdmin={isSuperAdmin} />
         </TabsContent>
         <TabsContent value="comms" className="mt-4">
           <CommsTab />

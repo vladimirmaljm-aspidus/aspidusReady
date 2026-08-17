@@ -81,6 +81,7 @@ export class MockStore implements Store {
       password_hash: u.password_hash || mock.mockHash("password"),
       totp_secret: u.totp_secret || null,
       totp_enabled: u.totp_enabled ?? false,
+      recovery_codes: u.recovery_codes ?? null,
       locked_until: u.locked_until || null,
       failed_attempts: u.failed_attempts ?? 0,
       last_login_at: u.last_login_at || null,

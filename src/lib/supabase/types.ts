@@ -19,6 +19,14 @@ export interface User {
   password_hash: string;
   totp_secret: string | null;
   totp_enabled: boolean;
+  /**
+   * SHA-256 hex strings for the 10 one-time recovery codes issued at 2FA
+   * enrollment (migration 040). Hashed at the application layer
+   * (src/lib/auth/totp.ts `hashRecoveryCode`) so a DB read alone can't
+   * recover usable codes. NULL when 2FA is not active. A code is removed
+   * from the array when consumed (single-use).
+   */
+  recovery_codes: string[] | null;
   locked_until: string | null;
   failed_attempts: number;
   last_login_at: string | null;

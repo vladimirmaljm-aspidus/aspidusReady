@@ -157,6 +157,11 @@ const SECTIONS: NavSection[] = [
       { key: "feature-flags", i18nKey: "feature-flags", i18nSection: "platform", icon: ToggleRight, permission: "platform.feature_flags.read" },
       { key: "plan-upgrade-queue", i18nKey: "plan-upgrade-queue", i18nSection: "platform", icon: TrendingUp, permission: "platform.plans.write" },
       { key: "verification-logs", i18nKey: "verification-logs", i18nSection: "platform", icon: Shield, superAdminOnly: true },
+      // P0-4 — unified super-admin settings interface (security, roles,
+      // data protection, monitoring, incidents, platform config,
+      // system health). Visible to super-admins only; the view itself
+      // also re-checks isSuperAdmin before rendering.
+      { key: "super-admin-settings", i18nKey: "super-admin-settings", i18nSection: "platform", icon: Settings2, superAdminOnly: true },
     ],
   },
 ];

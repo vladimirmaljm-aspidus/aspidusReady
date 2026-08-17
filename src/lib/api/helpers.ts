@@ -72,6 +72,64 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
     return NextResponse.json({ error: "Session expired." }, { status: 401 });
   }
 
+  // ── P0-1 Session TTL + idle-timeout check (super_admin exempt) ─────────
+  // The JWT now carries `expires_at` (application-level absolute expiry,
+  // derived from SessionConfig at createSession time) and
+  // `last_activity_at` (bumped by POST /api/auth/touch). Both are
+  // enforced here for admin + user sessions; super_admin is exempt
+  // (CRITICAL INVARIANT — see src/lib/auth/session-config.ts) so a
+  // misconfigured TTL can never lock the platform owner out.
+  //
+  // The check runs BEFORE the impersonation swap so a super_admin's
+  // own session is the one being checked (and exempted); the
+  // impersonation target's TTL is irrelevant because the impersonation
+  // claim carries its own expiry.
+  //
+  // Legacy sessions minted before P0-1 lack these claims — for those,
+  // we fall through (no TTL / idle enforcement) so existing cookies
+  // aren't abruptly invalidated. Once every active session has been
+  // rotated through the new createSession, this fallback is dead code.
+  if (baseUser.role !== "super_admin") {
+    try {
+      const {
+        getSessionConfig,
+        isAbsoluteTtlApplicable,
+        isIdleTimeoutApplicable,
+      } = await import("@/lib/auth/session-config");
+      const config = await getSessionConfig();
+      // Absolute-TTL check — `expires_at` is ms since epoch.
+      if (
+        isAbsoluteTtlApplicable(baseUser.role) &&
+        typeof session.expires_at === "number" &&
+        Date.now() > session.expires_at
+      ) {
+        return NextResponse.json(
+          { error: "Session expired. Please sign in again." },
+          { status: 401 },
+        );
+      }
+      // Idle-timeout check — `last_activity_at` is ms since epoch.
+      // Only applies if the claim is present (legacy sessions fall
+      // through; the JWT-exp cap is the backstop for those).
+      if (
+        isIdleTimeoutApplicable(baseUser.role) &&
+        typeof session.last_activity_at === "number" &&
+        Date.now() - session.last_activity_at > config.idleTimeoutMs
+      ) {
+        return NextResponse.json(
+          { error: "Session expired due to inactivity. Please sign in again." },
+          { status: 401 },
+        );
+      }
+    } catch (e) {
+      // Fail-open on config-load error — better a stale session than
+      // locking a real user out when the DB is briefly unreachable.
+      // The token_version check above + the JWT-exp cryptographic
+      // cap are still in force as backstops.
+      console.error("[requireAuth] Session TTL check failed:", e);
+    }
+  }
+
   // ── Impersonation handling ────────────────────────────────────────────
   // If the session carries an `impersonating` claim, and it hasn't expired,
   // swap the effective user to the impersonation target. Only super_admins

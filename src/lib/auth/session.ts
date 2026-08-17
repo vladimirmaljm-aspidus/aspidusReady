@@ -5,6 +5,14 @@ import { getStore } from "@/lib/data/store";
 const COOKIE_NAME = "crm_session";
 const SESSION_TTL_DAYS = 7;
 
+/**
+ * TTL for the short-lived 2FA temp token (issued by /api/auth/login after a
+ * valid password but BEFORE TOTP verification). 5 minutes is long enough
+ * that a user typing a 6-digit code by hand won't time out, but short
+ * enough that a stolen temp token is a narrow window.
+ */
+const TWO_FACTOR_TEMP_TTL_SEC = 5 * 60;
+
 export interface ImpersonationClaim {
   original_super_admin_id: string;
   original_username: string;
@@ -37,6 +45,27 @@ export interface SessionPayload {
   tenant_id: string | null;
   /** Optional impersonation context — present only while a super_admin is acting as another user. */
   impersonating?: ImpersonationClaim;
+  /**
+   * Application-level absolute session expiry (ms since epoch). Distinct
+   * from the JWT `exp` claim (which is the cryptographic-validity cap set
+   * to SESSION_TTL_DAYS = 7d). `requireAuth` rejects sessions whose
+   * `expires_at` is in the past — this is the role-based TTL surface
+   * (admin = 8h, user = 8h by default) enforced by SessionConfig.
+   *
+   * P0-1 CRITICAL INVARIANT: super_admin sessions carry a far-future
+   * `expires_at` (100 years from issue) AND `requireAuth` skips the
+   * absolute-TTL check for them — they never expire on idle or absolute
+   * TTL. Set at createSession time via `getSessionTtlForRole(role, config)`
+   * (see session-config.ts).
+   */
+  expires_at?: number;
+  /**
+   * Last activity timestamp (ms since epoch). Bumped by
+   * `bumpSessionActivity` (called from POST /api/auth/touch). requireAuth
+   * rejects sessions whose last_activity_at is older than
+   * SessionConfig.idleTimeoutMs (admin + user only; super_admin exempt).
+   */
+  last_activity_at?: number;
   iat?: number;
   exp?: number;
 }
@@ -52,8 +81,55 @@ function getSecret(): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
+/**
+ * Mint a session JWT for a freshly-authenticated user.
+ *
+ * P0-1 (Auth Security): the JWT now carries `expires_at` (application-level
+ * absolute expiry, derived from SessionConfig by role) and
+ * `last_activity_at` (seeded to Date.now() so the idle-timeout clock
+ * starts the moment the session is issued). `requireAuth` checks both:
+ *   - `expires_at` past now → 401 "Session expired" (super_admin exempt).
+ *   - `last_activity_at` older than idleTimeoutMs → 401 "Session expired
+ *     due to inactivity" (super_admin exempt).
+ *
+ * The JWT's cryptographic `exp` claim is set to SESSION_TTL_DAYS (7d) as
+ * the hard upper cap on signature validity — even if the SessionConfig
+ * TTL were misconfigured to 30 days, the JWT itself stops verifying at
+ * 7d and `verifySession` returns null.
+ *
+ * For super_admin the SessionConfig returns Infinity; Infinity coerces
+ * to `null` when JSON-serialised, which would lose the value in the JWT
+ * claim set. We materialise it as a 100-year far-future timestamp so
+ * the value survives the round-trip. `requireAuth`'s
+ * `isAbsoluteTtlApplicable` check still skips the comparison for
+ * super_admin regardless, so the 100-year placeholder is never actually
+ * consulted — it just has to be a finite, large number.
+ */
 export async function createSession(payload: Omit<SessionPayload, "iat" | "exp">): Promise<string> {
-  const token = await new SignJWT({ ...payload })
+  // P0-1: derive the role-based absolute TTL from SessionConfig. We
+  // intentionally load the config inside createSession so a config
+  // update (PUT /api/settings/session-config) takes effect on the next
+  // login, not just on the next server restart. Failures fall back to
+  // the 7-day JWT-exp cap so a DB outage doesn't break login entirely.
+  let expiresAt: number;
+  try {
+    const { getSessionConfig, getSessionTtlForRole } = await import("@/lib/auth/session-config");
+    const config = await getSessionConfig();
+    const ttl = getSessionTtlForRole(payload.role, config);
+    // Infinity → 100-year far-future so the value survives JSON
+    // serialisation in the JWT claim set without becoming `null`.
+    expiresAt = ttl === Infinity
+      ? Date.now() + 100 * 365 * 24 * 60 * 60 * 1000
+      : Date.now() + ttl;
+  } catch {
+    expiresAt = Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+  }
+
+  const token = await new SignJWT({
+    ...payload,
+    expires_at: expiresAt,
+    last_activity_at: Date.now(),
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_TTL_DAYS}d`)
@@ -94,6 +170,118 @@ export async function clearSessionCookie(): Promise<void> {
 }
 
 export const SESSION_COOKIE_NAME = COOKIE_NAME;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2FA temp-token helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Payload carried by the short-lived 2FA temp token. Issued by
+ * /api/auth/login AFTER the password verifies but BEFORE TOTP, and
+ * consumed by /api/auth/2fa/login to complete the 2FA flow.
+ *
+ * `token_version` is snapshotted from the user row at issue time and
+ * re-checked at /2fa/login — if the user's password was reset (or their
+ * token_version bumped for any reason) between temp-token issue and
+ * TOTP verification, the temp token is refused.
+ */
+export interface TwoFactorTempPayload {
+  sub: string;
+  username: string;
+  role: string;
+  token_version: number;
+  tenant_id: string | null;
+  /** Cryptographic marker — distinguishes 2FA temp tokens from full session JWTs. */
+  kind: "2fa_temp";
+  iat?: number;
+  exp?: number;
+}
+
+/**
+ * Mint a short-lived (5min) JWT identifying a user who has verified their
+ * password but not yet their TOTP. The /api/auth/2fa/login route consumes
+ * this + the TOTP code from the user's authenticator app, and on success
+ * issues a FULL session cookie (createSession).
+ *
+ * CRITICAL: this is NEVER issued for super_admin — the login route skips
+ * the 2FA branch for super_admin and issues a full session directly.
+ * (An attacker who steals a super_admin's password still has no TOTP
+ * bypass to attempt because there's no temp token to attack.)
+ */
+export async function issueTwoFactorTempToken(
+  payload: Omit<TwoFactorTempPayload, "kind" | "iat" | "exp">,
+): Promise<string> {
+  const token = await new SignJWT({ ...payload, kind: "2fa_temp" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${TWO_FACTOR_TEMP_TTL_SEC}s`)
+    .sign(getSecret());
+  return token;
+}
+
+/**
+ * Verify a 2FA temp token. Returns the payload on success, null on any
+ * failure (expired, malformed, wrong secret, missing `kind: "2fa_temp"`
+ * marker — the marker guards against a full session JWT being passed
+ * in place of a temp token).
+ */
+export async function verifyTwoFactorTempToken(
+  token: string,
+): Promise<TwoFactorTempPayload | null> {
+  try {
+    const { payload } = await jwtVerify(token, getSecret());
+    if (payload.kind !== "2fa_temp") return null;
+    return payload as unknown as TwoFactorTempPayload;
+  } catch {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Idle-timeout bump helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Re-sign the session JWT with `last_activity_at = Date.now()`. Preserves
+ * the original `exp` and `expires_at` so the absolute TTL clock is NOT
+ * reset by activity — only the idle window is. Called by
+ * POST /api/auth/touch on every heartbeat from the frontend.
+ *
+ * The caller passes the current payload (from `getSessionFromCookie`);
+ * we re-sign with the same secret + a fresh iat. The 7-day JWT-exp cap
+ * is re-applied (the new token's exp = now + 7d). This is intentional —
+ * `setExpirationTime("7d")` is the cryptographic-validity cap, distinct
+ * from the application-level `expires_at` which carries the role-based
+ * TTL and is preserved from the original session. If `expires_at` is
+ * missing (legacy session minted before P0-1), fall back to a fresh
+ * 7d so we don't accidentally mint a never-expiring admin session.
+ */
+export async function bumpSessionActivity(
+  session: SessionPayload,
+): Promise<string> {
+  const expiresAt =
+    typeof session.expires_at === "number"
+      ? session.expires_at
+      : Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+  // Strip iat/exp — Jose will re-set them on re-sign. Keeping the
+  // originals would produce a malformed JWT (Jose refuses duplicate
+  // registered claims).
+  const { iat: _omitIat, exp: _omitExp, ...rest } = session;
+  void _omitIat;
+  void _omitExp;
+
+  const token = await new SignJWT({
+    ...rest,
+    expires_at: expiresAt,
+    last_activity_at: Date.now(),
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${SESSION_TTL_DAYS}d`)
+    .sign(getSecret());
+  return token;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Session security helpers

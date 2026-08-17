@@ -41,6 +41,7 @@ export type ViewKey =
   | "platform-users"
   | "platform-health"
   | "super-admin-overview"
+  | "super-admin-settings"
   | "feature-flags"
   | "document-templates"
   | "document-verification"

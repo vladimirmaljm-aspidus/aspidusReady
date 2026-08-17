@@ -46,6 +46,13 @@ interface SendEmailOptions {
   text?: string;
   tenantId?: string;
   attachments?: EmailAttachment[];
+  /**
+   * Optional per-message Reply-To address. Overrides the comms blob's
+   * `reply_to` field when set — used by the breach-notification
+   * dispatcher so the supervisory authority can reply to the DPO contact
+   * even if the tenant's comms config has no reply_to set.
+   */
+  replyTo?: string;
 }
 
 interface SmtpConfig {
@@ -268,7 +275,11 @@ async function sendViaResend(opts: SendEmailOptions, cfg: ResendConfig): Promise
     html: opts.html,
   };
   if (opts.text) payload.text = opts.text;
-  if (cfg.replyTo) payload.reply_to = cfg.replyTo;
+  // Per-message Reply-To takes precedence over the comms-blob reply_to
+  // (so the breach-notification dispatcher can route replies to the DPO
+  // contact even if the tenant's comms config has no reply_to set).
+  const replyTo = opts.replyTo || cfg.replyTo;
+  if (replyTo) payload.reply_to = replyTo;
 
   // Attachments — Resend expects base64 content
   if (opts.attachments && opts.attachments.length > 0) {
@@ -317,7 +328,9 @@ async function sendViaPostmark(opts: SendEmailOptions, cfg: PostmarkConfig): Pro
     MessageStream: cfg.messageStream || "outbound",
   };
   if (opts.text) payload.TextBody = opts.text;
-  if (cfg.replyTo) payload.ReplyTo = cfg.replyTo;
+  // Per-message Reply-To takes precedence over the comms-blob reply_to.
+  const replyTo = opts.replyTo || cfg.replyTo;
+  if (replyTo) payload.ReplyTo = replyTo;
 
   // Attachments — Postmark expects base64 content
   if (opts.attachments && opts.attachments.length > 0) {
@@ -369,7 +382,9 @@ async function sendViaSmtp(opts: SendEmailOptions, cfg: SmtpConfig): Promise<{ s
     socketTimeout: 15_000,
   });
 
-  const info = await transporter.sendMail({
+  // Per-message Reply-To (e.g. the DPO contact for breach notifications)
+  // — nodemailer accepts `replyTo` directly on the message object.
+  const mailOpts: Record<string, unknown> = {
     from: `"${cfg.fromName}" <${cfg.fromEmail}>`,
     to: opts.to,
     subject: opts.subject,
@@ -380,7 +395,10 @@ async function sendViaSmtp(opts: SendEmailOptions, cfg: SmtpConfig): Promise<{ s
       content: a.content,
       contentType: a.contentType,
     })),
-  });
+  };
+  if (opts.replyTo) mailOpts.replyTo = opts.replyTo;
+
+  const info = await transporter.sendMail(mailOpts);
 
   return { success: true, messageId: info.messageId };
 }

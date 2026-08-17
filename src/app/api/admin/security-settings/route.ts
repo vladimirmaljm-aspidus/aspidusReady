@@ -1,0 +1,239 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireSuperAdmin, audit, sanitizeError } from "@/lib/api/helpers";
+import { getSupabase } from "@/lib/supabase/client";
+import { DEFAULT_POLICY } from "@/lib/auth/password-policy";
+
+export const runtime = "nodejs";
+
+/**
+ * GET /api/admin/security-settings  (super-admin only)
+ *
+ * Returns the platform-level security configuration stored under
+ * `settings.key = "security_config"` (tenant_id = NULL).
+ *
+ * The payload covers the four security knobs a super-admin tunes:
+ *   • 2FA / TOTP enforcement policy (force for super_admin, allow per role)
+ *   • Session TTLs (per role + idle timeout)
+ *   • CSRF enforcement toggle (P2-18)
+ *   • Password policy (min length + char-class requirements)
+ *
+ * All values fall back to platform-wide defaults if the settings row
+ * has never been written. Defaults are exported so the client UI can
+ * offer a "Reset to defaults" action.
+ */
+export async function GET(req: NextRequest) {
+  const auth = await requireSuperAdmin(req);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const sb = getSupabase();
+    const { data } = await sb
+      .from("settings")
+      .select("value")
+      .eq("key", "security_config")
+      .is("tenant_id", "null")
+      .maybeSingle();
+
+    const stored = (data?.value as Record<string, unknown> | null) ?? null;
+
+    const config = mergeDefaults(stored);
+    return NextResponse.json({ config, defaults: DEFAULT_SECURITY_CONFIG });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: sanitizeError(e) },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * PUT /api/admin/security-settings  (super-admin only)
+ *
+ * Persists the full security-config payload. The client is expected to
+ * send the complete document (the GET shape); the route replaces the
+ * stored row wholesale rather than merging, so omitted fields reset to
+ * their defaults via `mergeDefaults` on the next read.
+ *
+ * Validation is intentionally lenient (type coercion only) — the
+ * super-admin is trusted, and the UI validates before submit. If a
+ * future tightening is needed, add per-field guards here.
+ */
+export async function PUT(req: NextRequest) {
+  const auth = await requireSuperAdmin(req);
+  if (auth instanceof NextResponse) return auth;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Body must be an object." }, { status: 400 });
+  }
+
+  const config = mergeDefaults(body as Record<string, unknown>);
+
+  try {
+    const sb = getSupabase();
+    const { data: existing } = await sb
+      .from("settings")
+      .select("id")
+      .eq("key", "security_config")
+      .is("tenant_id", "null")
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await sb
+        .from("settings")
+        .update({ value: config, updated_at: new Date().toISOString() })
+        .eq("id", (existing as any).id);
+      if (error) return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
+    } else {
+      const { error } = await sb
+        .from("settings")
+        .insert({
+          key: "security_config",
+          value: config,
+          tenant_id: null,
+          updated_at: new Date().toISOString(),
+        });
+      if (error) return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
+    }
+
+    await audit(auth.store, auth.user, req, "settings.security.update", "settings", "security_config", {
+      totp_force_super_admin: config.totp.forceSuperAdmin,
+      session_super_admin_ttl: config.session.superAdminTtlMinutes,
+      password_min_length: config.passwordPolicy.minLength,
+    });
+
+    return NextResponse.json({ config });
+  } catch (e: any) {
+    return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
+  }
+}
+
+/* ─── Defaults & merging ──────────────────────────────────────────────── */
+
+export interface TotpConfig {
+  forceSuperAdmin: boolean;
+  forceAdmin: boolean;
+  forceStaff: boolean;
+  // Optional grace period (hours) after login before 2FA must be set up,
+  // so existing users aren't locked out on first enable.
+  enrollmentGraceHours: number;
+}
+
+export interface SessionConfig {
+  superAdminTtlMinutes: number;
+  adminTtlMinutes: number;
+  userTtlMinutes: number;
+  idleTimeoutMinutes: number;
+  // Hard cap on concurrent sessions per user (0 = unlimited).
+  maxConcurrentSessions: number;
+}
+
+export interface CsrfConfig {
+  // When true, the Origin-header check in requireAuth applies to
+  // state-changing methods (POST/PUT/PATCH/DELETE) on every route.
+  enforceOrigin: boolean;
+  // When true, SameSite=Strict is used; otherwise Lax (default).
+  sameSiteStrict: boolean;
+}
+
+export interface PasswordPolicyConfig {
+  minLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireNumbers: boolean;
+  requireSymbols: boolean;
+  // Days before a password must be rotated (0 = never).
+  expiryDays: number;
+  // Prevent reuse of last N passwords (0 = no history check).
+  historyCount: number;
+}
+
+export interface SecurityConfig {
+  totp: TotpConfig;
+  session: SessionConfig;
+  csrf: CsrfConfig;
+  passwordPolicy: PasswordPolicyConfig;
+}
+
+export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
+  totp: {
+    forceSuperAdmin: true,
+    forceAdmin: false,
+    forceStaff: false,
+    enrollmentGraceHours: 24,
+  },
+  session: {
+    superAdminTtlMinutes: 60 * 8, // 8 hours
+    adminTtlMinutes: 60 * 12, // 12 hours
+    userTtlMinutes: 60 * 24 * 7, // 7 days
+    idleTimeoutMinutes: 30,
+    maxConcurrentSessions: 5,
+  },
+  csrf: {
+    enforceOrigin: true,
+    sameSiteStrict: false,
+  },
+  passwordPolicy: {
+    minLength: DEFAULT_POLICY.minLength,
+    requireUppercase: DEFAULT_POLICY.requireUppercase,
+    requireLowercase: DEFAULT_POLICY.requireLowercase,
+    requireNumbers: DEFAULT_POLICY.requireNumbers,
+    requireSymbols: DEFAULT_POLICY.requireSymbols,
+    expiryDays: 0,
+    historyCount: 3,
+  },
+};
+
+function asBool(v: unknown, fallback: boolean): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") return v === "true";
+  return fallback;
+}
+function asNum(v: unknown, fallback: number): number {
+  const n = typeof v === "string" ? Number(v) : v;
+  return Number.isFinite(n) && typeof n === "number" ? n : fallback;
+}
+
+export function mergeDefaults(stored: Record<string, unknown> | null): SecurityConfig {
+  if (!stored) return { ...DEFAULT_SECURITY_CONFIG };
+
+  const t = (stored.totp as Record<string, unknown> | undefined) ?? {};
+  const s = (stored.session as Record<string, unknown> | undefined) ?? {};
+  const c = (stored.csrf as Record<string, unknown> | undefined) ?? {};
+  const p = (stored.passwordPolicy as Record<string, unknown> | undefined) ?? {};
+
+  return {
+    totp: {
+      forceSuperAdmin: asBool(t.forceSuperAdmin, DEFAULT_SECURITY_CONFIG.totp.forceSuperAdmin),
+      forceAdmin: asBool(t.forceAdmin, DEFAULT_SECURITY_CONFIG.totp.forceAdmin),
+      forceStaff: asBool(t.forceStaff, DEFAULT_SECURITY_CONFIG.totp.forceStaff),
+      enrollmentGraceHours: asNum(t.enrollmentGraceHours, DEFAULT_SECURITY_CONFIG.totp.enrollmentGraceHours),
+    },
+    session: {
+      superAdminTtlMinutes: asNum(s.superAdminTtlMinutes, DEFAULT_SECURITY_CONFIG.session.superAdminTtlMinutes),
+      adminTtlMinutes: asNum(s.adminTtlMinutes, DEFAULT_SECURITY_CONFIG.session.adminTtlMinutes),
+      userTtlMinutes: asNum(s.userTtlMinutes, DEFAULT_SECURITY_CONFIG.session.userTtlMinutes),
+      idleTimeoutMinutes: asNum(s.idleTimeoutMinutes, DEFAULT_SECURITY_CONFIG.session.idleTimeoutMinutes),
+      maxConcurrentSessions: asNum(s.maxConcurrentSessions, DEFAULT_SECURITY_CONFIG.session.maxConcurrentSessions),
+    },
+    csrf: {
+      enforceOrigin: asBool(c.enforceOrigin, DEFAULT_SECURITY_CONFIG.csrf.enforceOrigin),
+      sameSiteStrict: asBool(c.sameSiteStrict, DEFAULT_SECURITY_CONFIG.csrf.sameSiteStrict),
+    },
+    passwordPolicy: {
+      minLength: asNum(p.minLength, DEFAULT_SECURITY_CONFIG.passwordPolicy.minLength),
+      requireUppercase: asBool(p.requireUppercase, DEFAULT_SECURITY_CONFIG.passwordPolicy.requireUppercase),
+      requireLowercase: asBool(p.requireLowercase, DEFAULT_SECURITY_CONFIG.passwordPolicy.requireLowercase),
+      requireNumbers: asBool(p.requireNumbers, DEFAULT_SECURITY_CONFIG.passwordPolicy.requireNumbers),
+      requireSymbols: asBool(p.requireSymbols, DEFAULT_SECURITY_CONFIG.passwordPolicy.requireSymbols),
+      expiryDays: asNum(p.expiryDays, DEFAULT_SECURITY_CONFIG.passwordPolicy.expiryDays),
+      historyCount: asNum(p.historyCount, DEFAULT_SECURITY_CONFIG.passwordPolicy.historyCount),
+    },
+  };
+}

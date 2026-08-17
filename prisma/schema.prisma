@@ -94,6 +94,11 @@ model User {
   password_hash        String
   totp_secret          String?
   totp_enabled         Boolean   @default(false)
+  // SHA-256 hex strings for 10 one-time 2FA recovery codes (migration 040
+  // / src/lib/auth/totp.ts `hashRecoveryCode`). Hashed at the application
+  // layer so a DB read alone can't recover usable codes. NULL when 2FA is
+  // not active. Stored as TEXT (JSON array) — SQLite has no native JSON.
+  recovery_codes       String?
   locked_until         DateTime?
   failed_attempts      Int       @default(0)
   last_login_at        DateTime?

@@ -65,6 +65,9 @@ function mapUserRow(r: any): User {
     ...r,
     permissions: parseJSON<string[]>(r.permissions, []),
     notif_prefs: parseJSON<Record<string, unknown>>(r.notif_prefs, null),
+    // recovery_codes is stored as TEXT (JSON array) in SQLite — parse it
+    // back to a string[] so callers see the same shape as Supabase.
+    recovery_codes: parseJSON<string[]>(r.recovery_codes, null),
     locked_until: dateToISO(r.locked_until),
     last_login_at: dateToISO(r.last_login_at),
     created_at: dateToISOOrNow(r.created_at),
@@ -297,6 +300,10 @@ export class PrismaStore implements Store {
     if (u.password_hash !== undefined) data.password_hash = u.password_hash;
     if (u.totp_secret !== undefined) data.totp_secret = u.totp_secret;
     if (u.totp_enabled !== undefined) data.totp_enabled = u.totp_enabled;
+    // recovery_codes (string[] | null) is persisted as TEXT (JSON array) —
+    // SQLite has no native JSON column type. stringifyJSON(null) returns
+    // null, which clears the column on disable / recovery.
+    if (u.recovery_codes !== undefined) data.recovery_codes = stringifyJSON(u.recovery_codes);
     if (u.locked_until !== undefined) data.locked_until = u.locked_until ? new Date(u.locked_until) : null;
     if (u.failed_attempts !== undefined) data.failed_attempts = u.failed_attempts;
     if (u.last_login_at !== undefined) data.last_login_at = u.last_login_at ? new Date(u.last_login_at) : null;

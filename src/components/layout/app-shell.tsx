@@ -62,6 +62,7 @@ const CommissionsView = dynamic(() => import("@/components/views/commissions-vie
 const ErpView = dynamic(() => import("@/components/views/erp-view").then((m) => m.ErpView), { ssr: false });
 const TenantsView = dynamic(() => import("@/components/views/tenants-view").then((m) => m.TenantsView), { ssr: false });
 const SuperAdminOverviewView = dynamic(() => import("@/components/views/super-admin-overview-view").then((m) => m.SuperAdminOverviewView), { ssr: false });
+const SuperAdminSettingsView = dynamic(() => import("@/components/views/super-admin-settings-view").then((m) => m.SuperAdminSettingsView), { ssr: false });
 const FeatureFlagsView = dynamic(() => import("@/components/views/feature-flags-view").then((m) => m.FeatureFlagsView), { ssr: false });
 const PortalUploadsView = dynamic(() => import("@/components/views/portal-uploads-view").then((m) => m.PortalUploadsView), { ssr: false });
 const LogisticsRequestsView = dynamic(() => import("@/components/views/logistics-requests-view").then((m) => m.LogisticsRequestsView), { ssr: false });
@@ -120,6 +121,7 @@ function ViewContent({ view }: { view: string }) {
     case "plans":                return <PlansView />;
     case "tenants":              return <TenantsView />;
     case "super-admin-overview": return <SuperAdminOverviewView />;
+    case "super-admin-settings": return <SuperAdminSettingsView />;
     case "feature-flags":        return <FeatureFlagsView />;
     case "portal-uploads":       return <PortalUploadsView />;
     case "logistics-requests":   return <LogisticsRequestsView />;

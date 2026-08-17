@@ -33,14 +33,23 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
  *     the original value is returned untouched so the vault stays readable
  *     even if all keys are rotated/lost. Log the failure upstream.
  *
- * Key source:
- *   - v1: `process.env.SECRET_KEY` (padded/truncated to 32 bytes). MUST be
- *     set in every environment — this is the original key.
+ * Key source (P0-3 / Feature 1 — vault key separation):
+ *   - v1: `process.env.VAULT_KEY_V2 || process.env.SECRET_KEY_V1 || process.env.SECRET_KEY`.
+ *     The preferred source is `VAULT_KEY_V2` — a vault-only secret that is
+ *     NOT used to sign JWTs. Deployments that have not yet provisioned it
+ *     fall back to `SECRET_KEY` (the legacy single-secret model) so the
+ *     rollout is non-destructive: existing vault rows decrypt exactly as
+ *     before, and new encryptions use the same key until the operator
+ *     sets `VAULT_KEY_V2`.
  *   - vN (N ≥ 2): `process.env.SECRET_KEY_V<N>`. Optional — only set when
  *     a rotation is in progress.
  *   - The CURRENT key version is `process.env.VAULT_KEY_VERSION` (default
  *     "1"). When unset, all new encryptions use v1 (the original key),
  *     preserving the previous behaviour bit-for-bit.
+ *   - The JWT signing key lives in `JWT_SECRET_KEY` (see
+ *     src/lib/auth/session.ts); the vault never reads it. A JWT-key
+ *     compromise therefore cannot decrypt the vault, and a vault-key
+ *     leak cannot forge session tokens.
  */
 
 const ALGORITHM = "aes-256-gcm";
@@ -62,19 +71,36 @@ function getCurrentKeyVersion(): string {
 /**
  * Resolve the AES-256 key for a given version.
  *
- *   v1: `SECRET_KEY` env var (the original key). For backward compat, v1
- *       does NOT require a `_V1` suffix — it reads `SECRET_KEY` directly.
+ *   v1: prefer `VAULT_KEY_V2` (P0-3 / Feature 1 — vault key separation),
+ *       falling back to `SECRET_KEY` for backward compatibility, then to
+ *       `SECRET_KEY_V1` for deployments that already split the v1 secret
+ *       under that name. The fallback chain keeps existing deployments
+ *       working bit-for-bit: only operators who actively want the vault
+ *       / JWT key separation need to provision `VAULT_KEY_V2`.
  *   vN (N ≥ 2): `SECRET_KEY_V<N>` env var. This must be set if `decrypt()`
  *       is asked to read a value encrypted with version N.
  *
- * Throws if the required env var is missing or shorter than 16 chars.
+ * Throws if the resolved env var is missing or shorter than 16 chars.
  */
 function getKeyForVersion(version: string): Buffer {
   const envName = version === "1" ? "SECRET_KEY" : `SECRET_KEY_V${version}`;
-  const raw = process.env[envName];
+  // P0-3 / Feature 1: prefer a vault-only env var so a JWT-key compromise
+  // does not automatically compromise the vault (and vice versa). The chain
+  // is: VAULT_KEY_V2 → SECRET_KEY_V1 → SECRET_KEY. We intentionally do NOT
+  // fall back to JWT_SECRET_KEY — the whole point is to keep these two
+  // secrets separate. A misconfigured deployment that sets only
+  // JWT_SECRET_KEY (no SECRET_KEY, no VAULT_KEY_V2) will throw here, which
+  // is the desired behaviour: vault reads fail loud rather than silently
+  // using the JWT key.
+  let raw: string | undefined;
+  if (version === "1") {
+    raw = process.env.VAULT_KEY_V2 || process.env.SECRET_KEY_V1 || process.env.SECRET_KEY;
+  } else {
+    raw = process.env[`SECRET_KEY_V${version}`];
+  }
   if (!raw || raw.length < 16) {
     throw new Error(
-      `${envName} environment variable is required (min 16 chars) to decrypt ` +
+      `${envName} (or VAULT_KEY_V2) environment variable is required (min 16 chars) to decrypt ` +
         `vault secrets encrypted with key version ${version}. ` +
         `Set it in your .env or Render env vars.`,
     );

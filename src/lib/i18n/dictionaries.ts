@@ -61,6 +61,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     erp: "ERP / Accounting",
     "verification-logs": "Verification Logs",
     "performance": "Performance",
+    "super-admin-settings": "Platform Settings",
   },
   sr: {
     dashboard: "Kontrolna tabla",
@@ -115,6 +116,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     erp: "ERP / Knjigovodstvo",
     "verification-logs": "Evidencija verifikacija",
     "performance": "Performanse",
+    "super-admin-settings": "Podešavanja platforme",
   },
   tr: {
     dashboard: "Gösterge Paneli",
@@ -169,6 +171,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     erp: "ERP / Muhasebe",
     "verification-logs": "Doğrulama Kayıtları",
     "performance": "Performans",
+    "super-admin-settings": "Platform Ayarları",
   },
   de: {
     dashboard: "Übersicht",
@@ -223,6 +226,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     erp: "ERP / Buchhaltung",
     "verification-logs": "Verifizierungsprotokoll",
     "performance": "Leistung",
+    "super-admin-settings": "Plattform-Einstellungen",
   },
   ru: {
     dashboard: "Панель управления",
@@ -277,6 +281,7 @@ export const NAV: Record<Locale, Record<string, string>> = {
     erp: "ERP / Бухгалтерия",
     "verification-logs": "Журнал верификаций",
     "performance": "Производительность",
+    "super-admin-settings": "Настройки платформы",
   },
 };
 

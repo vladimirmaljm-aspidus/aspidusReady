@@ -5,6 +5,7 @@ package-lock.json
 # ── Build output ─────────────────────────────────────────────────────────────
 .next/
 tsconfig.tsbuildinfo
+*.tsbuildinfo
 
 # ── Environment & secrets ────────────────────────────────────────────────────
 .env

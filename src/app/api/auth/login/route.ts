@@ -5,6 +5,7 @@ import {
   createSession,
   setSessionCookie,
   enforceConcurrentSessionLimit,
+  issueTwoFactorTempToken,
 } from "@/lib/auth/session";
 import { lookupIp } from "@/lib/utils/geo-ip";
 import { createHash } from "crypto";
@@ -23,6 +24,22 @@ import { reportSecurityEvent } from "@/lib/monitoring/security-alerts";
 export const runtime = "nodejs";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// P0-1 (Auth Security) per-user login rate limit — separate from the
+// per-IP cap above. Where the per-IP cap defends against distributed
+// brute-force from many IPs against one account, the per-user cap defends
+// against a single attacker rotating IPs against one account (e.g. a botnet
+// trying 1000 passwords for "admin" from 1000 different source IPs — the
+// per-IP cap would see 1 attempt per IP and never fire, but the per-user
+// cap sees 1000 attempts for "admin" and locks the account out).
+//
+// CRITICAL: super_admin is NEVER subject to the per-user rate limit —
+// the platform owner must always be able to log in. The check below
+// explicitly skips super_admin accounts, so even an accidental lockout
+// (e.g. a forgotten password on a shared super_admin account) can be
+// self-recovered without DB intervention.
+const PER_USER_LOGIN_MAX_ATTEMPTS = 5;
+const PER_USER_LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
 
 // F-7 (Rate Limiting): login attempts per IP are now configurable by
 // super-admins via the Settings UI (see src/lib/security/rate-limit-config.ts
@@ -168,6 +185,56 @@ export async function POST(req: NextRequest) {
         { error: "Invalid username or password." },
         { status: 401 }
       );
+    }
+
+    // ── P0-1: per-user login rate limit (super_admin NEVER blocked) ───────
+    // Distinct from the per-IP cap above: defends against a single attacker
+    // rotating IPs against one account. CRITICAL: super_admin skips this
+    // entirely — the platform owner must always be able to log in, even
+    // under sustained attack from a botnet that has the right password
+    // (e.g. a compromised super_admin credential needs to be resettable
+    // from the super_admin's own browser without DB surgery).
+    if (user.role !== "super_admin") {
+      const userRlKey = `login:user:${user.username}`;
+      const userRl = await checkRateLimit(
+        userRlKey,
+        PER_USER_LOGIN_MAX_ATTEMPTS,
+        PER_USER_LOGIN_WINDOW_MS,
+      );
+      if (!userRl.allowed) {
+        // Audit + security event BEFORE the 429 — same pattern as the
+        // per-IP cap above. The `scope: per_user` detail lets the IDS
+        // distinguish "one IP burning through many accounts" from
+        // "many IPs hammering one account" (the latter is what this
+        // cap exists to stop).
+        try {
+          await store.appendAudit({
+            user_id: user.id,
+            username: user.username,
+            action: "login.rate_limited",
+            entity_type: "auth",
+            entity_id: user.id,
+            details: { scope: "per_user", count: userRl.count },
+            ip,
+            user_agent: userAgent,
+          });
+        } catch (e) {
+          console.error("[login] appendAudit (per_user rate-limit) failed:", e);
+        }
+        reportSecurityEvent({
+          type: "rate.limit.hit",
+          userId: user.id,
+          tenantId: user.tenant_id ?? undefined,
+          ip,
+          details: { scope: "per_user", key: userRlKey, count: userRl.count },
+          severity: "warning",
+        });
+        const retryAfterSec = Math.ceil((userRl.retryAfter ?? 60_000) / 1000);
+        return NextResponse.json(
+          { error: "Too many login attempts for this account. Try again later." },
+          { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+        );
+      }
     }
 
     // ── Resolve geo (awaited here — by now the lookup has run in parallel

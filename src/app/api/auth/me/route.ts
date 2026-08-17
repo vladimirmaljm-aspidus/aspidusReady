@@ -61,7 +61,7 @@ export async function GET() {
       }
     }
 
-    const { password_hash, totp_secret, ...safeUser } = user;
+    const { password_hash, totp_secret, recovery_codes, ...safeUser } = user;
     let defaultLocale: string | null = null;
     try {
       defaultLocale = await store.getSetting<string>("default_locale", user.tenant_id ?? null);
