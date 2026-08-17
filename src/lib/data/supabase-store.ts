@@ -32,6 +32,13 @@ import {
 } from "@/lib/supabase/types";
 import { verifyPassword } from "@/lib/auth/password";
 import { createHash } from "crypto";
+// P0-3 / Feature 2 — field-level encryption: the portal_access equality-
+// search methods (login, forgot-password, duplicate-check) need a
+// deterministic HMAC token to query by, since portal_email itself is
+// encrypted with AES-256-GCM (random IV per row — no equality leakage).
+// See migration 042_field_encryption_hmac.sql and the docstring at the
+// bottom of src/lib/crypto/field-encryption.ts.
+import { hmacField } from "@/lib/crypto/field-encryption";
 
 type SupaRow = Record<string, unknown>;
 
@@ -1841,10 +1848,49 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     return (data as PortalAccess) || null;
   }
+  /**
+   * P0-3 / Feature 2 — field-level encryption: query by the deterministic
+   * HMAC token (portal_email_hmac) instead of the encrypted portal_email
+   * column. AES-256-GCM uses a random IV per row, so two encryptions of
+   * the same plaintext email produce different ciphertexts — direct
+   * `WHERE portal_email = ?` cannot work.
+   *
+   * The HMAC column is populated by the API route layer (alongside
+   * encrypting portal_email) and backfilled by migration 042 for legacy
+   * rows. If the column is missing entirely (migration 042 not applied),
+   * PostgREST returns an error and we fall back to the legacy plaintext
+   * `portal_email = ?` query so the login flow stays working during the
+   * rollout window.
+   */
   async getPortalAccessByEmail(tenantId: string, email: string): Promise<PortalAccess | null> {
-    const { data, error } = await this.sb().from("portal_access").select("*").eq("tenant_id", tenantId).eq("portal_email", email).maybeSingle();
-    if (error) throw error;
-    return (data as PortalAccess) || null;
+    const token = hmacField(email);
+    if (token) {
+      const { data, error } = await this.sb()
+        .from("portal_access")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("portal_email_hmac", token)
+        .maybeSingle();
+      if (!error && data) return data as PortalAccess;
+      // If the error is "column portal_email_hmac does not exist"
+      // (migration 042 not applied), fall back to legacy plaintext search.
+      // Any other error propagates.
+      if (error && !/could not find the ['"]?portal_email_hmac['"]? column/i.test(error.message)) {
+        // Fall through to legacy plaintext search for other errors too —
+        // it's safer than throwing. Log so ops can triage.
+        console.warn("[getPortalAccessByEmail] HMAC query failed, falling back to plaintext:", error.message);
+      }
+    }
+    // Legacy plaintext fallback (pre-migration-042 deployment, OR rows
+    // whose portal_email_hmac is still NULL after a partial backfill).
+    const { data: legacy, error: legErr } = await this.sb()
+      .from("portal_access")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("portal_email", email)
+      .maybeSingle();
+    if (legErr) throw legErr;
+    return (legacy as PortalAccess) || null;
   }
   async getPortalAccessById(id: string): Promise<PortalAccess | null> {
     const { data, error } = await this.sb().from("portal_access").select("*").eq("id", id).maybeSingle();
@@ -1872,6 +1918,14 @@ export class SupabaseStore implements Store {
       "gps_verified_at",
       // ↓ newly-introduced column — see migration 019_portal_access_locale.sql.
       "locale",
+      // ↓ P0-3 / Feature 2 — field-level encryption. The HMAC token column
+      //   is populated by the API route layer (alongside encrypting
+      //   portal_email). Listed here so upsertPortalAccess stays tolerant
+      //   of deployments where migration 042 has not yet been applied —
+      //   the column is stripped before the INSERT / UPDATE so the write
+      //   doesn't 400 on "column does not exist". The route layer falls
+      //   back to the legacy plaintext-equality search path in that case.
+      "portal_email_hmac",
     ];
     const stripOptionalColumns = (row: SupaRow): SupaRow => {
       const out: SupaRow = { ...row };
@@ -1952,23 +2006,57 @@ export class SupabaseStore implements Store {
     return pa;
   }
 
+  /**
+   * P0-3 / Feature 2 — equality search by HMAC token (see
+   * getPortalAccessByEmail above). Used by the login flow when the user
+   * does NOT supply a tenant_id — we look up by email alone.
+   */
   async verifyPortalCredentialsByEmail(email: string, password: string): Promise<PortalAccess | null> {
-    const { data, error } = await this.sb().from("portal_access").select("*").eq("portal_email", email).maybeSingle();
-    if (error || !data) return null;
-    const pa = data as PortalAccess;
-    if (!pa.password_hash || pa.status !== "active") return null;
+    const pa = await this.getPortalAccessByEmailAnyTenant(email);
+    if (!pa || !pa.password_hash) return null;
+    if (pa.status !== "active") return null;
     const valid = await verifyPassword(password, pa.password_hash);
     return valid ? pa : null;
   }
   async getPortalAccessByEmailAnyTenant(email: string): Promise<PortalAccess | null> {
-    const { data, error } = await this.sb().from("portal_access").select("*").eq("portal_email", email).maybeSingle();
-    if (error || !data) return null;
-    return data as PortalAccess;
+    const token = hmacField(email);
+    if (token) {
+      const { data, error } = await this.sb()
+        .from("portal_access")
+        .select("*")
+        .eq("portal_email_hmac", token)
+        .maybeSingle();
+      if (!error && data) return data as PortalAccess;
+      if (error && !/could not find the ['"]?portal_email_hmac['"]? column/i.test(error.message)) {
+        console.warn("[getPortalAccessByEmailAnyTenant] HMAC query failed, falling back to plaintext:", error.message);
+      }
+    }
+    const { data: legacy, error: legErr } = await this.sb()
+      .from("portal_access")
+      .select("*")
+      .eq("portal_email", email)
+      .maybeSingle();
+    if (legErr || !legacy) return null;
+    return legacy as PortalAccess;
   }
   async listPortalAccessByEmail(email: string): Promise<PortalAccess[]> {
-    const { data, error } = await this.sb().from("portal_access").select("*").eq("portal_email", email);
-    if (error) return [];
-    return (data as PortalAccess[]) || [];
+    const token = hmacField(email);
+    if (token) {
+      const { data, error } = await this.sb()
+        .from("portal_access")
+        .select("*")
+        .eq("portal_email_hmac", token);
+      if (!error && data && data.length > 0) return data as PortalAccess[];
+      if (error && !/could not find the ['"]?portal_email_hmac['"]? column/i.test(error.message)) {
+        console.warn("[listPortalAccessByEmail] HMAC query failed, falling back to plaintext:", error.message);
+      }
+    }
+    const { data: legacy, error: legErr } = await this.sb()
+      .from("portal_access")
+      .select("*")
+      .eq("portal_email", email);
+    if (legErr) return [];
+    return (legacy as PortalAccess[]) || [];
   }
 
   // ---- document templates ----

@@ -3,6 +3,10 @@ import { requireAuth, audit, getIp } from "@/lib/api/helpers";
 import { sendEmail, welcomePortalEmail } from "@/lib/email/service";
 import { notifyPortalInviteSent } from "@/lib/notif/helper";
 import { createPasswordReset } from "@/lib/auth/password-reset";
+// P0-3 / Feature 2 — field-level encryption. portal_email is encrypted at
+// rest (enc: prefix) on the row; the invite route decrypts it before
+// sending the welcome email so the recipient address is plaintext.
+import { decryptField } from "@/lib/crypto/field-encryption";
 
 export const runtime = "nodejs";
 
@@ -33,6 +37,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   if (!access.portal_email) return NextResponse.json({ error: "No portal email set." }, { status: 400 });
+  // P0-3 / Feature 2: portal_email is stored encrypted (enc: prefix);
+  // decrypt before sending the welcome email. Legacy plaintext rows pass
+  // through untouched (decryptField is a no-op on non-enc: strings).
+  const portalEmail = decryptField(access.portal_email);
 
   // Always refresh invite metadata; only downgrade status if not already active
   // (previously the `if (access.status !== "active")` guard meant re-inviting an
@@ -84,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { subject, html } = welcomePortalEmail({
     partnerName: partner?.name || "Client",
-    portalEmail: access.portal_email,
+    portalEmail: portalEmail,
     accessId: access.id,
     tenantName: tenant?.name || "VELOS",
     baseUrl,
@@ -93,19 +101,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   const result = await sendEmail({
-    to: access.portal_email,
+    to: portalEmail,
     subject,
     html,
     tenantId: access.tenant_id,
   });
 
   await audit(auth.store, auth.user, req, "portal.invite", "portal_access", id, {
-    email: access.portal_email,
+    email: portalEmail,
     sent: result.success,
     token_issued: !!setupToken,
   });
   // Notify
-  await notifyPortalInviteSent(access.tenant_id, partner?.name || "Client", access.portal_email || "", id);
+  await notifyPortalInviteSent(access.tenant_id, partner?.name || "Client", portalEmail || "", id);
 
   if (!result.success) {
     return NextResponse.json({ error: "Email failed to send. Queued for retry.", details: result.error }, { status: 500 });

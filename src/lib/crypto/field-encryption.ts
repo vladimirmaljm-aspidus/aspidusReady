@@ -65,6 +65,7 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHmac,
   randomBytes,
   scryptSync,
 } from "crypto";
@@ -264,3 +265,86 @@ export const COMMS_SENSITIVE_KEYS = [
   "resend_api_key",
   "postmark_server_token",
 ] as const;
+
+// ----------------------------------------------------------------------------
+// HMAC search tokens (P0-3 / Feature 2 follow-up — equality search on
+// encrypted fields).
+//
+// Background
+// ----------
+// `encryptField()` uses a random IV per call, so two encryptions of the same
+// plaintext produce DIFFERENT ciphertexts. This is the right default for
+// confidentiality (no equality leakage) but it BREAKS `WHERE field = ?`
+// lookups. Several columns we encrypt (`portal_access.portal_email`,
+// `partners.tax_id`, `partners.vat_number`) are used in equality search
+// during login / duplicate-checks, so encrypting them at rest would silently
+// break those flows.
+//
+// The standard pattern (see migration 016 for the prior vault-platform-leak
+// application) is to store a DETERMINISTIC HMAC token in a separate column
+// alongside the encrypted ciphertext. The HMAC is SHA-256 of the plaintext
+// keyed with a server-side secret — given the secret is not in the DB, a DB
+// dump alone cannot recover the plaintext email from the HMAC, but the HMAC
+// IS deterministic so equality search works (`WHERE portal_email_hmac = ?`).
+//
+// HMAC vs hashing-without-key: HMAC is keyed, so an attacker who leaks the
+// DB still cannot compute the HMAC for a guessed email without the env var.
+// SHA-256 alone (no key) would let an attacker enumerate plausible emails
+// offline against the leaked table.
+//
+// Key source (P0-3 / Feature 1 — vault key separation): prefer
+// `FIELD_HMAC_KEY`, falling back to `FIELD_ENCRYPTION_KEY`, then
+// `SECRET_KEY`. The fallback chain keeps existing deployments working
+// without any env changes — they get a working HMAC token immediately, just
+// keyed with their existing SECRET_KEY. Operators who want a strong
+// separation between the encryption key and the HMAC key (so a leak of one
+// doesn't reveal the other) provision BOTH env vars with different values.
+// ----------------------------------------------------------------------------
+
+/**
+ * Resolve the HMAC key. Falls back through FIELD_HMAC_KEY →
+ * FIELD_ENCRYPTION_KEY → SECRET_KEY → "fallback" (dev/test only).
+ */
+function getHmacKey(): string {
+  return (
+    process.env.FIELD_HMAC_KEY ||
+    process.env.FIELD_ENCRYPTION_KEY ||
+    process.env.SECRET_KEY ||
+    "fallback"
+  );
+}
+
+/**
+ * Compute a deterministic HMAC-SHA-256 token for a plaintext field value.
+ *
+ * The token is base64url-encoded (no padding) so it's safe to store in a
+ * TEXT column and use in a Postgres B-tree index. Two calls with the same
+ * plaintext + same key produce the same token (deterministic); any change
+ * to either the plaintext OR the key produces a different token.
+ *
+ * Returns the empty string when given the empty string (so callers can
+ * pass `email || ""` without producing a degenerate token).
+ *
+ * SECURITY: this is for SEARCH ONLY — never return the token to the client
+ * (it's an internal lookup handle, not a value the user ever sees). The
+ * token does not reveal the plaintext given the env var is not leaked, but
+ * it's still a credential-like artefact and should be treated as such.
+ */
+export function hmacField(value: string): string {
+  if (value == null) return "";
+  const str = typeof value === "string" ? value : String(value);
+  if (str === "") return "";
+  const key = getHmacKey();
+  return createHmac("sha256", key).update(str, "utf8").digest("base64url");
+}
+
+/**
+ * Convenience: is a stored value a (legacy) plaintext email that has not yet
+ * been encrypted + had its HMAC computed? Useful for the backfill script to
+ * decide which rows need a one-time migration pass.
+ */
+export function isPlaintextField(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  if (value === "") return false;
+  return !value.startsWith("enc:");
+}

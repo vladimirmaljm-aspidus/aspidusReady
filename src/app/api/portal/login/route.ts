@@ -12,6 +12,14 @@ export const runtime = "nodejs";
 // super-admins via the Settings UI (src/lib/security/rate-limit-config.ts).
 // Defaults: 20 attempts / 15 min. Same layered defense as /api/auth/login.
 
+// P0-1 (Auth Security) per-portal-user rate limit — separate from the per-IP
+// cap above. Portal clients are NEVER super_admin (super_admin uses
+// /api/auth/login), so the per-user cap applies uniformly to every portal
+// access record. Defends against a single attacker rotating IPs against one
+// portal account — mirrors the per-user cap on /api/auth/login.
+const PER_PORTAL_USER_LOGIN_MAX_ATTEMPTS = 5;
+const PER_PORTAL_USER_LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
+
 // Portal login — separate session type (partner, not user)
 export async function POST(req: NextRequest) {
   try {
@@ -77,6 +85,39 @@ export async function POST(req: NextRequest) {
     const existing = tenant_id
       ? await store.getPortalAccessByEmail(tenant_id, email)
       : await store.getPortalAccessByEmailAnyTenant(email);
+
+    // ── P0-1: per-portal-user rate limit ────────────────────────────────
+    // Only applies when we have a known portal_access record (so an
+    // attacker probing random emails can't lock out a different account
+    // — they're throttled by the per-IP cap above). Portal clients are
+    // NEVER super_admin, so no role exemption is needed here.
+    if (existing) {
+      const portalRlKey = `login:portal:${existing.id}`;
+      const portalRl = await checkRateLimit(
+        portalRlKey,
+        PER_PORTAL_USER_LOGIN_MAX_ATTEMPTS,
+        PER_PORTAL_USER_LOGIN_WINDOW_MS,
+      );
+      if (!portalRl.allowed) {
+        try {
+          await audit(
+            store,
+            { id: undefined, username: email, tenant_id: existing.tenant_id },
+            req,
+            "portal.login_rate_limited",
+            "portal_access",
+            existing.id,
+            { email, ip, country: null, scope: "per_user", count: portalRl.count },
+          );
+        } catch (e) { console.error("[audit]", e); }
+        const retryAfterSec = Math.ceil((portalRl.retryAfter ?? 60_000) / 1000);
+        return NextResponse.json(
+          { error: "Too many login attempts for this account. Try again later." },
+          { status: 429, headers: { "Retry-After": String(retryAfterSec) } },
+        );
+      }
+    }
+
 
     // ── Resolve geo (by now the lookup has been running in parallel with the
     //    existing-account query above, so this await is usually instant).
@@ -229,6 +270,9 @@ export async function POST(req: NextRequest) {
 
     // F-7: clear the per-IP rate-limit counter on successful login — best-effort.
     void resetRateLimit(rateLimitKey).catch(() => {});
+    // P0-1: also clear the per-portal-user rate-limit counter — same
+    // rationale as the per-IP reset.
+    void resetRateLimit(`login:portal:${access.id}`).catch(() => {});
 
     // Success: reset the failed-attempt counter and record the login.
     // Also persist the resolved country on portal_access.last_login_country

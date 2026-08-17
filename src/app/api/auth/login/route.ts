@@ -425,6 +425,52 @@ export async function POST(req: NextRequest) {
     // count forward. Best-effort — failures here don't block login.
     void resetRateLimit(rateLimitKey).catch(() => {});
 
+    // P0-1: also clear the per-user rate-limit counter (super_admin was
+    // never counted, so this is a no-op for them).
+    if (user.role !== "super_admin") {
+      void resetRateLimit(`login:user:${user.username}`).catch(() => {});
+    }
+
+    // ── P0-1: 2FA / TOTP check (super_admin bypasses) ──────────────────
+    // After the password verifies, if the user has 2FA activated AND is
+    // not super_admin, do NOT issue a full session. Instead, mint a short-
+    // lived (5min) temp token and return it to the client — the client
+    // then posts {tempToken, token:<6-digit code>} to /api/auth/2fa/login
+    // to complete the flow.
+    //
+    // CRITICAL: super_admin NEVER hits this branch — they log straight in
+    // with just their password, regardless of totp_enabled. The bypass is
+    // here (in the login route), not in the TOTP helpers — see the header
+    // comment in src/lib/auth/totp.ts.
+    //
+    // We DO NOT reset failed_attempts on this branch — that happens at
+    // the final /2fa/login success. If the user abandons the 2FA flow,
+    // the failed_attempts from the password stage stay (which is fine:
+    // a successful password check does not bump failed_attempts anyway).
+    if (user.totp_enabled && user.totp_secret && user.role !== "super_admin") {
+      const tempToken = await issueTwoFactorTempToken({
+        sub: user.id,
+        username: user.username,
+        role: user.role,
+        token_version: user.token_version,
+        tenant_id: user.tenant_id,
+      });
+      await store.appendAudit({
+        user_id: user.id,
+        username: user.username,
+        action: "auth.2fa.temp_token_issued",
+        entity_type: "auth",
+        entity_id: user.id,
+        details: { method: "password" },
+        ip,
+        user_agent: userAgent,
+      });
+      // Do NOT return the user object here — the client must complete 2FA
+      // before we surface any account details. Returning only
+      // {requiresTwoFactor, tempToken} is the minimal viable response.
+      return NextResponse.json({ requiresTwoFactor: true, tempToken });
+    }
+
     await store.appendAudit({
       user_id: user.id,
       username: user.username,
@@ -521,8 +567,11 @@ export async function POST(req: NextRequest) {
     });
     await setSessionCookie(token);
 
-    // strip sensitive fields
-    const { password_hash, totp_secret, ...safeUser } = user;
+    // strip sensitive fields — recovery_codes is hashed SHA-256 hex strings
+    // (see src/lib/auth/totp.ts) so it's not directly usable by an attacker,
+    // but still must not leak to the client. The /api/auth/me route strips
+    // the same set.
+    const { password_hash, totp_secret, recovery_codes, ...safeUser } = user;
     return NextResponse.json({ user: safeUser });
   } catch (e) {
     console.error("[login]", e);

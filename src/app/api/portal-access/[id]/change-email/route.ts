@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, getIp } from "@/lib/api/helpers";
 import { sendEmail, welcomePortalEmail } from "@/lib/email/service";
 import { createPasswordReset } from "@/lib/auth/password-reset";
+// P0-3 / Feature 2 — field-level encryption. portal_email is encrypted at
+// rest (enc: prefix) + a deterministic HMAC token (portal_email_hmac) for
+// equality search (login, duplicate-check). The change-email flow reads
+// the OLD email for the audit trail, writes the NEW email encrypted, and
+// recomputes the HMAC. See src/lib/crypto/field-encryption.ts.
+import { encryptField, decryptField, hmacField } from "@/lib/crypto/field-encryption";
 
 export const runtime = "nodejs";
 
@@ -49,12 +55,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Portal access not found." }, { status: 404 });
     }
 
-    const oldEmail = access.portal_email;
+    const oldEmail = decryptField(access.portal_email || "");
     if (oldEmail === new_email) {
       return NextResponse.json({ ok: true, message: "Email unchanged." });
     }
 
     // Guard: don't allow two portal_access rows to share the same email in the same tenant.
+    // P0-3 / Feature 2: getPortalAccessByEmail looks up by HMAC token, so
+    // this check works even when portal_email is encrypted at rest.
     const existing = await auth.store.getPortalAccessByEmail(access.tenant_id, new_email).catch(() => null);
     if (existing && existing.id !== id) {
       return NextResponse.json({ error: `Another portal account already uses ${new_email}.` }, { status: 409 });
@@ -62,7 +70,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const updated = await auth.store.upsertPortalAccess({
       id,
-      portal_email: new_email,
+      portal_email: encryptField(new_email),
+      // Recompute the HMAC token for the new plaintext email so login +
+      // duplicate-check continue to find the row.
+      portal_email_hmac: hmacField(new_email),
       // Force re-authentication with a new password.
       must_set_password: send_reset_link,
       token_version: (access.token_version || 0) + 1,
@@ -117,7 +128,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } catch (e) { console.warn("[change-email.email]", e); }
     }
 
-    return NextResponse.json({ ok: true, updated: { ...updated, password_hash: undefined }, email_sent });
+    // P0-3 / Feature 2: decrypt portal_email for the response so the admin
+    // UI shows plaintext, and strip the HMAC column (internal-only).
+    const { password_hash: _omitPw, portal_email_hmac: _omitHmac, ...safeUpdated } = updated as any;
+    if (safeUpdated.portal_email && typeof safeUpdated.portal_email === "string") {
+      safeUpdated.portal_email = decryptField(safeUpdated.portal_email);
+    }
+    return NextResponse.json({ ok: true, updated: safeUpdated, email_sent });
   } catch (e: any) {
     console.error("[portal-access.change-email.POST]", e);
     return NextResponse.json({ error: e?.message || "Internal server error." }, { status: 500 });
