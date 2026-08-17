@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollText, Search, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ScrollText, Search, ChevronLeft, ChevronRight, RefreshCw, ShieldAlert } from "lucide-react";
 import { fmtDateTime } from "@/lib/utils/format";
 import { MapLink } from "@/components/common/map-link";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useT } from "@/lib/i18n/store";
+import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
+import { PageHeader } from "@/components/common/page-header";
 
 interface AuditRow {
   id: string; tenant_id: string | null; user_id: string | null; username: string | null;
@@ -33,6 +35,16 @@ export function PlatformAuditView() {
   const [page, setPage] = React.useState(0);
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const t = useT();
+  const userObj = useAppStore((s) => s.user);
+  const isSuper = isSuperAdmin(userObj);
+
+  // Defense-in-depth: even though the sidebar hides this view from
+  // non-super-admins (and the audit API uses requireSuperAdmin), a
+  // non-super-admin who lands here via state manipulation / direct
+  // navigation should see a clear denial message instead of a partially
+  // rendered UI that fires 403 fetches. We must declare all hooks BEFORE
+  // the early return (Rules of Hooks), so the queries below pass
+  // `enabled: isSuper` to short-circuit network calls when denied.
 
   const tenantsQ = useQuery({
     queryKey: ["platform-audit-tenants"],
@@ -40,6 +52,7 @@ export function PlatformAuditView() {
       const r = await fetch("/api/tenants");
       return r.ok ? (r.json() as Promise<{ items: Tenant[] }>) : { items: [] };
     },
+    enabled: isSuper,
   });
   const tenants = tenantsQ.data?.items || [];
 
@@ -59,7 +72,29 @@ export function PlatformAuditView() {
       return r.json() as Promise<{ total: number; items: AuditRow[] }>;
     },
     refetchOnWindowFocus: false,
+    enabled: isSuper,
   });
+
+  if (!isSuper) {
+    return (
+      <div>
+        <PageHeader title={t("pf-audit-title")} description={t("pf-audit-desc")} />
+        <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+          <CardContent className="p-6 flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="size-5" />
+            </div>
+            <div>
+              <p className="font-medium">Platform admin access required.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                This area is restricted to platform super-administrators. Contact your platform operator if you believe this is an error.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const items = auditQ.data?.items || [];
   const total = auditQ.data?.total || 0;

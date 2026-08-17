@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, XCircle, RefreshCw, TrendingUp } from "lucide-react";
+import { CheckCircle2, XCircle, RefreshCw, TrendingUp, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 import { useT } from "@/lib/i18n/store";
+import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 
 interface UpgradeRequest {
   id: string;
@@ -47,6 +48,8 @@ export function PlanUpgradeQueueView() {
   const [decision, setDecision] = React.useState<"approve" | "reject">("approve");
   const [months, setMonths] = React.useState<number>(12);
   const [note, setNote] = React.useState("");
+  const userObj = useAppStore((s) => s.user);
+  const isSuper = isSuperAdmin(userObj);
 
   const listQ = useQuery({
     queryKey: ["plan-upgrade-queue", statusFilter],
@@ -57,6 +60,7 @@ export function PlanUpgradeQueueView() {
       if (!r.ok) throw new Error("Failed to load queue");
       return r.json() as Promise<{ items: UpgradeRequest[]; total: number }>;
     },
+    enabled: isSuper,
   });
   const tenantsQ = useQuery({
     queryKey: ["plan-upgrade-tenants"],
@@ -64,6 +68,7 @@ export function PlanUpgradeQueueView() {
       const r = await fetch("/api/tenants");
       return r.ok ? (r.json() as Promise<{ items: Tenant[] }>) : { items: [] };
     },
+    enabled: isSuper,
   });
   const tenantName = React.useMemo(() => new Map((tenantsQ.data?.items || []).map((t) => [t.id, t.name])), [tenantsQ.data]);
   const items = listQ.data?.items || [];
@@ -84,6 +89,36 @@ export function PlanUpgradeQueueView() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // Defense-in-depth: super-admin-only review queue. The sidebar item
+  // carries `permission: "platform.plans.write"` (super-admin only after
+  // the canUser fix), and PATCH /api/plan-upgrade-requests/[id] uses
+  // requireSuperAdmin, but if a non-super-admin reaches this view via
+  // state manipulation we render a clear denial instead of firing 403
+  // fetches. Hooks above are declared before this return (Rules of Hooks).
+  if (!isSuper) {
+    return (
+      <div className="space-y-4">
+        <PageHeader
+          title={t("plan-upgrade-queue")}
+          description={t("pf-upgrade-queue-desc")}
+        />
+        <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+          <CardContent className="p-6 flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="size-5" />
+            </div>
+            <div>
+              <p className="font-medium">Platform admin access required.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                This area is restricted to platform super-administrators. Contact your platform operator if you believe this is an error.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

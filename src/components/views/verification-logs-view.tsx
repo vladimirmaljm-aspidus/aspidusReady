@@ -4,7 +4,7 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Shield, Monitor, Smartphone, Globe, ExternalLink, Search,
-  Tablet, Bot, Loader2, AlertCircle,
+  Tablet, Bot, Loader2, AlertCircle, ShieldAlert,
 } from "lucide-react";
 import {
   Card, CardContent,
@@ -19,6 +19,7 @@ import { PageHeader } from "@/components/common/page-header";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { fmtDateTime } from "@/lib/utils/format";
 import { useT } from "@/lib/i18n/store";
+import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
 
 // ─── Row type returned by /api/super-admin/verification-logs ─────────────────
 interface VerificationLogRow {
@@ -95,6 +96,8 @@ export function VerificationLogsView() {
   const t = useT();
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebounced(search, 300);
+  const userObj = useAppStore((s) => s.user);
+  const isSuper = isSuperAdmin(userObj);
 
   const { data, isLoading, error } = useQuery<LogsResponse>({
     queryKey: ["super-admin-verification-logs", debouncedSearch],
@@ -108,7 +111,37 @@ export function VerificationLogsView() {
       }
       return r.json();
     },
+    enabled: isSuper,
   });
+
+  // Defense-in-depth: super-admin-only surface (fraud-prevention logs).
+  // The sidebar item is marked `superAdminOnly: true` AND the
+  // /api/super-admin/verification-logs route uses requireSuperAdmin, but
+  // a non-super-admin who reaches this view via direct state
+  // manipulation should see a clear denial instead of firing 403 fetches.
+  if (!isSuper) {
+    return (
+      <div>
+        <PageHeader
+          title={t("verification-logs")}
+          description={t("pf-vlogs-desc")}
+        />
+        <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+          <CardContent className="p-6 flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="size-5" />
+            </div>
+            <div>
+              <p className="font-medium">Platform admin access required.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                This area is restricted to platform super-administrators. Contact your platform operator if you believe this is an error.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const logs = data?.items || [];
   const total = data?.total || 0;

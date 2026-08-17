@@ -4,11 +4,18 @@
  * The single source of truth for "can this user do X?".
  *
  * Rules (evaluated top-down; first match wins):
- *   1. Super-admin (role === "super_admin" OR permissions includes "*") → allow
- *   2. Platform permission (`platform.*`)                                → super-admin only (already handled by rule 1; anyone else → deny)
+ *   1. Super-admin (role === "super_admin")                              → allow
+ *   1b. Platform permission (`platform.*`) for non-super-admin           → DENY (even if user has "*" wildcard)
+ *   2. Wildcard permission ("*") for non-super-admin                     → allow (non-platform only — see 1b)
  *   3. Role === "admin"                                                  → allow ANY non-platform permission (implicit tenant-wide grant)
  *   4. Explicit grant in user.permissions                                → allow (supports wildcards: `partners.*`, `erp.*`)
  *   5. Otherwise                                                         → deny
+ *
+ * NOTE: The `platform.*` deny (1b) runs BEFORE the wildcard-"*" allow
+ * so that a regular admin whose `permissions` array contains "*" cannot
+ * reach super-admin-only surfaces. Only `role === "super_admin"` may
+ * pass `platform.*` checks. This invariant must hold on both the server
+ * (this file) and the client mirror (`canUser()` in app-store.ts).
  *
  * Wildcards recognised in the user's permissions array:
  *   - "*"                      → grants everything
@@ -79,13 +86,23 @@ function isDeniedByOverride(diff: RoleOverrideDiff | null, permission: string): 
 export function can(user: PermissionSubject | null | undefined, permission: string): boolean {
   if (!user) return false;
 
-  // 1) Super-admin bypass
+  // 1) Super-admin bypass — only `role === "super_admin"` short-circuits.
+  //    A regular admin with `permissions: ["*"]` is NOT a super-admin and
+  //    must NOT pass `platform.*` checks (handled by 1b below).
   if (user.role === "super_admin") return true;
-  const perms = user.permissions || [];
-  if (perms.includes("*")) return true;
 
-  // 2) Platform permissions require super-admin (already denied above)
+  // 1b) Platform permissions are SUPER-ADMIN ONLY. This deny runs BEFORE
+  //     the wildcard-"*" check below so an admin whose permissions array
+  //     contains "*" still cannot reach super-admin-only surfaces (e.g.
+  //     the Platform sidebar section, /api/super-admin/*, /api/admin/*).
+  //     Without this ordering, the "*" wildcard would let tenant admins
+  //     see the Platform section and call super-admin endpoints.
   if (isPlatformPerm(permission)) return false;
+
+  const perms = user.permissions || [];
+  // 2) Wildcard permission "*" grants everything EXCEPT platform perms
+  //    (already returned false in 1b above).
+  if (perms.includes("*")) return true;
 
   // ── Consult UI-driven role override (FIX-V1) ─────────────────────────
   // The cache is warmed by requireAuth; in tests / scripts where

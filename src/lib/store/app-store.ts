@@ -280,18 +280,28 @@ export function useTenantParam(): string {
  * components don't need to import the server-only permission module.
  *
  * Rules (must stay in sync with the server evaluator):
- *   1. super_admin OR perms includes "*"        -> allow
- *   2. platform.* permission (non-super-admin)  -> deny
- *   3. role === "admin"                         -> allow any non-platform perm
- *   4. explicit grant / resource-wildcard match -> allow
- *   5. otherwise                                -> deny
+ *   1. super_admin (role === "super_admin")        -> allow
+ *   1b. platform.* permission (non-super-admin)    -> DENY (even if user has "*" wildcard)
+ *   2. perms includes "*" (non-super-admin)        -> allow (non-platform only — see 1b)
+ *   3. role === "admin"                            -> allow any non-platform perm
+ *   4. explicit grant / resource-wildcard match    -> allow
+ *   5. otherwise                                   -> deny
+ *
+ * NOTE: The `platform.*` deny (1b) runs BEFORE the wildcard-"*" allow
+ * so that a regular admin whose `permissions` array contains "*" cannot
+ * see super-admin-only sidebar items (the "Platform" section) or call
+ * super-admin endpoints. Only `role === "super_admin"` may pass
+ * `platform.*` checks.
  */
 export function canUser(u: SafeUser | null | undefined, key: string): boolean {
   if (!u) return false;
   if (u.role === "super_admin") return true;
+  // Platform perms are SUPER-ADMIN ONLY. Must run before the wildcard
+  // "*" bypass so tenant admins with permissions=["*"] still cannot
+  // reach the Platform section or super-admin endpoints.
+  if (key.startsWith("platform.")) return false;
   const perms = u.permissions || [];
   if (perms.includes("*")) return true;
-  if (key.startsWith("platform.")) return false;
   if (u.role === "admin") return true;
   if (perms.includes(key)) return true;
   const dotIdx = key.indexOf(".");

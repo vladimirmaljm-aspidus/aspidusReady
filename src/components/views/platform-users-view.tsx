@@ -10,10 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserCheck, KeyRound, ShieldOff, Search, Loader2, Users, Filter } from "lucide-react";
+import { UserCheck, KeyRound, ShieldOff, Search, Loader2, Users, Filter, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { ALL_PERMISSIONS, PLATFORM_PERMISSIONS, PORTAL_CLIENT_PERMISSIONS } from "@/lib/permissions/catalog";
 import { useT } from "@/lib/i18n/store";
+import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
+import { PageHeader } from "@/components/common/page-header";
 
 interface PlatformUser {
   id: string; tenant_id: string | null; username: string; email: string;
@@ -45,6 +47,15 @@ export function PlatformUsersView() {
   const [tenantFilter, setTenantFilter] = React.useState<string>("all");
   const [roleFilter, setRoleFilter] = React.useState<string>("all");
   const [editing, setEditing] = React.useState<PlatformUser | null>(null);
+  const userObj = useAppStore((s) => s.user);
+  const isSuper = isSuperAdmin(userObj);
+
+  // Defense-in-depth: super-admin-only surface. The sidebar hides this
+  // view and /api/super-admin/users uses requireSuperAdmin, but if a
+  // non-super-admin reaches it via state manipulation we render a clear
+  // denial instead of firing 403 fetches. `enabled: isSuper` below
+  // short-circuits the queries; hooks must be called before the early
+  // return (Rules of Hooks).
 
   const usersQ = useQuery({
     queryKey: ["platform-users"],
@@ -53,6 +64,7 @@ export function PlatformUsersView() {
       if (!r.ok) throw new Error(t("pf-failed-load-users"));
       return r.json() as Promise<{ items: PlatformUser[] }>;
     },
+    enabled: isSuper,
   });
   const tenantsQ = useQuery({
     queryKey: ["platform-users-tenants"],
@@ -60,7 +72,29 @@ export function PlatformUsersView() {
       const r = await fetch("/api/tenants");
       return r.ok ? (r.json() as Promise<{ items: Tenant[] }>) : { items: [] };
     },
+    enabled: isSuper,
   });
+
+  if (!isSuper) {
+    return (
+      <div>
+        <PageHeader title={t("pf-all-users")} description={t("pf-users-desc")} />
+        <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+          <CardContent className="p-6 flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="size-5" />
+            </div>
+            <div>
+              <p className="font-medium">Platform admin access required.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                This area is restricted to platform super-administrators. Contact your platform operator if you believe this is an error.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const items = usersQ.data?.items || [];
   const tenants = tenantsQ.data?.items || [];

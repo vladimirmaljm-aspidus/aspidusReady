@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, Cpu, Database,
-  Gauge, RefreshCw, Server, Trash2, TrendingUp, Zap,
+  Gauge, RefreshCw, Server, Trash2, TrendingUp, Zap, ShieldAlert,
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -41,6 +41,8 @@ import {
 import { useT } from "@/lib/i18n/store";
 import { fmtDateTime } from "@/lib/utils/format";
 import { toast } from "sonner";
+import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
+import { PageHeader } from "@/components/common/page-header";
 
 // ── Types (mirror the API response shape) ───────────────────────────────────
 
@@ -123,6 +125,8 @@ const GRID_STROKE = "var(--border)";
 export function PerformanceView() {
   const t = useT();
   const qc = useQueryClient();
+  const userObj = useAppStore((s) => s.user);
+  const isSuper = isSuperAdmin(userObj);
 
   const perfQ = useQuery({
     queryKey: ["admin-performance"],
@@ -133,6 +137,7 @@ export function PerformanceView() {
     },
     refetchInterval: 15_000,
     refetchOnWindowFocus: true,
+    enabled: isSuper,
   });
 
   const resetMut = useMutation({
@@ -147,6 +152,32 @@ export function PerformanceView() {
     },
     onError: () => toast.error(t("pf-apm-reset-failed")),
   });
+
+  // Defense-in-depth: super-admin-only APM dashboard. The sidebar item
+  // carries `permission: "platform.health.read"` (super-admin only after
+  // the canUser fix), and /api/admin/performance uses requireSuperAdmin,
+  // but a non-super-admin who reaches this view via state manipulation
+  // should see a clear denial instead of firing 403 fetches every 15s.
+  if (!isSuper) {
+    return (
+      <div>
+        <PageHeader title={t("pf-apm-title")} description={t("pf-apm-desc")} />
+        <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+          <CardContent className="p-6 flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="size-5" />
+            </div>
+            <div>
+              <p className="font-medium">Platform admin access required.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                This area is restricted to platform super-administrators. Contact your platform operator if you believe this is an error.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const data = perfQ.data;
   const s = data?.summary;

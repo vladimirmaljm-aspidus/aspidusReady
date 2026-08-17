@@ -49,6 +49,18 @@ interface NavItem {
 interface NavSection {
   i18nKey: string;
   items: NavItem[];
+  /**
+   * When true, the entire section (and all its items) is hidden from any
+   * user who is not a super_admin. This is a defense-in-depth check on top
+   * of the per-item `permission: "platform.*"` gate (which `canUser()`
+   * already denies to non-super-admins, including those who hold the
+   * `"*"` wildcard permission).
+   *
+   * Currently set on the "platform" section so regular tenant admins can
+   * never see Platform nav items, even if their role somehow grants
+   * `platform.*` perms.
+   */
+  superAdminOnly?: boolean;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -147,6 +159,13 @@ const SECTIONS: NavSection[] = [
   },
   {
     i18nKey: "platform",
+    // SUPER-ADMIN ONLY — defense-in-depth. The per-item permissions
+    // (`platform.*`) are already denied to non-super-admins by
+    // `canUser()` (including tenant admins who hold the `"*"` wildcard),
+    // but marking the entire section here makes the intent explicit and
+    // guarantees the section vanishes for any non-super-admin even if a
+    // future refactor accidentally relaxes `canUser()`.
+    superAdminOnly: true,
     items: [
       { key: "platform-dashboard", i18nKey: "platform-dashboard", i18nSection: "platform", icon: LayoutDashboard, permission: "platform.overview" },
       { key: "tenants", i18nKey: "tenants", i18nSection: "platform", icon: Building2, permission: "platform.tenants.read" },
@@ -256,6 +275,13 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
       {/* ─── Navigation ─────────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto custom-scroll px-3 py-4 space-y-1">
         {SECTIONS.map((section) => {
+          // Section-level super-admin gate (defense-in-depth). The
+          // "platform" section carries `superAdminOnly: true` so the
+          // whole section vanishes for non-super-admins regardless of
+          // any per-item permission logic. This runs BEFORE per-item
+          // filtering so we short-circuit the section entirely.
+          if (section.superAdminOnly && !superAdmin) return null;
+
           const visibleItems = section.items.filter((n) => {
             // ── Super-admin scoping ───────────────────────────────────────
             // A super_admin without an active tenant context does NOT
@@ -276,6 +302,9 @@ export function Sidebar({ hideCollapseToggle = false, forceExpanded = false }: {
             // New model: hide the item unless the user holds the permission.
             // super_admin passes canUser for any key; admin passes for any
             // non-platform key; regular users pass only when explicitly granted.
+            // (Note: canUser denies `platform.*` for non-super-admins even
+            // if they hold the `"*"` wildcard permission, so platform items
+            // are effectively super-admin-only via this check too.)
             if (n.permission && !canUser(user, n.permission)) return false;
 
             // Feature-flag gating (super-admin bypasses).

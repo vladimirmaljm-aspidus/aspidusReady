@@ -66,9 +66,18 @@ export async function POST(req: NextRequest) {
     // so a single malformed line would silently bypass the balance gate. Negative
     // amounts are nonsensical in accounting and must also be rejected up-front.
     // We normalize the values so downstream code sees clean finite numbers.
+    //
+    // F-TWO deep-audit fix: use `Number(l.debit)` WITHOUT the `|| 0` fallback.
+    // The previous form `Number(l.debit) || 0` silently coerced non-numeric
+    // input (e.g. `"abc"`, `null`, `undefined`) to 0 because `NaN || 0 === 0`,
+    // which then passed the `Number.isFinite(d)` check (0 is finite) and
+    // entered the balance computation as a 0-debit line — masking typos and
+    // allowing malformed POST bodies to persist silent zero-amount lines.
+    // The bare `Number(l.debit)` returns NaN for invalid input, which the
+    // `!Number.isFinite(d)` check now correctly rejects.
     for (const l of body.lines) {
-      const d = Number(l.debit) || 0;
-      const c = Number(l.credit) || 0;
+      const d = Number(l.debit);
+      const c = Number(l.credit);
       if (!Number.isFinite(d) || d < 0) {
         return NextResponse.json({ error: "Invalid debit amount." }, { status: 400 });
       }

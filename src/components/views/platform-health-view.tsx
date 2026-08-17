@@ -5,9 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Database, Building2, Users, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
+import { Heart, Database, Building2, Users, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ShieldAlert } from "lucide-react";
 import { fmtDateTime } from "@/lib/utils/format";
 import { useT } from "@/lib/i18n/store";
+import { useAppStore, isSuperAdmin } from "@/lib/store/app-store";
+import { PageHeader } from "@/components/common/page-header";
 
 interface Health {
   db_status: "ok" | "error";
@@ -22,6 +24,9 @@ interface Health {
 
 export function PlatformHealthView() {
   const t = useT();
+  const userObj = useAppStore((s) => s.user);
+  const isSuper = isSuperAdmin(userObj);
+
   const healthQ = useQuery({
     queryKey: ["platform-health"],
     queryFn: async () => {
@@ -30,7 +35,35 @@ export function PlatformHealthView() {
       return r.json() as Promise<Health>;
     },
     refetchInterval: 30_000,
+    enabled: isSuper,
   });
+
+  // Defense-in-depth: super-admin-only surface. The sidebar hides this
+  // view and /api/super-admin/health uses requireSuperAdmin, but if a
+  // non-super-admin reaches it via state manipulation we render a clear
+  // denial instead of firing 403 fetches. All hooks (above) are called
+  // before this early return (Rules of Hooks).
+  if (!isSuper) {
+    return (
+      <div>
+        <PageHeader title={t("pf-health-title")} description={t("pf-health-desc")} />
+        <Card className="border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5">
+          <CardContent className="p-6 flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="size-5" />
+            </div>
+            <div>
+              <p className="font-medium">Platform admin access required.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                This area is restricted to platform super-administrators. Contact your platform operator if you believe this is an error.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const h = healthQ.data;
   const generated = h?.generated_at ? fmtDateTime(h.generated_at) : "";
 
