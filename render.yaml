@@ -3,7 +3,7 @@ services:
     name: velos-trade-platform
     runtime: node
     plan: starter
-    buildCommand: NODE_OPTIONS="--max-old-space-size=2048" npm install --legacy-peer-deps && npx prisma generate && npm run build
+    buildCommand: npm install --legacy-peer-deps && npx prisma generate && npm run build
     startCommand: HOSTNAME=0.0.0.0 NODE_ENV=production node .next/standalone/server.js
     healthCheckPath: /api/health
     envVars:

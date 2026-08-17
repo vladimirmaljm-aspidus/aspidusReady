@@ -1210,9 +1210,6 @@ export class MockStore implements Store {
   async getPortalRfq(id: string): Promise<PortalRfq | null> {
     return mock.portalRfqs.find((r) => r.id === id) || null;
   }
-  async getPortalRfqByDemandId(dealId: string): Promise<PortalRfq | null> {
-    return mock.portalRfqs.find((r) => r.linked_demand_id === dealId) || null;
-  }
   async upsertPortalRfq(r: Partial<PortalRfq> & { id?: string }): Promise<PortalRfq> {
     const existing = r.id ? mock.portalRfqs.find((x) => x.id === r.id) : null;
     if (existing) { Object.assign(existing, r, { updated_at: new Date().toISOString() }); return existing; }

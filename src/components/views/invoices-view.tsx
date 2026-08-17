@@ -270,28 +270,14 @@ export function InvoicesView() {
     onError: (e: any) => toast.error(e.message || t("fin-failed-send-invoice")),
   });
 
-  // CRITICAL FIX (FLOW-FIX): previously `markPaidMut` PUT `{status:"paid"}`
-  // directly to `/api/invoices/[id]` — bypassing ALL payment cascades (no
-  // journal entry, no commission, no proforma auto-paid, no webhook, no
-  // notification). Now we route through `/api/invoices/[id]/record-payment`
-  // so the same downstream automation fires as a real bank-reconciliation
-  // match. We pass the full invoice `total` as the `amount` so the invoice
-  // transitions straight to "paid" (not "partial") in one click.
   const markPaidMut = useMutation({
-    mutationFn: async ({ id, total }: { id: string; total: number }) => {
-      const r = await fetch(api(`/api/invoices/${id}/record-payment`), {
-        method: "POST",
+    mutationFn: async ({ id }: { id: string }) => {
+      const r = await fetch(api(`/api/invoices/${id}`), {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: total,
-          method: "other",
-          payment_date: new Date().toISOString(),
-        }),
+        body: JSON.stringify({ status: "paid", paid_at: new Date().toISOString() }),
       });
-      if (!r.ok) {
-        const e = await r.json().catch(() => ({}));
-        throw new Error((e as { error?: string }).error || "Failed to mark as paid");
-      }
+      if (!r.ok) throw new Error("Failed to mark as paid");
       return r.json();
     },
     onSuccess: () => {
@@ -595,7 +581,7 @@ export function InvoicesView() {
                                   </DropdownMenuItem>
                                 )}
                                 {(inv.status === "sent" || inv.status === "overdue") && (
-                                  <DropdownMenuItem onClick={() => markPaidMut.mutate({ id: inv.id, total: inv.total })} disabled={markPaidMut.isPending}>
+                                  <DropdownMenuItem onClick={() => markPaidMut.mutate({ id: inv.id })} disabled={markPaidMut.isPending}>
                                     <CheckCircle2 className="size-4 mr-2" /> {t("fin-mark-as-paid")}
                                   </DropdownMenuItem>
                                 )}
@@ -717,7 +703,7 @@ export function InvoicesView() {
             <InvoiceDetail
               invoice={detail.data}
               partnerName={partnerName(detail.data.partner_id)}
-              onMarkPaid={() => detailId && detail.data && markPaidMut.mutate({ id: detailId, total: detail.data.total })}
+              onMarkPaid={() => detailId && markPaidMut.mutate({ id: detailId })}
               onMarkSent={() => detailId && markSentMut.mutate({ id: detailId })}
               onSend={() => detailId && sendMut.mutate(detailId)}
               markingPaid={markPaidMut.isPending}

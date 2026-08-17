@@ -5,7 +5,6 @@ import { generatePdf } from "@/lib/pdf/generator";
 import { notify } from "@/lib/notif/helper";
 import { validateStatusTransition } from "@/lib/api/status-validator";
 import { assertNoSoDViolation } from "@/lib/permissions/sod-matrix";
-import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -28,30 +27,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     body = await req.json();
   } catch {
-    // Body is optional — empty body means "use the partner's email"
+    // Body is optional — empty body means "send to portal only, no email"
   }
-  // Fetch the invoice early so we can resolve the partner email — this
-  // makes the email + PDF attach step default-on rather than opt-in.
-  const invoice = await auth.store.getInvoice(id);
-  if (!invoice) {
-    return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
-  }
-  // Tenant ownership check
-  if (!auth.isSuperAdmin && invoice.tenant_id !== auth.tenantId) {
-    return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
-  }
-
-  // Fetch partner for email info / portal notification
-  const partner = invoice.partner_id ? await auth.store.getPartner(invoice.partner_id) : null;
-  // CRITICAL FIX (FLOW-FIX): the UI calls this endpoint with an EMPTY body,
-  // so the old `if (toEmail)` guard silently skipped PDF generation and
-  // email send. Now we default `toEmail` to the partner's email so the
-  // document is emailed + portal-notified on every send — the manual
-  // override (explicit `body.email`) is still respected for the rare
-  // case where the admin wants to send to a different address.
-  const toEmail: string | undefined = body?.email || partner?.email || undefined;
+  const toEmail: string | undefined = body?.email;
 
   try {
+    // Fetch the invoice
+    const invoice = await auth.store.getInvoice(id);
+    if (!invoice) {
+      return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
+    }
+    // Tenant ownership check
+    if (!auth.isSuperAdmin && invoice.tenant_id !== auth.tenantId) {
+      return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
+    }
 
     // ── P1-1 / Feature 2: Separation-of-Duties check ─────────────────
     // The "send" action IS the approval step for an invoice (once sent,
@@ -69,20 +58,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (sod) return sod;
     }
 
+    // Fetch partner for email info / portal notification
+    const partner = invoice.partner_id ? await auth.store.getPartner(invoice.partner_id) : null;
+
     // Resolve tenant (required for PDF generation and notification)
     const tenantId = resolveTenantId(auth, req);
     if (!tenantId) {
       return NextResponse.json({ error: "tenant_id query parameter is required for super-admin actions." }, { status: 400 });
     }
 
-    // ─── Email send (default-on) ───
-    // CRITICAL FIX (FLOW-FIX): previously the UI sent an EMPTY body, so
-    // `toEmail` was undefined and the entire PDF + email leg was
-    // silently skipped. We now default `toEmail` to the partner's email
-    // (resolved above) — so every "Send" click generates the PDF and
-    // emails the partner. The `email` field in the body still overrides
-    // for ad-hoc recipients. The leg is skipped only when the partner
-    // has no email AND none was supplied.
+    // ─── Email send (optional) ───
+    // If `email` is provided in the body, generate a PDF and email it to the
+    // recipient. If `email` is missing, we skip the email step and only mark
+    // the invoice as sent + push a portal notification.
     let emailResult: { success: boolean; skipped?: boolean; error?: string } = { success: true, skipped: true };
     if (toEmail) {
       const result = await generatePdf({ docType: "invoice", docId: id, tenantId });
@@ -148,30 +136,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         console.error("[invoice.send] portal notification failed:", e);
         // Don't fail the send if notification fails
       }
-    }
-
-    // ── FLOW-FIX: outbound webhook `invoice.sent` ───────────────────
-    // Fire-and-forget — webhook delivery failures must NEVER block the
-    // send. Receivers get the invoice snapshot + recipient + timestamp.
-    if (emailResult.success) {
-      void triggerWebhooks(
-        auth.store,
-        tenantId,
-        "invoice.sent",
-        "invoice",
-        id,
-        {
-          id: invoice.id,
-          number: invoice.number,
-          partner_id: invoice.partner_id,
-          partner_name: partner?.name || null,
-          total: invoice.total,
-          currency: invoice.currency,
-          due_date: invoice.due_date,
-          sent_to: toEmail || null,
-          sent_at: new Date().toISOString(),
-        },
-      ).catch((e) => console.error("[invoice.send] webhook trigger failed:", e));
     }
 
     await audit(auth.store, auth.user, req, "invoice.send_email", "invoice", id, { to: toEmail || "(portal only)" });

@@ -310,7 +310,6 @@ export interface Store {
   listPortalRfqs(tenantId: string, params?: ListParams): Promise<ListResult<PortalRfq>>;
   listPortalRfqsByPartner(partnerId: string): Promise<PortalRfq[]>;
   getPortalRfq(id: string): Promise<PortalRfq | null>;
-  getPortalRfqByDemandId(dealId: string): Promise<PortalRfq | null>;
   upsertPortalRfq(r: Partial<PortalRfq> & { id?: string }): Promise<PortalRfq>;
   deletePortalRfq(id: string): Promise<void>;
 

@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
 import { getStore } from "@/lib/data/store";
-import { notifyRfqReceived, notify } from "@/lib/notif/helper";
+import { notifyRfqReceived } from "@/lib/notif/helper";
 import { notifyPortalActivity } from "@/lib/realtime/notify";
 import { audit } from "@/lib/api/helpers";
 import { nextDocNumber } from "@/lib/api/doc-number";
-import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -50,19 +49,6 @@ export async function POST(req: NextRequest) {
   body.partner_id = access.partner_id;
   body.tenant_id = access.tenant_id;
   body.portal_access_id = access.id;
-  // CRITICAL FIX (FLOW-FIX / FLOW-2 audit): the RFQ→product link was
-  // never stored — all 3 RFQs in the live DB had `product_id = NULL`
-  // because (a) some submission paths didn't include it, and (b) the
-  // route never explicitly normalised/passed it through. We now make
-  // the field explicit so the catalog-attached form's product_id
-  // always lands on the portal_rfqs row. Stays null for the free-text
-  // form (which has no catalog product to link).
-  if (body.product_id !== undefined && body.product_id !== null && body.product_id !== "") {
-    body.product_id = String(body.product_id);
-  } else {
-    body.product_id = null;
-  }
-  body.source = body.source || (body.product_id ? "catalog" : "form");
   // CRITICAL FIX (audit T-portal): portal clients must only CREATE, never
   // UPDATE. `upsertPortalRfq` is a smart-upsert keyed on `id`, so a client
   // passing another partner's `id` could silently overwrite their RFQ.
@@ -161,53 +147,6 @@ export async function POST(req: NextRequest) {
       productName: body.product_name || null,
       quantity: body.quantity,
     });
-
-    // ── FLOW-FIX: client-visible confirmation notification ────────────────
-    // Previously the client themselves got NO confirmation — only admins
-    // were notified. A partner-scoped notification ("Your RFQ was
-    // received") closes the loop visibly for the client. Same shape as
-    // the admin one but `partner_id` set so listNotificationsByPartner
-    // surfaces it in the portal bell.
-    try {
-      await notify({
-        tenantId: access.tenant_id,
-        userId: null,
-        partnerId: access.partner_id,
-        type: "rfq_received",
-        title: `RFQ received: ${body.number}`,
-        message: `Your request for ${body.product_name || "a product"} has been received. We'll prepare a quote shortly.`,
-        entityType: "portal_rfq",
-        entityId: created.id,
-        actionLabel: "View",
-      });
-    } catch (e) {
-      console.error("[portal.rfqs.create] client notification failed:", e);
-    }
-
-    // ── FLOW-FIX: outbound webhook `rfq.created` ─────────────────────────
-    // Fire-and-forget — webhook delivery failures must NEVER block the
-    // RFQ submission. Receivers get the RFQ snapshot + partner + product.
-    void triggerWebhooks(
-      store,
-      access.tenant_id,
-      "rfq.created",
-      "portal_rfq",
-      created.id,
-      {
-        id: created.id,
-        number: body.number,
-        product_id: body.product_id,
-        product_name: body.product_name,
-        quantity: body.quantity,
-        unit: body.unit,
-        target_price: body.target_price ?? null,
-        currency: body.currency,
-        partner_id: access.partner_id,
-        partner_name: partner?.name || null,
-        source: body.source,
-        status: body.status,
-      },
-    ).catch((e) => console.error("[portal.rfqs.create] webhook trigger failed:", e));
 
     return NextResponse.json(created);
   } catch (e: any) {

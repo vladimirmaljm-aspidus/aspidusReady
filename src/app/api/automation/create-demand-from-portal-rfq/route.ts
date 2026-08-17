@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireAuthOrApiKey, requireAuthOrApiKeyPermission, audit, resolveTenantId } from "@/lib/api/helpers";
-import { notify } from "@/lib/notif/helper";
-import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -72,12 +70,9 @@ export async function POST(req: NextRequest) {
     const demandNumber = `RFQ-${year}-${String(nextSeq).padStart(3, "0")}`;
 
     // 4. Build demand items from RFQ data
-    //    CRITICAL FIX (FLOW-FIX): preserve rfq.product_id link so the
-    //    product-traceability chain is intact (RFQ → demand → offer). Was
-    //    hard-coded to null — broke Step 3 of the audit.
     const demandItems = [
       {
-        product_id: rfq.product_id as string | null,
+        product_id: null as string | null,
         product_name: rfq.product_name,
         quantity: rfq.quantity,
         unit: rfq.unit,
@@ -139,52 +134,6 @@ export async function POST(req: NextRequest) {
         product_name: rfq.product_name,
       }
     );
-
-    // 9. FLOW-FIX: notify the portal client their RFQ is being actioned.
-    //    Previously the client only found out by refreshing the portal
-    //    RFQ list view — no push notification was sent on the
-    //    pending → quoted transition. The notification is partner-scoped
-    //    so listNotificationsByPartner surfaces it in the portal bell.
-    if (rfq.partner_id) {
-      try {
-        await notify({
-          tenantId: rfq.tenant_id,
-          userId: null,
-          partnerId: rfq.partner_id,
-          type: "rfq_quoted",
-          title: `Your RFQ has been converted`,
-          message: `Your request (${rfq.number || rfq.product_name}) is being prepared as a quote. We'll send you an offer shortly.`,
-          entityType: "portal_rfq",
-          entityId: rfq.id,
-          actionLabel: "View",
-        });
-      } catch (e) {
-        console.error("[create-demand-from-portal-rfq] client notification failed:", e);
-      }
-    }
-
-    // 10. FLOW-FIX: outbound webhook `rfq.quoted` — fire-and-forget.
-    //     Complements `rfq.created` (fired at submission). Receivers get
-    //     the RFQ snapshot + linked demand id so they can mirror the
-    //     status change in their own system.
-    void triggerWebhooks(
-      store,
-      tid,
-      "rfq.quoted",
-      "portal_rfq",
-      rfq.id,
-      {
-        id: rfq.id,
-        number: rfq.number,
-        product_id: rfq.product_id,
-        product_name: rfq.product_name,
-        partner_id: rfq.partner_id,
-        partner_name: partner?.name || null,
-        linked_demand_id: created.id,
-        demand_number: created.number,
-        status: "quoted",
-      },
-    ).catch((e) => console.error("[create-demand-from-portal-rfq] webhook trigger failed:", e));
 
     return NextResponse.json(created);
   } catch (e: any) {

@@ -2487,25 +2487,6 @@ export class SupabaseStore implements Store {
     if (error) throw error;
     return (data as PortalRfq) || null;
   }
-  /**
-   * Look up the portal RFQ that was converted into a given deal/demand.
-   * Used by the `create-offer-from-deal` automation to write back
-   * `portal_rfq.linked_offer_id` — closing the RFQ → demand → offer loop.
-   * Returns the most recent match (multiple should not occur because
-   * `create-demand-from-portal-rfq` is the only path that sets
-   * `linked_demand_id`, but ordering defensively).
-   */
-  async getPortalRfqByDemandId(dealId: string): Promise<PortalRfq | null> {
-    const { data, error } = await this.sb()
-      .from("portal_rfqs")
-      .select("*")
-      .eq("linked_demand_id", dealId)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
-    return (data as PortalRfq) || null;
-  }
   async upsertPortalRfq(r: Partial<PortalRfq> & { id?: string }): Promise<PortalRfq> {
     return this.smartUpsert<PortalRfq>("portal_rfqs", r, r.tenant_id ?? undefined);
   }
