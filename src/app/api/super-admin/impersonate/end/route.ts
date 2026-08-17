@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSuperAdmin, audit } from "@/lib/api/helpers";
+import { requireSuperAdmin, audit, getIp } from "@/lib/api/helpers";
 import { createSession, setSessionCookie, getSessionFromCookie } from "@/lib/auth/session";
+// P0-2 (Monitoring) — fire `impersonate.stop` for Sentry / IDS / webhook
+// fan-out. Pure reporting call; never blocks the super-admin.
+import { reportSecurityEvent } from "@/lib/monitoring/security-alerts";
 
 export const runtime = "nodejs";
 
@@ -45,6 +48,24 @@ export async function POST(req: NextRequest) {
         original_expires_at: original.expires_at,
       },
     );
+
+    // P0-2 (Monitoring) — fire `impersonate.stop` AFTER the audit log.
+    // severity=info: the impersonation ending is the safe/expected
+    // transition (super-admin returns to their own identity). Reported
+    // for completeness so the audit trail in Sentry + the webhook fan-out
+    // has matching start/stop events for every impersonation session.
+    reportSecurityEvent({
+      type: "impersonate.stop",
+      userId: session.sub,
+      tenantId: original.target_tenant_id ?? undefined,
+      ip: getIp(req),
+      details: {
+        target_user_id: original.target_user_id,
+        target_tenant_id: original.target_tenant_id,
+        original_expires_at: original.expires_at,
+      },
+      severity: "info",
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {

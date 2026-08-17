@@ -11,6 +11,14 @@ import { createHash } from "crypto";
 import { getIp } from "@/lib/api/helpers";
 import { checkRateLimit, resetRateLimit } from "@/lib/security/rate-limiter";
 import { getRateLimitConfig } from "@/lib/security/rate-limit-config";
+// P0-2 (Monitoring) — security event reporting for login attempts.
+// Failed / blocked / rate-limited logins fire `reportSecurityEvent` BEFORE
+// the route returns the 401/423/429, so Sentry + the IDS + the security
+// webhooks see every auth failure. Super-admins are subject to the same
+// per-IP rate limit as everyone else (rate-limiting is a transport-level
+// defense, not an authorization decision) — "super-admin is never blocked"
+// applies to permission gates, not to rate limits.
+import { reportSecurityEvent } from "@/lib/monitoring/security-alerts";
 
 export const runtime = "nodejs";
 
@@ -101,6 +109,17 @@ export async function POST(req: NextRequest) {
       config.loginWindowMs,
     );
     if (!rl.allowed) {
+      // P0-2 (Monitoring) — fire `rate.limit.hit` BEFORE returning the 429.
+      // The per-IP cap is the primary brute-force backstop; a hit here is a
+      // meaningful security signal. The burst tracker + IDS in
+      // security-alerts.ts / anomaly-detector.ts will further escalate if a
+      // pattern emerges.
+      reportSecurityEvent({
+        type: "rate.limit.hit",
+        ip,
+        details: { scope: "per_ip", key: rateLimitKey, count: rl.count },
+        severity: "warning",
+      });
       const retryAfterSec = Math.ceil((rl.retryAfter ?? 60_000) / 1000);
       return NextResponse.json(
         { error: "Too many login attempts from this address. Try again later." },
@@ -133,6 +152,17 @@ export async function POST(req: NextRequest) {
         details: { reason: user ? "User inactive" : "User not found" },
         ip,
         user_agent: userAgent,
+      });
+      // P0-2 (Monitoring) — fire `login.failed` for the IDS / Sentry / webhook
+      // pipeline. The `details.reason` distinguishes enumeration (User not
+      // found) from reactivation attempts (User inactive). No `userId` is
+      // available because the user doesn't exist; the IP is the only signal,
+      // which is exactly what the brute-force-login IDS rule keys on.
+      reportSecurityEvent({
+        type: "login.failed",
+        ip,
+        details: { reason: user ? "User inactive" : "User not found", username },
+        severity: "info",
       });
       return NextResponse.json(
         { error: "Invalid username or password." },
@@ -169,6 +199,19 @@ export async function POST(req: NextRequest) {
         details: { reason: "Account locked" },
         ip,
         user_agent: userAgent,
+      });
+      // P0-2 (Monitoring) — fire `login.blocked` (severity=warning) — the
+      // account-lock surface is hit only after 5 consecutive failures, so a
+      // `login.blocked` event implies a sustained attack (the burst tracker
+      // will already have paged; this is the durable record in Sentry /
+      // webhook deliveries).
+      reportSecurityEvent({
+        type: "login.blocked",
+        userId: user.id,
+        tenantId: user.tenant_id ?? undefined,
+        ip,
+        details: { reason: "account_locked", locked_until: user.locked_until },
+        severity: "warning",
       });
       // Surface the exact unlock time + a Retry-After header so the client
       // can show a live countdown instead of a vague "try again later".
@@ -223,6 +266,21 @@ export async function POST(req: NextRequest) {
         ip,
         user_agent: userAgent,
       });
+      // P0-2 (Monitoring) — fire `login.failed` (severity=warning) for each
+      // wrong-password attempt. This is the canonical brute-force signal —
+      // the anomaly-detector.ts brute-force-login rule fires when 5+ of
+      // these accumulate from the same IP in 60 s, escalating to a single
+      // `suspicious.activity` event. We report on EVERY attempt (not just
+      // after the lockout) so a slow-drip attack that never trips the
+      // per-IP cap is still visible in Sentry / the webhook fan-out.
+      reportSecurityEvent({
+        type: "login.failed",
+        userId: user.id,
+        tenantId: user.tenant_id ?? undefined,
+        ip,
+        details: { reason: "Wrong password", failed_attempts: next, country },
+        severity: "warning",
+      });
       return NextResponse.json({ error: "Invalid username or password." }, { status: 401 });
     }
 
@@ -253,6 +311,20 @@ export async function POST(req: NextRequest) {
           details: { reason: `tenant_${tenant.status}` },
           ip,
           user_agent: userAgent,
+        });
+        // P0-2 (Monitoring) — fire `login.blocked` for the tenant-status
+        // denial. NOTE: super-admin bypasses the tenant gate entirely (the
+        // guard at line 233 above skips for `role === "super_admin"`), so
+        // this event NEVER fires for super-admin callers — "super-admin is
+        // never blocked" is preserved by the audit-time check, not by the
+        // security-event report.
+        reportSecurityEvent({
+          type: "login.blocked",
+          userId: user.id,
+          tenantId: user.tenant_id ?? undefined,
+          ip,
+          details: { reason: `tenant_${tenant.status}` },
+          severity: "warning",
         });
         return NextResponse.json(
           {

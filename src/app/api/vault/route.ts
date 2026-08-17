@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, audit, resolveTenantId, getIp } from "@/lib/api/helpers";
 import { encrypt, decrypt, currentKeyVersion } from "@/lib/api/vault-crypto";
+// P0-2 (Monitoring) — fire `vault.read` when a caller explicitly requests the
+// decrypted secret value (reveal=true). This is the high-sensitivity
+// surface — anyone revealing vault values is security-relevant. NOTE: super
+// admin can reveal values too (they manage the platform); the event fires
+// for them as well, but the route never denies them — "super-admin is never
+// blocked" is preserved by the audit-time check, not by suppressing the
+// report.
+import { reportSecurityEvent } from "@/lib/monitoring/security-alerts";
 
 export const runtime = "nodejs";
 
@@ -54,6 +62,21 @@ export async function GET(req: NextRequest) {
       });
     } catch (e) {
       console.error("[vault GET audit]", e);
+    }
+    // P0-2 (Monitoring) — fire `vault.read` ONLY when the caller explicitly
+    // requested the decrypted value (reveal=true). The non-reveal list
+    // response strips the secret value, so it's not security-relevant
+    // beyond the existing audit entry. Super-admin can also reveal; the
+    // event reports the access for the audit trail without blocking.
+    if (reveal && items.length > 0) {
+      reportSecurityEvent({
+        type: "vault.read",
+        userId: auth.user.id,
+        tenantId: auth.tenantId ?? undefined,
+        ip: getIp(req),
+        details: { count: items.length, reveal: true },
+        severity: "info",
+      });
     }
     return NextResponse.json({ items, total: result.total });
   } catch (e: any) {

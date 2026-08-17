@@ -399,7 +399,7 @@ function WebhookFormDialog({
               value={events}
               onChange={(e) => setEvents(e.target.value)}
               rows={3}
-              placeholder="offer.sent, deal.won, deal.lost, invoice.overdue, partner.create"
+              placeholder="offer.sent, deal.won, deal.lost, invoice.overdue, partner.create, security.*"
               className="font-mono text-xs"
             />
             <p className="text-xs text-muted-foreground">
@@ -407,6 +407,58 @@ function WebhookFormDialog({
               <code className="font-mono">deal.won</code>, <code className="font-mono">deal.lost</code>,{" "}
               <code className="font-mono">invoice.overdue</code>, <code className="font-mono">partner.create</code>.
             </p>
+            {/* P0-2 (Monitoring) — Security Events preset chips. */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <span className="text-xs text-muted-foreground self-center">Security events:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const list = events
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  if (!list.includes("security.*")) list.push("security.*");
+                  setEvents(list.join(", "));
+                }}
+                className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200 text-[11px] font-mono hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                title="Fire on every security event (login failures, CSRF blocks, impersonation, IDOR probes, IDS escalations, …)"
+              >
+                security.*
+              </button>
+              {(
+                [
+                  "security.login.failed",
+                  "security.login.blocked",
+                  "security.rate.limit.hit",
+                  "security.csrf.blocked",
+                  "security.permission.denied",
+                  "security.role.escalation",
+                  "security.impersonate.start",
+                  "security.impersonate.stop",
+                  "security.vault.read",
+                  "security.cross.tenant.attempt",
+                  "security.2fa.disabled",
+                  "security.suspicious.activity",
+                ] as const
+              ).map((ev) => (
+                <button
+                  key={ev}
+                  type="button"
+                  onClick={() => {
+                    const list = events
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    if (!list.includes(ev)) list.push(ev);
+                    setEvents(list.join(", "));
+                  }}
+                  className="px-2 py-0.5 rounded-md bg-muted text-foreground/80 dark:text-foreground/70 text-[11px] font-mono hover:bg-muted/70 transition-colors"
+                  title={`Fire only on ${ev}`}
+                >
+                  {ev}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-md bg-muted/30">

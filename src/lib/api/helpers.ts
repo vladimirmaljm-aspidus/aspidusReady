@@ -7,6 +7,15 @@ import { createHash } from "crypto";
 // ApiKeyAuthContext }` from this module (`import type` is erased at compile
 // time), so this static import does NOT create a runtime circular dependency.
 import { requirePermission } from "@/lib/permissions/can";
+// P0-2 (Monitoring) — `reportSecurityEvent` fires Sentry + log + IDS +
+// webhook fan-out for security-relevant events. Imported here so the CSRF
+// defense, the permission gate, and the admin/super-admin role gates can
+// each report a denial BEFORE returning the 403. NOTE: the import direction
+// is helpers.ts → security-alerts.ts (one-way) — security-alerts.ts does NOT
+// import helpers.ts, so there is no cycle. The chain that DOES form a cycle
+// (security-alerts.ts ↔ anomaly-detector.ts) resolves via function hoisting
+// (see the header comments in those two files).
+import { reportSecurityEvent } from "@/lib/monitoring/security-alerts";
 
 export interface AuthContext {
   user: SafeUser;
@@ -175,23 +184,50 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
       if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
         const origin = req.headers.get("origin");
         const appBaseUrl = process.env.APP_BASE_URL;
+        // P0-2 (Monitoring) — fire a `csrf.blocked` security event BEFORE
+        // returning the 403, so Sentry + the IDS + the security webhooks
+        // see every cross-site state-change attempt. NOTE: this applies to
+        // super-admin sessions too — CSRF defense is the worst-case
+        // scenario the check exists to stop; "super-admin is never blocked"
+        // applies to authorization gates, not to transport-level defenses
+        // like CSRF / rate limit / TLS. The `csrfBlock()` helper both
+        // reports the event and returns the NextResponse.
+        const csrfIp = getIp(req);
+        const csrfBlock = (details: Record<string, unknown>) => {
+          reportSecurityEvent({
+            type: "csrf.blocked",
+            ip: csrfIp,
+            severity: "warning",
+            details: { method, ...details },
+          });
+          return NextResponse.json(
+            { error: "Cross-site requests are not allowed." },
+            { status: 403 },
+          );
+        };
+        const invalidOriginBlock = (details: Record<string, unknown>) => {
+          reportSecurityEvent({
+            type: "csrf.blocked",
+            ip: csrfIp,
+            severity: "warning",
+            details: { method, reason: "malformed_origin", ...details },
+          });
+          return NextResponse.json(
+            { error: "Invalid origin." },
+            { status: 403 },
+          );
+        };
         if (appBaseUrl) {
           if (origin) {
             try {
               const allowedOrigin = new URL(appBaseUrl).origin;
               const requestOrigin = new URL(origin).origin;
               if (requestOrigin !== allowedOrigin) {
-                return NextResponse.json(
-                  { error: "Cross-site requests are not allowed." },
-                  { status: 403 },
-                );
+                return csrfBlock({ allowed: allowedOrigin, got: requestOrigin });
               }
             } catch {
               // Malformed APP_BASE_URL or Origin — reject defensively.
-              return NextResponse.json(
-                { error: "Invalid origin." },
-                { status: 403 },
-              );
+              return invalidOriginBlock({});
             }
           }
           // If origin is missing (same-origin requests sometimes omit it),
@@ -206,16 +242,10 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
             try {
               const originHost = new URL(origin).host;
               if (originHost !== host) {
-                return NextResponse.json(
-                  { error: "Cross-site requests are not allowed." },
-                  { status: 403 },
-                );
+                return csrfBlock({ allowed_host: host, got_host: originHost });
               }
             } catch {
-              return NextResponse.json(
-                { error: "Invalid origin." },
-                { status: 403 },
-              );
+              return invalidOriginBlock({});
             }
           }
           // If origin is missing, allow — SameSite=Lax covers this case.
@@ -349,6 +379,21 @@ export function requireAuthOrApiKeyPermission(
     // wildcards). Conversion is idempotent for colon-format input.
     const colonPerm = permission.replace(/\./g, ":");
     if (!hasPermission(auth.permissions, colonPerm)) {
+      // P0-2 (Monitoring) — fire a `permission.denied` security event
+      // BEFORE returning the 403. NOTE: API-key callers are NEVER
+      // super-admin (super-admins always auth via session cookie), so
+      // every API-key 403 here is a genuine authorization denial — a
+      // possible attack signal worth escalating to Sentry + the IDS.
+      reportSecurityEvent({
+        type: "permission.denied",
+        ip: auth.ip,
+        details: {
+          permission,
+          apiKeyId: auth.apiKeyId,
+          apiKeyName: auth.apiKeyName,
+        },
+        severity: "warning",
+      });
       return NextResponse.json(
         {
           error: "Insufficient permissions for this API key.",
@@ -362,7 +407,29 @@ export function requireAuthOrApiKeyPermission(
   // Session-auth caller — delegate to the catalog-aware evaluator.
   // `requirePermission()` runs `can()`, which accepts both dot and
   // colon formats and understands role-based implicit grants.
-  return requirePermission(auth, permission);
+  //
+  // SUPER-ADMIN IS NEVER BLOCKED: `can()` returns true for
+  // `role === "super_admin"` (rule 1), so `requirePermission()` returns
+  // `null` for super-admin callers — the security event below only
+  // fires for actual authorization denials (regular users / API keys
+  // lacking the permission). This is the canonical "super-admin is
+  // never blocked" guarantee: the report is on the denial path, and
+  // super-admins never reach the denial path.
+  const denied = requirePermission(auth, permission);
+  if (denied) {
+    reportSecurityEvent({
+      type: "permission.denied",
+      userId: auth.user?.id,
+      tenantId: auth.tenantId ?? undefined,
+      ip: auth.ip,
+      details: {
+        permission,
+        role: auth.user?.role,
+      },
+      severity: "warning",
+    });
+  }
+  return denied;
 }
 
 /**
@@ -395,6 +462,20 @@ export async function requireAdmin(req?: NextRequest): Promise<AuthContext | Nex
   const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+    // P0-2 (Monitoring) — fire `permission.denied` for non-admin callers
+    // attempting an admin-only route. SUPER-ADMIN IS NEVER BLOCKED: the
+    // guard `!auth.isSuperAdmin` is false for super-admin callers, so
+    // super-admins never enter this branch. The report fires only for
+    // genuine denials (regular users hitting an admin endpoint), which is
+    // a meaningful attack signal (privilege-escalation probe).
+    reportSecurityEvent({
+      type: "permission.denied",
+      userId: auth.user.id,
+      tenantId: auth.tenantId ?? undefined,
+      ip: auth.ip,
+      details: { required: "admin_or_super_admin", role: auth.user.role },
+      severity: "warning",
+    });
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
   return auth;
@@ -411,6 +492,22 @@ export async function requireSuperAdmin(req?: NextRequest): Promise<AuthContext 
   const auth = await requireAuth(req);
   if (auth instanceof NextResponse) return auth;
   if (!auth.isSuperAdmin) {
+    // P0-2 (Monitoring) — fire `role.escalation` for non-super-admin
+    // callers attempting a super-admin-only route. The event type is
+    // `role.escalation` (not `permission.denied`) because the
+    // distinguishable attack pattern is "low-privilege caller probing
+    // for super-admin-only surfaces" — that's the platform's #1
+    // privilege-escalation recon signal. SUPER-ADMIN IS NEVER BLOCKED:
+    // super-admins have `isSuperAdmin === true` and skip this branch
+    // entirely (the report only fires for actual denials).
+    reportSecurityEvent({
+      type: "role.escalation",
+      userId: auth.user.id,
+      tenantId: auth.tenantId ?? undefined,
+      ip: auth.ip,
+      details: { required: "super_admin", role: auth.user.role },
+      severity: "critical",
+    });
     return NextResponse.json({ error: "Super-admin access required." }, { status: 403 });
   }
   return auth;

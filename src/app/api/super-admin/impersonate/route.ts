@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin, audit, getIp } from "@/lib/api/helpers";
 import { createSession, setSessionCookie, getSessionFromCookie } from "@/lib/auth/session";
+// P0-2 (Monitoring) — fire `impersonate.start` for Sentry / IDS / webhook
+// fan-out. SUPER-ADMIN IS NEVER BLOCKED: this is a pure reporting call
+// AFTER the route has already authorised and executed the impersonation;
+// the report does not gate anything. Super-admin can always impersonate.
+import { reportSecurityEvent } from "@/lib/monitoring/security-alerts";
 
 export const runtime = "nodejs";
 
@@ -98,6 +103,28 @@ export async function POST(req: NextRequest) {
       ip: getIp(req),
     },
   );
+
+  // P0-2 (Monitoring) — fire `impersonate.start` AFTER the audit log is
+  // written. severity=warning: impersonation is a legitimate super-admin
+  // operation, but it's security-relevant (a super-admin becomes a
+  // regular user) and should always appear in the security audit trail
+  // + Sentry + the webhook fan-out. NOTE: this report is post-success —
+  // super-admin is never blocked here. The `details` mirror the audit
+  // payload so a Sentry alert or webhook receiver has full context.
+  reportSecurityEvent({
+    type: "impersonate.start",
+    userId: session.sub,
+    tenantId: target.tenant_id ?? undefined,
+    ip: getIp(req),
+    details: {
+      target_user_id: target.id,
+      target_username: target.username,
+      target_tenant_id: target.tenant_id,
+      duration_minutes: durationMin,
+      expires_at: expiresAt,
+    },
+    severity: "warning",
+  });
 
   return NextResponse.json({
     ok: true,
