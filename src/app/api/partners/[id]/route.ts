@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
+// P0-3 / Feature 2 — field-level encryption. The partner PII fields
+// contact_email, phone, tax_id, vat_number are encrypted at rest (enc:
+// prefix). This [id] route decrypts on GET and encrypts on PUT.
+import {
+  encryptField,
+  decryptField,
+  hmacField,
+  isEncrypted,
+} from "@/lib/crypto/field-encryption";
 
 export const runtime = "nodejs";
 
@@ -22,7 +31,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // returning the full row including the secret. `portal_token` is a
     // legacy 32+ char secret stored on the partner row — leaking it to any
     // partner:read principal (including API keys) is a credential exposure.
-    const { portal_token: _omit, ...safePartner } = partner as any;
+    // P0-3 / Feature 2: decrypt contact_email / phone / tax_id /
+    // vat_number for the admin UI; strip the internal HMAC columns.
+    const { portal_token: _omit, tax_id_hmac: _omitTid, vat_number_hmac: _omitVn, ...safePartner } = partner as any;
+    if (safePartner.contact_email && typeof safePartner.contact_email === "string") {
+      safePartner.contact_email = decryptField(safePartner.contact_email);
+    }
+    if (safePartner.phone && typeof safePartner.phone === "string") {
+      safePartner.phone = decryptField(safePartner.phone);
+    }
+    if (safePartner.tax_id && typeof safePartner.tax_id === "string") {
+      safePartner.tax_id = decryptField(safePartner.tax_id);
+    }
+    if (safePartner.vat_number && typeof safePartner.vat_number === "string") {
+      safePartner.vat_number = decryptField(safePartner.vat_number);
+    }
     return NextResponse.json(safePartner);
   } catch (error: any) {
     return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
@@ -45,11 +68,53 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const body = await req.json();
+    // ── P0-3 / Feature 2 — field-level encryption ──────────────────────────
+    // Encrypt contact_email, phone, tax_id, vat_number at rest with
+    // AES-256-GCM (enc: prefix). tax_id / vat_number ALSO get a
+    // deterministic HMAC token (tax_id_hmac / vat_number_hmac) for the
+    // duplicate-check on the next create. Idempotent: already-encrypted
+    // values (enc: prefix) are left untouched so a re-save of a loaded-but-
+    // unmodified row is a no-op.
+    if (body.contact_email != null) {
+      if (typeof body.contact_email === "string" && body.contact_email !== "" && !isEncrypted(body.contact_email)) {
+        body.contact_email = encryptField(body.contact_email);
+      }
+    }
+    if (body.phone != null) {
+      if (typeof body.phone === "string" && body.phone !== "" && !isEncrypted(body.phone)) {
+        body.phone = encryptField(body.phone);
+      }
+    }
+    if (body.tax_id != null) {
+      if (typeof body.tax_id === "string" && body.tax_id !== "" && !isEncrypted(body.tax_id)) {
+        body.tax_id_hmac = hmacField(body.tax_id);
+        body.tax_id = encryptField(body.tax_id);
+      }
+    }
+    if (body.vat_number != null) {
+      if (typeof body.vat_number === "string" && body.vat_number !== "" && !isEncrypted(body.vat_number)) {
+        body.vat_number_hmac = hmacField(body.vat_number);
+        body.vat_number = encryptField(body.vat_number);
+      }
+    }
     // Preserve the entity's tenant_id — regular users cannot move it to another tenant
     const updated = await auth.store.upsertPartner({ ...body, id, tenant_id: existing.tenant_id });
     await audit(auth.store, auth.user, req, "partner.update", "partner", id, { name: updated.name });
     // Strip portal_token from response (parity with GET / list — audit D-5 / F-9-1).
-    const { portal_token: _omit, ...safeUpdated } = updated as any;
+    // P0-3 / Feature 2: decrypt PII fields + strip the HMAC columns.
+    const { portal_token: _omit, tax_id_hmac: _omitTid, vat_number_hmac: _omitVn, ...safeUpdated } = updated as any;
+    if (safeUpdated.contact_email && typeof safeUpdated.contact_email === "string") {
+      safeUpdated.contact_email = decryptField(safeUpdated.contact_email);
+    }
+    if (safeUpdated.phone && typeof safeUpdated.phone === "string") {
+      safeUpdated.phone = decryptField(safeUpdated.phone);
+    }
+    if (safeUpdated.tax_id && typeof safeUpdated.tax_id === "string") {
+      safeUpdated.tax_id = decryptField(safeUpdated.tax_id);
+    }
+    if (safeUpdated.vat_number && typeof safeUpdated.vat_number === "string") {
+      safeUpdated.vat_number = decryptField(safeUpdated.vat_number);
+    }
     return NextResponse.json(safeUpdated);
   } catch (error: any) {
     return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });

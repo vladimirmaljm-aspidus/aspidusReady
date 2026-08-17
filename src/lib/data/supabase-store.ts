@@ -239,6 +239,34 @@ export class SupabaseStore implements Store {
         // etc.) would also land here; we treat them the same because the
         // UPDATE did not produce a row either way.
         //
+        // P0-3 / Feature 2 — field-level encryption: if the error is
+        // "column X does not exist" (e.g. tax_id_hmac / vat_number_hmac /
+        // portal_email_hmac added by migration 042 not yet applied), retry
+        // the UPDATE once with that column stripped. This keeps the
+        // partner / portal_access upserts tolerant of pre-migration-042
+        // deployments the same way upsertPortalAccess already is.
+        const missingColMatch = String(error.message || "").match(
+          /Could not find the ['"]?([\w_]+)['"]? column/,
+        );
+        if (missingColMatch) {
+          const missingCol = missingColMatch[1];
+          const safeFields: SupaRow = { ...fields };
+          delete safeFields[missingCol];
+          // Also strip from payload for the INSERT fallback below.
+          delete (payload as SupaRow)[missingCol];
+          const retryQuery = this.sb().from(table).update(safeFields).eq("id", id);
+          if (tenantId && "tenant_id" in safeFields) {
+            retryQuery.eq("tenant_id", tenantId);
+          }
+          const { data: retried, error: retriedErr } = await retryQuery.select().single();
+          if (!retriedErr && retried) return retried as T;
+          // If the retry still failed with the 0-row match case, fall
+          // through to the existing INSERT fallback below.
+          if (retriedErr && !/PGRST116|JSON object requested/.test(retriedErr.message || "")) {
+            // A different error after the column-strip retry — propagate.
+            throw retriedErr;
+          }
+        }
         // SECURITY GATE (task C-7 / audit P2-1): when `tenantId` is set
         // (i.e. a tenant-scoped request, NOT a super-admin platform
         // request), THROW instead of falling back to INSERT. The caller
@@ -255,12 +283,13 @@ export class SupabaseStore implements Store {
         // "create-or-update by id" flows keep working — those requests
         // are explicitly NOT tenant-scoped and run with the service_role
         // key, so there's no cross-tenant IDOR vector to defend against.
-        if (tenantId) {
+        if (tenantId && !missingColMatch) {
           throw new Error(
             `Record not found or access denied (table=${table}, id=${id}).`,
           );
         }
-        // Fall through to INSERT path (super-admin / no tenant scope only).
+        // Fall through to INSERT path (super-admin / no tenant scope only,
+        // OR a column-strip retry that still found 0 rows).
       } else if (updated) {
         return updated as T;
       }
@@ -273,7 +302,25 @@ export class SupabaseStore implements Store {
         .insert(payload)
         .select()
         .single();
-      if (insErr) throw insErr;
+      if (insErr) {
+        // P0-3 / Feature 2: same column-strip retry on the INSERT path.
+        // Same pattern as above — strip the unknown column and retry.
+        const insMissing = String(insErr.message || "").match(
+          /Could not find the ['"]?([\w_]+)['"]? column/,
+        );
+        if (insMissing) {
+          const safePayload: SupaRow = { ...payload };
+          delete safePayload[insMissing[1]];
+          const { data: ins2, error: ins2Err } = await this.sb()
+            .from(table)
+            .insert(safePayload)
+            .select()
+            .single();
+          if (ins2Err) throw ins2Err;
+          return ins2 as T;
+        }
+        throw insErr;
+      }
       return inserted as T;
     }
     // INSERT new record (database auto-generates id)
@@ -282,7 +329,24 @@ export class SupabaseStore implements Store {
       .insert(payload)
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      // P0-3 / Feature 2: same column-strip retry as above.
+      const missing = String(error.message || "").match(
+        /Could not find the ['"]?([\w_]+)['"]? column/,
+      );
+      if (missing) {
+        const safePayload: SupaRow = { ...payload };
+        delete safePayload[missing[1]];
+        const { data: ins2, error: ins2Err } = await this.sb()
+          .from(table)
+          .insert(safePayload)
+          .select()
+          .single();
+        if (ins2Err) throw ins2Err;
+        return ins2 as T;
+      }
+      throw error;
+    }
     return inserted as T;
   }
 

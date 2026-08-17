@@ -71,10 +71,19 @@ export interface SessionPayload {
 }
 
 function getSecret(): Uint8Array {
-  const s = process.env.SECRET_KEY;
+  // P0-3 / Feature 1 — vault key separation: prefer JWT_SECRET_KEY (a
+  // JWT-only secret decoupled from the vault / field-encryption layer),
+  // falling back to SECRET_KEY for backward compatibility. Deployments
+  // that set ONLY SECRET_KEY keep working bit-for-bit; deployments that
+  // want the separation set JWT_SECRET_KEY (different random value) AND
+  // keep SECRET_KEY for the vault / field-encryption fallbacks. A
+  // JWT-key compromise therefore cannot decrypt the vault, and a vault-
+  // key leak cannot forge session tokens.
+  const s = process.env.JWT_SECRET_KEY || process.env.SECRET_KEY;
   if (!s || s.length < 32) {
     throw new Error(
-      "SECRET_KEY environment variable is required in every environment and must be at least 32 characters. " +
+      "JWT_SECRET_KEY (or SECRET_KEY) environment variable is required in every " +
+      "environment and must be at least 32 characters. " +
       "Generate one with: openssl rand -hex 32"
     );
   }

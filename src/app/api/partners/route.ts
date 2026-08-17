@@ -150,11 +150,18 @@ async function _post(req: NextRequest) {
             if (!hmacErr && hitByHmac) {
               // Surface the plaintext tax_id / vat_number to the admin
               // (hitByHmac[<field>] is encrypted at rest — decrypt for UX).
-              const display = { ...hitByHmac };
-              if (display[field] && typeof display[field] === "string") {
-                display[field] = decryptField(display[field]);
+              // Cast through `unknown` first because the Supabase client's
+              // static type doesn't include the dynamically-computed column
+              // name in `select(\`id, name, ${field}\`)` — the runtime shape
+              // is correct, the type isn't.
+              const hitByHmacRow = hitByHmac as unknown as Record<string, unknown>;
+              const display: Record<string, unknown> = { ...hitByHmacRow };
+              const dv = display[field];
+              if (dv && typeof dv === "string") {
+                display[field] = decryptField(dv);
               }
-              return NextResponse.json({ error: `Partner with ${field} "${v}" already exists (${hitByHmac.name}).`, duplicate: field, existing: display }, { status: 409 });
+              const hitName = hitByHmacRow.name;
+              return NextResponse.json({ error: `Partner with ${field} "${v}" already exists (${hitName}).`, duplicate: field, existing: display }, { status: 409 });
             }
             // Fall back to legacy plaintext equality (pre-migration-042
             // deployment where the HMAC column does not exist).
