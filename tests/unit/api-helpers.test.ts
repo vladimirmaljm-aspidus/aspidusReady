@@ -184,4 +184,30 @@ describe("sanitizeError", () => {
     expect(out).toContain("Failed to upsert deal");
     expect(out).toContain("Duplicate entry");
   });
+
+  // F-FINAL / P0: supabase-js returns plain-object PostgrestError shapes
+  // (NOT `Error` instances) — `{ message, code, details, hint }`. The old
+  // implementation produced `[object Object]` for these. Verify the new
+  // branch reads `.message` correctly and still applies the leak-rewrite
+  // rules.
+  it("handles a plain-object PostgrestError (supabase-js shape)", () => {
+    const fakePostgrestError = {
+      message: 'duplicate key value violates unique constraint "users_email_key"',
+      code: "23505",
+      details: "Key (email)=(a@b.com) already exists.",
+      hint: "",
+    };
+    const out = sanitizeError(fakePostgrestError);
+    expect(out).toBe("Duplicate entry.");
+    expect(out).not.toContain("users_email_key");
+    expect(out).not.toContain("[object Object]");
+  });
+
+  it("handles a plain-object error without a message property", () => {
+    const out = sanitizeError({ code: "23505", details: "no message field" });
+    // Falls back to String(e ?? "") which produces "[object Object]" —
+    // which is ugly but not a leak. The point of this test is to confirm
+    // sanitizeError doesn't crash on the missing-message branch.
+    expect(typeof out).toBe("string");
+  });
 });

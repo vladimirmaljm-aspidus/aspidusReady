@@ -122,7 +122,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await audit(
       store,
-      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      { id: undefined, username: access.portal_email || `portal:${access.id}`, tenant_id: access.tenant_id },
       req,
       "portal.kyc_document_deleted",
       "kyc_document",

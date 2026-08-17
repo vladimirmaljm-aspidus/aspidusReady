@@ -43,8 +43,15 @@ export async function nextDocNumber(docType: DocType): Promise<string | null> {
   if (!isSupabaseConfigured()) return null;
   try {
     const sb = getSupabase();
+    // CRITICAL FIX (F-FINAL / P0): the canonical RPC signature is
+    // `get_next_doc_number(p_doc_type text, p_tenant_id text DEFAULT NULL)`
+    // (migration 011). Calling with `{ doc_type }` produced a PostgREST
+    // PGRST202 "Could not find the function public.get_next_doc_number(doc_type)"
+    // error on every create-offer/invoice/proforma without an explicit
+    // number → 500 with sanitized "Database error." body. Use the canonical
+    // `p_doc_type` arg name so the RPC resolves correctly.
     const { data, error } = await sb.rpc("get_next_doc_number", {
-      doc_type: docType,
+      p_doc_type: docType,
     });
     if (error) {
       console.warn(

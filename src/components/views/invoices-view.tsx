@@ -1406,7 +1406,7 @@ function InvoiceFormDialog({
   const api = useApiUrl();
   const tenantKey = useTenantKey();
 
-  const [form, setForm] = useState<Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string }>({ items: [] });
+  const [form, setForm] = useState<Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string | null }>({ items: [] });
 
   // Ref mirror of `form` so event handlers (handleUnitChange, selectProduct)
   // can read the latest line items without capturing stale state.
@@ -1507,7 +1507,7 @@ function InvoiceFormDialog({
 
     // Auto-fill from partner data immediately
     setForm((f) => {
-      const updates: Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string } = { ...f };
+      const updates: Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string | null } = { ...f };
 
       // Auto-fill currency from partner preference
       if (partner.preferred_currency && !f.currency) {
@@ -1530,7 +1530,7 @@ function InvoiceFormDialog({
     if (ctx?.partner) {
       const p = ctx.partner as Partner;
       setForm((f) => {
-        const updates: Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string } = { ...f };
+        const updates: Partial<Invoice> & { items: OfferLineItem[]; payment_terms?: string | null } = { ...f };
 
         // Fill currency if not already set
         if (p.preferred_currency && f.currency === "EUR") {

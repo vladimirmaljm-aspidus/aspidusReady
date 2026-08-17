@@ -23,6 +23,13 @@ export interface PackingListInput {
   createdAt?: string | null;
   targetPickupDate?: string | null;
   targetDeliveryDate?: string | null;
+  // F-FINAL: optional letterhead / seal image URLs for future per-tenant
+  // branding parity with the offer/invoice/proforma PDF template (which
+  // already supports `logoUrl` and `sealImageUrl`). Currently unused by
+  // callers — renderPackingListPdf accepts them so future code can pass
+  // them through without another interface break.
+  letterheadUrl?: string | null;
+  sealUrl?: string | null;
   origin: {
     company?: string | null;
     address_line?: string | null;
@@ -60,13 +67,19 @@ export interface PackingListInput {
   specialInstructions?: string | null;
 }
 
+// F-FINAL: VELOS brand palette — copper (#B45309) + lighter copper tint
+// for section titles. Replaces the previous hardcoded teal (#0f766e)
+// that didn't match the rest of the brand.
+const COPPER = "#B45309";
+const COPPER_SOFT = "#92400E";
+
 const styles = StyleSheet.create({
   page: { padding: 30, fontSize: 9, fontFamily: "Helvetica", color: "#111" },
-  headerBar: { backgroundColor: "#0f766e", color: "white", padding: 12, marginBottom: 16, borderRadius: 3 },
+  headerBar: { backgroundColor: COPPER, color: "white", padding: 12, marginBottom: 16, borderRadius: 3 },
   h1: { fontSize: 16, fontWeight: 700 },
   small: { fontSize: 9, opacity: 0.85 },
   section: { marginBottom: 10 },
-  sectionTitle: { fontSize: 10, fontWeight: 700, marginBottom: 4, textTransform: "uppercase", color: "#0f766e" },
+  sectionTitle: { fontSize: 10, fontWeight: 700, marginBottom: 4, textTransform: "uppercase", color: COPPER_SOFT },
   twoCol: { flexDirection: "row", gap: 12 },
   col: { flex: 1, border: "1pt solid #d1d5db", borderRadius: 3, padding: 8 },
   label: { fontSize: 8, color: "#6b7280", marginBottom: 1 },

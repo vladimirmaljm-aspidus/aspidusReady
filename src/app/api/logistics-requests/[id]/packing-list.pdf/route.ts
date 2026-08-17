@@ -1,25 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, hasPermission, sanitizeError, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
 import { renderPackingListPdf } from "@/lib/pdf/packing-list";
 
 export const runtime = "nodejs";
 
 // Admin: download the professional packing list PDF for a logistics request.
+// F-FINAL: allow API key auth (Bearer asp_...) in addition to cookie sessions,
+// matching the offer/invoice/proforma PDF routes — unblocks programmatic
+// packing-list archive to external storage.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-  const auth = await requireAuth(_req);
+  const auth = await requireAuthOrApiKey(_req);
   if (auth instanceof NextResponse) return auth;
+  // Permission gate (logistics.read) — cookie session enforces via requirePermission,
+  // API key enforces via hasPermission below.
   { const { requirePermission } = await import("@/lib/permissions/can");
-    const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; }
+    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "logistics.read"); if (_d) return _d; } }
+  // Feature gate (module_logistics)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
-    const _f = await requireFeature(auth.tenantId, "module_logistics", auth.isSuperAdmin); if (_f) return _f; }
+    const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
+    const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    const _f = await requireFeature(_tid, "module_logistics", _isSA); if (_f) return _f; }
+  if ("apiKeyId" in auth && !hasPermission(auth.permissions, "logistics:read")) {
+    return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
+  }
 
   const { id } = await params;
   const sb = getSupabase();
   const { data: lr } = await sb.from("logistics_requests").select("*").eq("id", id).maybeSingle();
   if (!lr) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  if (!auth.isSuperAdmin && (lr as any).tenant_id !== auth.tenantId) {
+  const isSuperAdmin = !("apiKeyId" in auth) && auth.isSuperAdmin;
+  if (!isSuperAdmin && (lr as any).tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   const tenant = await auth.store.getTenant((lr as any).tenant_id);
@@ -33,7 +45,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[logistics-requests.packing-list.pdf]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 

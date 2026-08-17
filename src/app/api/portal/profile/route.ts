@@ -48,7 +48,7 @@ export async function PUT(req: NextRequest) {
   try {
     await audit(
       store,
-      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      { id: undefined, username: access.portal_email || `portal:${access.id}`, tenant_id: access.tenant_id },
       req,
       "portal.profile_update",
       "portal_access",

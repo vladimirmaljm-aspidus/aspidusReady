@@ -121,7 +121,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await audit(
         store,
         {
-          id: `portal:${access.id}`,
+          id: undefined,
           username: access.portal_email || `portal:${access.id}`,
           tenant_id: access.tenant_id,
         },

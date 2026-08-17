@@ -384,23 +384,44 @@ export function resolveTenantId(auth: AuthContext | ApiKeyAuthContext, req: Next
   return auth.tenantId;
 }
 
-export function getIp(req: NextRequest): string {
+export function getIp(req?: NextRequest | Request): string {
+  // F-FINAL / P1: the previous implementation returned the LAST entry of
+  // `X-Forwarded-For`, which worked when the deployment was Render-only
+  // (Render's proxy appended the real client IP at the end of the chain).
+  // The current production deployment has Cloudflare in front of Render
+  // (response headers show `server: cloudflare`, `cf-ray: ...`), so the
+  // LAST XFF entry is now Cloudflare's edge-node IP or Render's internal
+  // container IP — NOT the client. Every audit_logs.ip and rate_limits
+  // bucket ended up keyed on Render-internal IPs (10.x.x.x).
+  //
+  // Resolution order:
+  //   1. `CF-Connecting-IP` — set by Cloudflare to the real client IP.
+  //      Cannot be spoofed by the client (Cloudflare overwrites any
+  //      client-supplied value before reaching origin).
+  //   2. `X-Real-IP` — set by nginx/Caddy in single-proxy deploys.
+  //   3. `X-Forwarded-For` — fall back to the FIRST entry, which is the
+  //      original client (the rest of the chain is intermediate proxies,
+  //      ending with the trusted proxy that last forwarded the request).
+  //      Yes this is attacker-controllable on a non-Cloudflare deploy, but
+  //      we only reach this branch when CF-Connecting-IP and X-Real-IP are
+  //      both absent (i.e. we're NOT behind Cloudflare), so the trusted
+  //      proxy that set XFF is the only writer of the chain.
+  if (!req) return "0.0.0.0";
+  const cfIp = req.headers.get("cf-connecting-ip");
+  if (cfIp) return cfIp.trim();
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
   const xff = req.headers.get("x-forwarded-for");
   if (xff) {
-    // Render's proxy appends the real client IP at the END of the chain.
-    // The first value is attacker-controlled and must NOT be trusted.
-    // CRITICAL FIX (audit S-1/C-1): previously this returned the FIRST entry,
-    // allowing an attacker to spoof `X-Forwarded-For: 1.2.3.4` and bypass
-    // rate-limiting / audit-IP attribution.
-    const parts = xff.split(",").map(s => s.trim()).filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[0];
   }
-  return req.headers.get("x-real-ip") || "127.0.0.1";
+  return "0.0.0.0";
 }
 
 export async function audit(
   store: AuthContext["store"],
-  user: SafeUser | { id: string; username: string; tenant_id?: string | null },
+  user: SafeUser | { id?: string | null; username: string; tenant_id?: string | null },
   req: NextRequest,
   action: string,
   entityType?: string,
@@ -409,7 +430,13 @@ export async function audit(
 ): Promise<void> {
   try {
     await store.appendAudit({
-      user_id: user.id,
+      // F-FINAL / P1: portal routes previously passed `id: "portal:<uuid>"`
+      // here, which failed the audit_logs.user_id FK to users(id). The
+      // signature now accepts `id?: string | null | undefined` — when
+      // the caller is a portal client, pass `id: undefined` (or omit) so
+      // the FK column is set to NULL. The `username` field remains a
+      // free-form string carrying "portal:<email>" for traceability.
+      user_id: user.id ?? null,
       username: user.username,
       tenant_id: user.tenant_id || null,
       action,
@@ -471,7 +498,19 @@ export async function audit(
  * ops can triage. This helper is for the OUTBOUND response only.
  */
 export function sanitizeError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e ?? "");
+  // F-FINAL / P0: supabase-js returns plain-object PostgrestError shapes
+  // (NOT `Error` instances) — `{ message, code, details, hint }` — so the
+  // previous `e instanceof Error ? e.message : String(e ?? "")` branch
+  // produced `[object Object]` for every DB error. Strip the .message
+  // property off plain objects first, then fall back to String coercion.
+  let msg: string;
+  if (e instanceof Error) {
+    msg = e.message;
+  } else if (typeof e === "object" && e !== null && "message" in e) {
+    msg = String((e as { message: unknown }).message ?? "");
+  } else {
+    msg = String(e ?? "");
+  }
   if (!msg) return "Internal server error.";
   return msg
     // ── Schema/table/column leaks ────────────────────────────────────────

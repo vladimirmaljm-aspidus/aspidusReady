@@ -77,7 +77,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Commission agent not found." }, { status: 400 });
       }
     }
-    const created = await auth.store.upsertDeal(body);
+    // F-FINAL / P1: the deals table has 4 NOT NULL columns with no DB-side
+    // defaults (probability, buy_cost, quantity, unit). Without these
+    // defaults, the typical CRM "create deal" payload (title / partner_id /
+    // stage / value / currency) hit HTTP 500 with a sanitized
+    // "Required field missing." message — counterintuitive for a CRM entity
+    // that conceptually doesn't need a buy_cost at creation time. Supply
+    // sane defaults so the typical payload works; callers who care about
+    // cost-tracking can override.
+    const deal = {
+      ...body,
+      probability: body.probability ?? 0,
+      buy_cost: body.buy_cost ?? 0,
+      quantity: body.quantity ?? 1,
+      unit: body.unit ?? "MT",
+    };
+    const created = await auth.store.upsertDeal(deal);
     await audit(auth.store, getAuthUser(auth), req, body.id ? "deal.update" : "deal.create", "deal", created.id, { title: created.title });
     return NextResponse.json(created);
   } catch (error: any) {

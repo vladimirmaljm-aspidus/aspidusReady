@@ -643,14 +643,22 @@ export function buildPdfDocument({
   // Offer carries these typed; invoice/proforma may carry them via the
   // extended DB row (we read defensively via `any`).
   const tradeFields = doc as any;
-  const incoterm: string = tradeFields.incoterm || (items[0] as any)?.incoterm || "EXW";
+  // F-FINAL / P1: default incoterm + payment_terms to "—" (em-dash) instead
+  // of the previous fake defaults "EXW" and "T/T in Advance". A default of
+  // "EXW" made it look like the seller had committed to an ExWorks shipment
+  // when in fact the field was simply empty — that's a legally meaningful
+  // incoterm that imposes specific obligations on the buyer (loading, export
+  // clearance, etc.). Same for "T/T in Advance" — a specific payment
+  // instrument + timing the seller may not have agreed to. The em-dash
+  // makes the missing-field state visually obvious on the rendered PDF.
+  const incoterm: string = tradeFields.incoterm || (items[0] as any)?.incoterm || "—";
   const pol: string = tradeFields.pol || "—";
   const pod: string = tradeFields.pod || "—";
   const vessel: string = tradeFields.vessel || "—";
   const containerNo: string = tradeFields.container_no || "—";
   const leadTime: string = tradeFields.lead_time || "—";
   const packaging: string = tradeFields.packaging || (items[0] as any)?.packaging || "—";
-  const paymentTerms: string = tradeFields.payment_terms || tradeFields.terms || "T/T in Advance";
+  const paymentTerms: string = tradeFields.payment_terms || tradeFields.terms || "—";
   const originCountry: string = (items[0] as any)?.origin_country || "—";
   const bankDetails: string = tradeFields.bank_details || "";
 

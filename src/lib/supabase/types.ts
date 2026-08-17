@@ -492,6 +492,21 @@ export interface Invoice {
   paid_at: string | null;
   notes: string | null;
   items: OfferLineItem[];
+  // ── Trade / shipping fields (F-FINAL / P1) ───────────────────────────
+  // These columns exist on the live `invoices` table (migration 007 +
+  // supabase-schema-full.sql) but were missing from this interface —
+  // every PDF render and offer→invoice automation that read them had
+  // to cast through `any`. Typing them here keeps the trade-calculator
+  // → offer → invoice flow type-safe end to end.
+  pol: string | null;              // port of loading
+  pod: string | null;              // port of discharge
+  vessel: string | null;
+  container_no: string | null;
+  lead_time: number | null;
+  packaging: string | null;
+  payment_terms: string | null;
+  incoterm: string | null;
+  origin_country: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -522,6 +537,20 @@ export interface Proforma {
   paid_at: string | null;
   notes: string | null;
   items: OfferLineItem[];
+  // ── Trade / shipping fields (F-FINAL / P1) ───────────────────────────
+  // Parity with Invoice — same 9 fields, same nullability. The PDF
+  // template reads these off the doc object via `as any` casts; typing
+  // them here lets us drop those casts and catch regressions at compile
+  // time.
+  pol: string | null;              // port of loading
+  pod: string | null;              // port of discharge
+  vessel: string | null;
+  container_no: string | null;
+  lead_time: number | null;
+  packaging: string | null;
+  payment_terms: string | null;
+  incoterm: string | null;
+  origin_country: string | null;
   created_at: string;
   updated_at: string;
 }

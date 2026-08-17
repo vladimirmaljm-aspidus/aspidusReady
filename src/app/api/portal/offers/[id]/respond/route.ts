@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { requireKycApproved } from "@/lib/portal/kyc-gate";
+import { requireGpsVerified } from "@/lib/portal/require-gps";
 import { getStore } from "@/lib/data/store";
 import { audit } from "@/lib/api/helpers";
 import { notify } from "@/lib/notif/helper";
@@ -29,6 +30,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const _kycBlock = await requireKycApproved(access);
     if (_kycBlock) return _kycBlock;
+    // F-FINAL / P1: GPS gate — parity with /api/portal/proformas/[id]/respond
+    // which already calls requireGpsVerified. Without this, a portal client
+    // could accept/reject an offer via direct API call without ever sharing
+    // their GPS location (the client-side portal-shell gate is bypassable
+    // by hitting the API directly with a valid session cookie).
+    const _gpsBlock = await requireGpsVerified(access);
+    if (_gpsBlock) return _gpsBlock;
 
     const { id } = await params;
 
@@ -174,7 +182,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await audit(
         store,
         {
-          id: `portal:${access.id}`,
+          id: undefined,
           username: access.portal_email || `portal:${access.id}`,
           tenant_id: access.tenant_id,
         },

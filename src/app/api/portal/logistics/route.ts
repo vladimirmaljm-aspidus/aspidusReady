@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
   try {
     await audit(
       store,
-      { id: `portal:${access.id}`, username: access.portal_email || "", tenant_id: access.tenant_id },
+      { id: undefined, username: access.portal_email || `portal:${access.id}`, tenant_id: access.tenant_id },
       req,
       "portal.logistics_request_created",
       "logistics_request",

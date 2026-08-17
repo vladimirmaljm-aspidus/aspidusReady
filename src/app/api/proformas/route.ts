@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, resolveTenantId, hasPermission, audit, sanitizeError, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
 
 export const runtime = "nodejs";
@@ -45,7 +45,8 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json(result);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[proformas GET]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }
 
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest) {
         created = await auth.store.createDocWithNumber("proforma", body as Record<string, unknown>) as any;
       } catch (e: any) {
         console.error("[proformas.post] atomic create failed:", e);
-        return NextResponse.json({ error: e.message || "Failed to create proforma." }, { status: 500 });
+        return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
       }
     } else {
       try {
@@ -145,12 +146,13 @@ export async function POST(req: NextRequest) {
         // collision is a genuine conflict that should surface as a 500
         // (not be silently retried with a bumped number).
         console.error("[proformas.post] upsert failed:", e);
-        return NextResponse.json({ error: e.message || "Failed to create proforma." }, { status: 500 });
+        return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
       }
     }
     await audit(auth.store, getAuthUser(auth), req, body.id ? "proforma.update" : "proforma.create", "proforma", created.id, { number: created.number });
     return NextResponse.json(created);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    console.error("[proformas POST]", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

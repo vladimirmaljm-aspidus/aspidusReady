@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       try {
         await audit(
           store,
-          { id: `portal:${existing.id}`, username: email, tenant_id: existing.tenant_id },
+          { id: undefined, username: email, tenant_id: existing.tenant_id },
           req,
           "portal.login_failed",
           "portal_access",
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       try {
         await audit(
           store,
-          { id: existing ? `portal:${existing.id}` : "portal:unknown", username: email, tenant_id: existing?.tenant_id },
+          { id: undefined, username: email, tenant_id: existing?.tenant_id ?? null },
           req,
           "portal.login_failed",
           "portal_access",
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
       try {
         await audit(
           store,
-          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          { id: undefined, username: access.portal_email, tenant_id: access.tenant_id },
           req,
           "portal.login_failed",
           "portal_access",
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       try {
         await audit(
           store,
-          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          { id: undefined, username: access.portal_email, tenant_id: access.tenant_id },
           req,
           "portal.login_failed",
           "portal_access",
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
       try {
         await audit(
           store,
-          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          { id: undefined, username: access.portal_email, tenant_id: access.tenant_id },
           req,
           "portal.login_failed",
           "portal_access",
@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
       try {
         await audit(
           store,
-          { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+          { id: undefined, username: access.portal_email, tenant_id: access.tenant_id },
           req,
           "portal.login_failed",
           "portal_access",
@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
     try {
       await audit(
         store,
-        { id: `portal:${access.id}`, username: access.portal_email, tenant_id: access.tenant_id },
+        { id: undefined, username: access.portal_email, tenant_id: access.tenant_id },
         req,
         "portal.login",
         "portal_access",

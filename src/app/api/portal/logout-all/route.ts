@@ -49,10 +49,13 @@ export async function POST(req: NextRequest) {
     });
 
     // Audit — `portal.logout_all` distinguishes from a single-device logout.
+    // F-FINAL / P1: user_id set to NULL (not `portal:<id>`) so the FK to
+    // users(id) passes. Traceability is preserved via the `username` field
+    // which still carries the portal email (or `portal:<id>` fallback).
     try {
       await store.appendAudit({
         tenant_id: access.tenant_id,
-        user_id: `portal:${access.id}`,
+        user_id: null,
         username: access.portal_email || `portal:${access.id}`,
         action: "portal.logout_all",
         entity_type: "portal_access",

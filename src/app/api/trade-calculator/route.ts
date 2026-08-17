@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId, sanitizeError } from "@/lib/api/helpers";
 import { TradeCostLine } from "@/lib/supabase/types";
 import { TRADE_COST_TYPES } from "@/lib/data/reference";
 import { getExchangeRate } from "@/lib/utils/exchange-rates";
@@ -52,6 +52,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // F-FINAL / P0: wrap the whole handler in try/catch. Previously, a DB
+  // error from `upsertTradeCalculation` (or any helper) bubbled out of
+  // the route handler as an unhandled rejection — Next.js turned that
+  // into a 500 with an EMPTY body (no JSON), so callers got a parse
+  // error and ops got no triage context. Now we log + return a sanitized
+  // JSON body so the client sees `{"error":"..."}` and ops sees the
+  // original stack in the server log.
+  try {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
   // Permission gate (trade-calculator.create)
@@ -257,4 +265,11 @@ export async function POST(req: NextRequest) {
   const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
   await audit(auth.store, auditUser, req, body.id ? "trade_calc.update" : "trade_calc.create", "trade_calculation", created.id, { name: created.name });
   return NextResponse.json(created);
+  } catch (e: any) {
+    console.error("[trade-calculator POST]", e);
+    return NextResponse.json(
+      { error: sanitizeError(e) },
+      { status: 500 },
+    );
+  }
 }

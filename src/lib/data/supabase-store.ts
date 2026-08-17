@@ -587,8 +587,42 @@ export class SupabaseStore implements Store {
     docType: "offer" | "invoice" | "proforma" | "demand" | "rfq",
     payload: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    const { nextDocNumber } = await import("@/lib/api/doc-number");
-    const seqNum = await nextDocNumber(docType);
+    const { nextDocNumber, formatDocNumber } = await import("@/lib/api/doc-number");
+    let seqNum = await nextDocNumber(docType);
+    // F-FINAL / P0: defensive fallback — if the atomic RPC returned null
+    // (Supabase unreachable, migration 011 not applied, or PGRST arg-name
+    // mismatch regression), fall back to the legacy `listX().total + 1`
+    // approach so the INSERT still gets a number and doesn't trip the
+    // NOT NULL constraint on `offers.number` / `invoices.number` /
+    // `proformas.number` / etc. This matches the original defensive
+    // design described in the doc-number.ts header comment and the
+    // createDocWithNumber docstring above.
+    if (!seqNum) {
+      const tid = (payload as any).tenant_id as string | undefined;
+      if (tid) {
+        try {
+          let total = 0;
+          switch (docType) {
+            case "offer":    total = (await this.listOffers(tid)).total; break;
+            case "invoice":  total = (await this.listInvoices(tid)).total; break;
+            case "proforma": total = (await this.listProformas(tid)).total; break;
+            case "demand":   total = (await this.listDemands(tid)).total; break;
+            case "rfq":      total = (await this.listPortalRfqs(tid)).total; break;
+          }
+          const year = new Date().getFullYear();
+          seqNum = formatDocNumber(docType, year, total + 1);
+          console.warn(
+            `[createDocWithNumberLegacy] RPC returned null for '${docType}', ` +
+            `falling back to listX().total + 1 = ${seqNum} (tenant ${tid}).`,
+          );
+        } catch (fallbackErr: any) {
+          console.error(
+            `[createDocWithNumberLegacy] listX fallback failed for '${docType}':`,
+            fallbackErr?.message || fallbackErr,
+          );
+        }
+      }
+    }
     if (seqNum) {
       payload.number = seqNum;
     }
