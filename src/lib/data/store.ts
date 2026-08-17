@@ -21,6 +21,7 @@ import {
   ErpAccount, FiscalPeriod, ErpJournalEntry, ErpJournalLine,
   ErpCostCenter, ErpBankAccount, ErpBankTransaction, ErpSetting,
   TrialBalance, BalanceSheet, ProfitAndLoss, GeneralLedger,
+  FxRevaluationAdjustment, FxRevaluationResult,
   UserPreference,
 } from "@/lib/supabase/types";
 
@@ -431,6 +432,23 @@ export interface Store {
   postErpJournalEntry(id: string, postedBy: string): Promise<ErpJournalEntry>;
   reverseErpJournalEntry(id: string, reversedBy: string): Promise<ErpJournalEntry>;
   deleteErpJournalEntry(id: string): Promise<void>;
+
+  // E-2 (multi-currency ERP) — generate an FX revaluation entry for the
+  // given as-of date. The store method routes to the
+  // `create_fx_revaluation(text, date, text, jsonb, text)` RPC, which
+  // creates a draft revaluation journal entry (is_revaluation = true)
+  // with one balanced line-pair per adjustment. The caller computes the
+  // adjustments (account_id, currency, fx_rate_old, fx_rate_new,
+  // balance_foreign, gain_loss_account_id) externally — typically from
+  // open AR/AP balances and the latest rates fetched via
+  // /api/exchange-rates.
+  createFxRevaluation(
+    tenantId: string,
+    revalDate: string,
+    baseCurrency: string,
+    adjustments: FxRevaluationAdjustment[],
+    createdBy: string,
+  ): Promise<FxRevaluationResult>;
 
   // Cost Centers
   listErpCostCenters(tenantId: string, params?: ListParams): Promise<ListResult<ErpCostCenter>>;

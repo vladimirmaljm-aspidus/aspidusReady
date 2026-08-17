@@ -1620,6 +1620,16 @@ export interface ErpJournalEntry {
   credit_total: number;
   currency: string;
   exchange_rate: number;
+  // E-2 (multi-currency ERP): base currency + FX revaluation metadata.
+  // base_currency is the tenant's reporting currency (e.g. USD); the
+  // per-line currency/fx_rate/debit_base/credit_base columns on
+  // ErpJournalLine express each line in its own currency AND its base
+  // equivalent. is_revaluation + revaluation_of mark entries produced
+  // by the create_fx_revaluation(...) RPC so reports can identify them
+  // and exclude/include them as accounting policy requires.
+  base_currency?: string | null;
+  is_revaluation?: boolean | null;
+  revaluation_of?: string | null; // UUID-as-text of the originating entry
   notes: string | null;
   created_by: string;
   posted_by: string | null;
@@ -1640,12 +1650,46 @@ export interface ErpJournalLine {
   debit: number;
   credit: number;
   currency: string;
+  // E-2 (multi-currency ERP): per-line FX conversion. fx_rate is the
+  // rate used to convert `debit`/`credit` (foreign) into `debit_base`
+  // / `credit_base` (base currency). For lines in the base currency,
+  // fx_rate = 1 and debit_base = debit, credit_base = credit. For
+  // revaluation adjustments that have no meaningful foreign amount,
+  // debit/credit stay 0 and the base amounts carry the adjustment.
+  fx_rate?: number | null;
+  debit_base?: number | null;
+  credit_base?: number | null;
   partner_id: string | null;
   cost_center_id: string | null;
   created_at: string;
   // virtual (joined)
   account?: ErpAccount;
   partner?: Partner;
+}
+
+// E-2 (multi-currency ERP) — input passed to `create_fx_revaluation`.
+// One per open foreign-currency balance (account) whose rate has moved
+// since the original posting.
+export interface FxRevaluationAdjustment {
+  account_id: string;          // erp_accounts.id of the foreign-currency account
+  currency: string;            // ISO 4217 code of the foreign currency
+  fx_rate_old: number;         // rate at the original posting (or last reval)
+  fx_rate_new: number;         // current rate at the reval date
+  balance_foreign: number;    // signed open balance in the foreign currency
+                               //   +debit balance (asset like AR/Bank)
+                               //   -credit balance (liability like AP)
+  gain_loss_account_id: string; // erp_accounts.id of the FX P&L account
+  description?: string;
+}
+
+// E-2 (multi-currency ERP) — return shape of `create_fx_revaluation`.
+// Matches the JSONB returned by the RPC.
+export interface FxRevaluationResult {
+  id: string;                  // new erp_journal_entries.id
+  entry_number: string;        // e.g. REVAL-20250817-0001
+  line_count: number;          // number of lines created (2 × adjustments)
+  total_debit_base: number;    // sum of debit_base across lines (== total_credit_base)
+  total_credit_base: number;
 }
 
 export interface ErpCostCenter {
@@ -1743,6 +1787,14 @@ export interface TrialBalanceItem {
   debit_total: number;
   credit_total: number;
   balance: number;
+  // E-2 (multi-currency ERP): base-currency equivalents. When the journal
+  // has multi-currency lines, `debit_total`/`credit_total`/`balance` reflect
+  // the foreign amounts (kept for backward compat with existing report
+  // consumers) while `debit_total_base`/`credit_total_base`/`balance_base`
+  // reflect the base-currency aggregated amounts that actually balance.
+  debit_total_base?: number;
+  credit_total_base?: number;
+  balance_base?: number;
 }
 
 export interface TrialBalance {
@@ -1750,12 +1802,20 @@ export interface TrialBalance {
   total_debit: number;
   total_credit: number;
   as_of_date: string;
+  // E-2 (multi-currency ERP): base-currency totals. Should always equal
+  // each other (double-entry in the base currency).
+  total_debit_base?: number;
+  total_credit_base?: number;
+  base_currency?: string;
 }
 
 export interface BalanceSheetItem {
   account_code: string;
   account_name: string;
   amount: number;
+  // E-2 (multi-currency ERP): base-currency equivalent. Falls back to
+  // `amount` for entries with no multi-currency lines.
+  amount_base?: number;
   children?: BalanceSheetItem[];
 }
 
@@ -1767,6 +1827,11 @@ export interface BalanceSheet {
   total_liabilities: number;
   total_equity: number;
   as_of_date: string;
+  // E-2 (multi-currency ERP): base-currency totals.
+  total_assets_base?: number;
+  total_liabilities_base?: number;
+  total_equity_base?: number;
+  base_currency?: string;
 }
 
 export interface ProfitAndLoss {
@@ -1777,6 +1842,11 @@ export interface ProfitAndLoss {
   net_profit: number;
   period_start: string;
   period_end: string;
+  // E-2 (multi-currency ERP): base-currency totals.
+  total_revenue_base?: number;
+  total_expenses_base?: number;
+  net_profit_base?: number;
+  base_currency?: string;
 }
 
 export interface GeneralLedgerEntry {
@@ -1789,6 +1859,11 @@ export interface GeneralLedgerEntry {
   balance: number;
   reference_type: string | null;
   reference_id: string | null;
+  // E-2 (multi-currency ERP): base-currency equivalents.
+  debit_base?: number;
+  credit_base?: number;
+  balance_base?: number;
+  currency?: string;
 }
 
 export interface GeneralLedger {
@@ -1800,6 +1875,12 @@ export interface GeneralLedger {
   closing_balance: number;
   total_debit: number;
   total_credit: number;
+  // E-2 (multi-currency ERP): base-currency equivalents.
+  opening_balance_base?: number;
+  closing_balance_base?: number;
+  total_debit_base?: number;
+  total_credit_base?: number;
+  base_currency?: string;
 }
 
 export interface UserPreference {

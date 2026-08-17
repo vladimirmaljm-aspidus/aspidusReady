@@ -33,7 +33,7 @@ import {
   Plus, Search, Pencil, Trash2, Eye, MoreHorizontal, Wallet, TrendingUp, TrendingDown,
   PieChart, BookOpen, ArrowRightLeft, Landmark, FileBarChart, Settings2,
   CheckCircle2, RotateCcw, XCircle, ChevronRight, Download, Building2, Calendar,
-  Hash, RefreshCw,
+  Hash, RefreshCw, Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/common/page-header";
@@ -45,7 +45,7 @@ import type {
   ErpAccount, ErpJournalEntry, ErpJournalLine, ErpBankAccount,
   ErpBankTransaction, ErpSetting, TrialBalance, BalanceSheet,
   ProfitAndLoss, GeneralLedger, TrialBalanceItem, BalanceSheetItem,
-  GeneralLedgerEntry,
+  GeneralLedgerEntry, FxRevaluationAdjustment,
 } from "@/lib/supabase/types";
 import { useApiUrl, useTenantKey } from "@/lib/hooks/use-api-url";
 import { useT } from "@/lib/i18n/store";
@@ -243,6 +243,11 @@ interface JournalLineForm {
   description: string;
   debit: number;
   credit: number;
+  // E-2 (multi-currency ERP): per-line currency + FX rate. Falls back to
+  // the entry-level currency / exchange_rate when undefined (the RPC
+  // does the same server-side).
+  currency: string;
+  fx_rate: number;
 }
 
 interface JournalEntryForm {
@@ -253,6 +258,23 @@ interface JournalEntryForm {
   currency: string;
   notes: string;
   lines: JournalLineForm[];
+}
+
+// E-2 (multi-currency ERP) — form state for the FX Revaluation dialog.
+interface FxRevalForm {
+  reval_date: string;
+  base_currency: string;
+  adjustments: FxRevalAdjForm[];
+}
+
+interface FxRevalAdjForm {
+  account_id: string;
+  currency: string;
+  fx_rate_old: number;
+  fx_rate_new: number;
+  balance_foreign: number;
+  gain_loss_account_id: string;
+  description: string;
 }
 
 interface AccountForm {
@@ -318,7 +340,24 @@ const emptyJournalEntry: JournalEntryForm = {
   reference_id: "",
   currency: "EUR",
   notes: "",
-  lines: [{ account_id: "", description: "", debit: 0, credit: 0 }],
+  lines: [{ account_id: "", description: "", debit: 0, credit: 0, currency: "EUR", fx_rate: 1 }],
+};
+
+// E-2 (multi-currency ERP) — empty form for the FX Revaluation dialog.
+const emptyFxReval: FxRevalForm = {
+  reval_date: new Date().toISOString().split("T")[0],
+  base_currency: "USD",
+  adjustments: [],
+};
+
+const emptyFxRevalAdj: FxRevalAdjForm = {
+  account_id: "",
+  currency: "EUR",
+  fx_rate_old: 1,
+  fx_rate_new: 1,
+  balance_foreign: 0,
+  gain_loss_account_id: "",
+  description: "",
 };
 
 const emptyAccount: AccountForm = {
@@ -970,9 +1009,58 @@ function JournalEntries() {
     onError: () => toast.error(lbl("fin-failed-reverse-entry")),
   });
 
+  // E-2 (multi-currency ERP) — revaluation entry creation. Posts to
+  // /api/erp/journal-entries/revalue which calls the
+  // create_fx_revaluation RPC. The new entry is created in `draft`
+  // status — the user reviews it and posts it via the existing
+  // post mutation.
+  const [showRevalDialog, setShowRevalDialog] = useState(false);
+  const [revalForm, setRevalForm] = useState<FxRevalForm>(emptyFxReval);
+
+  const revalMutation = useMutation({
+    mutationFn: (data: FxRevalForm) =>
+      fetch(api("/api/erp/journal-entries/revalue"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then(async (r) => {
+        const body = await r.json();
+        if (!r.ok) throw new Error(body?.error || "Failed");
+        return body;
+      }),
+    onSuccess: (data: { entry_number?: string; id?: string }) => {
+      toast.success(`${lbl("fin-reval-success")}: ${data?.entry_number ?? ""}`);
+      qc.invalidateQueries({ queryKey: ["erp-journal-entries", tenantKey] });
+      setShowRevalDialog(false);
+      setRevalForm(emptyFxReval);
+    },
+    onError: (e: any) => toast.error(e?.message || lbl("fin-reval-failed")),
+  });
+
+  function addRevalAdj() {
+    setRevalForm({ ...revalForm, adjustments: [...revalForm.adjustments, { ...emptyFxRevalAdj }] });
+  }
+  function removeRevalAdj(index: number) {
+    setRevalForm({ ...revalForm, adjustments: revalForm.adjustments.filter((_, i) => i !== index) });
+  }
+  function updateRevalAdj(index: number, field: keyof FxRevalAdjForm, value: string | number) {
+    const adjustments = [...revalForm.adjustments];
+    adjustments[index] = { ...adjustments[index], [field]: value };
+    setRevalForm({ ...revalForm, adjustments });
+  }
+
   const totalDebit = form.lines.reduce((s, l) => s + (l.debit || 0), 0);
   const totalCredit = form.lines.reduce((s, l) => s + (l.credit || 0), 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+  // E-2 (multi-currency ERP): base-currency totals for the editor's
+  // balance check. The RPC enforces the foreign-currency balance
+  // server-side (debits must equal credits in the line currency), but
+  // base-currency totals are informative — when every line has the
+  // same currency as the base, they should also equal the foreign
+  // totals. When lines span multiple currencies, the base totals are
+  // informational only (an FX gain/loss on settlement is expected).
+  const totalDebitBase = form.lines.reduce((s, l) => s + (l.debit || 0) * (l.fx_rate || 1), 0);
+  const totalCreditBase = form.lines.reduce((s, l) => s + (l.credit || 0) * (l.fx_rate || 1), 0);
 
   function openEdit(entry: ErpJournalEntry) {
     setEditEntry(entry);
@@ -983,12 +1071,18 @@ function JournalEntries() {
       reference_id: entry.reference_id ?? "",
       currency: entry.currency,
       notes: entry.notes ?? "",
+      // E-2 (multi-currency ERP): preserve per-line currency + fx_rate
+      // when editing. Defaults to the entry-level currency and a rate
+      // of 1 when the line didn't have them set (legacy rows from
+      // before migration 038).
       lines: entry.lines?.map((l) => ({
         account_id: l.account_id,
         description: l.description ?? "",
         debit: l.debit,
         credit: l.credit,
-      })) ?? [{ account_id: "", description: "", debit: 0, credit: 0 }],
+        currency: l.currency ?? entry.currency,
+        fx_rate: l.fx_rate ?? entry.exchange_rate ?? 1,
+      })) ?? [{ account_id: "", description: "", debit: 0, credit: 0, currency: entry.currency, fx_rate: 1 }],
     });
     setShowAddDialog(true);
   }
@@ -1000,7 +1094,10 @@ function JournalEntries() {
   }
 
   function addLine() {
-    setForm({ ...form, lines: [...form.lines, { account_id: "", description: "", debit: 0, credit: 0 }] });
+    // E-2 (multi-currency ERP): new line inherits the entry's currency
+    // and a default fx_rate of 1 (which is correct when the line's
+    // currency equals the base currency; the user can edit it).
+    setForm({ ...form, lines: [...form.lines, { account_id: "", description: "", debit: 0, credit: 0, currency: form.currency, fx_rate: 1 }] });
   }
 
   function removeLine(index: number) {
@@ -1040,9 +1137,15 @@ function JournalEntries() {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={openAdd}>
-          <Plus className="size-4 mr-2" />{lbl("add-entry")}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={openAdd}>
+            <Plus className="size-4 mr-2" />{lbl("add-entry")}
+          </Button>
+          {/* E-2 (multi-currency ERP) — open the FX Revaluation dialog. */}
+          <Button variant="outline" onClick={() => { setRevalForm(emptyFxReval); setShowRevalDialog(true); }}>
+            <Repeat className="size-4 mr-2" />{lbl("fin-revalue")}
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -1068,7 +1171,13 @@ function JournalEntries() {
             <TableBody>
               {entries.map((entry) => (
                 <TableRow key={entry.id}>
-                  <TableCell className="font-mono font-medium">{entry.entry_number}</TableCell>
+                  <TableCell className="font-mono font-medium">
+                    {entry.entry_number}
+                    {/* E-2: flag revaluation entries inline so they stand out */}
+                    {entry.is_revaluation && (
+                      <Badge variant="outline" className="ml-2 text-[10px] py-0 px-1.5 align-middle">{lbl("fin-revaluation-badge")}</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>{fmtDate(entry.date)}</TableCell>
                   <TableCell className="max-w-[200px]">{entry.description}</TableCell>
                   <TableCell>
@@ -1081,8 +1190,26 @@ function JournalEntries() {
                       {lbl(STATUS_BADGE[entry.status]?.key ?? "")}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right font-mono">{fmtMoney(entry.debit_total, entry.currency)}</TableCell>
-                  <TableCell className="text-right font-mono">{fmtMoney(entry.credit_total, entry.currency)}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {fmtMoney(entry.debit_total, entry.currency)}
+                    {/* E-2: when an entry has a base_currency different
+                        from its line currency, show the base-currency
+                        total too. For revaluation entries, debit_total
+                        is already in the base currency. */}
+                    {entry.base_currency && entry.base_currency !== entry.currency && (
+                      <div className="text-[10px] text-muted-foreground">
+                        ≈ {fmtMoney(entry.debit_total, entry.base_currency)}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {fmtMoney(entry.credit_total, entry.currency)}
+                    {entry.base_currency && entry.base_currency !== entry.currency && (
+                      <div className="text-[10px] text-muted-foreground">
+                        ≈ {fmtMoney(entry.credit_total, entry.base_currency)}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" onClick={() => setViewEntry(entry)} title={lbl("view")} aria-label={lbl("view")}>
@@ -1181,13 +1308,20 @@ function JournalEntries() {
                     <TableRow>
                       <TableHead>{lbl("account")}</TableHead>
                       <TableHead>{lbl("line-description")}</TableHead>
+                      {/* E-2: per-line currency + FX rate + base amounts */}
+                      <TableHead className="w-24">{lbl("fin-currency")}</TableHead>
+                      <TableHead className="text-right w-24">{lbl("fin-fx-rate")}</TableHead>
                       <TableHead className="text-right w-32">{lbl("debit")}</TableHead>
                       <TableHead className="text-right w-32">{lbl("credit")}</TableHead>
+                      <TableHead className="text-right w-32">{lbl("fin-base-amount")}</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {form.lines.map((line, idx) => (
+                    {form.lines.map((line, idx) => {
+                      const lineDebitBase = (line.debit || 0) * (line.fx_rate || 1);
+                      const lineCreditBase = (line.credit || 0) * (line.fx_rate || 1);
+                      return (
                       <TableRow key={idx}>
                         <TableCell>
                           <Select value={line.account_id} onValueChange={(v) => updateLine(idx, "account_id", v)}>
@@ -1201,10 +1335,35 @@ function JournalEntries() {
                           <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder={lbl("description")} />
                         </TableCell>
                         <TableCell>
+                          <Select value={line.currency} onValueChange={(v) => updateLine(idx, "currency", v)}>
+                            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.0001"
+                            value={line.fx_rate || ""}
+                            onChange={(e) => updateLine(idx, "fx_rate", parseFloat(e.target.value) || 1)}
+                            className="text-right"
+                            placeholder="1.0"
+                          />
+                        </TableCell>
+                        <TableCell>
                           <Input type="number" step="0.01" value={line.debit || ""} onChange={(e) => updateLine(idx, "debit", parseFloat(e.target.value) || 0)} className="text-right" />
                         </TableCell>
                         <TableCell>
                           <Input type="number" step="0.01" value={line.credit || ""} onChange={(e) => updateLine(idx, "credit", parseFloat(e.target.value) || 0)} className="text-right" />
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs text-muted-foreground align-middle">
+                          {/* Show the larger of debit_base / credit_base so
+                              the column is meaningful for both sides. */}
+                          {lineDebitBase > 0 && <div>{fmtMoney(lineDebitBase, form.currency)}</div>}
+                          {lineCreditBase > 0 && <div>{fmtMoney(lineCreditBase, form.currency)}</div>}
+                          {lineDebitBase === 0 && lineCreditBase === 0 && <span className="opacity-40">—</span>}
                         </TableCell>
                         <TableCell>
                           {form.lines.length > 1 && (
@@ -1214,14 +1373,24 @@ function JournalEntries() {
                           )}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
-              {/* Totals */}
+              {/* Totals — foreign + base */}
               <div className="flex justify-end gap-8 pt-2 border-t">
                 <div className="text-sm"><span className="text-muted-foreground">{lbl("debit-total")}:</span> <span className="font-mono font-semibold">{fmtMoney(totalDebit, form.currency)}</span></div>
                 <div className="text-sm"><span className="text-muted-foreground">{lbl("credit-total")}:</span> <span className="font-mono font-semibold">{fmtMoney(totalCredit, form.currency)}</span></div>
+                {/* E-2: base-currency totals — only shown when there's
+                    actual FX activity (otherwise they'd duplicate the
+                    foreign totals and add noise). */}
+                {(totalDebitBase !== totalDebit || totalCreditBase !== totalCredit) && (
+                  <>
+                    <div className="text-sm border-l pl-8"><span className="text-muted-foreground">{lbl("fin-base-amount")} D:</span> <span className="font-mono font-semibold">{fmtMoney(totalDebitBase, form.currency)}</span></div>
+                    <div className="text-sm"><span className="text-muted-foreground">{lbl("fin-base-amount")} C:</span> <span className="font-mono font-semibold">{fmtMoney(totalCreditBase, form.currency)}</span></div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1248,28 +1417,57 @@ function JournalEntries() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div><span className="text-xs text-muted-foreground">{lbl("status")}</span><div><Badge className={STATUS_BADGE[viewEntry.status]?.className ?? ""}>{lbl(STATUS_BADGE[viewEntry.status]?.key ?? "")}</Badge></div></div>
                 <div><span className="text-xs text-muted-foreground">{lbl("currency")}</span><div className="font-mono">{viewEntry.currency}</div></div>
+                {/* E-2: show the base currency if it differs from the line currency */}
+                <div><span className="text-xs text-muted-foreground">{lbl("fin-base-currency")}</span><div className="font-mono">{viewEntry.base_currency ?? viewEntry.currency}</div></div>
                 <div><span className="text-xs text-muted-foreground">{lbl("reference")}</span><div>{viewEntry.reference_type ?? "—"}{viewEntry.reference_id ? `: ${viewEntry.reference_id.slice(0, 8)}...` : ""}</div></div>
                 <div><span className="text-xs text-muted-foreground">{lbl("notes")}</span><div>{viewEntry.notes ?? "—"}</div></div>
               </div>
+              {viewEntry.is_revaluation && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm">
+                  <span className="font-semibold">{lbl("fin-revaluation-badge")}</span>
+                  <span className="ml-2 text-muted-foreground">
+                    {lbl("fin-revalue-entry")} — {viewEntry.description}
+                  </span>
+                </div>
+              )}
               {viewEntry.lines && viewEntry.lines.length > 0 && (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>{lbl("account")}</TableHead>
                       <TableHead>{lbl("line-description")}</TableHead>
+                      {/* E-2: per-line currency + FX rate + base amounts */}
+                      <TableHead className="text-right">{lbl("fin-currency")}</TableHead>
+                      <TableHead className="text-right">{lbl("fin-fx-rate")}</TableHead>
                       <TableHead className="text-right">{lbl("debit")}</TableHead>
                       <TableHead className="text-right">{lbl("credit")}</TableHead>
+                      <TableHead className="text-right">{lbl("fin-base-amount")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {viewEntry.lines.map((line) => {
                       const acct = accounts.find((a) => a.id === line.account_id);
+                      // E-2: derive the line's currency + fx_rate +
+                      // base amounts with sensible fallbacks for
+                      // legacy rows (pre-migration 038).
+                      const lineCurrency = line.currency ?? viewEntry.currency;
+                      const lineFxRate = line.fx_rate ?? 1;
+                      const lineDebitBase = line.debit_base ?? (line.debit ? line.debit * lineFxRate : 0);
+                      const lineCreditBase = line.credit_base ?? (line.credit ? line.credit * lineFxRate : 0);
+                      const baseCur = viewEntry.base_currency ?? viewEntry.currency;
                       return (
                         <TableRow key={line.id}>
                           <TableCell className="font-mono">{acct ? `${acct.code} — ${acct.name}` : line.account_id}</TableCell>
                           <TableCell>{line.description ?? "—"}</TableCell>
-                          <TableCell className="text-right font-mono">{line.debit ? fmtMoney(line.debit, viewEntry.currency) : ""}</TableCell>
-                          <TableCell className="text-right font-mono">{line.credit ? fmtMoney(line.credit, viewEntry.currency) : ""}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{lineCurrency}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{lineFxRate}</TableCell>
+                          <TableCell className="text-right font-mono">{line.debit ? fmtMoney(line.debit, lineCurrency) : ""}</TableCell>
+                          <TableCell className="text-right font-mono">{line.credit ? fmtMoney(line.credit, lineCurrency) : ""}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {lineDebitBase > 0 && <div>{fmtMoney(lineDebitBase, baseCur)}</div>}
+                            {lineCreditBase > 0 && <div>{fmtMoney(lineCreditBase, baseCur)}</div>}
+                            {lineDebitBase === 0 && lineCreditBase === 0 && <span className="opacity-40">—</span>}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -1279,11 +1477,144 @@ function JournalEntries() {
               <div className="flex justify-end gap-8 pt-2 border-t">
                 <div className="text-sm"><span className="text-muted-foreground">{lbl("debit-total")}:</span> <span className="font-mono font-semibold">{fmtMoney(viewEntry.debit_total, viewEntry.currency)}</span></div>
                 <div className="text-sm"><span className="text-muted-foreground">{lbl("credit-total")}:</span> <span className="font-mono font-semibold">{fmtMoney(viewEntry.credit_total, viewEntry.currency)}</span></div>
+                {/* E-2: show the base-currency totals too when they differ */}
+                {viewEntry.base_currency && viewEntry.base_currency !== viewEntry.currency && (
+                  <>
+                    <div className="text-sm border-l pl-8"><span className="text-muted-foreground">{lbl("fin-base-amount")} D:</span> <span className="font-mono font-semibold">{fmtMoney(viewEntry.debit_total, viewEntry.base_currency)}</span></div>
+                    <div className="text-sm"><span className="text-muted-foreground">{lbl("fin-base-amount")} C:</span> <span className="font-mono font-semibold">{fmtMoney(viewEntry.credit_total, viewEntry.base_currency)}</span></div>
+                  </>
+                )}
               </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewEntry(null)}>{lbl("close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* E-2 (multi-currency ERP) — FX Revaluation dialog */}
+      <Dialog open={showRevalDialog} onOpenChange={setShowRevalDialog}>
+        <DialogContent size="full">
+          <DialogHeader>
+            <DialogTitle>{lbl("fin-revalue-entry")}</DialogTitle>
+            <DialogDescription>{lbl("fin-revalue-desc")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>{lbl("fin-reval-date")}</Label>
+                <Input type="date" value={revalForm.reval_date} onChange={(e) => setRevalForm({ ...revalForm, reval_date: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>{lbl("fin-base-currency")}</Label>
+                <Select value={revalForm.base_currency} onValueChange={(v) => setRevalForm({ ...revalForm, base_currency: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">{lbl("fin-reval-adjustments")}</h3>
+                <Button variant="outline" size="sm" onClick={addRevalAdj}>
+                  <Plus className="size-4 mr-1" />{lbl("add-line")}
+                </Button>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{lbl("account")}</TableHead>
+                      <TableHead className="w-24">{lbl("fin-currency")}</TableHead>
+                      <TableHead className="text-right w-28">Old Rate</TableHead>
+                      <TableHead className="text-right w-28">New Rate</TableHead>
+                      <TableHead className="text-right w-32">Balance</TableHead>
+                      <TableHead>{lbl("fin-gain-loss")} Acct</TableHead>
+                      <TableHead className="text-right w-32">{lbl("fin-gain-loss")}</TableHead>
+                      <TableHead className="w-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {revalForm.adjustments.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-4 text-sm">
+                          No adjustments — submit to create an empty revaluation entry header only.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {revalForm.adjustments.map((adj, idx) => {
+                      const baseOld = (adj.balance_foreign || 0) * (adj.fx_rate_old || 1);
+                      const baseNew = (adj.balance_foreign || 0) * (adj.fx_rate_new || 1);
+                      const delta = baseNew - baseOld;
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell>
+                            <Select value={adj.account_id} onValueChange={(v) => updateRevalAdj(idx, "account_id", v)}>
+                              <SelectTrigger className="w-56"><SelectValue placeholder={lbl("select-account")} /></SelectTrigger>
+                              <SelectContent>
+                                {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select value={adj.currency} onValueChange={(v) => updateRevalAdj(idx, "currency", v)}>
+                              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" step="0.0001" value={adj.fx_rate_old || ""} onChange={(e) => updateRevalAdj(idx, "fx_rate_old", parseFloat(e.target.value) || 0)} className="text-right" />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" step="0.0001" value={adj.fx_rate_new || ""} onChange={(e) => updateRevalAdj(idx, "fx_rate_new", parseFloat(e.target.value) || 0)} className="text-right" />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" step="0.01" value={adj.balance_foreign || ""} onChange={(e) => updateRevalAdj(idx, "balance_foreign", parseFloat(e.target.value) || 0)} className="text-right" />
+                          </TableCell>
+                          <TableCell>
+                            <Select value={adj.gain_loss_account_id} onValueChange={(v) => updateRevalAdj(idx, "gain_loss_account_id", v)}>
+                              <SelectTrigger className="w-56"><SelectValue placeholder={lbl("select-account")} /></SelectTrigger>
+                              <SelectContent>
+                                {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {delta !== 0 && (
+                              <span className={delta > 0 ? "text-emerald-600" : "text-red-600"}>
+                                {delta > 0 ? "+" : ""}{fmtMoney(Math.abs(delta), revalForm.base_currency)}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" onClick={() => removeRevalAdj(idx)} title={lbl("remove")} aria-label={lbl("remove")}>
+                              <XCircle className="size-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Each adjustment generates two balanced journal lines: one debiting/crediting the foreign-currency
+                account, and one crediting/debiting the FX gain/loss account. The entry is saved as <code>draft</code> —
+                review and post it via the entries list once you're satisfied.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRevalDialog(false)}>{lbl("cancel")}</Button>
+            <Button onClick={() => revalMutation.mutate(revalForm)} disabled={revalMutation.isPending || !revalForm.reval_date}>
+              {revalMutation.isPending ? lbl("fin-saving") : lbl("fin-revalue")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1371,11 +1702,18 @@ function GeneralLedger() {
             <CardTitle className="text-lg">
               {ledger.account_code} — {ledger.account_name}
             </CardTitle>
-            <div className="flex gap-6 text-sm text-muted-foreground">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
               <span>{lbl("fin-opening-label")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.opening_balance, "EUR")}</span></span>
               <span>{lbl("fin-closing-label")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.closing_balance, "EUR")}</span></span>
               <span>{lbl("fin-total-debit-inline")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.total_debit, "EUR")}</span></span>
               <span>{lbl("fin-total-credit-inline")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.total_credit, "EUR")}</span></span>
+              {/* E-2: show base-currency balances too when the account
+                  has any multi-currency activity. */}
+              {ledger.base_currency && (
+                <span className="border-l pl-6">
+                  {lbl("fin-base-amount")}: <span className="font-mono font-semibold text-foreground">{fmtMoney(ledger.opening_balance_base ?? ledger.opening_balance, ledger.base_currency)} → {fmtMoney(ledger.closing_balance_base ?? ledger.closing_balance, ledger.base_currency)}</span>
+                </span>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -1386,8 +1724,13 @@ function GeneralLedger() {
                     <TableHead>{lbl("entry-number")}</TableHead>
                     <TableHead>{lbl("date")}</TableHead>
                     <TableHead>{lbl("description")}</TableHead>
+                    {/* E-2: line currency column for multi-currency GL */}
+                    <TableHead className="text-right">{lbl("fin-currency")}</TableHead>
                     <TableHead className="text-right">{lbl("debit")}</TableHead>
                     <TableHead className="text-right">{lbl("credit")}</TableHead>
+                    {/* E-2: base-currency equivalents */}
+                    <TableHead className="text-right">{lbl("fin-base-amount")} D</TableHead>
+                    <TableHead className="text-right">{lbl("fin-base-amount")} C</TableHead>
                     <TableHead className="text-right">{lbl("running-balance")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1397,8 +1740,11 @@ function GeneralLedger() {
                       <TableCell className="font-mono">{entry.entry_number}</TableCell>
                       <TableCell>{fmtDate(entry.date)}</TableCell>
                       <TableCell>{entry.description}</TableCell>
-                      <TableCell className="text-right font-mono">{entry.debit ? fmtMoney(entry.debit, "EUR") : ""}</TableCell>
-                      <TableCell className="text-right font-mono">{entry.credit ? fmtMoney(entry.credit, "EUR") : ""}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground">{entry.currency ?? "EUR"}</TableCell>
+                      <TableCell className="text-right font-mono">{entry.debit ? fmtMoney(entry.debit, entry.currency ?? "EUR") : ""}</TableCell>
+                      <TableCell className="text-right font-mono">{entry.credit ? fmtMoney(entry.credit, entry.currency ?? "EUR") : ""}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground">{entry.debit_base ? fmtMoney(entry.debit_base, ledger.base_currency ?? "EUR") : ""}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground">{entry.credit_base ? fmtMoney(entry.credit_base, ledger.base_currency ?? "EUR") : ""}</TableCell>
                       <TableCell className="text-right font-mono font-semibold">{fmtMoney(entry.balance, "EUR")}</TableCell>
                     </TableRow>
                   ))}
@@ -1833,11 +2179,16 @@ function ErpReports() {
                         <TableHead>{lbl("type")}</TableHead>
                         <TableHead className="text-right">{lbl("debit")}</TableHead>
                         <TableHead className="text-right">{lbl("credit")}</TableHead>
+                        {/* E-2: base-currency columns */}
+                        <TableHead className="text-right">{lbl("fin-base-amount")} D</TableHead>
+                        <TableHead className="text-right">{lbl("fin-base-amount")} C</TableHead>
                         <TableHead className="text-right">{lbl("balance")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {trialBalance.items.map((item: TrialBalanceItem) => (
+                      {trialBalance.items.map((item: TrialBalanceItem) => {
+                        const baseCur = trialBalance.base_currency ?? "EUR";
+                        return (
                         <TableRow key={item.account_id}>
                           <TableCell className="font-mono">{item.account_code}</TableCell>
                           <TableCell>{item.account_name}</TableCell>
@@ -1846,14 +2197,19 @@ function ErpReports() {
                           </TableCell>
                           <TableCell className="text-right font-mono">{item.debit_total ? fmtMoney(item.debit_total, "EUR") : ""}</TableCell>
                           <TableCell className="text-right font-mono">{item.credit_total ? fmtMoney(item.credit_total, "EUR") : ""}</TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">{item.debit_total_base ? fmtMoney(item.debit_total_base, baseCur) : ""}</TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">{item.credit_total_base ? fmtMoney(item.credit_total_base, baseCur) : ""}</TableCell>
                           <TableCell className="text-right font-mono font-semibold">{fmtMoney(item.balance, "EUR")}</TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                       {/* Totals */}
                       <TableRow className="font-bold border-t-2">
                         <TableCell colSpan={3}>{lbl("fin-total-col")}</TableCell>
                         <TableCell className="text-right font-mono">{fmtMoney(trialBalance.total_debit, "EUR")}</TableCell>
                         <TableCell className="text-right font-mono">{fmtMoney(trialBalance.total_credit, "EUR")}</TableCell>
+                        <TableCell className="text-right font-mono">{trialBalance.total_debit_base ? fmtMoney(trialBalance.total_debit_base, trialBalance.base_currency ?? "EUR") : ""}</TableCell>
+                        <TableCell className="text-right font-mono">{trialBalance.total_credit_base ? fmtMoney(trialBalance.total_credit_base, trialBalance.base_currency ?? "EUR") : ""}</TableCell>
                         <TableCell></TableCell>
                       </TableRow>
                     </TableBody>
@@ -1890,19 +2246,19 @@ function ErpReports() {
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-sky-700 dark:text-sky-400">{lbl("assets")}</h3>
                     <BalanceSheetTable items={balanceSheet.assets} />
-                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-assets-inline")}: {fmtMoney(balanceSheet.total_assets, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-assets-inline")}: {fmtMoney(balanceSheet.total_assets, "EUR")}{balanceSheet.total_assets_base ? <span className="ml-2 text-xs font-normal text-muted-foreground">≈ {fmtMoney(balanceSheet.total_assets_base, balanceSheet.base_currency ?? "EUR")}</span> : null}</div>
                   </div>
                   {/* Liabilities */}
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-red-700 dark:text-red-400">{lbl("liabilities")}</h3>
                     <BalanceSheetTable items={balanceSheet.liabilities} />
-                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-liabilities-inline")}: {fmtMoney(balanceSheet.total_liabilities, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-liabilities-inline")}: {fmtMoney(balanceSheet.total_liabilities, "EUR")}{balanceSheet.total_liabilities_base ? <span className="ml-2 text-xs font-normal text-muted-foreground">≈ {fmtMoney(balanceSheet.total_liabilities_base, balanceSheet.base_currency ?? "EUR")}</span> : null}</div>
                   </div>
                   {/* Equity */}
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-purple-700 dark:text-purple-400">{lbl("equity")}</h3>
                     <BalanceSheetTable items={balanceSheet.equity} />
-                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-equity-inline")}: {fmtMoney(balanceSheet.total_equity, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-equity-inline")}: {fmtMoney(balanceSheet.total_equity, "EUR")}{balanceSheet.total_equity_base ? <span className="ml-2 text-xs font-normal text-muted-foreground">≈ {fmtMoney(balanceSheet.total_equity_base, balanceSheet.base_currency ?? "EUR")}</span> : null}</div>
                   </div>
                 </div>
               )}
@@ -1938,18 +2294,21 @@ function ErpReports() {
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-emerald-700 dark:text-emerald-400">{lbl("revenue")}</h3>
                     <BalanceSheetTable items={profitAndLoss.revenue} />
-                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-revenue-inline")}: {fmtMoney(profitAndLoss.total_revenue, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-revenue-inline")}: {fmtMoney(profitAndLoss.total_revenue, "EUR")}{profitAndLoss.total_revenue_base ? <span className="ml-2 text-xs font-normal text-muted-foreground">≈ {fmtMoney(profitAndLoss.total_revenue_base, profitAndLoss.base_currency ?? "EUR")}</span> : null}</div>
                   </div>
                   {/* Expenses */}
                   <div>
                     <h3 className="text-base font-semibold mb-2 text-amber-700 dark:text-amber-400">{lbl("expenses")}</h3>
                     <BalanceSheetTable items={profitAndLoss.expenses} />
-                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-expenses-inline")}: {fmtMoney(profitAndLoss.total_expenses, "EUR")}</div>
+                    <div className="text-right mt-2 font-bold text-sm">{lbl("fin-total-expenses-inline")}: {fmtMoney(profitAndLoss.total_expenses, "EUR")}{profitAndLoss.total_expenses_base ? <span className="ml-2 text-xs font-normal text-muted-foreground">≈ {fmtMoney(profitAndLoss.total_expenses_base, profitAndLoss.base_currency ?? "EUR")}</span> : null}</div>
                   </div>
                   {/* Net Profit */}
                   <div className="border-t-2 pt-4">
                     <div className="text-right text-xl font-bold">
                       {lbl("net-profit-loss")}: {fmtMoney(profitAndLoss.net_profit, "EUR")}
+                      {profitAndLoss.net_profit_base !== undefined && profitAndLoss.net_profit_base !== profitAndLoss.net_profit && (
+                        <span className="ml-2 text-sm font-normal text-muted-foreground">≈ {fmtMoney(profitAndLoss.net_profit_base, profitAndLoss.base_currency ?? "EUR")}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1977,6 +2336,8 @@ function BalanceSheetTable({ items }: { items: BalanceSheetItem[] }) {
             <TableHead>{t("fin-code")}</TableHead>
             <TableHead>{t("name")}</TableHead>
             <TableHead className="text-right">{t("amount")}</TableHead>
+            {/* E-2: base-currency equivalent */}
+            <TableHead className="text-right">{t("fin-base-amount")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -1985,6 +2346,9 @@ function BalanceSheetTable({ items }: { items: BalanceSheetItem[] }) {
               <TableCell className="font-mono">{item.account_code}</TableCell>
               <TableCell>{item.account_name}</TableCell>
               <TableCell className="text-right font-mono">{fmtMoney(item.amount, "EUR")}</TableCell>
+              <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                {item.amount_base ? fmtMoney(item.amount_base, "EUR") : ""}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -27,6 +27,7 @@ import {
   ErpAccount, FiscalPeriod, ErpJournalEntry, ErpJournalLine,
   ErpCostCenter, ErpBankAccount, ErpBankTransaction, ErpSetting,
   TrialBalance, TrialBalanceItem, BalanceSheetItem, BalanceSheet, ProfitAndLoss, GeneralLedger, GeneralLedgerEntry,
+  FxRevaluationAdjustment, FxRevaluationResult,
   UserPreference,
 } from "@/lib/supabase/types";
 import { verifyPassword } from "@/lib/auth/password";
@@ -2812,26 +2813,38 @@ export class SupabaseStore implements Store {
       credit_total: entryFields.credit_total ?? 0,
       currency: entryFields.currency,
       exchange_rate: entryFields.exchange_rate,
+      // E-2 (multi-currency ERP): pass the new multi-currency + revaluation
+      // fields through to the RPC. Each is optional — the RPC COALESCEs
+      // to a sane default when absent, so existing callers that don't
+      // send them keep working unchanged.
+      base_currency: entryFields.base_currency,
+      is_revaluation: entryFields.is_revaluation,
+      revaluation_of: entryFields.revaluation_of,
       notes: entryFields.notes,
       created_by: entryFields.created_by,
       posted_by: entryFields.posted_by,
       posted_at: entryFields.posted_at,
     };
 
-    // The RPC's INSERT INTO erp_journal_lines only persists id, journal_entry_id,
-    // tenant_id, account_id, description, debit, credit, line_number — partner_id,
-    // cost_center_id, and currency on each line are NOT preserved by the RPC.
-    // (Documented in supabase/migrations/002_add_rpc_functions.sql lines 126-141
-    // and in 031_erp_rpc_adoption.sql.) Acceptable trade-off for atomicity —
-    // the existing JS path's spread (`...rest`) preserved them, but none of the
-    // active call sites (erp/journal-entries/route.ts POST/PUT) actually send
-    // per-line partner_id/cost_center_id.
+    // E-2 (multi-currency ERP): the RPC now persists currency, fx_rate,
+    // debit_base, and credit_base per line. We forward whatever the
+    // caller provided. For lines that omit currency/fx_rate, the RPC
+    // falls back to the entry-level currency / exchange_rate (and a
+    // default of 1.0 when neither is set), then derives
+    // debit_base = debit * fx_rate and credit_base = credit * fx_rate.
+    // For one-sided revaluation adjustments, the caller passes
+    // debit_base/credit_base explicitly with debit=credit=0; the RPC
+    // respects the explicit values via COALESCE(NULLIF(..., '')).
     const p_lines = lines.map((l, idx) => ({
       line_number: l.line_number ?? (idx + 1),
       account_id: l.account_id,
       description: l.description,
       debit: l.debit || 0,
       credit: l.credit || 0,
+      currency: l.currency,
+      fx_rate: l.fx_rate,
+      debit_base: l.debit_base,
+      credit_base: l.credit_base,
     }));
 
     const { data, error } = await this.sb().rpc("upsert_journal_entry", {
@@ -2993,6 +3006,35 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
 
+  // E-2 (multi-currency ERP) — generate an FX revaluation journal entry.
+  // Routes to the `create_fx_revaluation(text, date, text, jsonb, text)`
+  // RPC (migration 038). The function creates a draft revaluation entry
+  // (is_revaluation = true) with one balanced line-pair per adjustment.
+  // Returns the RPC's JSONB result as a typed `FxRevaluationResult`.
+  async createFxRevaluation(
+    tenantId: string,
+    revalDate: string,
+    baseCurrency: string,
+    adjustments: FxRevaluationAdjustment[],
+    createdBy: string,
+  ): Promise<FxRevaluationResult> {
+    if (!tenantId) throw new Error("createFxRevaluation: tenant_id is required");
+    if (!createdBy) throw new Error("createFxRevaluation: created_by is required");
+    const { data, error } = await this.sb().rpc("create_fx_revaluation", {
+      p_tenant_id: tenantId,
+      p_reval_date: revalDate,
+      p_base_currency: baseCurrency,
+      p_adjustments: adjustments as unknown as SupaRow,
+      p_created_by: createdBy,
+    });
+    if (error) throw error;
+    const result = data as FxRevaluationResult | null;
+    if (!result || !result.id) {
+      throw new Error("create_fx_revaluation RPC returned no entry id");
+    }
+    return result;
+  }
+
   // ─── Cost Centers ────────────────────────────────────────────────────────
   async listErpCostCenters(tenantId: string, params?: ListParams): Promise<ListResult<ErpCostCenter>> {
     let q = this.sb().from("erp_cost_centers").select("*", { count: "exact" }).eq("tenant_id", tenantId);
@@ -3149,6 +3191,31 @@ export class SupabaseStore implements Store {
   }
 
   // ─── ERP Reports ────────────────────────────────────────────────────────
+  // E-2 (multi-currency ERP) helper: returns the base-currency amount for
+  // a journal line. The line's `debit_base`/`credit_base` columns are
+  // populated by the `upsert_journal_entry` RPC for all new lines. For
+  // rows created before migration 038, the columns default to 0 — in
+  // that case we fall back to the foreign-currency `debit`/`credit`
+  // (which is the legacy single-currency behaviour: fx_rate is 1).
+  private effectiveBase(line: { debit_base?: number | null; credit_base?: number | null; debit?: number | null; credit?: number | null }): { debit_base: number; credit_base: number } {
+    const db = Number(line.debit_base);
+    const cb = Number(line.credit_base);
+    return {
+      debit_base: Number.isFinite(db) && db !== 0 ? db : Number(line.debit) || 0,
+      credit_base: Number.isFinite(cb) && cb !== 0 ? cb : Number(line.credit) || 0,
+    };
+  }
+
+  // E-2 (multi-currency ERP) helper: returns the tenant's base currency
+  // for a report header. Resolved from erp_settings.default_currency
+  // (the existing per-tenant setting) with a 'USD' fallback. The
+  // journal entries themselves carry an entry-level `base_currency`
+  // column too, but erp_settings is the canonical tenant-wide value.
+  private async getTenantBaseCurrency(tenantId: string): Promise<string> {
+    const settings = await this.getErpSettings(tenantId);
+    return settings?.default_currency || "USD";
+  }
+
   async getTrialBalance(tenantId: string, asOfDate: string): Promise<TrialBalance> {
     // Fetch all posted journal entries up to asOfDate.
     // CRITICAL FIX (audit P1-10): include both "posted" and "reversed" entries.
@@ -3163,11 +3230,14 @@ export class SupabaseStore implements Store {
       .lte("date", asOfDate);
     if (entriesError) throw entriesError;
     const entryIds = ((entries || []) as { id: string }[]).map(e => e.id);
-    if (entryIds.length === 0) return { items: [], total_debit: 0, total_credit: 0, as_of_date: asOfDate };
-    // Fetch all lines for those entries
+    if (entryIds.length === 0) return { items: [], total_debit: 0, total_credit: 0, as_of_date: asOfDate, total_debit_base: 0, total_credit_base: 0, base_currency: await this.getTenantBaseCurrency(tenantId) };
+    // Fetch all lines for those entries — include the new base-currency
+    // columns added by migration 038 so the report can show both the
+    // foreign-currency amounts (debit/credit) and the base-currency
+    // equivalents (debit_base/credit_base).
     const { data: lines, error: linesError } = await this.sb()
       .from("erp_journal_lines")
-      .select("account_id, debit, credit")
+      .select("account_id, debit, credit, debit_base, credit_base, currency, fx_rate")
       .in("journal_entry_id", entryIds);
     if (linesError) throw linesError;
     // Fetch accounts for this tenant
@@ -3181,21 +3251,27 @@ export class SupabaseStore implements Store {
     for (const a of (accounts || []) as { id: string; code: string; name: string; account_type: string }[]) {
       accountMap.set(a.id, a);
     }
-    // Aggregate by account
-    const accTotals = new Map<string, { debit: number; credit: number }>();
-    for (const l of (lines || []) as { account_id: string; debit: number; credit: number }[]) {
-      const cur = accTotals.get(l.account_id) || { debit: 0, credit: 0 };
+    // Aggregate by account — both foreign and base amounts
+    const accTotals = new Map<string, { debit: number; credit: number; debit_base: number; credit_base: number }>();
+    for (const l of (lines || []) as { account_id: string; debit: number; credit: number; debit_base?: number | null; credit_base?: number | null }[]) {
+      const cur = accTotals.get(l.account_id) || { debit: 0, credit: 0, debit_base: 0, credit_base: 0 };
+      const eb = this.effectiveBase(l);
       cur.debit += l.debit || 0;
       cur.credit += l.credit || 0;
+      cur.debit_base += eb.debit_base;
+      cur.credit_base += eb.credit_base;
       accTotals.set(l.account_id, cur);
     }
     const items: TrialBalanceItem[] = [];
     let totalDebit = 0;
     let totalCredit = 0;
+    let totalDebitBase = 0;
+    let totalCreditBase = 0;
     for (const [accountId, totals] of accTotals) {
       const acc = accountMap.get(accountId);
       if (!acc) continue;
       const balance = totals.debit - totals.credit;
+      const balanceBase = totals.debit_base - totals.credit_base;
       items.push({
         account_id: accountId,
         account_code: acc.code,
@@ -3204,12 +3280,25 @@ export class SupabaseStore implements Store {
         debit_total: totals.debit,
         credit_total: totals.credit,
         balance,
+        debit_total_base: totals.debit_base,
+        credit_total_base: totals.credit_base,
+        balance_base: balanceBase,
       });
       totalDebit += totals.debit;
       totalCredit += totals.credit;
+      totalDebitBase += totals.debit_base;
+      totalCreditBase += totals.credit_base;
     }
     items.sort((a, b) => a.account_code.localeCompare(b.account_code));
-    return { items, total_debit: totalDebit, total_credit: totalCredit, as_of_date: asOfDate };
+    return {
+      items,
+      total_debit: totalDebit,
+      total_credit: totalCredit,
+      as_of_date: asOfDate,
+      total_debit_base: totalDebitBase,
+      total_credit_base: totalCreditBase,
+      base_currency: await this.getTenantBaseCurrency(tenantId),
+    };
   }
 
   async getBalanceSheet(tenantId: string, asOfDate: string): Promise<BalanceSheet> {
@@ -3221,12 +3310,22 @@ export class SupabaseStore implements Store {
     let totalAssets = 0;
     let totalLiabilities = 0;
     let totalEquity = 0;
+    let totalAssetsBase = 0;
+    let totalLiabilitiesBase = 0;
+    let totalEquityBase = 0;
     for (const item of tb.items) {
-      const bsItem: BalanceSheetItem = { account_code: item.account_code, account_name: item.account_name, amount: Math.abs(item.balance) };
+      const balanceBase = item.balance_base ?? item.balance;
+      const bsItem: BalanceSheetItem = {
+        account_code: item.account_code,
+        account_name: item.account_name,
+        amount: Math.abs(item.balance),
+        amount_base: Math.abs(balanceBase),
+      };
       switch (item.account_type) {
         case "asset":
           assets.push(bsItem);
           totalAssets += item.balance; // assets: normal DEBIT balance (positive)
+          totalAssetsBase += balanceBase;
           break;
         case "liability":
           liabilities.push(bsItem);
@@ -3235,16 +3334,28 @@ export class SupabaseStore implements Store {
           // therefore negative for them. Use Math.abs() so the balance
           // sheet actually balances: assets = liabilities + equity.
           totalLiabilities += Math.abs(item.balance);
+          totalLiabilitiesBase += Math.abs(balanceBase);
           break;
         case "equity":
           equity.push(bsItem);
           totalEquity += Math.abs(item.balance); // same credit-balance fix
+          totalEquityBase += Math.abs(balanceBase);
           break;
         default:
           break;
       }
     }
-    return { assets, liabilities, equity, total_assets: totalAssets, total_liabilities: totalLiabilities, total_equity: totalEquity, as_of_date: asOfDate };
+    return {
+      assets, liabilities, equity,
+      total_assets: totalAssets,
+      total_liabilities: totalLiabilities,
+      total_equity: totalEquity,
+      as_of_date: asOfDate,
+      total_assets_base: totalAssetsBase,
+      total_liabilities_base: totalLiabilitiesBase,
+      total_equity_base: totalEquityBase,
+      base_currency: tb.base_currency,
+    };
   }
 
   async getProfitAndLoss(tenantId: string, periodStart: string, periodEnd: string): Promise<ProfitAndLoss> {
@@ -3261,11 +3372,11 @@ export class SupabaseStore implements Store {
       .lte("date", periodEnd);
     if (entriesError) throw entriesError;
     const entryIds = ((entries || []) as { id: string }[]).map(e => e.id);
-    if (entryIds.length === 0) return { revenue: [], expenses: [], total_revenue: 0, total_expenses: 0, net_profit: 0, period_start: periodStart, period_end: periodEnd };
-    // Fetch lines
+    if (entryIds.length === 0) return { revenue: [], expenses: [], total_revenue: 0, total_expenses: 0, net_profit: 0, period_start: periodStart, period_end: periodEnd, total_revenue_base: 0, total_expenses_base: 0, net_profit_base: 0, base_currency: await this.getTenantBaseCurrency(tenantId) };
+    // Fetch lines — include base-currency columns
     const { data: lines, error: linesError } = await this.sb()
       .from("erp_journal_lines")
-      .select("account_id, debit, credit")
+      .select("account_id, debit, credit, debit_base, credit_base, currency, fx_rate")
       .in("journal_entry_id", entryIds);
     if (linesError) throw linesError;
     // Fetch revenue and expense accounts
@@ -3280,31 +3391,56 @@ export class SupabaseStore implements Store {
     for (const a of (accounts || []) as { id: string; code: string; name: string; account_type: string }[]) {
       accountMap.set(a.id, a);
     }
-    // Aggregate
-    const accTotals = new Map<string, { debit: number; credit: number }>();
-    for (const l of (lines || []) as { account_id: string; debit: number; credit: number }[]) {
-      const cur = accTotals.get(l.account_id) || { debit: 0, credit: 0 };
+    // Aggregate — both foreign and base amounts
+    const accTotals = new Map<string, { debit: number; credit: number; debit_base: number; credit_base: number }>();
+    for (const l of (lines || []) as { account_id: string; debit: number; credit: number; debit_base?: number | null; credit_base?: number | null }[]) {
+      const cur = accTotals.get(l.account_id) || { debit: 0, credit: 0, debit_base: 0, credit_base: 0 };
+      const eb = this.effectiveBase(l);
       cur.debit += l.debit || 0;
       cur.credit += l.credit || 0;
+      cur.debit_base += eb.debit_base;
+      cur.credit_base += eb.credit_base;
       accTotals.set(l.account_id, cur);
     }
     const revenue: BalanceSheetItem[] = [];
     const expenses: BalanceSheetItem[] = [];
     let totalRevenue = 0;
     let totalExpenses = 0;
+    let totalRevenueBase = 0;
+    let totalExpensesBase = 0;
     for (const [accountId, totals] of accTotals) {
       const acc = accountMap.get(accountId);
       if (!acc) continue;
-      const item: BalanceSheetItem = { account_code: acc.code, account_name: acc.name, amount: Math.abs(totals.credit - totals.debit) };
+      const amount = Math.abs(totals.credit - totals.debit);
+      const amountBase = Math.abs(totals.credit_base - totals.debit_base);
+      const item: BalanceSheetItem = {
+        account_code: acc.code,
+        account_name: acc.name,
+        amount,
+        amount_base: amountBase,
+      };
       if (acc.account_type === "revenue") {
         revenue.push(item);
         totalRevenue += totals.credit - totals.debit; // revenue: credit balance
+        totalRevenueBase += totals.credit_base - totals.debit_base;
       } else if (acc.account_type === "expense") {
         expenses.push(item);
         totalExpenses += totals.debit - totals.credit; // expense: debit balance
+        totalExpensesBase += totals.debit_base - totals.credit_base;
       }
     }
-    return { revenue, expenses, total_revenue: totalRevenue, total_expenses: totalExpenses, net_profit: totalRevenue - totalExpenses, period_start: periodStart, period_end: periodEnd };
+    return {
+      revenue, expenses,
+      total_revenue: totalRevenue,
+      total_expenses: totalExpenses,
+      net_profit: totalRevenue - totalExpenses,
+      period_start: periodStart,
+      period_end: periodEnd,
+      total_revenue_base: totalRevenueBase,
+      total_expenses_base: totalExpensesBase,
+      net_profit_base: totalRevenueBase - totalExpensesBase,
+      base_currency: await this.getTenantBaseCurrency(tenantId),
+    };
   }
 
   async getGeneralLedger(tenantId: string, accountId: string, dateFrom?: string, dateTo?: string): Promise<GeneralLedger> {
@@ -3324,21 +3460,34 @@ export class SupabaseStore implements Store {
     if (entriesError) throw entriesError;
     const entryIds = ((entries || []) as { id: string }[]).map(e => e.id);
     if (entryIds.length === 0) {
-      return { account_id: accountId, account_code: accountCode, account_name: accountName, entries: [], opening_balance: 0, closing_balance: 0, total_debit: 0, total_credit: 0 };
+      return {
+        account_id: accountId, account_code: accountCode, account_name: accountName,
+        entries: [], opening_balance: 0, closing_balance: 0, total_debit: 0, total_credit: 0,
+        opening_balance_base: 0, closing_balance_base: 0, total_debit_base: 0, total_credit_base: 0,
+        base_currency: await this.getTenantBaseCurrency(tenantId),
+      };
     }
-    // Get lines for this account across all matching entries
+    // Get lines for this account across all matching entries — include
+    // base-currency columns.
     const { data: lines, error: linesError } = await this.sb()
       .from("erp_journal_lines")
-      .select("journal_entry_id, debit, credit")
+      .select("journal_entry_id, debit, credit, debit_base, credit_base, currency, fx_rate")
       .eq("account_id", accountId)
       .in("journal_entry_id", entryIds);
     if (linesError) throw linesError;
-    const linesByEntry = new Map<string, { debit: number; credit: number }>();
-    for (const l of (lines || []) as { journal_entry_id: string; debit: number; credit: number }[]) {
-      linesByEntry.set(l.journal_entry_id, { debit: l.debit, credit: l.credit });
+    const linesByEntry = new Map<string, { debit: number; credit: number; debit_base: number; credit_base: number; currency?: string }>();
+    for (const l of (lines || []) as { journal_entry_id: string; debit: number; credit: number; debit_base?: number | null; credit_base?: number | null; currency?: string }[]) {
+      const eb = this.effectiveBase(l);
+      linesByEntry.set(l.journal_entry_id, {
+        debit: l.debit, credit: l.credit,
+        debit_base: eb.debit_base, credit_base: eb.credit_base,
+        currency: l.currency,
+      });
     }
-    // Compute opening balance (all posted lines before dateFrom)
+    // Compute opening balance (all posted lines before dateFrom) — both
+    // foreign and base-currency running totals.
     let openingBalance = 0;
+    let openingBalanceBase = 0;
     if (dateFrom) {
       const { data: preEntries } = await this.sb()
         .from("erp_journal_entries")
@@ -3350,27 +3499,37 @@ export class SupabaseStore implements Store {
       if (preEntryIds.length > 0) {
         const { data: preLines } = await this.sb()
           .from("erp_journal_lines")
-          .select("debit, credit")
+          .select("debit, credit, debit_base, credit_base")
           .eq("account_id", accountId)
           .in("journal_entry_id", preEntryIds);
-        for (const pl of (preLines || []) as { debit: number; credit: number }[]) {
+        for (const pl of (preLines || []) as { debit: number; credit: number; debit_base?: number | null; credit_base?: number | null }[]) {
           openingBalance += (pl.debit || 0) - (pl.credit || 0);
+          const eb = this.effectiveBase(pl);
+          openingBalanceBase += eb.debit_base - eb.credit_base;
         }
       }
     }
     // Build entries list
     const glEntries: GeneralLedgerEntry[] = [];
     let runningBalance = openingBalance;
+    let runningBalanceBase = openingBalanceBase;
     let totalDebit = 0;
     let totalCredit = 0;
+    let totalDebitBase = 0;
+    let totalCreditBase = 0;
     for (const entry of (entries || []) as { id: string; entry_number: string; date: string; description: string; reference_type: string | null; reference_id: string | null }[]) {
       const line = linesByEntry.get(entry.id);
       if (!line) continue;
       const debit = line.debit || 0;
       const credit = line.credit || 0;
+      const debitBase = line.debit_base || 0;
+      const creditBase = line.credit_base || 0;
       runningBalance += debit - credit;
+      runningBalanceBase += debitBase - creditBase;
       totalDebit += debit;
       totalCredit += credit;
+      totalDebitBase += debitBase;
+      totalCreditBase += creditBase;
       glEntries.push({
         journal_entry_id: entry.id,
         entry_number: entry.entry_number,
@@ -3381,6 +3540,10 @@ export class SupabaseStore implements Store {
         balance: runningBalance,
         reference_type: entry.reference_type,
         reference_id: entry.reference_id,
+        debit_base: debitBase,
+        credit_base: creditBase,
+        balance_base: runningBalanceBase,
+        currency: line.currency,
       });
     }
     return {
@@ -3392,6 +3555,11 @@ export class SupabaseStore implements Store {
       closing_balance: runningBalance,
       total_debit: totalDebit,
       total_credit: totalCredit,
+      opening_balance_base: openingBalanceBase,
+      closing_balance_base: runningBalanceBase,
+      total_debit_base: totalDebitBase,
+      total_credit_base: totalCreditBase,
+      base_currency: await this.getTenantBaseCurrency(tenantId),
     };
   }
 
