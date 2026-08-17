@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     template: "%s · VELOS",
   },
   description:
-    "International trade CRM with multi-tenancy, compliance, and document automation. Powered by VELOS.",
+    "International trade CRM with multi-tenancy, compliance, and document automation. Powered by Aspidus.",
   applicationName: "VELOS",
   keywords: [
     "VELOS",

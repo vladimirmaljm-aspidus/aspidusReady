@@ -3,13 +3,8 @@ import { ImageResponse } from "next/og";
 /**
  * Next.js dynamic apple-touch-icon (180x180 PNG, served at /apple-icon).
  *
- * Faithful to the Symbol of Veles from Wikipedia — THREE SEPARATE filled
- * segments (not connected strokes):
- *   1. Top bar (trapezoid, widest at top)
- *   2. Outer downward triangle (apex at bottom)
- *   3. Inner downward triangle (smaller, centered inside outer)
- *
- * iOS Safari requires PNG (SVG support is unreliable for home screen icons).
+ * Professional 3-segment Veles symbol for iOS home screen.
+ * Filled segments (not strokes) with sheen + shadow for premium look.
  */
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
@@ -24,53 +19,46 @@ export default function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          position: "relative",
           background:
             "linear-gradient(135deg, #F59E0B 0%, #D97706 30%, #B45309 65%, #7C2D12 100%)",
           borderRadius: "22%",
+          position: "relative",
         }}
       >
-        {/* Top sheen overlay (white highlight fading out toward middle) */}
+        {/* Top sheen */}
         <div
           style={{
             position: "absolute",
             top: 0,
             left: 0,
             width: "100%",
-            height: "100%",
+            height: "50%",
             background:
               "linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0) 50%)",
             borderRadius: "22%",
           }}
         />
-        {/* Bottom inner shadow overlay (darkening the bottom edge for depth) */}
+        {/* Bottom shadow for depth */}
         <div
           style={{
             position: "absolute",
-            top: 0,
+            bottom: 0,
             left: 0,
             width: "100%",
-            height: "100%",
+            height: "40%",
             background:
-              "linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,0.28) 100%)",
+              "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.28) 100%)",
             borderRadius: "22%",
           }}
         />
-        {/* Veles symbol — 3 separate filled segments, cream on copper.
-            viewBox 0 0 32 34 (aspect ratio ~0.94, matching 560:600 original). */}
-        <svg
-          width="58%"
-          height="64%"
-          viewBox="0 0 32 34"
-          fill="#FFFBF5"
-          style={{ position: "relative" }}
-        >
-          {/* Segment 1: Top bar (trapezoid — wider at top, narrower at bottom) */}
-          <path d="M2 2 L30 2 L27 9 L5 9 Z" />
-          {/* Segment 2: Outer downward triangle (apex at bottom center) */}
-          <path d="M4 11 L16 32 L28 11 Z" />
-          {/* Segment 3: Inner downward triangle (smaller, centered, gap between it and outer) */}
-          <path d="M10 13 L16 23 L22 13 Z" />
+        {/* Veles symbol — 3 filled segments */}
+        <svg width="55%" height="62%" viewBox="0 0 100 110" fill="#FFFBF5" style={{ position: "relative" }}>
+          {/* Segment 1: Top bar (trapezoid) */}
+          <path d="M5 5 L95 5 L88 22 L12 22 Z" />
+          {/* Segment 2: Outer downward triangle */}
+          <path d="M10 28 L50 105 L90 28 Z" />
+          {/* Segment 3: Inner downward triangle */}
+          <path d="M28 32 L50 70 L72 32 Z" />
         </svg>
       </div>
     ),

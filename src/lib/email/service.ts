@@ -465,7 +465,7 @@ export function welcomePortalEmail(opts: {
         </ul>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -505,7 +505,7 @@ export function documentEmail(opts: {
         </p>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -569,7 +569,7 @@ export function kycStatusEmail(opts: {
         </p>
       </div>
       <p style="text-align: center; color: #999; font-size: 11px; margin-top: 20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -614,7 +614,7 @@ export function shareDocumentEmail(opts: {
         </div>
       </div>
       <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -657,7 +657,7 @@ export function newMessageEmail(opts: {
         </div>
       </div>
       <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">
-        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.
+        © ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.
       </p>
     </div>
   `;
@@ -698,7 +698,7 @@ export function logisticsQuoteReadyEmail(opts: {
         </div>
         <p style="color:#888;font-size:12px;line-height:1.5;">Sign in to your portal to accept, decline, or ask for changes.</p>
       </div>
-      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">© ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by VELOS.</p>
+      <p style="text-align:center;color:#999;font-size:11px;margin-top:20px;">© ${new Date().getFullYear()} ${escapeHtml(opts.tenantName)}. Powered by Aspidus.</p>
     </div>
   `;
   return { subject, html };

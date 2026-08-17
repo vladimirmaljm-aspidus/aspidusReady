@@ -254,7 +254,7 @@ export function AppShell() {
             <div className="flex items-center gap-2 text-muted-foreground/80">
               <span>© {new Date().getFullYear()} VELOS</span>
               <span className="text-muted-foreground/40" aria-hidden>·</span>
-              <span>Powered by VELOS</span>
+              <span>Powered by Aspidus</span>
             </div>
           </div>
         </footer>
