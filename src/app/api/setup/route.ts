@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth/password";
+import { validatePasswordWithPlatformPolicy } from "@/lib/auth/password-policy";
 import { getIp } from "@/lib/api/helpers";
 import { checkRateLimit } from "@/lib/security/rate-limiter";
 
@@ -80,7 +81,16 @@ export async function POST(req: NextRequest) {
     const fullName = body.full_name || "Administrator";
     if (!username || !password) return NextResponse.json({ error: "Admin credentials are required." }, { status: 400 });
     if (!email) return NextResponse.json({ error: "Admin email is required." }, { status: 400 });
-    if (password.length < 8) return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+    // FIX-V1: validate the bootstrap admin password against the platform-
+    // wide policy. Previously this only checked `password.length < 8` —
+    // a super_admin bootstrap password like "abcdefgh" passed. Falls
+    // back to DEFAULT_POLICY (8+ upper/lower/number, no symbols) on a
+    // fresh deploy where the security_config row doesn't exist yet —
+    // the same shape the inline check enforced implicitly.
+    const pwValidation = await validatePasswordWithPlatformPolicy(password);
+    if (!pwValidation.ok) {
+      return NextResponse.json({ error: pwValidation.errors.join(" ") }, { status: 400 });
+    }
     const tenantName = body.tenant_name || "VELOS Trade";
     const { getStore } = await import("@/lib/data/store");
     const store = await getStore();

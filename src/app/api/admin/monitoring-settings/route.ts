@@ -255,6 +255,18 @@ export async function PUT(req: NextRequest) {
       alert_routing_count: config.alertRouting.length,
     });
 
+    // Invalidate the in-process caches so the next IDS event, APM
+    // checkAlerts() call, alert-routing evaluation, and security-webhook
+    // fan-out pick up the new values immediately. See
+    // src/lib/monitoring/monitoring-config.ts.
+    try {
+      const { invalidateMonitoringConfigCache } = await import("@/lib/monitoring/monitoring-config");
+      invalidateMonitoringConfigCache();
+    } catch {
+      // Non-fatal — the cache TTL is 5 minutes so the change still
+      // propagates within that window even if the invalidate call fails.
+    }
+
     return NextResponse.json({ config });
   } catch (e: any) {
     return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });

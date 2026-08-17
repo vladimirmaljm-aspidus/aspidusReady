@@ -230,7 +230,12 @@ export async function GET(req: NextRequest) {
       const store = await getStore();
       await audit(
         store,
-        { id: "system", username: "cron", tenant_id: null },
+        // V-3 FIX: `id: undefined` (NOT "system") — the audit_logs.user_id
+        // column has a FK to users(id) which rejects the literal "system".
+        // Per-incident escalation audit at line 148 was already fixed in
+        // D-FIX; the summary audit here was the missed 6th call site.
+        // The FK constraint accepts NULL (ON DELETE SET NULL on the FK).
+        { id: undefined, username: "cron", tenant_id: null } as any,
         req,
         "cron.breach_notification_check",
         "system",

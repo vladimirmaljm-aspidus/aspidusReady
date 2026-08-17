@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit, sanitizeError } from "@/lib/api/helpers";
 import { hashPassword } from "@/lib/auth/password";
+import { validatePasswordWithPlatformPolicy } from "@/lib/auth/password-policy";
 import { enforceQuota } from "@/lib/api/plan-limits";
 
 export const runtime = "nodejs";
@@ -117,6 +118,19 @@ export async function POST(req: NextRequest) {
     // (audit F-6/P1 password_hash backdoor).
     let serverHashedPassword: string | null = null;
     if (body.password) {
+      // FIX-V1: validate the plaintext password against the platform-wide
+      // policy BEFORE hashing. Previously this route skipped validation
+      // entirely — an admin could set a 1-char password on any user,
+      // bypassing the super-admin's configured minLength / char-class
+      // toggles. Falls back to DEFAULT_POLICY when security_config is
+      // missing or the DB is unreachable (fresh deploy).
+      const pwValidation = await validatePasswordWithPlatformPolicy(body.password);
+      if (!pwValidation.ok) {
+        return NextResponse.json(
+          { error: pwValidation.errors.join(" ") },
+          { status: 400 },
+        );
+      }
       serverHashedPassword = await hashPassword(body.password);
       // Strip BOTH the plaintext password AND any client-supplied hash
       // before the whitelist runs (defense in depth — the whitelist would

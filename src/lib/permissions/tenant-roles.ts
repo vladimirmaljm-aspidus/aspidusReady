@@ -77,6 +77,107 @@ export interface TenantRoleOverride {
 }
 
 /**
+ * Loaded shape for the FIX-V1 settings-blob sub-system. The
+ * `role-overrides/route.ts` POST/GET persist a JSON array of
+ * `{ id, tenant_id, role, mode, permissions, notes, ... }` into the
+ * `settings.value` column (key = "role_overrides"). This helper loads
+ * that blob and returns the GRANT-mode permissions for the given
+ * (role, tenant_id) pair. DENY mode is ignored (the SoD check is
+ * grants-only — a deny can't cause a SoD violation because a violation
+ * requires the user to HOLD both perms).
+ *
+ * Returns an object with a `grants` array (possibly empty). Cached for
+ * 5 minutes — callers that mutate the blob should call
+ * `invalidateRoleOverridesCache()` after the write.
+ */
+export interface RoleOverrideGrants {
+  grants: string[];
+}
+
+const roleOverridesCache = new Map<string, { value: RoleOverrideGrants; expires: number }>();
+const ROLE_OVERRIDES_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function invalidateRoleOverridesCache(
+  tenantId?: string | null,
+  role?: string,
+): void {
+  if (!tenantId && !role) {
+    roleOverridesCache.clear();
+    return;
+  }
+  for (const key of Array.from(roleOverridesCache.keys())) {
+    const [t, r] = key.split("|");
+    if (tenantId && role && t === tenantId && r === role) {
+      roleOverridesCache.delete(key);
+    } else if (tenantId && !role && t === tenantId) {
+      roleOverridesCache.delete(key);
+    } else if (!tenantId && role && r === role) {
+      roleOverridesCache.delete(key);
+    }
+  }
+}
+
+export async function loadRoleOverrides(
+  role: string,
+  tenantId: string,
+): Promise<RoleOverrideGrants> {
+  // Super-admin rule: never subject to overrides — return empty grants.
+  if (role === "super_admin") return { grants: [] };
+
+  const key = `${tenantId}|${role}`;
+  const cached = roleOverridesCache.get(key);
+  if (cached && Date.now() < cached.expires) return cached.value;
+
+  const empty: RoleOverrideGrants = { grants: [] };
+
+  if (!isSupabaseConfigured()) {
+    roleOverridesCache.set(key, { value: empty, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+    return empty;
+  }
+
+  try {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("settings")
+      .select("value")
+      .eq("key", "role_overrides")
+      .is("tenant_id", "null")
+      .maybeSingle();
+    if (error || !data) {
+      roleOverridesCache.set(key, { value: empty, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+      return empty;
+    }
+
+    const rows: any[] = Array.isArray(data?.value) ? (data.value as any[]) : [];
+    // Match: tenant_id is null (platform-wide) OR equals the requested
+    // tenantId. Mode must be "grant" (deny semantics don't add perms).
+    const matching = rows.filter(
+      (r) =>
+        r?.mode === "grant" &&
+        r?.role === role &&
+        (r?.tenant_id === null || r?.tenant_id === tenantId) &&
+        Array.isArray(r?.permissions),
+    );
+    const grants = new Set<string>();
+    for (const r of matching) {
+      for (const p of r.permissions) {
+        if (typeof p === "string" && p.length > 0) {
+          // Platform perms are forbidden via overrides (defence-in-depth
+          // — the role-overrides POST also rejects them at write time).
+          if (!isPlatformPerm(p)) grants.add(p);
+        }
+      }
+    }
+    const result: RoleOverrideGrants = { grants: Array.from(grants) };
+    roleOverridesCache.set(key, { value: result, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+    return result;
+  } catch (e) {
+    roleOverridesCache.set(key, { value: empty, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+    return empty;
+  }
+}
+
+/**
  * In-memory cache for `loadTenantRolePermissions`. The override table is
  * low-churn (updated by an admin clicking "save" in a settings panel),
  * so a 5-minute TTL is more than enough to keep the per-request lookup

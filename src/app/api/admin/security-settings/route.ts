@@ -172,8 +172,10 @@ export interface SessionConfig {
   adminTtlMinutes: number;
   userTtlMinutes: number;
   idleTimeoutMinutes: number;
-  // Hard cap on concurrent sessions per user (0 = unlimited).
-  maxConcurrentSessions: number;
+  // FIX-V1 (Fix 6): maxConcurrentSessions removed — the field was saved
+  // to DB but never read (enforceConcurrentSessionLimit hardcodes
+  // MAX_CONCURRENT_SESSIONS=5). Don't persist fields that aren't
+  // enforced; re-add when the runtime learns to read it.
 }
 
 export interface CsrfConfig {
@@ -190,10 +192,10 @@ export interface PasswordPolicyConfig {
   requireLowercase: boolean;
   requireNumbers: boolean;
   requireSymbols: boolean;
-  // Days before a password must be rotated (0 = never).
-  expiryDays: number;
-  // Prevent reuse of last N passwords (0 = no history check).
-  historyCount: number;
+  // FIX-V1 (Fix 4): expiryDays + historyCount removed — they were saved
+  // to DB but never read by any code (no password_changed_at column, no
+  // password_history table). Re-add when the runtime learns to enforce
+  // rotation / reuse prevention.
 }
 
 export interface SecurityConfig {
@@ -215,7 +217,6 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     adminTtlMinutes: 60 * 12, // 12 hours
     userTtlMinutes: 60 * 24 * 7, // 7 days
     idleTimeoutMinutes: 30,
-    maxConcurrentSessions: 5,
   },
   csrf: {
     enforceOrigin: true,
@@ -227,8 +228,6 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     requireLowercase: DEFAULT_POLICY.requireLowercase,
     requireNumbers: DEFAULT_POLICY.requireNumbers,
     requireSymbols: DEFAULT_POLICY.requireSymbols,
-    expiryDays: 0,
-    historyCount: 3,
   },
 };
 
@@ -262,7 +261,6 @@ export function mergeDefaults(stored: Record<string, unknown> | null): SecurityC
       adminTtlMinutes: asNum(s.adminTtlMinutes, DEFAULT_SECURITY_CONFIG.session.adminTtlMinutes),
       userTtlMinutes: asNum(s.userTtlMinutes, DEFAULT_SECURITY_CONFIG.session.userTtlMinutes),
       idleTimeoutMinutes: asNum(s.idleTimeoutMinutes, DEFAULT_SECURITY_CONFIG.session.idleTimeoutMinutes),
-      maxConcurrentSessions: asNum(s.maxConcurrentSessions, DEFAULT_SECURITY_CONFIG.session.maxConcurrentSessions),
     },
     csrf: {
       enforceOrigin: asBool(c.enforceOrigin, DEFAULT_SECURITY_CONFIG.csrf.enforceOrigin),
@@ -274,8 +272,6 @@ export function mergeDefaults(stored: Record<string, unknown> | null): SecurityC
       requireLowercase: asBool(p.requireLowercase, DEFAULT_SECURITY_CONFIG.passwordPolicy.requireLowercase),
       requireNumbers: asBool(p.requireNumbers, DEFAULT_SECURITY_CONFIG.passwordPolicy.requireNumbers),
       requireSymbols: asBool(p.requireSymbols, DEFAULT_SECURITY_CONFIG.passwordPolicy.requireSymbols),
-      expiryDays: asNum(p.expiryDays, DEFAULT_SECURITY_CONFIG.passwordPolicy.expiryDays),
-      historyCount: asNum(p.historyCount, DEFAULT_SECURITY_CONFIG.passwordPolicy.historyCount),
     },
   };
 }

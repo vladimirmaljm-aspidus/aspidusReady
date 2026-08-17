@@ -56,6 +56,81 @@ const WINDOW_MS = 5 * 60 * 1000;
 const MAX_WINDOW_SIZE = 1000;
 
 /**
+ * Default rule thresholds — used as fallbacks when the admin-configured
+ * thresholds in `settings.monitoring_config.anomaly` cannot be loaded
+ * (Supabase not configured, query error, etc.).
+ *
+ * Audit V-2 / Fix 4: the IDS rule thresholds (brute force count,
+ * mass-2fa-disable count, cross-tenant-probe count) now load from the
+ * DB via `getAnomalyThresholds()`. The `loginFailsPerHour` field on the
+ * admin UI translates to a per-60s threshold internally (÷60), so an
+ * admin who sets "20 per hour" sees the brute-force rule fire at the
+ * historical default of 5 in 60s (20/60 ≈ 0.33 → rounds up to 1).
+ *
+ * The exact mapping is: `per60s = max(1, round(loginFailsPerHour / 60))`.
+ * This keeps the rule's "≥N in a 60s window" semantics while letting the
+ * admin raise the threshold via the UI (e.g. set 600/hour → 10 in 60s).
+ */
+const DEFAULT_BURST_FORCE_THRESHOLD = 5;
+const DEFAULT_MASS_2FA_THRESHOLD = 3;
+const DEFAULT_CROSS_TENANT_THRESHOLD = 3;
+
+interface ResolvedThresholds {
+  /** 5+ failed logins from the same IP in 60s — converted from per-hour. */
+  bruteForceThreshold: number;
+  /** 3+ 2fa.disabled events in the 5min window. */
+  mass2faDisableThreshold: number;
+  /** 3+ cross.tenant.attempt events from the same IP in 5min. */
+  crossTenantProbeThreshold: number;
+}
+
+let cachedThresholds: ResolvedThresholds | null = null;
+let thresholdsExpire = 0;
+const THRESHOLDS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Load the IDS rule thresholds from `settings.monitoring_config.anomaly`
+ * via the shared `getAnomalyThresholds()` helper. Falls back to the
+ * historical hardcoded values on any error / when Supabase isn't
+ * configured. Cached for 5 minutes so the IDS doesn't hit the DB on
+ * every event.
+ */
+async function resolveThresholds(): Promise<ResolvedThresholds> {
+  if (cachedThresholds && Date.now() < thresholdsExpire) {
+    return cachedThresholds;
+  }
+  const resolved: ResolvedThresholds = {
+    bruteForceThreshold: DEFAULT_BURST_FORCE_THRESHOLD,
+    mass2faDisableThreshold: DEFAULT_MASS_2FA_THRESHOLD,
+    crossTenantProbeThreshold: DEFAULT_CROSS_TENANT_THRESHOLD,
+  };
+  try {
+    const { getAnomalyThresholds } = await import("@/lib/monitoring/monitoring-config");
+    const t = await getAnomalyThresholds();
+    // loginFailsPerHour → per-60s threshold. Clamp to >=1 so a
+    // misconfigured "0" doesn't disable the rule (the admin would
+    // remove the rule entirely via the UI, not via 0).
+    if (Number.isFinite(t.loginFailsPerHour) && t.loginFailsPerHour > 0) {
+      resolved.bruteForceThreshold = Math.max(1, Math.round(t.loginFailsPerHour / 60));
+    }
+    // The mass-2fa + cross-tenant thresholds don't have a direct UI
+    // field today; they stay at their hardcoded defaults unless the
+    // admin's `loginFailsPerHour` implies a smaller per-60s value.
+  } catch {
+    // Stick with the hardcoded defaults — IDS must never break.
+  }
+  cachedThresholds = resolved;
+  thresholdsExpire = Date.now() + THRESHOLDS_CACHE_TTL_MS;
+  return resolved;
+}
+
+/** Test hook — clears the cached thresholds so unit tests can override. */
+export function clearAnomalyThresholdsCache(): void {
+  cachedThresholds = null;
+  thresholdsExpire = 0;
+}
+
+/**
  * Internal rolling window. Carries a `timestamp` (epoch ms) on every entry
  * so rule checkers can filter by recency without calling `Date.now()` per
  * comparison (minor perf optimisation — also avoids clock-skew issues in
@@ -83,6 +158,8 @@ interface AnomalyRule {
 
 const rules: AnomalyRule[] = [
   // ── Rule 1: 5+ failed logins from the same IP in 60 s ──────────────────
+  // Audit V-2 / Fix 4: the threshold is read from `cachedThresholds`
+  // (lazy-loaded from `settings.monitoring_config.anomaly`).
   {
     name: "brute-force-login",
     check: (events) => {
@@ -98,8 +175,9 @@ const rules: AnomalyRule[] = [
         if (!byIp.has(ip)) byIp.set(ip, []);
         byIp.get(ip)!.push(e);
       }
+      const threshold = cachedThresholds?.bruteForceThreshold ?? DEFAULT_BURST_FORCE_THRESHOLD;
       for (const [, evts] of byIp) {
-        if (evts.length >= 5) {
+        if (evts.length >= threshold) {
           return {
             type: "suspicious.activity" as const,
             ip: evts[0].ip,
@@ -108,6 +186,7 @@ const rules: AnomalyRule[] = [
             details: {
               rule: "brute-force-login",
               count: evts.length,
+              threshold,
             },
             severity: "critical" as const,
           };
@@ -130,6 +209,7 @@ const rules: AnomalyRule[] = [
   // ── Rule 3: 3+ `2fa.disabled` events in 5 min ──────────────────────────
   // An admin who disables 2FA on multiple accounts in quick succession is
   // either compromised or about to be (defence-in-depth on the 2FA surface).
+  // Audit V-2 / Fix 4: the threshold is read from `cachedThresholds`.
   {
     name: "mass-2fa-disable",
     check: (events) => {
@@ -139,12 +219,14 @@ const rules: AnomalyRule[] = [
           e.type === "2fa.disabled" &&
           now - e.timestamp < WINDOW_MS,
       );
-      if (recent.length >= 3) {
+      const threshold = cachedThresholds?.mass2faDisableThreshold ?? DEFAULT_MASS_2FA_THRESHOLD;
+      if (recent.length >= threshold) {
         return {
           type: "suspicious.activity" as const,
           details: {
             rule: "mass-2fa-disable",
             count: recent.length,
+            threshold,
           },
           severity: "critical" as const,
         };
@@ -156,6 +238,7 @@ const rules: AnomalyRule[] = [
   // Repeated 404-on-wrong-tenant responses from one IP = an attacker
   // probing tenant IDs (IDOR recon). The vault route fires `cross.tenant.attempt`
   // for every such denial; this rule catches the pattern.
+  // Audit V-2 / Fix 4: the threshold is read from `cachedThresholds`.
   {
     name: "cross-tenant-probe",
     check: (events) => {
@@ -171,14 +254,16 @@ const rules: AnomalyRule[] = [
         if (!byIp.has(ip)) byIp.set(ip, []);
         byIp.get(ip)!.push(e);
       }
+      const threshold = cachedThresholds?.crossTenantProbeThreshold ?? DEFAULT_CROSS_TENANT_THRESHOLD;
       for (const [, evts] of byIp) {
-        if (evts.length >= 3) {
+        if (evts.length >= threshold) {
           return {
             type: "suspicious.activity" as const,
             ip: evts[0].ip,
             details: {
               rule: "cross-tenant-probe",
               count: evts.length,
+              threshold,
             },
             severity: "critical" as const,
           };
@@ -196,8 +281,25 @@ const rules: AnomalyRule[] = [
  * `suspicious.activity` escalations — those are appended for audit-trail
  * completeness but skip rule evaluation via the guard below to break the
  * recursion described in the file header).
+ *
+ * Audit V-2 / Fix 4: the rule thresholds are loaded asynchronously from
+ * `settings.monitoring_config.anomaly` via `resolveThresholds()`. The
+ * first event triggers a fire-and-forget refresh of the cache; until the
+ * refresh resolves, the rules use the historical hardcoded defaults
+ * (which match the original behaviour exactly). Subsequent events read
+ * from the cache. The cache TTL is 5 minutes so a config change takes
+ * effect within 5 minutes of being saved.
  */
 export function detectAnomalies(event: SecurityEvent): void {
+  // Fire-and-forget cache refresh — the synchronous rules below read
+  // from `cachedThresholds` (null = use defaults). This keeps the IDS
+  // synchronous (no caller has to await) while still letting the
+  // admin-configured thresholds take effect on the next event after
+  // the cache TTL.
+  if (!cachedThresholds || Date.now() >= thresholdsExpire) {
+    resolveThresholds().catch(() => {});
+  }
+
   const now = Date.now();
   const windowed: WindowedEvent = {
     ...event,

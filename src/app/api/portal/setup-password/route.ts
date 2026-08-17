@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { getSessionFromCookie, createSession, setSessionCookie } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
-import { validatePassword, PORTAL_POLICY } from "@/lib/auth/password-policy";
+import { validatePasswordWithPlatformPolicy } from "@/lib/auth/password-policy";
 import { consumePasswordReset } from "@/lib/auth/password-reset";
 import { getIp } from "@/lib/api/helpers";
 import { checkRateLimit } from "@/lib/security/rate-limiter";
@@ -41,9 +41,15 @@ export const runtime = "nodejs";
 // (minLength: 8, no character-class requirements) that accepted "abcdefgh".
 // The reset-password and change-password routes enforced the strong
 // DEFAULT_POLICY — so a client could set a weak password at first login
-// that they could then never re-use via change-password. We now use the
-// same PORTAL_POLICY (8+ chars + uppercase + lowercase + number, no
+// that they could then never re-use via change-password. We then used
+// the same PORTAL_POLICY (8+ chars + uppercase + lowercase + number, no
 // symbol requirement for mobile UX) as the other portal password routes.
+//
+// FIX-V1: this route now calls `validatePasswordWithPlatformPolicy()` so
+// the super-admin's configured minLength / char-class toggles apply to
+// the FIRST password a portal client sets (matching reset-password +
+// change-password, which already use it). Falls back to DEFAULT_POLICY
+// (same shape as PORTAL_POLICY) on a fresh deploy or DB hiccup.
 export async function POST(req: NextRequest) {
   try {
     const { access_id, setup_token, password } = await req.json();
@@ -70,7 +76,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const validation = validatePassword(password, PORTAL_POLICY);
+    // FIX-V1: switch from the hardcoded PORTAL_POLICY constant to the
+    // platform-wide policy loader. This routes the FIRST password a
+    // portal client sets through the super-admin's configured minLength /
+    // char-class toggles — closing the audit gap where setup-password
+    // accepted "abcdefgh" while reset-password + change-password
+    // enforced the strong policy (uppercase + lowercase + number).
+    //
+    // Falls back to DEFAULT_POLICY (8+ upper/lower/number, no symbols —
+    // same shape as the old PORTAL_POLICY) when the security_config row
+    // is missing or the DB is unreachable, so a fresh deploy keeps the
+    // same defaults the old code enforced.
+    const validation = await validatePasswordWithPlatformPolicy(password);
     if (!validation.ok) {
       return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
     }

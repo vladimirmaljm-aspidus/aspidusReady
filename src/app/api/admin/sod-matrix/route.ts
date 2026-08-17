@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin, audit, sanitizeError } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
+import { invalidateSodMatrixCache } from "@/lib/permissions/sod-matrix";
 
 export const runtime = "nodejs";
 
@@ -161,6 +162,13 @@ export async function PUT(req: NextRequest) {
       rule_count: rules.length,
       active_count: rules.filter((r) => r.active).length,
     });
+
+    // FIX-V1: drop the in-process SoD matrix cache so the next
+    // `assertNoSoDViolation` call picks up the new rules immediately
+    // (within milliseconds — not up to the 5-min TTL). Without this,
+    // a super-admin would save a new rule and not see it enforced
+    // until the next serverless cold-start or 5 min later.
+    invalidateSodMatrixCache();
 
     return NextResponse.json({ rules });
   } catch (e: any) {

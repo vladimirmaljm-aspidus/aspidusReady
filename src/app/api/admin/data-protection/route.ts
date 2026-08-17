@@ -174,6 +174,17 @@ export async function PUT(req: NextRequest) {
       breach_tracking: gdpr.breachNotificationTracking,
     });
 
+    // Invalidate the in-process cache so the next read (DELETE /api/users/[id],
+    // GET /api/export, POST /api/admin/incidents/[id]/notify, getDpoContactEmail)
+    // picks up the new toggles immediately. See src/lib/compliance/gdpr-config.ts.
+    try {
+      const { invalidateGdprConfigCache } = await import("@/lib/compliance/gdpr-config");
+      invalidateGdprConfigCache();
+    } catch {
+      // Non-fatal — the cache TTL is 5 minutes so the change still
+      // propagates within that window even if the invalidate call fails.
+    }
+
     return NextResponse.json({ gdpr });
   } catch (e: any) {
     return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });

@@ -37,8 +37,12 @@ interface RateLimitConfig {
   forgotPasswordWindowMs: number;
   setupPasswordMaxAttempts: number;
   setupPasswordWindowMs: number;
-  middlewareLoginMaxRequests: number;
-  middlewarePortalLoginMaxRequests: number;
+  // FIX-V1 (Fix 5): middlewareLoginMaxRequests + middlewarePortalLoginMaxRequests
+  // removed — the edge middleware hardcodes 30/min for hot-path performance
+  // and ignores these values. Persisting them was misleading (the user thought
+  // they tuned something they didn't). The backend RateLimitConfig interface
+  // (lib/security/rate-limit-config.ts) still carries them for back-compat
+  // with any stored settings rows, but they are no longer editable here.
 }
 
 const MS_PER_MIN = 60 * 1000;
@@ -61,8 +65,6 @@ function configToForm(c: RateLimitConfig): EditForm {
     forgotPasswordWindowMin: Math.round(c.forgotPasswordWindowMs / MS_PER_MIN),
     setupPasswordMaxAttempts: c.setupPasswordMaxAttempts,
     setupPasswordWindowMin: Math.round(c.setupPasswordWindowMs / MS_PER_MIN),
-    middlewareLoginMaxRequests: c.middlewareLoginMaxRequests,
-    middlewarePortalLoginMaxRequests: c.middlewarePortalLoginMaxRequests,
   };
 }
 
@@ -76,8 +78,6 @@ function formToConfig(f: EditForm): RateLimitConfig {
     forgotPasswordWindowMs: Number(f.forgotPasswordWindowMin) * MS_PER_MIN,
     setupPasswordMaxAttempts: Number(f.setupPasswordMaxAttempts),
     setupPasswordWindowMs: Number(f.setupPasswordWindowMin) * MS_PER_MIN,
-    middlewareLoginMaxRequests: Number(f.middlewareLoginMaxRequests),
-    middlewarePortalLoginMaxRequests: Number(f.middlewarePortalLoginMaxRequests),
   };
 }
 
@@ -267,42 +267,37 @@ export function RateLimitsCard() {
               </div>
             ))}
 
-            {/* Middleware caps (in-memory, per-instance defense-in-depth) */}
+            {/* FIX-V1 (Fix 5): middleware-level rate limits are hardcoded at
+                30 req/min for hot-path performance. The edge middleware can't
+                await a DB query per request without measurable latency, so the
+                cap is a transport-level defence. Shown as read-only. */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-medium">Middleware caps (per-instance)</h4>
+                <h4 className="text-sm font-medium">Middleware caps (hardcoded)</h4>
                 <Separator className="flex-1" />
               </div>
               <p className="text-[11px] text-muted-foreground leading-snug">
-                In-memory requests-per-minute caps applied by the edge middleware on every
-                instance. These are defense-in-depth on top of the DB-backed limits above.
+                Edge-middleware rate cap on /api/auth/login + /api/portal/login.
+                Applied before the request reaches your app code, so it can't read
+                DB-backed settings. Hardcoded at 30 req/min per IP for hot-path
+                performance — not user-configurable.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="middlewareLoginMaxRequests" className="text-[11px] text-muted-foreground">
+                  <Label className="text-[11px] text-muted-foreground">
                     Staff login (req/min)
                   </Label>
-                  <Input
-                    id="middlewareLoginMaxRequests"
-                    type="number"
-                    min={1}
-                    className="w-28 tabular"
-                    value={String(form.middlewareLoginMaxRequests)}
-                    onChange={(e) => updateField("middlewareLoginMaxRequests", e.target.value)}
-                  />
+                  <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm tabular">
+                    30 / 60s
+                  </div>
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="middlewarePortalLoginMaxRequests" className="text-[11px] text-muted-foreground">
+                  <Label className="text-[11px] text-muted-foreground">
                     Portal login (req/min)
                   </Label>
-                  <Input
-                    id="middlewarePortalLoginMaxRequests"
-                    type="number"
-                    min={1}
-                    className="w-28 tabular"
-                    value={String(form.middlewarePortalLoginMaxRequests)}
-                    onChange={(e) => updateField("middlewarePortalLoginMaxRequests", e.target.value)}
-                  />
+                  <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm tabular">
+                    30 / 60s
+                  </div>
                 </div>
               </div>
             </div>

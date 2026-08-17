@@ -56,7 +56,10 @@ interface SecurityConfig {
     adminTtlMinutes: number;
     userTtlMinutes: number;
     idleTimeoutMinutes: number;
-    maxConcurrentSessions: number;
+    // FIX-V1 (Fix 6): maxConcurrentSessions removed from the UI — it
+    // was saved to DB but never enforced (enforceConcurrentSessionLimit
+    // hardcodes MAX_CONCURRENT_SESSIONS=5). Don't show settings that
+    // don't work. Re-add when the runtime learns to read this field.
   };
   csrf: {
     enforceOrigin: boolean;
@@ -68,8 +71,11 @@ interface SecurityConfig {
     requireLowercase: boolean;
     requireNumbers: boolean;
     requireSymbols: boolean;
-    expiryDays: number;
-    historyCount: number;
+    // FIX-V1 (Fix 4): expiryDays + historyCount removed from the UI —
+    // they were saved to DB but never read by any code (no
+    // password_changed_at column, no password_history table). Don't
+    // show settings that don't work. Re-add when the runtime learns to
+    // enforce rotation / reuse prevention.
   };
 }
 
@@ -142,8 +148,10 @@ interface RateForm {
   forgotPasswordWindowMin: number;
   setupPasswordMaxAttempts: number;
   setupPasswordWindowMin: number;
-  middlewareLoginMaxRequests: number;
-  middlewarePortalLoginMaxRequests: number;
+  // FIX-V1 (Fix 5): middlewareLoginMaxRequests + middlewarePortalLoginMaxRequests
+  // removed from the form — they were persisted to DB but never read by the
+  // middleware (the middleware hardcodes 30/min for hot-path performance).
+  // A read-only informational display below explains the hardcoded cap.
 }
 
 function detectPreset(form: RateForm): RatePreset | "custom" {
@@ -208,8 +216,6 @@ export function SecuritySettings() {
           forgotPasswordWindowMin: Math.round(c.forgotPasswordWindowMs / MS_PER_MIN),
           setupPasswordMaxAttempts: c.setupPasswordMaxAttempts,
           setupPasswordWindowMin: Math.round(c.setupPasswordWindowMs / MS_PER_MIN),
-          middlewareLoginMaxRequests: c.middlewareLoginMaxRequests,
-          middlewarePortalLoginMaxRequests: c.middlewarePortalLoginMaxRequests,
         };
         setRateForm(form);
         const d = rd.defaults;
@@ -222,8 +228,6 @@ export function SecuritySettings() {
           forgotPasswordWindowMin: Math.round(d.forgotPasswordWindowMs / MS_PER_MIN),
           setupPasswordMaxAttempts: d.setupPasswordMaxAttempts,
           setupPasswordWindowMin: Math.round(d.setupPasswordWindowMs / MS_PER_MIN),
-          middlewareLoginMaxRequests: d.middlewareLoginMaxRequests,
-          middlewarePortalLoginMaxRequests: d.middlewarePortalLoginMaxRequests,
         });
       }
     } catch (e: any) {
@@ -287,8 +291,6 @@ export function SecuritySettings() {
         forgotPasswordWindowMs: rateForm.forgotPasswordWindowMin * MS_PER_MIN,
         setupPasswordMaxAttempts: rateForm.setupPasswordMaxAttempts,
         setupPasswordWindowMs: rateForm.setupPasswordWindowMin * MS_PER_MIN,
-        middlewareLoginMaxRequests: rateForm.middlewareLoginMaxRequests,
-        middlewarePortalLoginMaxRequests: rateForm.middlewarePortalLoginMaxRequests,
       };
       const r = await fetch(api("/api/settings/rate-limits"), {
         method: "PUT",
@@ -307,8 +309,6 @@ export function SecuritySettings() {
         forgotPasswordWindowMin: Math.round(c.forgotPasswordWindowMs / MS_PER_MIN),
         setupPasswordMaxAttempts: c.setupPasswordMaxAttempts,
         setupPasswordWindowMin: Math.round(c.setupPasswordWindowMs / MS_PER_MIN),
-        middlewareLoginMaxRequests: c.middlewareLoginMaxRequests,
-        middlewarePortalLoginMaxRequests: c.middlewarePortalLoginMaxRequests,
       });
       toast.success(t("pf-sa-saved"), {
         description: t("pf-sa-sec-login-desc"),
@@ -495,6 +495,19 @@ export function SecuritySettings() {
               >
                 <ReadOnlyField value="5 / 15 min" tone="info" />
               </SettingRow>
+
+              {/* FIX-V1 (Fix 5): middleware-level rate limit is hardcoded at
+                  30 req/min for hot-path performance. The edge middleware
+                  can't await a DB query per request without measurable
+                  latency — so the cap is a transport-level defence. */}
+              <SettingRow
+                label="Middleware-level login cap (hardcoded)"
+                description="Edge-middleware rate cap on /api/auth/login + /api/portal/login. Applied before the request reaches your app code, so it can't read DB-backed settings."
+                impact="Defence-in-depth against a flood of login attempts at the edge. Tunable per-route caps above are enforced at the route handler (DB-backed)."
+                tooltip="The edge middleware hardcodes 30 req/min per IP for login endpoints. This is intentional for hot-path performance — making the middleware await a DB query per request would add latency to every login."
+              >
+                <ReadOnlyField value="30 / 60s" tone="info" />
+              </SettingRow>
             </>
           )}
 
@@ -674,38 +687,14 @@ export function SecuritySettings() {
             />
           </SettingRow>
 
-          <SettingRow
-            label={t("pf-sa-pwd-expiry-label")}
-            description={t("pf-sa-pwd-expiry-desc")}
-            impact={t("pf-sa-pwd-expiry-impact")}
-            tooltip={t("pf-sa-pwd-expiry-desc")}
-            defaultBadge={String(defaults?.passwordPolicy.expiryDays ?? 0)}
-            unit="days"
-          >
-            <Input
-              type="number"
-              min={0}
-              className="w-24 tabular"
-              value={String(config.passwordPolicy.expiryDays)}
-              onChange={(e) => patchNested("passwordPolicy", "expiryDays", Number(e.target.value))}
-            />
-          </SettingRow>
-
-          <SettingRow
-            label={t("pf-sa-pwd-history-label")}
-            description={t("pf-sa-pwd-history-desc")}
-            impact={t("pf-sa-pwd-history-impact")}
-            tooltip={t("pf-sa-pwd-history-desc")}
-            defaultBadge={String(defaults?.passwordPolicy.historyCount ?? 3)}
-          >
-            <Input
-              type="number"
-              min={0}
-              className="w-24 tabular"
-              value={String(config.passwordPolicy.historyCount)}
-              onChange={(e) => patchNested("passwordPolicy", "historyCount", Number(e.target.value))}
-            />
-          </SettingRow>
+          {/* FIX-V1 (Fix 4): expiryDays + historyCount inputs removed —
+              they were saved to DB but never read by any code (no
+              password_changed_at column on users, no password_history
+              table). Don't show settings that don't work. Re-add when
+              the runtime learns to enforce rotation / reuse
+              prevention. The audit's verdict on both was
+              "❌ DOESN'T WORK". */}
+          <InfoNote description="Password rotation (expiry) and reuse prevention (history) are not enforced yet. The above minimum length + character-class toggles are the only policy knobs that take effect at password-set time." />
         </CardContent>
       </Card>
 

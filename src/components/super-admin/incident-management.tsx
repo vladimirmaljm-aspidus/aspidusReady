@@ -26,35 +26,49 @@ import {
 } from "./_shared";
 import { fmtDateTime, fmtRelative } from "@/lib/utils/format";
 
-type IncidentStatus = "open" | "investigating" | "contained" | "resolved" | "closed";
+// ---------------------------------------------------------------------------
+// Types — aligned with the backend SecurityIncident shape
+// (src/lib/compliance/incident-response.ts + migration 039_security_incidents.sql).
+//
+// The DB CHECK constraints enforce:
+//   type:     data_breach | unauthorized_access | malware | system_compromise | phishing | other
+//   severity: low | medium | high | critical
+//   status:   open | investigating | contained | resolved | reported
+//
+// `closed` is intentionally NOT in the status union (the DB would reject it).
+// `breach_notification_*` fields were renamed in V-3 to mirror the actual
+// DB columns: `gdpr_notification_deadline`, `gdpr_notified`, `reported_at`.
+// `owner` → `created_by`. `timeline` has no DB column → surfaced as an
+// empty array (the "Add Timeline Note" UI section was a no-op; the proper
+// path is to use the audit_logs trail which already records every update).
+// ---------------------------------------------------------------------------
+
+type IncidentStatus = "open" | "investigating" | "contained" | "resolved" | "reported";
 type IncidentSeverity = "low" | "medium" | "high" | "critical";
 type IncidentType =
-  | "breach"
-  | "sod_violation"
+  | "data_breach"
   | "unauthorized_access"
-  | "data_loss"
-  | "audit_finding"
+  | "malware"
+  | "system_compromise"
+  | "phishing"
   | "other";
 
 interface Incident {
   id: string;
-  title: string;
-  description: string;
+  tenant_id: string | null;
   type: IncidentType;
   severity: IncidentSeverity;
   status: IncidentStatus;
-  owner: string | null;
   detected_at: string;
-  resolved_at: string | null;
-  breach_notification_deadline: string | null;
-  breach_notification_sent_at: string | null;
-  timeline: Array<{
-    id: string;
-    at: string;
-    by: string;
-    kind: string;
-    note: string;
-  }>;
+  reported_at: string | null;
+  affected_tenants: string[];
+  affected_users: string[];
+  description: string;
+  root_cause: string | null;
+  mitigation_steps: string[];
+  gdpr_notified: boolean;
+  gdpr_notification_deadline: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -64,7 +78,7 @@ const STATUS_BADGE: Record<IncidentStatus, string> = {
   investigating: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
   contained: "bg-chart-4/15 text-chart-4 border-chart-4/30",
   resolved: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
-  closed: "bg-muted text-muted-foreground border-border",
+  reported: "bg-primary/10 text-primary border-primary/30",
 };
 
 const SEVERITY_BADGE: Record<IncidentSeverity, string> = {
@@ -75,31 +89,26 @@ const SEVERITY_BADGE: Record<IncidentSeverity, string> = {
 };
 
 const TYPE_LABEL: Record<IncidentType, string> = {
-  breach: "Breach",
-  sod_violation: "SoD Violation",
+  data_breach: "Data Breach",
   unauthorized_access: "Unauthorized Access",
-  data_loss: "Data Loss",
-  audit_finding: "Audit Finding",
+  malware: "Malware",
+  system_compromise: "System Compromise",
+  phishing: "Phishing",
   other: "Other",
 };
 
 // Static runbook steps per incident type — surfaced read-only in the
 // incident-detail dialog. Sourced from the SOC2 / GDPR playbook.
+// Mirrors `INCIDENT_RESPONSE_STEPS` in src/lib/compliance/incident-response.ts.
 const RUNBOOKS: Record<IncidentType, Array<{ step: string; description: string }>> = {
-  breach: [
+  data_breach: [
     { step: "1. Detect & confirm", description: "Verify the breach is real (not a false positive from anomaly detection / monitoring)." },
     { step: "2. Contain", description: "Revoke sessions, rotate affected credentials (vault-management → rotate keys), block offending IPs." },
     { step: "3. Assess scope", description: "Identify affected tenants, users, PII fields. Document in this incident's description." },
     { step: "4. Notify DPO", description: "Alert the DPO (gdpr_config.dpoEmail) within 24h of detection." },
-    { step: "5. Notify authority (72h)", description: "GDPR Art. 33: notify the supervisory authority within 72h. Mark breach_notification_sent_at." },
+    { step: "5. Notify authority (72h)", description: "GDPR Art. 33: notify the supervisory authority within 72h. Use the 'Mark Breach Notification Sent' button which calls POST /notify." },
     { step: "6. Notify data subjects", description: "GDPR Art. 34: notify affected data subjects without undue delay if high risk." },
     { step: "7. Post-incident review", description: "Root-cause analysis; update SoD matrix / anomaly thresholds / access controls." },
-  ],
-  sod_violation: [
-    { step: "1. Review the grant", description: "Identify the user + the two permissions that triggered the SoD rule." },
-    { step: "2. Remediate", description: "Revoke one of the two permissions, or move the user to a different role." },
-    { step: "3. Audit", description: "Pull audit_logs for the user over the last 30 days — look for actual misuse." },
-    { step: "4. Update matrix", description: "If the rule was a 'warn', consider upgrading to 'block' if misuse is confirmed." },
   ],
   unauthorized_access: [
     { step: "1. Kill session", description: "Revoke all sessions for the user; rotate their password reset token." },
@@ -107,23 +116,37 @@ const RUNBOOKS: Record<IncidentType, Array<{ step: string; description: string }
     { step: "3. Rotate secrets", description: "If vault or API keys were accessed, rotate them via vault-management." },
     { step: "4. Notify", description: "If PII was exposed, treat as a breach and follow the breach runbook." },
   ],
-  data_loss: [
-    { step: "1. Identify what was lost", description: "Pull audit_logs / backup diff to identify the rows / tables affected." },
-    { step: "2. Restore", description: "Restore from the most recent backup. Document any unrecoverable data." },
-    { step: "3. Notify affected users", description: "If user PII is permanently lost, notify them (GDPR Art. 34)." },
-    { step: "4. Hardening", description: "Add a guard / backup cadence / cron to prevent recurrence." },
+  malware: [
+    { step: "1. Isolate", description: "Take affected systems offline if possible." },
+    { step: "2. Identify", description: "Identify the malware strain and entry vector." },
+    { step: "3. Scan", description: "Run full AV/EDR scan on all hosts in the affected tenant." },
+    { step: "4. Restore", description: "Restore from known-clean backup if data was encrypted/exfiltrated." },
+    { step: "5. Patch", description: "Patch the entry vector (vulnerability, phishing vector, supply chain)." },
+    { step: "6. Document", description: "Document incident and post-incident review." },
   ],
-  audit_finding: [
-    { step: "1. Acknowledge", description: "Add the finding as an incident so it's tracked to closure." },
-    { step: "2. Plan remediation", description: "Assign an owner + a deadline. Document the plan in a timeline note." },
-    { step: "3. Implement", description: "Ship the fix; mark status = contained → resolved." },
-    { step: "4. Close", description: "Update the audit register; mark the finding as closed." },
+  system_compromise: [
+    { step: "1. Rotate ALL secrets", description: "SECRET_KEY, JWT_SECRET_KEY, VAULT_KEY_V2, FIELD_ENCRYPTION_KEY, SUPABASE_SERVICE_ROLE_KEY, CRON_TOKEN." },
+    { step: "2. Revoke sessions", description: "Revoke every active session (bump token_version for all users)." },
+    { step: "3. Audit super_admin", description: "Review every super_admin action in audit_logs for the compromise window." },
+    { step: "4. Inspect code", description: "Inspect deployed code for backdoors (git diff against last known-good commit)." },
+    { step: "5. Notify tenants", description: "Notify tenants whose data was accessible to the attacker." },
+    { step: "6. Forensic snapshot", description: "Forensic snapshot of the DB + filesystem for evidence." },
+    { step: "7. Document", description: "Document incident, root cause, and remediation." },
+  ],
+  phishing: [
+    { step: "1. Identify vector", description: "Identify the phishing vector (email, fake login page, etc.)." },
+    { step: "2. Block", description: "Block the sender / URL at the perimeter (email gateway, WAF)." },
+    { step: "3. Force reset", description: "Force password reset + 2FA re-enrollment for users who clicked." },
+    { step: "4. Notify users", description: "Notify affected users with a security advisory." },
+    { step: "5. Train staff", description: "Train staff on the phishing pattern (post-incident)." },
+    { step: "6. Document", description: "Document incident." },
   ],
   other: [
     { step: "1. Triage", description: "Assess severity and impact." },
     { step: "2. Contain", description: "Take immediate action to limit impact." },
-    { step: "3. Document", description: "Keep timeline updated with every action." },
-    { step: "4. Close", description: "Resolve once the impact is fully mitigated." },
+    { step: "3. Document", description: "Document the incident type and root cause." },
+    { step: "4. Determine notification", description: "Determine if GDPR / SOC 2 / contractual notification is required." },
+    { step: "5. Close", description: "Resolve once the impact is fully mitigated." },
   ],
 };
 
@@ -149,7 +172,8 @@ export function IncidentManagement() {
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
-      setIncidents(d.incidents);
+      // Backend returns `{ items, total, limit, offset }` — read `items`.
+      setIncidents((d.items ?? []) as Incident[]);
     } catch (e: any) {
       setError(e?.message || "Failed to load incidents");
     } finally {
@@ -161,12 +185,18 @@ export function IncidentManagement() {
 
   const selected = incidents?.find((i) => i.id === selectedId) || null;
 
-  async function updateIncident(id: string, patch: any, note?: string) {
+  // PUT the incident's mutable fields. Matches the backend allowlist at
+  // src/app/api/admin/incidents/[id]/route.ts (PUT export). The body is
+  // a partial SecurityIncident — only `status`, `type`, `severity`,
+  // `description`, `root_cause`, `mitigation_steps`, `affected_tenants`,
+  // `affected_users`, `tenant_id`, `gdpr_notified`, `reported_at` are
+  // honoured by the API.
+  async function updateIncident(id: string, patch: Partial<Incident>) {
     try {
-      const r = await fetch(api(`/api/admin/incidents?id=${encodeURIComponent(id)}`), {
-        method: "PATCH",
+      const r = await fetch(api(`/api/admin/incidents/${encodeURIComponent(id)}`), {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...patch, note }),
+        body: JSON.stringify(patch),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -178,11 +208,39 @@ export function IncidentManagement() {
     }
   }
 
+  // Trigger the GDPR Art. 33 supervisory-authority notification flow
+  // atomically — sends the email, flips `gdpr_notified=true`, sets
+  // `reported_at`, escalates `status` to `reported`, and audits the
+  // dispatch. Routes through POST /api/admin/incidents/[id]/notify
+  // (NOT the broken PUT path that previously sent a wrong field name).
+  async function notifyAuthority(id: string, force = false) {
+    try {
+      const r = await fetch(
+        api(`/api/admin/incidents/${encodeURIComponent(id)}/notify`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force }),
+        },
+      );
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      toast.success("Breach notification sent", {
+        description: d.message_id ? `Message ID: ${d.message_id}` : undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["incidents"] });
+      void load();
+    } catch (e: any) {
+      toast.error("Failed to send breach notification", { description: e?.message });
+    }
+  }
+
   if (loading) return <LoadingCard title={t("pf-sa-inc-title")} />;
   if (error || !incidents) return <ErrorCard title={t("pf-sa-inc-title")} message={error || "No data"} />;
 
   const openCount = incidents.filter((i) => i.status === "open" || i.status === "investigating").length;
-  const breachCount = incidents.filter((i) => i.type === "breach").length;
+  const breachCount = incidents.filter((i) => i.type === "data_breach").length;
+  const resolvedCount = incidents.filter((i) => i.status === "resolved" || i.status === "reported").length;
 
   return (
     <div className="space-y-6">
@@ -191,7 +249,7 @@ export function IncidentManagement() {
         <Tile label={t("pf-sa-inc-kpi-total")} value={String(incidents.length)} tone="info" />
         <Tile label={t("pf-sa-inc-kpi-open")} value={String(openCount)} tone={openCount > 0 ? "warn" : "ok"} />
         <Tile label={t("pf-sa-inc-kpi-breach")} value={String(breachCount)} tone={breachCount > 0 ? "critical" : "ok"} />
-        <Tile label={t("pf-sa-inc-kpi-resolved")} value={String(incidents.filter((i) => i.status === "resolved" || i.status === "closed").length)} tone="ok" />
+        <Tile label={t("pf-sa-inc-kpi-resolved")} value={String(resolvedCount)} tone="ok" />
       </div>
 
       <Card className="border-border/60 shadow-soft rounded-xl">
@@ -213,7 +271,7 @@ export function IncidentManagement() {
                 <SelectItem value="investigating">investigating</SelectItem>
                 <SelectItem value="contained">contained</SelectItem>
                 <SelectItem value="resolved">resolved</SelectItem>
-                <SelectItem value="closed">closed</SelectItem>
+                <SelectItem value="reported">reported</SelectItem>
               </SelectContent>
             </Select>
             <Button size="sm" onClick={() => setCreateOpen(true)} className="ml-auto bg-gradient-emerald text-white">
@@ -238,12 +296,12 @@ export function IncidentManagement() {
               </TableHeader>
               <TableBody>
                 {incidents.map((i) => {
-                  const deadlinePassed = i.breach_notification_deadline
-                    && !i.breach_notification_sent_at
-                    && new Date(i.breach_notification_deadline) < new Date();
+                  const deadlinePassed = i.gdpr_notification_deadline
+                    && !i.gdpr_notified
+                    && new Date(i.gdpr_notification_deadline) < new Date();
                   return (
                     <TableRow key={i.id} className="hover:bg-muted/40 cursor-pointer" onClick={() => setSelectedId(i.id)}>
-                      <TableCell className="font-medium">{i.title}</TableCell>
+                      <TableCell className="font-medium">{i.description.slice(0, 80) || i.id}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">{TYPE_LABEL[i.type]}</Badge>
                       </TableCell>
@@ -257,10 +315,10 @@ export function IncidentManagement() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground tabular">{fmtRelative(i.detected_at)}</TableCell>
                       <TableCell>
-                        {i.breach_notification_deadline ? (
+                        {i.gdpr_notification_deadline ? (
                           <span className={`text-xs tabular ${deadlinePassed ? "text-destructive font-semibold" : "text-amber-600"}`}>
-                            {fmtDateTime(i.breach_notification_deadline)}
-                            {i.breach_notification_sent_at && <Badge variant="outline" className="ml-2 text-[9px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">sent</Badge>}
+                            {fmtDateTime(i.gdpr_notification_deadline)}
+                            {i.gdpr_notified && <Badge variant="outline" className="ml-2 text-[9px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">sent</Badge>}
                           </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
@@ -290,7 +348,8 @@ export function IncidentManagement() {
         <IncidentDetailDialog
           incident={selected}
           onOpenChange={(v) => { if (!v) setSelectedId(null); }}
-          onUpdate={(patch, note) => updateIncident(selected.id, patch, note)}
+          onUpdate={(patch) => updateIncident(selected.id, patch)}
+          onNotify={(force) => notifyAuthority(selected.id, force)}
         />
       )}
     </div>
@@ -316,14 +375,17 @@ function CreateIncidentDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title, description, type, severity,
+          // Backend uses `description` as the canonical text field; the
+          // legacy `title` column was dropped — `description` carries both.
+          description: title + (description ? `\n\n${description}` : ""),
+          type, severity,
           detected_at: detectedAt || undefined,
         }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       toast.success("Incident created", {
-        description: type === "breach"
+        description: type === "data_breach"
           ? "72-hour breach-notification deadline auto-computed."
           : "Incident is now tracked in the register.",
       });
@@ -343,7 +405,7 @@ function CreateIncidentDialog({
         <DialogHeader>
           <DialogTitle>Create Security Incident</DialogTitle>
           <DialogDescription>
-            Document a security event for tracking. If type is "breach", the GDPR Art. 33 72-hour notification deadline is auto-computed.
+            Document a security event for tracking. If type is &quot;data_breach&quot;, the GDPR Art. 33 72-hour notification deadline is auto-computed.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -398,42 +460,48 @@ function CreateIncidentDialog({
 }
 
 function IncidentDetailDialog({
-  incident, onOpenChange, onUpdate,
+  incident, onOpenChange, onUpdate, onNotify,
 }: {
   incident: Incident;
   onOpenChange: (v: boolean) => void;
-  onUpdate: (patch: any, note?: string) => Promise<void>;
+  onUpdate: (patch: Partial<Incident>) => Promise<void>;
+  onNotify: (force?: boolean) => Promise<void>;
 }) {
   const t = useT();
-  const [note, setNote] = React.useState("");
+  const [rootCause, setRootCause] = React.useState(incident.root_cause || "");
   const [status, setStatus] = React.useState<IncidentStatus>(incident.status);
-  const [savingNote, setSavingNote] = React.useState(false);
   const [savingStatus, setSavingStatus] = React.useState(false);
+  const [savingRootCause, setSavingRootCause] = React.useState(false);
+  const [notifying, setNotifying] = React.useState(false);
 
   React.useEffect(() => {
     setStatus(incident.status);
-  }, [incident.id, incident.status]);
+    setRootCause(incident.root_cause || "");
+  }, [incident.id, incident.status, incident.root_cause]);
 
-  const deadlinePassed = incident.breach_notification_deadline
-    && !incident.breach_notification_sent_at
-    && new Date(incident.breach_notification_deadline) < new Date();
+  const deadlinePassed = incident.gdpr_notification_deadline
+    && !incident.gdpr_notified
+    && new Date(incident.gdpr_notification_deadline) < new Date();
 
-  async function addNote() {
-    if (!note.trim()) return;
-    setSavingNote(true);
-    await onUpdate({}, note);
-    setNote("");
-    setSavingNote(false);
-  }
   async function saveStatus() {
     setSavingStatus(true);
     await onUpdate({ status });
     setSavingStatus(false);
   }
+  async function saveRootCause() {
+    setSavingRootCause(true);
+    await onUpdate({ root_cause: rootCause });
+    setSavingRootCause(false);
+  }
   async function markBreachSent() {
-    setSavingStatus(true);
-    await onUpdate({ breach_notification_sent_at: true });
-    setSavingStatus(false);
+    setNotifying(true);
+    await onNotify(false);
+    setNotifying(false);
+  }
+  async function resendBreachNotification() {
+    setNotifying(true);
+    await onNotify(true);
+    setNotifying(false);
   }
 
   return (
@@ -442,37 +510,44 @@ function IncidentDetailDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             <ShieldAlert className="size-4 text-destructive" />
-            {incident.title}
+            {incident.description.slice(0, 100) || incident.id}
             <Badge variant="outline" className={`text-[10px] uppercase tracking-wider ${SEVERITY_BADGE[incident.severity]}`}>
               {incident.severity}
             </Badge>
           </DialogTitle>
           <DialogDescription>
             <Badge variant="outline" className="text-xs mr-2">{TYPE_LABEL[incident.type]}</Badge>
-            Detected {fmtDateTime(incident.detected_at)} by <strong>{incident.owner || "—"}</strong>
+            Detected {fmtDateTime(incident.detected_at)} by <strong>{incident.created_by || "—"}</strong>
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {incident.description && (
-            <div className="bg-muted/40 rounded-md p-3 text-sm">{incident.description}</div>
+            <div className="bg-muted/40 rounded-md p-3 text-sm whitespace-pre-wrap">{incident.description}</div>
           )}
 
-          {incident.type === "breach" && (
+          {incident.gdpr_notification_deadline && (
             <div className={`rounded-md border p-3 text-sm ${deadlinePassed ? "border-destructive/40 bg-destructive/5" : "border-amber-500/30 bg-amber-500/5"}`}>
               <div className="flex items-center gap-2 font-medium mb-1">
                 <Clock className="size-4" />
                 GDPR Art. 33 Breach Notification
               </div>
               <div className="text-xs text-muted-foreground space-y-1">
-                <p>Deadline: <span className={`tabular font-mono ${deadlinePassed ? "text-destructive" : ""}`}>{fmtDateTime(incident.breach_notification_deadline!)}</span></p>
-                {incident.breach_notification_sent_at ? (
-                  <p className="text-emerald-600 font-medium">✓ Notification marked sent at {fmtDateTime(incident.breach_notification_sent_at)}</p>
+                <p>Deadline: <span className={`tabular font-mono ${deadlinePassed ? "text-destructive" : ""}`}>{fmtDateTime(incident.gdpr_notification_deadline)}</span></p>
+                {incident.gdpr_notified ? (
+                  <div className="space-y-1">
+                    <p className="text-emerald-600 font-medium">✓ Notification sent at {fmtDateTime(incident.reported_at)}</p>
+                    <Button size="sm" variant="outline" className="mt-1" onClick={resendBreachNotification} disabled={notifying}>
+                      {notifying && <Loader2 className="size-3.5 mr-1 animate-spin" />}
+                      Re-send Follow-up Notification (Art. 33(4))
+                    </Button>
+                  </div>
                 ) : deadlinePassed ? (
                   <p className="text-destructive font-semibold">⚠ Deadline passed — notify the supervisory authority immediately.</p>
                 ) : (
-                  <Button size="sm" variant="outline" className="mt-2" onClick={markBreachSent} disabled={savingStatus}>
-                    Mark Breach Notification Sent
+                  <Button size="sm" variant="outline" className="mt-2" onClick={markBreachSent} disabled={notifying}>
+                    {notifying && <Loader2 className="size-3.5 mr-1 animate-spin" />}
+                    Send Breach Notification
                   </Button>
                 )}
               </div>
@@ -489,17 +564,33 @@ function IncidentDetailDialog({
                 <SelectItem value="investigating">investigating</SelectItem>
                 <SelectItem value="contained">contained</SelectItem>
                 <SelectItem value="resolved">resolved</SelectItem>
-                <SelectItem value="closed">closed</SelectItem>
+                <SelectItem value="reported">reported</SelectItem>
               </SelectContent>
             </Select>
             <Button size="sm" variant="outline" onClick={saveStatus} disabled={savingStatus || status === incident.status}>
+              {savingStatus && <Loader2 className="size-3.5 mr-1 animate-spin" />}
               Update Status
+            </Button>
+          </div>
+
+          {/* Root cause editor */}
+          <div className="space-y-2">
+            <Label className="text-sm">Root Cause</Label>
+            <Textarea
+              value={rootCause}
+              onChange={(e) => setRootCause(e.target.value)}
+              rows={2}
+              placeholder="What caused this incident? Document for the post-incident review."
+            />
+            <Button size="sm" variant="outline" onClick={saveRootCause} disabled={savingRootCause || rootCause === (incident.root_cause || "")}>
+              {savingRootCause && <Loader2 className="size-3.5 mr-1 animate-spin" />}
+              Save Root Cause
             </Button>
           </div>
 
           {/* Runbook */}
           <div>
-          <SectionLabel hint={`runbook · ${TYPE_LABEL[incident.type]}`}>{t("pf-sa-inc-runbook-title")}</SectionLabel>
+            <SectionLabel hint={`runbook · ${TYPE_LABEL[incident.type]}`}>{t("pf-sa-inc-runbook-title")}</SectionLabel>
             <ol className="space-y-2 text-sm">
               {RUNBOOKS[incident.type].map((s, i) => (
                 <li key={i} className="flex gap-2">
@@ -511,34 +602,6 @@ function IncidentDetailDialog({
                 </li>
               ))}
             </ol>
-          </div>
-
-          {/* Timeline */}
-          <div>
-            <SectionLabel hint={`${incident.timeline.length} events`}>{t("pf-sa-inc-timeline-title")}</SectionLabel>
-            <div className="space-y-2 text-xs">
-              {incident.timeline.slice().reverse().map((ev) => (
-                <div key={ev.id} className="flex gap-2">
-                  <div className="text-muted-foreground tabular w-32 shrink-0">{fmtDateTime(ev.at)}</div>
-                  <div>
-                    <span className="font-medium">{ev.by}</span>
-                    <span className="text-muted-foreground mx-1">·</span>
-                    <Badge variant="outline" className="text-[9px] uppercase tracking-wider">{ev.kind}</Badge>
-                    <p className="mt-0.5">{ev.note}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Add note */}
-          <div className="space-y-2">
-            <Label>Add Timeline Note</Label>
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Action taken, finding, next step…" />
-            <Button size="sm" onClick={addNote} disabled={savingNote || !note.trim()}>
-              {savingNote && <Loader2 className="size-3.5 mr-1 animate-spin" />}
-              Add Note
-            </Button>
           </div>
         </div>
 

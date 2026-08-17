@@ -21,13 +21,16 @@ export const runtime = "nodejs";
  *   • apm: live in-memory APM summary (per-route p50/p95/max, slow
  *          requests, error rate, slow threshold) — same shape as
  *          /api/admin/performance
- *   • db: liveness probe (one HEAD against tenants) + table-size
- *         estimates for the highest-churn tables
+ *   • db: real Postgres metrics via the get_db_metrics() RPC — DB
+ *          size (bytes + pretty), active/max connections, top-10
+ *          largest public-schema tables. Plus the row-count liveness
+ *          probe per table (HEAD request, capped at 1000).
  *   • sentry: enabled / server_only / client_only / disabled
- *   • crons: list of all cron routes (cron/* paths) and their static
- *            schedule hints — the platform can't read pg_cron directly
- *            from PostgREST, so we ship the static schedule as a hint
- *            and the last_run timestamp as best-effort from audit_logs
+ *   • crons: the actual pg_cron job list via the get_cron_status()
+ *            RPC — every job (not just 4 hard-coded ones), with the
+ *            real last-run status + start_time + end_time + return
+ *            message from cron.job_run_details. Replaces the broken
+ *            audit_logs lookup that used the wrong action-name format.
  *   • retention: the policy table from lib/compliance/retention.ts
  *
  * Auth: super_admin only. Same rationale as the other admin routes —
@@ -35,45 +38,117 @@ export const runtime = "nodejs";
  * cross-tenant info leak.
  */
 
-interface CronRouteInfo {
-  path: string;
-  schedule: string;
-  description: string;
+interface DbMetrics {
+  status: "ok" | "error" | "not_configured";
+  error: string | null;
+  db_size_pretty: string | null;
+  db_size_bytes: number | null;
+  active_connections: number | null;
+  max_connections: number | null;
+  largest_tables: Array<{
+    schemaname: string;
+    tablename: string;
+    size_pretty: string;
+    size_bytes: number;
+  }>;
+  table_counts: Record<string, number>;
 }
 
-const CRON_ROUTES: CronRouteInfo[] = [
-  {
-    path: "/api/cron/data-retention",
-    schedule: "Daily 03:00 UTC",
-    description:
-      "Executes the GDPR retention policy. Deletes sessions / rate_limits / login_history / mail_queue / notifications past their retention window.",
+interface CronJob {
+  jobid: number;
+  jobname: string;
+  schedule: string;
+  active: boolean;
+  path: string | null;
+  description: string | null;
+  last_run_status: string | null;
+  last_run_start: string | null;
+  last_run_end: string | null;
+  last_return_message: string | null;
+}
+
+// Static, human-readable descriptions for the canonical pg_cron jobs.
+// Sourced from the migration that schedules each job. Surfaced in the
+// UI for ops (a row's "what does this cron do?"). New crons added via
+// a future migration will simply appear with a null description —
+// the UI degrades to showing just the jobname + schedule.
+const CRON_DESCRIPTIONS: Record<string, { description: string; path: string | null }> = {
+  "session-cleanup": {
+    path: null,
+    description: "Deletes expired portal sessions (sessions table).",
   },
-  {
-    path: "/api/cron/invoice-overdue",
-    schedule: "Daily 04:00 UTC",
-    description:
-      "Marks invoices as overdue when their due date has passed and the status is still 'sent'.",
+  "password-reset-cleanup": {
+    path: null,
+    description: "Expires stale password-reset tokens past their validity window.",
   },
-  {
+  "vacuum-settings": {
+    path: null,
+    description: "pg_cron AUTOVACUUM tuning probe (admin only).",
+  },
+  "vacuum-users": {
+    path: null,
+    description: "VACUUM ANALYZE the users table (churn-heavy).",
+  },
+  "vacuum-sessions": {
+    path: null,
+    description: "VACUUM ANALYZE the sessions table (highest churn).",
+  },
+  "vacuum-audit": {
+    path: null,
+    description: "VACUUM ANALYZE the audit_logs table (write-heavy append-only).",
+  },
+  "vacuum-known-ips": {
+    path: null,
+    description: "VACUUM ANALYZE the known_ips table.",
+  },
+  "vacuum-inv-mov": {
+    path: null,
+    description: "VACUUM ANALYZE the inventory_movements table.",
+  },
+  "rate-limits-cleanup": {
+    path: null,
+    description: "Deletes expired rate-limit rows (rate_limits table).",
+  },
+  "subscription-sweep": {
     path: "/api/cron/subscription-sweep",
-    schedule: "Hourly",
-    description:
-      "Cancels trial subscriptions that have passed their trial_end without conversion; suspends tenants with overdue invoices.",
+    description: "Cancels expired trials; suspends tenants with overdue invoices.",
   },
-  {
+  "subscription-sweep-hourly": {
+    path: "/api/cron/subscription-sweep",
+    description: "Cancels expired trials; suspends tenants with overdue invoices.",
+  },
+  "webhook-retry": {
     path: "/api/cron/webhook-retry",
-    schedule: "Every 15 min",
-    description:
-      "Retries failed webhook deliveries with exponential backoff. Caps at 5 attempts.",
+    description: "Retries failed webhook deliveries with exponential backoff (cap 5).",
   },
-];
+  "invoice-overdue": {
+    path: "/api/cron/invoice-overdue",
+    description: "Marks invoices as overdue when their due date has passed.",
+  },
+  "invoice-overdue-check": {
+    path: "/api/cron/invoice-overdue",
+    description: "Marks invoices as overdue when their due date has passed.",
+  },
+  "breach-notification-check": {
+    path: "/api/cron/breach-notification-check",
+    description: "GDPR Art. 33 — escalates incidents whose 72h deadline is < 24h away.",
+  },
+  "data-retention": {
+    path: "/api/cron/data-retention",
+    description: "Executes the GDPR retention policy — purges stale rows past their retention window.",
+  },
+  "data-retention-cleanup": {
+    path: "/api/cron/data-retention",
+    description: "Executes the GDPR retention policy — purges stale rows past their retention window.",
+  },
+};
 
 export async function GET(req: NextRequest) {
   const auth = await requireSuperAdmin(req);
   if (auth instanceof NextResponse) return auth;
 
   const summary = getMetricsSummary();
-  const alerts = checkAlerts();
+  const alerts = await checkAlerts();
   const mem = process.memoryUsage();
   const memory = {
     rssMb: Math.round(mem.rss / 1024 / 1024),
@@ -92,50 +167,44 @@ export async function GET(req: NextRequest) {
     return "disabled";
   })();
 
-  // Cron job last-run status from audit_logs (best-effort — falls back
-  // to "never" if the audit table is empty or Supabase isn't
-  // configured).
-  let cronStatus: Array<CronRouteInfo & { last_run: string | null }> = [];
+  // ─── Cron status (real pg_cron metadata via RPC) ──────────────────────
+  // Replaces the broken audit_logs lookup that searched for the wrong
+  // action-name format (cron.<path>.run vs the actual cron.<underscore>).
+  // The get_cron_status() RPC (migration 043) is SECURITY DEFINER so
+  // the service_role can read cron.job + cron.job_run_details.
+  let crons: CronJob[] = [];
   try {
     if (isSupabaseConfigured()) {
       const sb = getSupabase();
-      // Look up the most recent audit entry per cron action. The
-      // cron routes all call audit() with action starting
-      // "cron.*" or the path itself.
-      const { data: auditRows } = await sb
-        .from("audit_logs")
-        .select("action, created_at")
-        .or(
-          CRON_ROUTES.map((r) => `action.eq.cron.${r.path.replace("/api/cron/", "")}.run`).join(","),
-        )
-        .order("created_at", { ascending: false })
-        .limit(100);
-
-      const lastByPath: Record<string, string | null> = {};
-      for (const row of (auditRows ?? []) as Array<{ action: string; created_at: string }>) {
-        for (const r of CRON_ROUTES) {
-          const key = r.path.replace("/api/cron/", "");
-          if (row.action.includes(key) && !lastByPath[r.path]) {
-            lastByPath[r.path] = row.created_at;
-          }
-        }
-      }
-
-      cronStatus = CRON_ROUTES.map((r) => ({
-        ...r,
-        last_run: lastByPath[r.path] ?? null,
-      }));
-    } else {
-      cronStatus = CRON_ROUTES.map((r) => ({ ...r, last_run: null }));
+      const { data: cronRows, error: cronErr } = await sb.rpc("get_cron_status");
+      if (cronErr) throw cronErr;
+      crons = ((cronRows ?? []) as any[]).map((r) => {
+        const meta = CRON_DESCRIPTIONS[r.jobname] ?? { description: null, path: null };
+        return {
+          jobid: r.jobid,
+          jobname: r.jobname,
+          schedule: r.schedule,
+          active: r.active,
+          path: meta.path,
+          description: meta.description,
+          last_run_status: r.last_run_status ?? null,
+          last_run_start: r.last_run_start ?? null,
+          last_run_end: r.last_run_end ?? null,
+          last_return_message: r.last_return_message ?? null,
+        };
+      });
     }
   } catch {
-    cronStatus = CRON_ROUTES.map((r) => ({ ...r, last_run: null }));
+    // Degrade to an empty list — the UI shows "no crons visible" rather
+    // than crashing the whole dashboard. (Likely cause: migration 043
+    // not yet applied to this env.)
+    crons = [];
   }
 
-  // DB table-size estimates. PostgREST doesn't expose pg_total_relation_size
-  // directly, so we approximate via COUNT(*) for the highest-churn tables.
-  // Counts are capped at 1000 (HEAD request) to avoid a slow COUNT(*)
-  // on a multi-million-row table.
+  // ─── DB metrics (real Postgres introspection via RPC) ────────────────
+  // Replaces the row-count-only stub. The get_db_metrics() RPC
+  // (migration 043) is SECURITY DEFINER so the service_role can read
+  // pg_database_size, pg_stat_activity, and pg_total_relation_size.
   const TABLE_PROBES = [
     "tenants",
     "users",
@@ -154,17 +223,46 @@ export async function GET(req: NextRequest) {
     "webhook_deliveries",
   ];
 
-  let db: {
-    status: "ok" | "error" | "not_configured";
-    error: string | null;
-    table_counts: Record<string, number>;
-  } = { status: "not_configured", error: null, table_counts: {} };
+  let db: DbMetrics = {
+    status: "not_configured",
+    error: null,
+    db_size_pretty: null,
+    db_size_bytes: null,
+    active_connections: null,
+    max_connections: null,
+    largest_tables: [],
+    table_counts: {},
+  };
 
   try {
     if (!isSupabaseConfigured()) {
-      db = { status: "not_configured", error: "SUPABASE_URL / service-role key not set", table_counts: {} };
+      db = {
+        ...db,
+        status: "not_configured",
+        error: "SUPABASE_URL / service-role key not set",
+      };
     } else {
       const sb = getSupabase();
+
+      // Real DB metrics via RPC — single round trip.
+      try {
+        const { data: m, error: mErr } = await sb.rpc("get_db_metrics");
+        if (mErr) throw mErr;
+        const metrics = (m ?? {}) as any;
+        db.db_size_pretty = metrics.db_size_pretty ?? null;
+        db.db_size_bytes = Number(metrics.db_size_bytes ?? 0) || null;
+        db.active_connections = Number(metrics.active_connections ?? 0) || null;
+        db.max_connections = Number(metrics.max_connections ?? 0) || null;
+        db.largest_tables = Array.isArray(metrics.largest_tables)
+          ? metrics.largest_tables
+          : [];
+      } catch {
+        // Migration 043 not applied yet — degrade gracefully (UI shows
+        // null for these tiles; the row-count liveness still works).
+      }
+
+      // Per-table row counts (HEAD request, capped at 1000 by PostgREST).
+      // Kept as a liveness probe — confirms each table is readable.
       const counts: Record<string, number> = {};
       for (const table of TABLE_PROBES) {
         const { count, error } = await sb
@@ -176,10 +274,12 @@ export async function GET(req: NextRequest) {
           counts[table] = -1; // signal error per-table without aborting the loop
         }
       }
-      db = { status: "ok", error: null, table_counts: counts };
+      db.status = "ok";
+      db.error = null;
+      db.table_counts = counts;
     }
   } catch (e: any) {
-    db = { status: "error", error: sanitizeError(e), table_counts: {} };
+    db = { ...db, status: "error", error: sanitizeError(e) };
   }
 
   return NextResponse.json({
@@ -198,7 +298,7 @@ export async function GET(req: NextRequest) {
     },
     db,
     sentry,
-    crons: cronStatus,
+    crons,
     retention: RETENTION_POLICY,
     timestamp: new Date().toISOString(),
   });

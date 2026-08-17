@@ -45,7 +45,12 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: true });
     if (tErr) throw tErr;
 
-    const { data: flags } = await sb.from("tenant_feature_flags").select("*");
+    // Read from the REAL `feature_flags` table (matches feature-guard.ts
+    // and supabase-store). The phantom `tenant_feature_flags` table never
+    // existed in any migration — every read/write against it silently
+    // failed (GET swallowed the error, POST returned 500).
+    const { data: flags, error: fErr } = await sb.from("feature_flags").select("*");
+    if (fErr) throw fErr;
 
     const flagByTenant: Record<string, any> = {};
     for (const f of (flags ?? []) as any[]) {
@@ -121,13 +126,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Fetch current flags
+    // Fetch current flags from the REAL `feature_flags` table.
     const sb = getSupabase();
-    const { data: existing } = await sb
-      .from("tenant_feature_flags")
+    const { data: existing, error: loadErr } = await sb
+      .from("feature_flags")
       .select("*")
       .eq("tenant_id", body.tenant_id)
       .maybeSingle();
+    if (loadErr) throw loadErr;
 
     const current = existing ?? blankFlags(body.tenant_id);
     // Only boolean flag keys are mutable.
@@ -142,12 +148,17 @@ export async function POST(req: NextRequest) {
     current.updated_by = auth.user.id;
 
     const { error } = await sb
-      .from("tenant_feature_flags")
+      .from("feature_flags")
       .upsert(current, { onConflict: "tenant_id" });
 
     if (error) return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
 
-    await audit(auth.store, auth.user, req, "feature_flag.toggle", "tenant_feature_flags", body.tenant_id, {
+    // Invalidate the in-memory feature-guard cache so the new flag is
+    // seen on the next request (otherwise it lags up to TTL_MS = 30s).
+    const { invalidateFeatureCache } = await import("@/lib/api/feature-guard");
+    invalidateFeatureCache(body.tenant_id);
+
+    await audit(auth.store, auth.user, req, "feature_flag.toggle", "feature_flags", body.tenant_id, {
       flag: body.flag,
       value: body.value,
     });

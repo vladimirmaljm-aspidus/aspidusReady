@@ -220,6 +220,29 @@ export function reportSecurityEvent(event: SecurityEvent): void {
   // 5. Fire security webhook(s) — async, non-blocking. Fan-out is
   //    fire-and-forget; failures are swallowed inside `fireSecurityWebhook`.
   fireSecurityWebhook(event).catch(() => {});
+
+  // 6. Alert routing — fire-and-forget email fan-out to recipients
+  //    configured under Super-Admin → Monitoring & Alerts → Alert
+  //    routing (audit V-2 / Fix 5). Same non-blocking contract as
+  //    `fireSecurityWebhook`: a routing failure must never break the
+  //    calling route.
+  routeAlert(event).catch(() => {});
+}
+
+/**
+ * Fire alert-routing emails for the event. Imported lazily to avoid a
+ * static-import cycle: `alert-routing.ts` lazy-imports `sendEmail`
+ * from `lib/email/service.ts`, which transitively imports
+ * `lib/data/store.ts`, which in turn imports this module. The lazy
+ * import keeps the cycle from forming at module-evaluation time.
+ */
+async function routeAlert(event: SecurityEvent): Promise<void> {
+  try {
+    const { routeAlert } = await import("@/lib/monitoring/alert-routing");
+    await routeAlert(event);
+  } catch {
+    // Swallowed — see reportSecurityEvent module docstring.
+  }
 }
 
 /**

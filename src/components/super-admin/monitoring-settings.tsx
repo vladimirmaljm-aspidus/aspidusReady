@@ -22,6 +22,7 @@ import { useT } from "@/lib/i18n/store";
 import {
   SettingsCardHeader, SectionLabel, SettingRow, ReadOnlyField, FieldRow, LoadingCard, ErrorCard,
 } from "./_shared";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface MonitoringConfig {
   sentry: {
@@ -150,6 +151,62 @@ export function MonitoringSettings() {
 
   return (
     <div className="space-y-6">
+      {/* Sentry disabled warning banner — audit V-2 / Fix 8 */}
+      {sentryStatus === "disabled" && (
+        <Alert
+          variant="destructive"
+          className="border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-300 [&>svg]:text-amber-600"
+        >
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="text-amber-800 dark:text-amber-200">
+            Sentry error monitoring is NOT active
+          </AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            Security events are currently only logged to <code>console.warn</code>. Set
+            the <code>SENTRY_DSN</code> environment variable (and
+            <code>NEXT_PUBLIC_SENTRY_DSN</code> for client-side errors) on Render to
+            enable Sentry error capture, breadcrumb aggregation, and alert emails.
+            Without Sentry, security incidents (failed logins, vault reads,
+            cross-tenant probes, suspicious activity) are invisible unless an
+            operator is actively tailing server logs.
+          </AlertDescription>
+        </Alert>
+      )}
+      {sentryStatus === "server-only" && (
+        <Alert
+          variant="destructive"
+          className="border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-300 [&>svg]:text-amber-600"
+        >
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="text-amber-800 dark:text-amber-200">
+            Sentry is in server-only mode
+          </AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            <code>SENTRY_DSN</code> is set but <code>NEXT_PUBLIC_SENTRY_DSN</code> is
+            not — client-side errors (React render failures, browser crashes) are
+            NOT captured. Set <code>NEXT_PUBLIC_SENTRY_DSN</code> on Render to enable
+            client-side error capture.
+          </AlertDescription>
+        </Alert>
+      )}
+      {sentryStatus === "client-only" && (
+        <Alert
+          variant="destructive"
+          className="border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-300 [&>svg]:text-amber-600"
+        >
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="text-amber-800 dark:text-amber-200">
+            Sentry is in client-only mode
+          </AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            <code>NEXT_PUBLIC_SENTRY_DSN</code> is set but <code>SENTRY_DSN</code> is
+            not — server-side errors (API route exceptions, cron failures, security
+            events) are NOT captured. Set <code>SENTRY_DSN</code> on Render to
+            enable server-side error capture.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Sentry */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader

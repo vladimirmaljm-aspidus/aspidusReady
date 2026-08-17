@@ -45,14 +45,30 @@ interface SystemHealthData {
   db: {
     status: "ok" | "error" | "not_configured";
     error: string | null;
+    db_size_pretty: string | null;
+    db_size_bytes: number | null;
+    active_connections: number | null;
+    max_connections: number | null;
+    largest_tables: Array<{
+      schemaname: string;
+      tablename: string;
+      size_pretty: string;
+      size_bytes: number;
+    }>;
     table_counts: Record<string, number>;
   };
   sentry: "enabled" | "server_only" | "client_only" | "disabled";
   crons: Array<{
-    path: string;
+    jobid: number;
+    jobname: string;
     schedule: string;
-    description: string;
-    last_run: string | null;
+    active: boolean;
+    path: string | null;
+    description: string | null;
+    last_run_status: string | null;
+    last_run_start: string | null;
+    last_run_end: string | null;
+    last_return_message: string | null;
   }>;
   retention: Array<{
     table: string;
@@ -102,6 +118,10 @@ export function SystemHealth() {
   const uptimeHours = Math.floor(data.process.uptimeSeconds / 3600);
   const uptimeMin = Math.floor((data.process.uptimeSeconds % 3600) / 60);
   const uptimeStr = uptimeHours > 0 ? `${uptimeHours}h ${uptimeMin}m` : `${uptimeMin}m`;
+
+  const connPct = data.db.max_connections && data.db.max_connections > 0
+    ? Math.round(((data.db.active_connections ?? 0) / data.db.max_connections) * 100)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -190,40 +210,94 @@ export function SystemHealth() {
         </CardContent>
       </Card>
 
-      {/* DB table counts */}
+      {/* DB metrics — real Postgres introspection */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
           title={t("pf-sa-sys-db-title")}
-          description={`${t("pf-sa-sys-db-desc")} Liveness: ${data.db.status}. Table counts (HEAD request, capped at 1000 — counts above 1000 show as "1000+").`}
+          description={`${t("pf-sa-sys-db-desc")} DB status: ${data.db.status}. Size + connections + largest tables via the get_db_metrics() RPC (migration 043). Row-count liveness probe below.`}
           dirty={false}
           saving={false}
         />
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Table</TableHead>
-                <TableHead className="text-right">Row Count</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.entries(data.db.table_counts).map(([table, count]) => (
-                <TableRow key={table}>
-                  <TableCell><code className="text-[11px] font-mono">{table}</code></TableCell>
-                  <TableCell className="text-right tabular">{count < 0 ? "—" : count >= 1000 ? "1000+" : count}</TableCell>
-                  <TableCell className="text-right">
-                    {count >= 0 ? <CheckCircle2 className="size-4 text-emerald-500 inline" /> : <XCircle className="size-4 text-destructive inline" />}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {data.db.error && (
+        <CardContent className="space-y-4">
+          {/* Top-row DB tiles */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <Tile
+              icon={Database}
+              label="Database Size"
+              value={data.db.db_size_pretty ?? "—"}
+              tone="info"
+              hint={data.db.db_size_bytes != null ? `${data.db.db_size_bytes.toLocaleString()} bytes` : undefined}
+            />
+            <Tile
+              icon={Server}
+              label="Active Connections"
+              value={data.db.active_connections != null ? String(data.db.active_connections) : "—"}
+              tone={connPct > 80 ? "warn" : "ok"}
+              hint={data.db.max_connections ? `${connPct}% of ${data.db.max_connections} max` : undefined}
+            />
+            <Tile
+              icon={Activity}
+              label="Liveness Probe"
+              value={data.db.status === "ok" ? "OK" : data.db.status}
+              tone={data.db.status === "ok" ? "ok" : "critical"}
+              hint={data.db.error ? data.db.error : "All probe tables reachable"}
+            />
+          </div>
+
+          {/* Largest tables */}
+          {data.db.largest_tables.length > 0 && (
+            <div>
+              <SectionLabel hint="top 10 · by pg_total_relation_size">Largest Tables</SectionLabel>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Schema</TableHead>
+                    <TableHead>Table</TableHead>
+                    <TableHead className="text-right">Size</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.db.largest_tables.map((t) => (
+                    <TableRow key={`${t.schemaname}.${t.tablename}`}>
+                      <TableCell className="text-xs font-mono">{t.schemaname}</TableCell>
+                      <TableCell><code className="text-[11px] font-mono">{t.tablename}</code></TableCell>
+                      <TableCell className="text-right tabular text-xs">{t.size_pretty} <span className="text-muted-foreground">({Number(t.size_bytes).toLocaleString()} B)</span></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {/* Row-count liveness probe */}
+          <div>
+            <SectionLabel hint="HEAD probe · capped at 1000 by PostgREST">Row Count Liveness Probe</SectionLabel>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={3} className="text-destructive text-xs">DB error: {data.db.error}</TableCell>
+                  <TableHead>Table</TableHead>
+                  <TableHead className="text-right">Row Count</TableHead>
+                  <TableHead className="text-right">Status</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(data.db.table_counts).map(([table, count]) => (
+                  <TableRow key={table}>
+                    <TableCell><code className="text-[11px] font-mono">{table}</code></TableCell>
+                    <TableCell className="text-right tabular">{count < 0 ? "—" : count >= 1000 ? "1000+" : count}</TableCell>
+                    <TableCell className="text-right">
+                      {count >= 0 ? <CheckCircle2 className="size-4 text-emerald-500 inline" /> : <XCircle className="size-4 text-destructive inline" />}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {data.db.error && (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-destructive text-xs">DB error: {data.db.error}</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -261,7 +335,7 @@ export function SystemHealth() {
         </CardContent>
       </Card>
 
-      {/* Cron status */}
+      {/* Cron status — real pg_cron metadata */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
           title={t("pf-sa-sys-cron-title")}
@@ -273,21 +347,52 @@ export function SystemHealth() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Route</TableHead>
+                <TableHead>Job</TableHead>
                 <TableHead>Schedule</TableHead>
+                <TableHead>Active</TableHead>
                 <TableHead>Last Run</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Description</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.crons.map((c) => (
-                <TableRow key={c.path}>
-                  <TableCell><code className="text-[11px] font-mono">{c.path}</code></TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs">{c.schedule}</Badge></TableCell>
-                  <TableCell className="text-xs text-muted-foreground tabular">
-                    {c.last_run ? fmtDateTime(c.last_run) : "never"}
+              {data.crons.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-xs text-muted-foreground text-center py-6">
+                    No pg_cron jobs visible — run migration 043 to enable the get_cron_status() RPC.
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{c.description}</TableCell>
+                </TableRow>
+              ) : data.crons.map((c) => (
+                <TableRow key={c.jobid}>
+                  <TableCell>
+                    <code className="text-[11px] font-mono">{c.jobname}</code>
+                    {c.path && <div className="text-[10px] text-muted-foreground font-mono mt-0.5">{c.path}</div>}
+                  </TableCell>
+                  <TableCell><Badge variant="outline" className="text-xs font-mono">{c.schedule}</Badge></TableCell>
+                  <TableCell>
+                    {c.active ? (
+                      <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">ACTIVE</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground">PAUSED</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground tabular">
+                    {c.last_run_start ? fmtDateTime(c.last_run_start) : "never"}
+                  </TableCell>
+                  <TableCell>
+                    {c.last_run_status ? (
+                      <Badge variant="outline" className={`text-[10px] uppercase ${
+                        c.last_run_status === "succeeded"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                          : "bg-destructive/10 text-destructive border-destructive/30"
+                      }`}>
+                        {c.last_run_status}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{c.description ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
