@@ -64,9 +64,24 @@ export async function emitNotification(params: {
     }
   } catch (e) {
     // Non-critical — the notification is already in the DB; this is just
-    // the live push. Log at debug so prod logs don't get spammed if the
-    // gateway is briefly down.
-    console.debug("[realtime] emit failed:", e instanceof Error ? e.message : e);
+    // the live push. Log prominently (rather than silently swallowing) so
+    // ops can tell a deployed-but-broken service from a not-deployed
+    // service. The latter is the current state — the mini-service exists
+    // in `mini-services/notifications-service/` but is NOT deployed to
+    // Render, so every emit hits ECONNREFUSED / 502. The frontend falls
+    // back to 30s polling (see `src/hooks/use-realtime.ts`'s
+    // `pollingActive` flag), so the user still sees the notification, just
+    // with up to 30s latency instead of <1s.
+    //
+    // Logged at `debug` (not `warn`) because the polling fallback makes
+    // this an expected, non-actionable state in the current deployment —
+    // but the message text is distinctive enough that grepping prod logs
+    // for "service may not be deployed" surfaces the gap immediately when
+    // someone asks "why aren't notifications instant?".
+    console.debug(
+      "[realtime] emit failed (service may not be deployed — frontend is polling as fallback):",
+      e instanceof Error ? e.message : String(e),
+    );
   }
 }
 

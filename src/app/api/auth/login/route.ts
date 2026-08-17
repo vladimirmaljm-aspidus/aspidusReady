@@ -243,7 +243,16 @@ export async function POST(req: NextRequest) {
     const country = geo?.country ?? null;
 
     // ---- Lockout check ----
-    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+    // P0 / task D-FIX: super_admin bypasses the per-account lockout
+    // entirely. The previous logic applied the locked_until check + the
+    // failed_attempts bump to ALL users, including super_admin — so 5
+    // wrong passwords would lock the platform owner out for 15 minutes,
+    // violating the "super_admin is never blocked" invariant. The bypass
+    // here mirrors the per-user rate-limit bypass above (line 197) and
+    // the 2FA / tenant-status bypasses below. The per-IP cap (line 117)
+    // still applies — rate-limiting is a transport-level defense, not
+    // an authorization decision.
+    if (user.role !== "super_admin" && user.locked_until && new Date(user.locked_until) > new Date()) {
       try {
         await store.recordLoginHistory({
           user_id: user.id,
@@ -305,10 +314,23 @@ export async function POST(req: NextRequest) {
     // ---- Verify password ----
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) {
-      // bump failed attempts (best-effort)
+      // bump failed attempts (best-effort) — but NEVER for super_admin.
+      // P0 / task D-FIX: the per-account lockout (failed_attempts >= 5
+      // → locked_until = +15min) is the per-account counterpart to the
+      // per-user rate-limit bypass at line 197. Without this guard, 5
+      // wrong super_admin passwords set locked_until, and the lockout
+      // check above (now also guarded) would have blocked the next
+      // attempt. Skipping the upsert here means super_admin's
+      // failed_attempts counter stays at its current value forever —
+      // which is the intended behaviour for a "never blocked" account.
+      // The audit log + reportSecurityEvent below still fire so the
+      // security pipeline sees the wrong-password signal; only the
+      // enforcement (counter bump + lock) is skipped.
       const next = (user.failed_attempts || 0) + 1;
-      const lockUntil = next >= 5 ? new Date(Date.now() + 15 * 60000).toISOString() : null;
-      await store.upsertUser({ id: user.id, failed_attempts: next, locked_until: lockUntil });
+      if (user.role !== "super_admin") {
+        const lockUntil = next >= 5 ? new Date(Date.now() + 15 * 60000).toISOString() : null;
+        await store.upsertUser({ id: user.id, failed_attempts: next, locked_until: lockUntil });
+      }
 
       try {
         await store.recordLoginHistory({

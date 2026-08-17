@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
     }
     await audit(
       store,
-      { id: "system", username: "cron", tenant_id: null },
+      { id: undefined, username: "cron", tenant_id: null },
       req,
       "cron.invoice_overdue",
       "system",

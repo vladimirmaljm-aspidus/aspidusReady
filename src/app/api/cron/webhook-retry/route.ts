@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     // logging failure can never cause the cron itself to fail.
     await audit(
       store,
-      { id: "system", username: "cron", tenant_id: null },
+      { id: undefined, username: "cron", tenant_id: null },
       req,
       "cron.webhook_retry",
       "system",

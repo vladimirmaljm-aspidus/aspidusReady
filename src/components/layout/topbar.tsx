@@ -216,7 +216,15 @@ export function Topbar() {
         description: data?.partnerName ? `From ${data.partnerName}` : undefined,
       });
     }, [flashBell]),
-  });
+  },
+  // P0 / task D-FIX: when the WebSocket gateway (mini-services/notifications-service)
+  // is not deployed, the useRealtime hook falls back to 30s polling. Passing
+  // `loadNotifications` here means the polling tick re-fetches /api/notifications
+  // (same path the initial-mount load uses), so the bell stays fresh even
+  // without the live WS push. When the mini-service IS deployed, the socket
+  // connects, polling clears, and the live WS handlers take over.
+  loadNotifications,
+);
 
   // Cleanup the pulse timer on unmount.
   React.useEffect(() => () => {
