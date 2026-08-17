@@ -80,7 +80,17 @@ async function paginateQuery<T>(
   q: PaginatableQuery,
   params?: ListParams,
 ): Promise<ListResult<T>> {
-  const limit = Math.min(params?.limit ?? 50, 500);
+  // S-FIX / data-loss: previously capped at 500 (the typical UI list
+  // page size). This silently truncated bulk exports — e.g. a tenant
+  // with 576 products got back 499 rows from
+  // `/api/export?type=products` (which passes `limit: 10000` but was
+  // clamped here). The cap is now 10k, matching the documented export
+  // ceiling in src/app/api/export/route.ts. UI list routes (deals,
+  // products, partners, offers, …) still cap at 500 at the *route*
+  // layer (see `Math.min(Number(url.searchParams.get("limit")), 500)`
+  // in those route files), so raising the store-layer cap does not
+  // expose any list endpoint to a higher request ceiling.
+  const limit = Math.min(params?.limit ?? 50, 10000);
   const offset = params?.offset ?? 0;
   const { data, error, count } = await q.range(offset, offset + limit - 1);
   if (error) throw error;
@@ -877,14 +887,28 @@ export class SupabaseStore implements Store {
     // `IN` query; falls back to the partner id if the row is missing or
     // the query itself fails (defence-in-depth — the dashboard must not
     // 500 just because the partners lookup failed).
+    // S-FIX / defense-in-depth: the `dealsQ` above is already tenant-
+    // scoped, so `partnerValue` should only ever contain partner_ids from
+    // the caller's tenant. However, if a cross-tenant partner_id were
+    // somehow already stored on a deal row (e.g. via the now-fixed POST
+    // /api/deals IDOR, or by direct DB insertion), the lookup below would
+    // resolve its name and silently leak it to the dashboard. Adding
+    // `.eq("tenant_id", tenantId)` here means a cross-tenant partner_id
+    // is treated as "unknown" — the dashboard falls back to showing the
+    // raw id rather than the partner name. No enumeration leak.
     const topPartnerIds = Array.from(partnerValue.keys()).slice(0, 5);
     let partnerNameMap = new Map<string, string>();
     if (topPartnerIds.length > 0) {
       try {
-        const { data: partnerRows, error: partnerErr } = await this.sb()
+        const partnerQuery = this.sb()
           .from("partners")
           .select("id, name")
           .in("id", topPartnerIds);
+        // Only apply the tenant filter when we actually have a tenantId —
+        // super-admin (tenantId undefined) intentionally sees across
+        // tenants on the platform-level dashboard.
+        if (tenantId) partnerQuery.eq("tenant_id", tenantId);
+        const { data: partnerRows, error: partnerErr } = await partnerQuery;
         if (!partnerErr && partnerRows) {
           for (const p of partnerRows as Pick<Partner, "id" | "name">[]) {
             partnerNameMap.set(p.id, p.name || p.id);

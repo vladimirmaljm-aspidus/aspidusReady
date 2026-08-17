@@ -21,7 +21,24 @@ export async function GET(req: NextRequest) {
   const product_id = url.searchParams.get("product_id") || undefined;
   const supplier_id = url.searchParams.get("supplier_id") || undefined;
   const status = url.searchParams.get("status") || undefined;
-  const result = await auth.store.listSupplierOffers(tenantId, { search, filters: { product_id, supplier_id, status } });
+  // S-FIX / pagination: previously this route ignored `limit` and `offset`
+  // entirely — `listSupplierOffers` fell back to its default (limit=50,
+  // offset=0), so every "next page" request returned the same 50 rows.
+  // Now parse and forward to the store, capping at the standard UI limit
+  // (500). This matches the pattern used by /api/products, /api/deals,
+  // /api/offers, etc.
+  const limit = url.searchParams.get("limit")
+    ? Math.min(Number(url.searchParams.get("limit")), 500)
+    : undefined;
+  const offset = url.searchParams.get("offset")
+    ? Number(url.searchParams.get("offset"))
+    : undefined;
+  const result = await auth.store.listSupplierOffers(tenantId, {
+    search,
+    limit,
+    offset,
+    filters: { product_id, supplier_id, status },
+  });
   return NextResponse.json(result);
 }
 

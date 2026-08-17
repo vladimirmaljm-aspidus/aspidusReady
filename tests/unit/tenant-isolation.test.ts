@@ -99,6 +99,8 @@ import { GET as getProduct, PUT as putProduct, DELETE as deleteProduct } from "@
 import { GET as getOffer, PUT as putOffer, DELETE as deleteOffer } from "@/app/api/offers/[id]/route";
 import { GET as getPartner, PUT as putPartner, DELETE as deletePartner } from "@/app/api/partners/[id]/route";
 import { POST as postOffer } from "@/app/api/offers/route";
+import { POST as postDeal } from "@/app/api/deals/route";
+import { PUT as putDeal } from "@/app/api/deals/[id]/route";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -136,9 +138,12 @@ function makeStore(over: Record<string, any> = {}): any {
     getProduct: vi.fn(async () => null),
     getOffer: vi.fn(async () => null),
     getPartner: vi.fn(async () => null),
+    getDeal: vi.fn(async () => null),
+    getCommissionAgent: vi.fn(async () => null),
     upsertProduct: vi.fn(async (p: any) => p),
     upsertOffer: vi.fn(async (o: any) => o),
     upsertPartner: vi.fn(async (p: any) => p),
+    upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
     deleteProduct: vi.fn(async () => {}),
     deleteOffer: vi.fn(async () => {}),
     deletePartner: vi.fn(async () => {}),
@@ -544,6 +549,384 @@ describe("tenant isolation — cross-tenant IDOR on POST /api/offers is blocked"
     expect(store.createDocWithNumber).toHaveBeenCalled();
     const passed = store.createDocWithNumber.mock.calls[0][1];
     expect(passed.tenant_id).toBe(TENANT_A); // overwritten — NOT tenant-B
+  });
+});
+
+// ── Tests: Deals IDOR prevention (S-FIX) ──────────────────────────────────
+//
+// Regression coverage for the POST /api/deals IDOR gap fixed in task S-FIX.
+// Previously the deals POST handler validated commission_agent_id but NOT
+// partner_id / buyer_id / supplier_id / product_id / contract_id — so a
+// user from tenant A could create a deal that cross-references tenant B's
+// partner, silently building a cross-tenant graph in the deals table
+// (which getInsights() would then surface on the dashboard).
+//
+// These tests exercise both the POST create path and the PUT update path
+// to ensure neither can repoint a deal at a cross-tenant entity.
+
+describe("Deals IDOR prevention — POST /api/deals", () => {
+  it("rejects a deal created with a cross-tenant partner_id → 404 'Partner not found.'", async () => {
+    const store = makeStore({
+      getPartner: vi.fn(async () => ({
+        id: "partner-tenant-B",
+        tenant_id: TENANT_B,
+        name: "Tenant B Partner",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await postDeal(
+      req(`http://localhost/api/deals`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Cross-tenant deal",
+          partner_id: "partner-tenant-B",
+          stage: "lead",
+          value: 1000,
+          currency: "USD",
+        }),
+      }),
+    );
+
+    expect(r.status).toBe(404);
+    const body = await r.json();
+    expect(body.error).toMatch(/partner not found/i);
+    // The deal MUST NOT have been created.
+    expect(store.upsertDeal).not.toHaveBeenCalled();
+    // The store WAS consulted — proving the route hit the IDOR guard and
+    // didn't 404 for some other reason (e.g. a permission gate).
+    expect(store.getPartner).toHaveBeenCalledWith("partner-tenant-B");
+  });
+
+  it("rejects a deal created with a cross-tenant product_id → 404 'Product not found.'", async () => {
+    const store = makeStore({
+      // partner_id is in the same tenant so it passes its check; the
+      // product_id check is what fires the 404.
+      getPartner: vi.fn(async () => ({
+        id: "partner-tenant-A",
+        tenant_id: TENANT_A,
+        name: "Tenant A Partner",
+      })),
+      getProduct: vi.fn(async () => ({
+        id: "prod-tenant-B",
+        tenant_id: TENANT_B,
+        sku: "B-SKU",
+        name: "Tenant B Widget",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await postDeal(
+      req(`http://localhost/api/deals`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Cross-tenant product",
+          partner_id: "partner-tenant-A",
+          product_id: "prod-tenant-B",
+          stage: "lead",
+          value: 1000,
+          currency: "USD",
+        }),
+      }),
+    );
+
+    expect(r.status).toBe(404);
+    const body = await r.json();
+    expect(body.error).toMatch(/product not found/i);
+    expect(store.upsertDeal).not.toHaveBeenCalled();
+  });
+
+  it("rejects a deal created with a cross-tenant supplier_id → 404 'Supplier not found.'", async () => {
+    const store = makeStore({
+      getPartner: vi.fn(async () => ({
+        // The supplier lookup reuses getPartner; the route verifies
+        // tenant_id matches.
+        id: "supplier-tenant-B",
+        tenant_id: TENANT_B,
+        name: "Tenant B Supplier",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await postDeal(
+      req(`http://localhost/api/deals`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Cross-tenant supplier",
+          supplier_id: "supplier-tenant-B",
+          stage: "lead",
+          value: 1000,
+          currency: "USD",
+        }),
+      }),
+    );
+
+    expect(r.status).toBe(404);
+    const body = await r.json();
+    expect(body.error).toMatch(/supplier not found/i);
+    expect(store.upsertDeal).not.toHaveBeenCalled();
+  });
+
+  it("rejects a deal created with a cross-tenant buyer_id → 404 'Buyer not found.'", async () => {
+    const store = makeStore({
+      getPartner: vi.fn(async () => ({
+        id: "buyer-tenant-B",
+        tenant_id: TENANT_B,
+        name: "Tenant B Buyer",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await postDeal(
+      req(`http://localhost/api/deals`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Cross-tenant buyer",
+          buyer_id: "buyer-tenant-B",
+          stage: "lead",
+          value: 1000,
+          currency: "USD",
+        }),
+      }),
+    );
+
+    expect(r.status).toBe(404);
+    const body = await r.json();
+    expect(body.error).toMatch(/buyer not found/i);
+    expect(store.upsertDeal).not.toHaveBeenCalled();
+  });
+
+  it("accepts a deal created with all same-tenant references → 200", async () => {
+    // Sanity check — make sure the IDOR guard doesn't false-positive when
+    // every referenced entity is in the caller's own tenant.
+    const store = makeStore({
+      getPartner: vi.fn(async () => ({
+        id: "partner-tenant-A",
+        tenant_id: TENANT_A,
+        name: "Tenant A Partner",
+      })),
+      getProduct: vi.fn(async () => ({
+        id: "prod-tenant-A",
+        tenant_id: TENANT_A,
+        sku: "A-SKU",
+        name: "Tenant A Widget",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await postDeal(
+      req(`http://localhost/api/deals`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Same-tenant deal",
+          partner_id: "partner-tenant-A",
+          product_id: "prod-tenant-A",
+          buyer_id: "partner-tenant-A",
+          supplier_id: "partner-tenant-A",
+          stage: "lead",
+          value: 1000,
+          currency: "USD",
+        }),
+      }),
+    );
+
+    expect(r.status).toBe(200);
+    expect(store.upsertDeal).toHaveBeenCalled();
+  });
+
+  it("super_admin CAN create a deal with a cross-tenant partner_id (no IDOR check)", async () => {
+    // Super-admins bypass the IDOR guard so they can remediate bad data
+    // (e.g. re-pointing a mislinked deal during platform-level support).
+    // We give the super-admin a non-null home tenant so the mocked
+    // `resolveTenantId` (which returns `auth.tenantId`) yields a usable
+    // tid — the route otherwise bails with 400 "No tenant context."
+    // (Real `resolveTenantId` honours `?tenant_id=` for super-admin, but
+    // the test-suite mock doesn't — keeping the mock simple is more
+    // valuable than reproducing the query-param branch here.)
+    const store = makeStore({
+      getPartner: vi.fn(async () => ({
+        id: "partner-tenant-B",
+        tenant_id: TENANT_B,
+        name: "Tenant B Partner",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
+    });
+    const sa: SafeUser = {
+      ...tenantAUser(),
+      id: "super-1",
+      role: "super_admin",
+      // Note: real super-admins have tenant_id=null, but the test mock
+      // for resolveTenantId returns auth.tenantId verbatim. Use TENANT_A
+      // so the route's `if (!tid) return 400` check doesn't fire and we
+      // actually reach the IDOR bypass branch.
+      tenant_id: TENANT_A,
+    };
+    mockState.auth = makeAuthCtx(sa, store);
+
+    const r = await postDeal(
+      req(`http://localhost/api/deals`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Super-admin remediation",
+          partner_id: "partner-tenant-B",
+          stage: "lead",
+          value: 1000,
+          currency: "USD",
+        }),
+      }),
+    );
+
+    expect(r.status).toBe(200);
+    expect(store.upsertDeal).toHaveBeenCalled();
+    // Confirm the IDOR check really was bypassed — getPartner was NOT
+    // called (the route skipped the ownership validation entirely).
+    expect(store.getPartner).not.toHaveBeenCalled();
+  });
+
+  it("does NOT trust a body.tenant_id that attempts to write into tenant B", async () => {
+    // Even if a malicious client sends body.tenant_id = "tenant-B", the
+    // route OVERWRITES it with the auth context's tenantId at line 74.
+    // The IDOR guard then validates partner_id against the *real* tenant
+    // (tenant-A), so a same-tenant partner passes.
+    const store = makeStore({
+      getPartner: vi.fn(async () => ({
+        id: "partner-tenant-A",
+        tenant_id: TENANT_A,
+        name: "Tenant A Partner",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-new", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await postDeal(
+      req(`http://localhost/api/deals`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Attempting to write into tenant B",
+          partner_id: "partner-tenant-A",
+          tenant_id: TENANT_B, // ← malicious
+          stage: "lead",
+          value: 1000,
+          currency: "USD",
+        }),
+      }),
+    );
+
+    expect(r.status).toBe(200);
+    expect(store.upsertDeal).toHaveBeenCalled();
+    const passed = store.upsertDeal.mock.calls[0][0];
+    expect(passed.tenant_id).toBe(TENANT_A); // overwritten — NOT tenant-B
+  });
+});
+
+describe("Deals IDOR prevention — PUT /api/deals/[id]", () => {
+  it("rejects updating a deal to repoint at a cross-tenant partner_id → 404 'Partner not found.'", async () => {
+    // The deal being updated is in tenant A (so the existing-tenant check
+    // passes), but the new partner_id is from tenant B. The IDOR guard
+    // must refuse.
+    const store = makeStore({
+      getDeal: vi.fn(async () => ({
+        id: "deal-tenant-A",
+        tenant_id: TENANT_A,
+        title: "Existing deal",
+        stage: "lead",
+      })),
+      getPartner: vi.fn(async () => ({
+        id: "partner-tenant-B",
+        tenant_id: TENANT_B,
+        name: "Tenant B Partner",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-tenant-A", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await putDeal(
+      req(`http://localhost/api/deals/deal-tenant-A`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          partner_id: "partner-tenant-B",
+        }),
+      }),
+      { params: Promise.resolve({ id: "deal-tenant-A" }) },
+    );
+
+    expect(r.status).toBe(404);
+    const body = await r.json();
+    expect(body.error).toMatch(/partner not found/i);
+    expect(store.upsertDeal).not.toHaveBeenCalled();
+  });
+
+  it("rejects updating a deal that already belongs to another tenant → 404 'Not found.'", async () => {
+    // Pre-existing tenant-isolation guard (not the S-FIX change), but
+    // included here as a regression so the S-FIX IDOR check doesn't
+    // accidentally weaken the existing GET/PUT tenant gate.
+    const store = makeStore({
+      getDeal: vi.fn(async () => ({
+        id: "deal-tenant-B",
+        tenant_id: TENANT_B,
+        title: "Tenant B deal",
+        stage: "lead",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-tenant-B", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await putDeal(
+      req(`http://localhost/api/deals/deal-tenant-B`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Hijacked" }),
+      }),
+      { params: Promise.resolve({ id: "deal-tenant-B" }) },
+    );
+
+    expect(r.status).toBe(404);
+    expect(store.upsertDeal).not.toHaveBeenCalled();
+  });
+
+  it("accepts a same-tenant partner_id update → 200", async () => {
+    const store = makeStore({
+      getDeal: vi.fn(async () => ({
+        id: "deal-tenant-A",
+        tenant_id: TENANT_A,
+        title: "Existing deal",
+        stage: "lead",
+      })),
+      getPartner: vi.fn(async () => ({
+        id: "partner-tenant-A",
+        tenant_id: TENANT_A,
+        name: "Tenant A Partner",
+      })),
+      upsertDeal: vi.fn(async (d: any) => ({ id: "deal-tenant-A", ...d })),
+    });
+    mockState.auth = makeAuthCtx(tenantAUser(), store);
+
+    const r = await putDeal(
+      req(`http://localhost/api/deals/deal-tenant-A`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          partner_id: "partner-tenant-A",
+        }),
+      }),
+      { params: Promise.resolve({ id: "deal-tenant-A" }) },
+    );
+
+    expect(r.status).toBe(200);
+    expect(store.upsertDeal).toHaveBeenCalled();
   });
 });
 

@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
     }
 
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
     body.tenant_id = tid;
     if (!body.owner_id && "user" in auth) body.owner_id = auth.user.id;
     // CRITICAL FIX (audit F-1): validate commission_agent_id points to a real
@@ -75,6 +80,49 @@ export async function POST(req: NextRequest) {
       const agent = await auth.store.getCommissionAgent(body.commission_agent_id);
       if (!agent || agent.tenant_id !== tid) {
         return NextResponse.json({ error: "Commission agent not found." }, { status: 400 });
+      }
+    }
+    // S-FIX / IDOR prevention: validate every cross-referenced entity belongs
+    // to the caller's tenant. Without these checks, an authenticated user
+    // could pass another tenant's partner_id / buyer_id / supplier_id /
+    // product_id / contract_id and silently create a deal that links to
+    // cross-tenant data (the DB has no FK enforcing tenant scoping across
+    // these tables). Super-admins bypass so they can remediate bad data.
+    // Defense-in-depth: each lookup is best-effort — a missing entity is a
+    // 404, a cross-tenant entity is a 404 (same shape, no enumeration leak).
+    const _isSuperAdmin = !("apiKeyId" in auth) && auth.isSuperAdmin;
+    if (!_isSuperAdmin) {
+      if (body.partner_id) {
+        const partner = await auth.store.getPartner(body.partner_id);
+        if (!partner || partner.tenant_id !== tid) {
+          return NextResponse.json({ error: "Partner not found." }, { status: 404 });
+        }
+      }
+      if (body.buyer_id) {
+        const buyer = await auth.store.getPartner(body.buyer_id);
+        if (!buyer || buyer.tenant_id !== tid) {
+          return NextResponse.json({ error: "Buyer not found." }, { status: 404 });
+        }
+      }
+      if (body.supplier_id) {
+        const supplier = await auth.store.getPartner(body.supplier_id);
+        if (!supplier || supplier.tenant_id !== tid) {
+          return NextResponse.json({ error: "Supplier not found." }, { status: 404 });
+        }
+      }
+      if (body.product_id) {
+        const product = await auth.store.getProduct(body.product_id);
+        if (!product || product.tenant_id !== tid) {
+          return NextResponse.json({ error: "Product not found." }, { status: 404 });
+        }
+      }
+      if (body.contract_id) {
+        // Contract field references a Deal (parent deal) — re-use getDeal
+        // for ownership verification.
+        const contract = await auth.store.getDeal(body.contract_id);
+        if (!contract || contract.tenant_id !== tid) {
+          return NextResponse.json({ error: "Contract not found." }, { status: 404 });
+        }
       }
     }
     // F-FINAL / P1: the deals table has 4 NOT NULL columns with no DB-side

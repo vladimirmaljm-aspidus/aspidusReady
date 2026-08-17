@@ -61,6 +61,47 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: "Commission agent not found." }, { status: 400 });
       }
     }
+    // S-FIX / IDOR prevention: validate every cross-referenced entity in the
+    // PATCH body belongs to the caller's tenant. Without these checks, an
+    // authenticated user could repoint a deal at another tenant's partner /
+    // buyer / supplier / product / contract by PUTting those IDs (the DB has
+    // no FK enforcing tenant scoping across these tables). Super-admins
+    // bypass so they can remediate cross-tenant references.
+    if (!auth.isSuperAdmin) {
+      const tid = auth.tenantId!;
+      if (body.partner_id) {
+        const partner = await auth.store.getPartner(body.partner_id);
+        if (!partner || partner.tenant_id !== tid) {
+          return NextResponse.json({ error: "Partner not found." }, { status: 404 });
+        }
+      }
+      if (body.buyer_id) {
+        const buyer = await auth.store.getPartner(body.buyer_id);
+        if (!buyer || buyer.tenant_id !== tid) {
+          return NextResponse.json({ error: "Buyer not found." }, { status: 404 });
+        }
+      }
+      if (body.supplier_id) {
+        const supplier = await auth.store.getPartner(body.supplier_id);
+        if (!supplier || supplier.tenant_id !== tid) {
+          return NextResponse.json({ error: "Supplier not found." }, { status: 404 });
+        }
+      }
+      if (body.product_id) {
+        const product = await auth.store.getProduct(body.product_id);
+        if (!product || product.tenant_id !== tid) {
+          return NextResponse.json({ error: "Product not found." }, { status: 404 });
+        }
+      }
+      if (body.contract_id) {
+        // Contract field references a Deal (parent deal) — re-use getDeal
+        // for ownership verification.
+        const contract = await auth.store.getDeal(body.contract_id);
+        if (!contract || contract.tenant_id !== tid) {
+          return NextResponse.json({ error: "Contract not found." }, { status: 404 });
+        }
+      }
+    }
     const updated = await auth.store.upsertDeal({ ...body, id, tenant_id: existing.tenant_id });
     await audit(auth.store, auth.user, req, "deal.update", "deal", id, { stage: updated.stage });
     return NextResponse.json(updated);
