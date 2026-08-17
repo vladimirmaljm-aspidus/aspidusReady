@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuthOrApiKey, requireAuthOrApiKeyPermission, audit, resolveTenantId } from "@/lib/api/helpers";
 import { TradeCostLine } from "@/lib/supabase/types";
 import { TRADE_COST_TYPES } from "@/lib/data/reference";
 import { getExchangeRate } from "@/lib/utils/exchange-rates";
@@ -28,9 +28,9 @@ function normalizeCommissionType(t: string | null | undefined): string | null {
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuthOrApiKey(_req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (trade-calculator.read)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.read"); if (_d) return _d; } } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  const denied = requireAuthOrApiKeyPermission(auth, "trade-calculator.read");
+  if (denied) return denied;
   // Feature gate (module_trade)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
@@ -58,9 +58,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (trade-calculator.update)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.update"); if (_d) return _d; } } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  const denied = requireAuthOrApiKeyPermission(auth, "trade-calculator.update");
+  if (denied) return denied;
   // Feature gate (module_trade)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
@@ -239,9 +239,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-  // Permission gate (trade-calculator.delete)
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.delete"); if (_d) return _d; } } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  const denied = requireAuthOrApiKeyPermission(auth, "trade-calculator.delete");
+  if (denied) return denied;
   // Feature gate (module_trade)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, requireAuthOrApiKeyPermission, audit, resolveTenantId } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 import type { OfferLineItem } from "@/lib/supabase/types";
 
@@ -19,9 +19,14 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (offers.create)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "offers.create"); if (_d) return _d; } } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  // This automation route creates an offer — a trade document with
+  // pricing and product data. Previously any API key could trigger
+  // offer creation, which also flows into the monthly_documents
+  // quota counter downstream. API-key callers MUST now hold
+  // `offers:create` (or `*`).
+  const denied = requireAuthOrApiKeyPermission(auth, "offers.create");
+  if (denied) return denied;
   // Feature gate (module_trade) — creates an offer (trade document).
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;

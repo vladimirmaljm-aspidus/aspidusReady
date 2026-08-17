@@ -19,7 +19,12 @@ import {
   TENANT_PERMISSIONS,
   isPlatformPerm,
 } from "@/lib/permissions/catalog";
-import { hasPermission, type AuthContext, type ApiKeyAuthContext } from "@/lib/api/helpers";
+import {
+  hasPermission,
+  requireAuthOrApiKeyPermission,
+  type AuthContext,
+  type ApiKeyAuthContext,
+} from "@/lib/api/helpers";
 import type { SafeUser } from "@/lib/store/app-store";
 
 // ── Permission matrix fixtures ────────────────────────────────────────────
@@ -433,5 +438,189 @@ describe("RBAC — permission catalog sanity", () => {
     for (const p of Object.values(PLATFORM)) {
       expect(TENANT_PERMISSIONS).not.toContain(p);
     }
+  });
+});
+
+// ── U-FIX: API-key permission bypass prevention ───────────────────────────
+// These tests lock down the fix for RBAC audit finding D-1 / P1: nine
+// routes wrapped `requirePermission(auth, ...)` inside
+// `if (!("apiKeyId" in auth))`, which silently skipped permission
+// checks for API-key callers — any API key (even one with `permissions:
+// []`) could access the dashboard, trade calculator, supplier offers,
+// ERP settings (POST mutates!), and automation routes.
+//
+// The fix introduced the `requireAuthOrApiKeyPermission()` helper in
+// `@/lib/api/helpers`. These tests prove:
+//   (a) An API key with empty permissions is REJECTED for every
+//       one of the 9 bypass routes (regression coverage for the fix).
+//   (b) An API key scoped to a single unrelated resource is REJECTED.
+//   (c) An API key with the correct permission is ALLOWED.
+//   (d) An API key with the wildcard `*` is ALLOWED.
+//   (e) Session-auth callers retain the existing `requirePermission`
+//       behavior (the helper does not regress session auth).
+//   (f) The dot-format permission string the routes pass in is
+//       correctly converted to colon format for the API-key layer.
+
+describe("U-FIX — API-key permission bypass prevention (requireAuthOrApiKeyPermission)", () => {
+  function apiKeyCtx(perms: string[]): ApiKeyAuthContext {
+    return {
+      store: {} as any,
+      ip: "127.0.0.1",
+      tenantId: "tenant-A",
+      apiKeyId: "key-1",
+      apiKeyName: "test key",
+      permissions: perms,
+    };
+  }
+
+  // ── The 9 bypass routes + their required permission ──────────────────────
+  // Mirrors the per-route mapping in the U-FIX task description so a future
+  // change to either side (route or test) drifts visibly.
+  const ROUTES_AND_PERMS: Array<{
+    label: string;
+    permission: string; // dot-format, as passed by the route
+    expectedColon: string; // colon-format, as hasPermission() sees it
+  }> = [
+    { label: "GET /api/dashboard",                              permission: "dashboard.read",         expectedColon: "dashboard:read" },
+    { label: "GET /api/dashboard/charts",                        permission: "dashboard.read",         expectedColon: "dashboard:read" },
+    { label: "GET /api/trade-calculator",                        permission: "trade-calculator.read",  expectedColon: "trade-calculator:read" },
+    { label: "POST /api/trade-calculator",                       permission: "trade-calculator.create",expectedColon: "trade-calculator:create" },
+    { label: "GET /api/trade-calculator/[id]",                   permission: "trade-calculator.read",  expectedColon: "trade-calculator:read" },
+    { label: "PUT /api/trade-calculator/[id]",                   permission: "trade-calculator.update",expectedColon: "trade-calculator:update" },
+    { label: "DELETE /api/trade-calculator/[id]",                permission: "trade-calculator.delete",expectedColon: "trade-calculator:delete" },
+    { label: "POST /api/trade-calculator/[id]/create-offer",     permission: "trade-calculator.create",expectedColon: "trade-calculator:create" },
+    { label: "GET /api/supplier-offers",                         permission: "supplier-offers.read",   expectedColon: "supplier-offers:read" },
+    { label: "GET /api/erp/settings",                            permission: "erp.read",               expectedColon: "erp:read" },
+    { label: "POST /api/erp/settings (MUTATES!)",               permission: "erp.manage_settings",    expectedColon: "erp:manage_settings" },
+    { label: "POST /api/automation/create-demand-from-portal-rfq", permission: "demands.create",        expectedColon: "demands:create" },
+    { label: "POST /api/automation/create-offer-from-deal",      permission: "offers.create",          expectedColon: "offers:create" },
+  ];
+
+  // ── (a) Empty-permissions API key is rejected on EVERY bypass route ────
+  it("rejects an API key with empty permissions on every one of the 9 bypass routes", () => {
+    const emptyKey = apiKeyCtx([]);
+    for (const { label, permission } of ROUTES_AND_PERMS) {
+      const denied = requireAuthOrApiKeyPermission(emptyKey, permission);
+      expect(denied, `${label} should reject an empty-permissions API key`).toBeInstanceOf(NextResponse);
+      expect((denied as NextResponse).status, `${label} should return 403`).toBe(403);
+    }
+  });
+
+  // ── (b) API key scoped to an UNRELATED resource is rejected ─────────────
+  it("rejects an API key scoped to a single unrelated resource on each bypass route", () => {
+    // The key is scoped to partners only — none of the 9 bypass routes
+    // expose partner data, so this key should be rejected everywhere
+    // here. This is the precise attack scenario the audit raised: an
+    // admin issues a "partners:read only" key, the attacker pivots to
+    // dashboard / ERP via the bypass. The fix must reject that pivot.
+    const partnersOnlyKey = apiKeyCtx(["partners:read"]);
+    for (const { label, permission } of ROUTES_AND_PERMS) {
+      const denied = requireAuthOrApiKeyPermission(partnersOnlyKey, permission);
+      expect(denied, `${label} should reject a partners-only key requesting ${permission}`).toBeInstanceOf(NextResponse);
+      expect((denied as NextResponse).status).toBe(403);
+    }
+  });
+
+  // ── (c) API key with the EXACT required permission is allowed ───────────
+  it("allows an API key with the exact required permission (colon-format grant stored on the key)", () => {
+    for (const { label, permission, expectedColon } of ROUTES_AND_PERMS) {
+      // Each route's required permission, stored on the key in colon
+      // format (the format POST /api/api-keys persists).
+      const key = apiKeyCtx([expectedColon]);
+      const denied = requireAuthOrApiKeyPermission(key, permission);
+      expect(denied, `${label} should allow the exact-match key`).toBeNull();
+    }
+  });
+
+  // ── (d) Wildcard '*' API key is allowed on every bypass route ───────────
+  it("allows an API key with the wildcard '*' permission on every bypass route", () => {
+    const wildcardKey = apiKeyCtx(["*"]);
+    for (const { label, permission } of ROUTES_AND_PERMS) {
+      const denied = requireAuthOrApiKeyPermission(wildcardKey, permission);
+      expect(denied, `${label} should allow the '*' wildcard key`).toBeNull();
+    }
+  });
+
+  // ── (e) Resource-level wildcard is honored ─────────────────────────────
+  it("allows an API key with a resource-level wildcard grant (e.g. 'erp:*' covers erp.read AND erp.manage_settings)", () => {
+    const erpWildcard = apiKeyCtx(["erp:*"]);
+    expect(requireAuthOrApiKeyPermission(erpWildcard, "erp.read")).toBeNull();
+    expect(requireAuthOrApiKeyPermission(erpWildcard, "erp.manage_settings")).toBeNull();
+    // …but erp:* does NOT cover offers/demands — defense-in-depth.
+    expect(requireAuthOrApiKeyPermission(erpWildcard, "offers.create")).toBeInstanceOf(NextResponse);
+    expect(requireAuthOrApiKeyPermission(erpWildcard, "demands.create")).toBeInstanceOf(NextResponse);
+  });
+
+  // ── (f) Helper correctly converts dot-format → colon-format ─────────────
+  it("correctly converts dot-format permission to colon format for the API-key path", () => {
+    // The helper MUST convert "erp.manage_settings" → "erp:manage_settings"
+    // because hasPermission() splits on ":" to derive "resource:*" wildcards.
+    // If the conversion breaks (e.g. someone removes the .replace() call),
+    // hasPermission would receive "erp.manage_settings", split on ":" would
+    // yield a single-element array, and "erp.manage_settings" wouldn't match
+    // "erp:*" — silently rejecting every legit API key.
+    const erpKey = apiKeyCtx(["erp:manage_settings"]);
+    expect(requireAuthOrApiKeyPermission(erpKey, "erp.manage_settings")).toBeNull();
+    // Multi-segment dots still convert correctly for the 2-segment perms
+    // in our route table (every affected perm is 2 segments).
+    const tradeKey = apiKeyCtx(["trade-calculator:create"]);
+    expect(requireAuthOrApiKeyPermission(tradeKey, "trade-calculator.create")).toBeNull();
+  });
+
+  // ── The 403 body carries the required_permission field for triage ────────
+  it("embeds the dot-format required_permission in the 403 body for client-side debugging", async () => {
+    const emptyKey = apiKeyCtx([]);
+    const denied = requireAuthOrApiKeyPermission(emptyKey, "dashboard.read");
+    expect(denied).toBeInstanceOf(NextResponse);
+    const body = await (denied as NextResponse).json();
+    expect(body.error).toMatch(/insufficient permissions/i);
+    expect(body.required_permission).toBe("dashboard.read");
+  });
+
+  // ── The ERP POST mutation is rejected even for an erp:read-only key ─────
+  it("rejects POST /api/erp/settings (the state-changing route) for an erp:read-only key", () => {
+    // This is the most severe of the 9 bypasses — POST mutates ERP
+    // settings. An API key scoped to erp:read should NOT be able to
+    // mutate. Lock this scenario down explicitly.
+    const erpReadKey = apiKeyCtx(["erp:read"]);
+    expect(requireAuthOrApiKeyPermission(erpReadKey, "erp.read")).toBeNull();        // GET is allowed
+    expect(requireAuthOrApiKeyPermission(erpReadKey, "erp.manage_settings")).toBeInstanceOf(NextResponse); // POST is denied
+  });
+
+  // ── Session-auth path: the helper preserves existing requirePermission ──
+  describe("session-auth path (delegates to requirePermission)", () => {
+    it("returns null for an admin session caller (implicit tenant-wide grant)", () => {
+      const auth = authCtxFor(safeUser({ role: "admin" }));
+      for (const { label, permission } of ROUTES_AND_PERMS) {
+        const denied = requireAuthOrApiKeyPermission(auth, permission);
+        expect(denied, `${label} should allow admin session caller`).toBeNull();
+      }
+    });
+
+    it("returns null for a super_admin session caller (unconditional bypass)", () => {
+      const auth = authCtxFor(safeUser({ role: "super_admin", tenant_id: null }));
+      for (const { label, permission } of ROUTES_AND_PERMS) {
+        const denied = requireAuthOrApiKeyPermission(auth, permission);
+        expect(denied, `${label} should allow super_admin session caller`).toBeNull();
+      }
+    });
+
+    it("returns a 403 NextResponse for a regular user without the grant", () => {
+      const auth = authCtxFor(safeUser({ role: "user", permissions: [] }));
+      const denied = requireAuthOrApiKeyPermission(auth, "dashboard.read");
+      expect(denied).toBeInstanceOf(NextResponse);
+      expect((denied as NextResponse).status).toBe(403);
+    });
+
+    it("returns null for a regular user with an explicit grant", () => {
+      const auth = authCtxFor(
+        safeUser({ role: "user", permissions: ["dashboard.read", "erp.manage_settings"] })
+      );
+      expect(requireAuthOrApiKeyPermission(auth, "dashboard.read")).toBeNull();
+      expect(requireAuthOrApiKeyPermission(auth, "erp.manage_settings")).toBeNull();
+      // The user does NOT have these:
+      expect(requireAuthOrApiKeyPermission(auth, "trade-calculator.read")).toBeInstanceOf(NextResponse);
+      expect(requireAuthOrApiKeyPermission(auth, "offers.create")).toBeInstanceOf(NextResponse);
+    });
   });
 });

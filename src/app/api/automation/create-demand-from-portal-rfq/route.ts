@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, requireAuthOrApiKeyPermission, audit, resolveTenantId } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -17,9 +17,13 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (demands.create)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "demands.create"); if (_d) return _d; } } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  // This automation route creates a CRM demand entity — previously
+  // any API key could trigger demand creation, including cross-
+  // tenant if combined with another bug. API-key callers MUST now
+  // hold `demands:create` (or `*`).
+  const denied = requireAuthOrApiKeyPermission(auth, "demands.create");
+  if (denied) return denied;
   // Feature gate (module_crm) — creates a demand (CRM entity).
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;

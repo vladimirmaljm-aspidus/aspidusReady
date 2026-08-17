@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, requireAuthOrApiKeyPermission, audit, resolveTenantId } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (supplier-offers.read)
-    if (!("apiKeyId" in auth)) { const { requirePermission } = await import("@/lib/permissions/can");
-      const _d = requirePermission(auth, "supplier-offers.read"); if (_d) return _d; } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  // Supplier-offers expose supplier cost data (cost, currency, lead
+  // time) — the upstream side of margin calculations. Previously any
+  // API key could list these.
+  const denied = requireAuthOrApiKeyPermission(auth, "supplier-offers.read");
+  if (denied) return denied;
   // Feature gate (module_trade)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;

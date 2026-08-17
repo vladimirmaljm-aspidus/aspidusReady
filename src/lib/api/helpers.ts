@@ -3,6 +3,10 @@ import { getSessionFromCookie, ImpersonationClaim } from "@/lib/auth/session";
 import { getStore } from "@/lib/data/store";
 import { SafeUser } from "@/lib/store/app-store";
 import { createHash } from "crypto";
+// NOTE: `@/lib/permissions/can` only imports `type { AuthContext,
+// ApiKeyAuthContext }` from this module (`import type` is erased at compile
+// time), so this static import does NOT create a runtime circular dependency.
+import { requirePermission } from "@/lib/permissions/can";
 
 export interface AuthContext {
   user: SafeUser;
@@ -307,6 +311,58 @@ export function hasPermission(permissions: string[], required: string): boolean 
   const [resource, action] = required.split(":");
   // Check for resource:* or resource:action
   return permissions.includes(`${resource}:*`) || permissions.includes(required);
+}
+
+/**
+ * Check permissions for BOTH session-auth and API-key-auth callers.
+ *
+ * U-FIX (RBAC audit D-1 / P1): nine routes previously wrapped
+ * `requirePermission(auth, ...)` inside `if (!("apiKeyId" in auth))`,
+ * which meant API-key callers were NEVER permission-checked — any API
+ * key (even one created with `permissions: []`) could access the
+ * dashboard KPIs, trade calculator, supplier offers, ERP settings
+ * (POST mutates!), and automation routes. This helper closes that
+ * bypass for any route that adopts it.
+ *
+ * Usage (replaces the broken pattern):
+ *   const auth = await requireAuthOrApiKey(req);
+ *   if (auth instanceof NextResponse) return auth;
+ *   const denied = requireAuthOrApiKeyPermission(auth, "dashboard.read");
+ *   if (denied) return denied;
+ *
+ * Permission format:
+ *   - Pass dot format (e.g. "dashboard.read", "erp.manage_settings") —
+ *     this is what the catalog (`lib/permissions/catalog.ts`) and the
+ *     session-side `requirePermission()` use.
+ *   - For API-key callers, this helper converts dots to colons before
+ *     calling `hasPermission()` (which expects colon format like
+ *     "dashboard:read"). The conversion is idempotent for callers
+ *     that already pass colon format.
+ */
+export function requireAuthOrApiKeyPermission(
+  auth: AuthContext | ApiKeyAuthContext,
+  permission: string
+): NextResponse | null {
+  if ("apiKeyId" in auth) {
+    // API-key caller — convert dot format to colon format for
+    // `hasPermission()` (which splits on `:` to derive `resource:*`
+    // wildcards). Conversion is idempotent for colon-format input.
+    const colonPerm = permission.replace(/\./g, ":");
+    if (!hasPermission(auth.permissions, colonPerm)) {
+      return NextResponse.json(
+        {
+          error: "Insufficient permissions for this API key.",
+          required_permission: permission,
+        },
+        { status: 403 }
+      );
+    }
+    return null;
+  }
+  // Session-auth caller — delegate to the catalog-aware evaluator.
+  // `requirePermission()` runs `can()`, which accepts both dot and
+  // colon formats and understands role-based implicit grants.
+  return requirePermission(auth, permission);
 }
 
 /**

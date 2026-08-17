@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAuthOrApiKey, audit, resolveTenantId } from "@/lib/api/helpers";
+import { requireAuth, requireAuthOrApiKey, requireAuthOrApiKeyPermission, audit, resolveTenantId } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
 
 export const runtime = "nodejs";
@@ -28,9 +28,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const auth = await requireAuthOrApiKey(req);
     if (auth instanceof NextResponse) return auth;
-    // Permission gate (trade-calculator.create)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "trade-calculator.create"); if (_d) return _d; } } /* requirePermission wired */
+    // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+    // POST creates an offer from a trade calc — `offers.create` is the
+    // narrower / more accurate permission for the resulting entity, but
+    // the route has historically been gated by `trade-calculator.create`.
+    // Both are accepted by `can()` for admins (implicit), so session
+    // callers see no behavior change; API-key callers must now hold
+    // `trade-calculator:create` (or `*`).
+    const denied = requireAuthOrApiKeyPermission(auth, "trade-calculator.create");
+    if (denied) return denied;
     // Feature gate (module_trade)
     { const { requireFeature } = await import("@/lib/api/feature-guard");
       const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;

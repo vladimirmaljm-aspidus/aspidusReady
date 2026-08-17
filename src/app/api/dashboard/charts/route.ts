@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   requireAuthOrApiKey,
+  requireAuthOrApiKeyPermission,
   resolveTenantId,
   sanitizeError,
 } from "@/lib/api/helpers";
@@ -38,27 +39,17 @@ async function _get(req: NextRequest) {
     const auth = await requireAuthOrApiKey(req);
     if (auth instanceof NextResponse) return auth;
 
-    // Permission gate — mirrors the existing /api/dashboard route. Session-
-    // auth callers go through requirePermission; API-key callers are
-    // checked against their key's permissions below.
-    {
-      const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) {
-        const denied = requirePermission(auth, "dashboard.read");
-        if (denied) return denied;
-      }
-    }
-
-    // API-key permission check (defence-in-depth — hasPermission is also
-    // called by requireApiKeyAuth's downstream consumers, but the existing
-    // /api/dashboard route doesn't gate API keys because getInsights is
-    // read-only. We mirror that lenient stance here: the charts payload
-    // is no more sensitive than the existing dashboard payload.)
-    // If you want to tighten this, uncomment the block below:
-    //
-    // if ("apiKeyId" in auth && !hasPermission(auth.permissions, "dashboard:read")) {
-    //   return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
-    // }
+    // U-FIX (RBAC audit D-1 / P1): the permission check was previously
+    // commented out — meaning BOTH session and API-key callers skipped
+    // it. Re-enabled using the new helper which checks permissions for
+    // BOTH auth modes. API-key callers MUST hold `dashboard:read` (or
+    // `*`); session callers are gated via `can()` → `dashboard.read`.
+    // Until this fix, any API key (even with `permissions: []`) could
+    // read the full charts payload: monthly revenue, top products by
+    // revenue, offer-status distribution, margin-by-category, payment
+    // trend — the most sensitive financial KPIs the dashboard surfaces.
+    const denied = requireAuthOrApiKeyPermission(auth, "dashboard.read");
+    if (denied) return denied;
 
     const tid = resolveTenantId(auth, req);
 

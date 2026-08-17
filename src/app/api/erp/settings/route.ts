@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requireAdmin, requireAuthOrApiKey, resolveTenantId, audit } from "@/lib/api/helpers";
+import { requireAuth, requireAdmin, requireAuthOrApiKey, requireAuthOrApiKeyPermission, resolveTenantId, audit } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
 
@@ -7,9 +7,12 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-    // Permission gate (erp.read)
-    { const { requirePermission } = await import("@/lib/permissions/can");
-      if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "erp.read"); if (_d) return _d; } } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  // ERP settings expose accounting standard, default currency, fiscal
+  // year — sensitive financial configuration. Previously any API key
+  // could read these.
+  const denied = requireAuthOrApiKeyPermission(auth, "erp.read");
+  if (denied) return denied;
   // Feature gate (module_finance)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
@@ -34,20 +37,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await requireAuthOrApiKey(req);
   if (auth instanceof NextResponse) return auth;
-  // Permission gate (erp.create)
-  { const { requirePermission } = await import("@/lib/permissions/can");
-    if (!("apiKeyId" in auth)) { const _d = requirePermission(auth, "erp.manage_settings"); if (_d) return _d; } } /* requirePermission wired */
+  // U-FIX (RBAC audit D-1): gate BOTH session AND API-key callers.
+  // This is the most severe bypass of the 9: POST MUTATES ERP
+  // settings (accounting standard, default currency, fiscal year).
+  // Previously any API key — even one created with `permissions: []`
+  // — could rewrite a tenant's accounting configuration. API-key
+  // callers MUST now hold `erp:manage_settings` (or `*`).
+  const denied = requireAuthOrApiKeyPermission(auth, "erp.manage_settings");
+  if (denied) return denied;
   // Feature gate (module_finance)
   { const { requireFeature } = await import("@/lib/api/feature-guard");
     const _tid = ("apiKeyId" in auth) ? auth.tenantId : auth.tenantId;
     const _isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
     const _f = await requireFeature(_tid, "module_finance", _isSA); if (_f) return _f; } /* requireFeature wired */
 
-
-  // For session auth, require admin role; for API key auth, check permissions
-  if ("apiKeyId" in auth) {
-    // API key auth — permission check handled by hasPermission if needed
-  } else if (!auth.isSuperAdmin && auth.user.role !== "admin") {
+  // Defense-in-depth: for session auth, ALSO require admin role (the
+  // catalog permission alone is insufficient because a non-admin user
+  // could in principle be granted erp.manage_settings — that grant is
+  // honored by `can()`, but the route historically required admin
+  // role on top. Keep that belt-and-suspenders check for session
+  // callers; the API-key path is gated by the helper above.)
+  if (!("apiKeyId" in auth) && !auth.isSuperAdmin && auth.user.role !== "admin") {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
 
