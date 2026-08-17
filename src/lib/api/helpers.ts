@@ -312,6 +312,32 @@ export async function requireAuth(req?: NextRequest): Promise<AuthContext | Next
     }
   }
 
+  // ── FIX-V1: warm the role-override cache (UI subsystem) ───────────────
+  // The super-admin Roles tab writes per-(tenant_id, role) overrides to
+  // `settings.role_overrides` (a JSON blob). `can()` consults a SYNC
+  // accessor (`getCachedRoleOverrides`) on the hot path — it doesn't await
+  // a DB query per check. We warm the cache here (async) so by the time
+  // the route handler calls `requirePermission(auth, ...)` the cache is
+  // hot. Super-admin + impersonation skip the warmup (super-admin is
+  // NEVER subject to overrides; when impersonating, the super-admin's
+  // own role is what matters for the bypass, not the target's override).
+  //
+  // Fail-open: a DB hiccup just means no override applies this request
+  // (the cache will retry on the next request when the DB is back). We
+  // also re-warm on every request that hits requireAuth — the in-process
+  // 5-min cache makes this a no-op once warmed.
+  if (!isSuperAdmin && !impersonation && effectiveUser.tenant_id && effectiveUser.role) {
+    try {
+      const { loadRoleOverrides } = await import("@/lib/permissions/tenant-roles");
+      await loadRoleOverrides(effectiveUser.role, effectiveUser.tenant_id);
+    } catch (e) {
+      // Non-fatal — overrides are additive; a missed warmup just means
+      // base perms apply this request. The 5-min cache will retry on
+      // the next request.
+      console.warn("[requireAuth] loadRoleOverrides warmup failed:", e);
+    }
+  }
+
   return {
     user: safe as SafeUser,
     store,

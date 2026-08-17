@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin, audit, sanitizeError } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
+import { invalidateRoleOverridesCache } from "@/lib/permissions/tenant-roles";
 
 export const runtime = "nodejs";
 
@@ -148,6 +149,11 @@ export async function POST(req: NextRequest) {
       permission_count: newOverride.permissions.length,
     });
 
+    // FIX-V1: drop the in-process cache so the next request that calls
+    // `can()` for this (tenant_id, role) pair sees the new override
+    // (within milliseconds — not up to the 5-min TTL).
+    invalidateRoleOverridesCache(newOverride.tenant_id, newOverride.role);
+
     return NextResponse.json({ override: newOverride }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
@@ -183,6 +189,10 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Override not found." }, { status: 404 });
     }
 
+    // Snapshot the override being deleted so we can drop the matching
+    // cache entry below (FIX-V1 — avoids up to 5-min staleness).
+    const deleted = list.find((o) => o.id === id);
+
     if (data?.id) {
       const { error } = await sb
         .from("settings")
@@ -194,6 +204,16 @@ export async function DELETE(req: NextRequest) {
     await audit(auth.store, auth.user, req, "settings.role_override.delete", "settings", "role_overrides", {
       override_id: id,
     });
+
+    // FIX-V1: drop the cache entry for the deleted override's (tenant_id,
+    // role) pair so the next `can()` for that pair sees the updated diff.
+    // If we couldn't determine the pair (data was missing), drop the
+    // whole cache — safer to over-invalidate than leave stale grants.
+    if (deleted) {
+      invalidateRoleOverridesCache(deleted.tenant_id, deleted.role);
+    } else {
+      invalidateRoleOverridesCache();
+    }
 
     return NextResponse.json({ deleted: id });
   } catch (e: any) {

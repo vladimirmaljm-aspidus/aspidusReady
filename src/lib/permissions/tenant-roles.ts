@@ -81,58 +81,83 @@ export interface TenantRoleOverride {
  * `role-overrides/route.ts` POST/GET persist a JSON array of
  * `{ id, tenant_id, role, mode, permissions, notes, ... }` into the
  * `settings.value` column (key = "role_overrides"). This helper loads
- * that blob and returns the GRANT-mode permissions for the given
- * (role, tenant_id) pair. DENY mode is ignored (the SoD check is
- * grants-only — a deny can't cause a SoD violation because a violation
- * requires the user to HOLD both perms).
+ * that blob and returns the GRANT-mode + DENY-mode permissions for
+ * the given (role, tenant_id) pair.
  *
- * Returns an object with a `grants` array (possibly empty). Cached for
- * 5 minutes — callers that mutate the blob should call
+ * The UI exposes BOTH grant + deny modes (the New Override dialog
+ * has a "grant (add)" / "deny (subtract)" Select). The loader honors
+ * both: `grants` is the union of every "grant" override's permissions
+ * for this role+tenant; `denies` is the union of every "deny" override's
+ * permissions. In `can()`, deny WINS over grants + base perms.
+ *
+ * Platform perms (`platform.*`) are filtered out of `grants` (defense-in-
+ * depth — overrides can never grant them). Denies of platform perms are
+ * also dropped (the isPlatformPerm gate in `can()` already rejects them
+ * for non-super callers, so a deny override is redundant).
+ *
+ * Cached for 5 minutes — callers that mutate the blob should call
  * `invalidateRoleOverridesCache()` after the write.
  */
-export interface RoleOverrideGrants {
+export interface RoleOverrideDiff {
   grants: string[];
+  denies: string[];
 }
 
-const roleOverridesCache = new Map<string, { value: RoleOverrideGrants; expires: number }>();
+const roleOverridesCache = new Map<string, { value: RoleOverrideDiff | null; expires: number }>();
 const ROLE_OVERRIDES_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function invalidateRoleOverridesCache(
   tenantId?: string | null,
-  role?: string,
+  role?: string | null,
 ): void {
   if (!tenantId && !role) {
     roleOverridesCache.clear();
     return;
   }
   for (const key of Array.from(roleOverridesCache.keys())) {
-    const [t, r] = key.split("|");
-    if (tenantId && role && t === tenantId && r === role) {
+    const [t, r] = key.split("|", 2);
+    if (tenantId !== undefined && role !== undefined) {
+      if (t === String(tenantId) && r === String(role)) {
+        roleOverridesCache.delete(key);
+      }
+    } else if (tenantId !== undefined && t === String(tenantId)) {
       roleOverridesCache.delete(key);
-    } else if (tenantId && !role && t === tenantId) {
-      roleOverridesCache.delete(key);
-    } else if (!tenantId && role && r === role) {
+    } else if (role !== undefined && r === String(role)) {
       roleOverridesCache.delete(key);
     }
   }
 }
 
+/**
+ * Async loader for the UI-driven role overrides. Reads the
+ * `settings.role_overrides` blob, filters by role + tenant scope,
+ * computes a `{ grants, denies }` diff (deny semantics preserved),
+ * caches for 5 min.
+ *
+ * Returns `null` for super_admin, when no override applies, or when the
+ * DB is unreachable (fail-open — caller falls back to base perms).
+ *
+ * Tenant scope: a row applies if its `tenant_id` is NULL (platform-wide)
+ * OR matches the caller's `tenantId`. This lets the super-admin define
+ * platform-wide overrides OR tenant-specific ones from the same UI.
+ */
 export async function loadRoleOverrides(
-  role: string,
-  tenantId: string,
-): Promise<RoleOverrideGrants> {
-  // Super-admin rule: never subject to overrides — return empty grants.
-  if (role === "super_admin") return { grants: [] };
+  role: string | null | undefined,
+  tenantId: string | null | undefined,
+): Promise<RoleOverrideDiff | null> {
+  // ── Super-admin rule: NEVER subject to overrides ──────────────────
+  if (!role || role === "super_admin" || !tenantId) return null;
 
   const key = `${tenantId}|${role}`;
   const cached = roleOverridesCache.get(key);
-  if (cached && Date.now() < cached.expires) return cached.value;
+  if (cached && Date.now() < cached.expires) {
+    return cached.value;
+  }
 
-  const empty: RoleOverrideGrants = { grants: [] };
-
+  // ── Fail fast when Supabase env vars aren't configured ────────────
   if (!isSupabaseConfigured()) {
-    roleOverridesCache.set(key, { value: empty, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
-    return empty;
+    roleOverridesCache.set(key, { value: null, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+    return null;
   }
 
   try {
@@ -141,40 +166,86 @@ export async function loadRoleOverrides(
       .from("settings")
       .select("value")
       .eq("key", "role_overrides")
-      .is("tenant_id", "null")
       .maybeSingle();
     if (error || !data) {
-      roleOverridesCache.set(key, { value: empty, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
-      return empty;
+      roleOverridesCache.set(key, { value: null, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+      return null;
     }
 
-    const rows: any[] = Array.isArray(data?.value) ? (data.value as any[]) : [];
-    // Match: tenant_id is null (platform-wide) OR equals the requested
-    // tenantId. Mode must be "grant" (deny semantics don't add perms).
-    const matching = rows.filter(
-      (r) =>
-        r?.mode === "grant" &&
-        r?.role === role &&
-        (r?.tenant_id === null || r?.tenant_id === tenantId) &&
-        Array.isArray(r?.permissions),
-    );
-    const grants = new Set<string>();
-    for (const r of matching) {
-      for (const p of r.permissions) {
-        if (typeof p === "string" && p.length > 0) {
-          // Platform perms are forbidden via overrides (defence-in-depth
-          // — the role-overrides POST also rejects them at write time).
-          if (!isPlatformPerm(p)) grants.add(p);
-        }
+    const rows: unknown[] = Array.isArray(data?.value) ? (data.value as unknown[]) : [];
+    // Match: role matches AND (tenant_id is null = platform-wide OR
+    // equals the caller's tenantId).
+    const matching = rows.filter((r): r is Record<string, unknown> => {
+      if (!r || typeof r !== "object") return false;
+      const o = r as Record<string, unknown>;
+      const rRole = o.role;
+      const rTenant = o.tenant_id;
+      return (
+        rRole === role &&
+        (rTenant === null || rTenant === undefined || rTenant === tenantId)
+      );
+    });
+
+    if (matching.length === 0) {
+      roleOverridesCache.set(key, { value: null, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+      return null;
+    }
+
+    const grantSet = new Set<string>();
+    const denySet = new Set<string>();
+    for (const o of matching) {
+      const mode = o.mode;
+      const perms = Array.isArray(o.permissions) ? (o.permissions as unknown[]) : [];
+      const cleaned: string[] = [];
+      for (const p of perms) {
+        if (typeof p !== "string" || p.length === 0) continue;
+        // Defense-in-depth: filter out platform perms — overrides can
+        // never grant OR usefully deny them.
+        if (isPlatformPerm(p)) continue;
+        cleaned.push(p);
+      }
+      if (mode === "deny") {
+        for (const p of cleaned) denySet.add(p);
+      } else {
+        // Default + "grant" mode → additive.
+        for (const p of cleaned) grantSet.add(p);
       }
     }
-    const result: RoleOverrideGrants = { grants: Array.from(grants) };
-    roleOverridesCache.set(key, { value: result, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
-    return result;
+
+    const diff: RoleOverrideDiff | null =
+      grantSet.size === 0 && denySet.size === 0
+        ? null
+        : { grants: Array.from(grantSet), denies: Array.from(denySet) };
+
+    roleOverridesCache.set(key, { value: diff, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+    return diff;
   } catch (e) {
-    roleOverridesCache.set(key, { value: empty, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
-    return empty;
+    // Don't crash the request — overrides are additive, so a DB hiccup
+    // just means the user falls back to defaults. Cache the null for
+    // the TTL so we don't hammer a failing DB.
+    console.error("[tenant-roles] loadRoleOverrides failed:", e);
+    roleOverridesCache.set(key, { value: null, expires: Date.now() + ROLE_OVERRIDES_CACHE_TTL_MS });
+    return null;
   }
+}
+
+/**
+ * Sync accessor for the cached role-override diff. Returns the diff if
+ * the cache has a fresh entry for this (tenant_id, role) pair, or `null`
+ * if the cache is cold (in which case no override applies — graceful
+ * degradation). The cache is warmed by `requireAuth` before any
+ * permission check runs, so a cold cache only happens when requireAuth
+ * was bypassed (tests, dev scripts).
+ */
+export function getCachedRoleOverrides(
+  role: string | null | undefined,
+  tenantId: string | null | undefined,
+): RoleOverrideDiff | null {
+  if (!role || role === "super_admin" || !tenantId) return null;
+  const key = `${tenantId}|${role}`;
+  const cached = roleOverridesCache.get(key);
+  if (cached && Date.now() < cached.expires) return cached.value;
+  return null;
 }
 
 /**
