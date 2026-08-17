@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { assertNoSoDViolation } from "@/lib/permissions/sod-matrix";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     if (existing.status !== "draft") {
       return NextResponse.json({ error: "Only draft entries can be posted." }, { status: 400 });
+    }
+
+    // ── P1-1 / Feature 2: Separation-of-Duties check ─────────────────
+    // The "post" action IS the approval step for a journal entry
+    // (posting moves a draft entry into the ledger — that's the
+    // binding financial commitment). The creator (`existing.created_by`)
+    // cannot post their own entry unless they are a super_admin.
+    // `assertNoSoDViolation` short-circuits for super_admin before
+    // consulting the SoD rules.
+    {
+      const sod = await assertNoSoDViolation(auth, existing.created_by, {
+        create_perm: "erp.create",
+        approve_perm: "erp.post",
+      });
+      if (sod) return sod;
     }
 
     const body = await req.json();

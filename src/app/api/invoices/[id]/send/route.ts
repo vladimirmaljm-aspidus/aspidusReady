@@ -4,6 +4,7 @@ import { sendEmail, documentEmail } from "@/lib/email/service";
 import { generatePdf } from "@/lib/pdf/generator";
 import { notify } from "@/lib/notif/helper";
 import { validateStatusTransition } from "@/lib/api/status-validator";
+import { assertNoSoDViolation } from "@/lib/permissions/sod-matrix";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Tenant ownership check
     if (!auth.isSuperAdmin && invoice.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
+    }
+
+    // ── P1-1 / Feature 2: Separation-of-Duties check ─────────────────
+    // The "send" action IS the approval step for an invoice (once sent,
+    // the invoice is locked). The creator (`invoice.created_by`, added
+    // by migration 040) cannot approve their own invoice unless they
+    // are a super_admin. `assertNoSoDViolation` short-circuits for
+    // super_admin before consulting the SoD rules.
+    // Note: `created_by` is null on legacy rows (pre-migration-040);
+    // the SoD check fails OPEN in that case (does not block).
+    {
+      const sod = await assertNoSoDViolation(auth, (invoice as any).created_by, {
+        create_perm: "invoices.create",
+        approve_perm: "invoices.send",
+      });
+      if (sod) return sod;
     }
 
     // Fetch partner for email info / portal notification

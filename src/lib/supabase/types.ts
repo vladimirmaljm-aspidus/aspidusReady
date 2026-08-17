@@ -507,6 +507,11 @@ export interface Invoice {
   payment_terms: string | null;
   incoterm: string | null;
   origin_country: string | null;
+  // P1-1 / Feature 2 (SoD): the user who created the invoice. Backfilled
+  // from audit_logs by migration 040; populated on insert by POST
+  // /api/invoices. NULL on legacy rows — the SoD check fails open
+  // (does not block) when this is NULL.
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }

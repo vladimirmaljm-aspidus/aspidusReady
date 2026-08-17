@@ -4,6 +4,7 @@ import { sendEmail, documentEmail } from "@/lib/email/service";
 import { generatePdf } from "@/lib/pdf/generator";
 import { notify } from "@/lib/notif/helper";
 import { validateStatusTransition } from "@/lib/api/status-validator";
+import { assertNoSoDViolation } from "@/lib/permissions/sod-matrix";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Tenant ownership check
     if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
       return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    }
+
+    // ── P1-1 / Feature 2: Separation-of-Duties check ─────────────────
+    // The "send" action IS the approval step for an offer (once sent,
+    // the offer is locked). The creator (`offer.owner_id`) cannot
+    // approve their own offer unless they are a super_admin.
+    // `assertNoSoDViolation` short-circuits for super_admin (never
+    // blocked) before consulting the SoD rules.
+    {
+      const sod = await assertNoSoDViolation(auth, offer.owner_id, {
+        create_perm: "offers.create",
+        approve_perm: "offers.send",
+      });
+      if (sod) return sod;
     }
 
     // Fetch partner for email info / portal notification

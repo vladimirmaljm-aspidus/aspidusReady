@@ -186,3 +186,262 @@ export const ENFORCEABLE_RETENTION_RULES: RetentionRule[] = RETENTION_POLICY.fil
 export function getRetentionRule(table: string): RetentionRule | null {
   return RETENTION_POLICY.find((r) => r.table === table) ?? null;
 }
+
+// ============================================================================
+// P1-1 / Feature 3 — Configurable per-table retention windows
+// ----------------------------------------------------------------------------
+// Until now the retention periods above were HARDCODED in this module.
+// The data-retention cron (`src/app/api/cron/data-retention/route.ts`)
+// iterated over `ENFORCEABLE_RETENTION_RULES` and DELETEd using the
+// rule's `days` field. A super-admin who wanted to tighten or loosen
+// a window had to file a code change + redeploy.
+//
+// This section adds a configurable layer:
+//   • `RetentionConfig` — a flat object with one field per table.
+//   • `DEFAULT_RETENTION_CONFIG` — the defaults (mirror the original
+//     hardcoded values, so existing deployments see no behaviour change).
+//   • `getRetentionConfig()` — loads the config from the `settings`
+//     table (key = "retention_config", tenant_id IS NULL — platform-wide).
+//     Cached for 5 minutes to keep the cron hot.
+//   • `validateRetentionConfig()` — bounds-checks the proposed values
+//     before persisting (rejects negative / absurd windows).
+//   • `getEnforceableRetentionRules(config)` — returns the policy
+//     rewritten with the config's `days` values. The cron calls this
+//     instead of the hardcoded `ENFORCEABLE_RETENTION_RULES` so the
+//     runtime policy honours the admin-configured windows.
+//
+// SUPER-ADMIN RULE
+// ----------------
+// Only super_admin can configure retention (the API route at
+// `/api/settings/retention-config` enforces `requireSuperAdmin`).
+// Super_admin can also MANUALLY trigger the cleanup (the cron route
+// already accepts a super-admin session cookie — see `authorizeCron`)
+// and view the deleted-counts summary (the cron response body).
+//
+// `audit_logs_years` and `kyc_submissions_years` are REGULATORY
+// minima (SOX 7-year, EU 5AMLD 5-year). The validation enforces a
+// minimum of 7 and 5 respectively — a super_admin cannot configure a
+// shorter window because that would put the platform in breach of
+// the underlying regulation. The cron route still NEVER deletes
+// from those tables (the rules' kind is `regulatory`), but the
+// values are surfaced here for transparency and to make the policy
+// machine-readable for a future data-retention-report tool.
+// ============================================================================
+
+/**
+ * Configurable per-table retention windows. Each field is the number
+ * of DAYS after which the cron should DELETE rows from the matching
+ * table (or YEARS, for the two regulatory-retained tables).
+ *
+ * Defaults mirror the original hardcoded values from
+ * `RETENTION_POLICY` above, so existing deployments see no behaviour
+ * change on first load.
+ */
+export interface RetentionConfig {
+  /** sessions.expires_at cutoff (days). Default 30. */
+  sessions_days: number;
+  /** login_history.created_at cutoff (days). Default 365. */
+  login_history_days: number;
+  /** password_resets.created_at cutoff (days). Default 1. */
+  password_resets_hours: number;
+  /** rate_limits.window_start cutoff (hours). Default 24. */
+  rate_limits_hours: number;
+  /** mail_queue.created_at cutoff (days, status='sent' only). Default 90. */
+  mail_queue_days: number;
+  /** notifications.created_at cutoff (days). Default 90. */
+  notifications_days: number;
+  /**
+   * audit_logs retention (years, REGULATORY — minimum 7 per SOX §802).
+   * The cron does NOT auto-delete audit_logs; this value is surfaced
+   * for transparency and machine-readable policy reporting.
+   */
+  audit_logs_years: number;
+  /**
+   * kyc_submissions retention (years, REGULATORY — minimum 5 per EU
+   * 5AMLD Article 40). The cron does NOT auto-delete kyc_submissions.
+   */
+  kyc_submissions_years: number;
+}
+
+export const DEFAULT_RETENTION_CONFIG: RetentionConfig = {
+  sessions_days: 30,
+  login_history_days: 365,
+  password_resets_hours: 24,
+  rate_limits_hours: 24,
+  mail_queue_days: 90,
+  notifications_days: 90,
+  audit_logs_years: 7,
+  kyc_submissions_years: 5,
+};
+
+// ── In-memory cache ─────────────────────────────────────────────────────────
+// Same pattern as `rate-limit-config.ts`: cache the loaded config for
+// 5 minutes so the cron (which runs daily) and any in-process admin
+// reads don't hit the DB on every call. The cache is invalidated by
+// the settings/retention-config PUT route after a write.
+let cachedConfig: RetentionConfig | null = null;
+let cacheExpires = 0;
+const RETENTION_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function invalidateRetentionConfigCache(): void {
+  cachedConfig = null;
+  cacheExpires = 0;
+}
+
+/**
+ * Load the retention config from the `settings` table.
+ * Falls back to `DEFAULT_RETENTION_CONFIG` when:
+ *   • Supabase is not configured (dev / test env).
+ *   • No row exists yet (first run — the migration 041 seeds it).
+ *   • The stored row is missing fields (older deployments).
+ *   • The DB query throws (network / auth error).
+ *
+ * Super-admin rule: this function is read-only and does NOT gate on
+ * role — the caller is responsible for permission checks (the cron
+ * route is gated by `authorizeCron`; the settings route by
+ * `requireSuperAdmin`).
+ */
+export async function getRetentionConfig(): Promise<RetentionConfig> {
+  if (cachedConfig && Date.now() < cacheExpires) {
+    return cachedConfig;
+  }
+  try {
+    const { getSupabase, isSupabaseConfigured } = await import("@/lib/supabase/client");
+    if (!isSupabaseConfigured()) {
+      cachedConfig = DEFAULT_RETENTION_CONFIG;
+      cacheExpires = Date.now() + RETENTION_CACHE_TTL_MS;
+      return cachedConfig;
+    }
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("settings")
+      .select("value")
+      .eq("key", "retention_config")
+      .is("tenant_id", "null")
+      .maybeSingle();
+    if (error || !data) {
+      cachedConfig = DEFAULT_RETENTION_CONFIG;
+      cacheExpires = Date.now() + RETENTION_CACHE_TTL_MS;
+      return cachedConfig;
+    }
+    // Merge with defaults so a partial stored config (older deploy
+    // missing newer fields) doesn't silently zero out any window.
+    const stored = (data.value ?? {}) as Partial<RetentionConfig>;
+    cachedConfig = { ...DEFAULT_RETENTION_CONFIG, ...stored };
+    cacheExpires = Date.now() + RETENTION_CACHE_TTL_MS;
+    return cachedConfig;
+  } catch (e) {
+    console.error("[retention] getRetentionConfig failed:", e);
+    cachedConfig = DEFAULT_RETENTION_CONFIG;
+    cacheExpires = Date.now() + RETENTION_CACHE_TTL_MS;
+    return cachedConfig;
+  }
+}
+
+/**
+ * Bounds-check a proposed RetentionConfig before persisting it.
+ *
+ * Returns an array of human-readable error strings (empty = OK).
+ *
+ * Rules:
+ *   • Numeric fields must be positive finite numbers.
+ *   • `*_days` / `*_hours` minimum is 1 (sub-day retention is
+ *     nonsensical and would cause the cron to delete rows that
+ *     are still being actively inserted).
+ *   • `audit_logs_years` minimum is 7 (SOX §802 regulatory minimum).
+ *   • `kyc_submissions_years` minimum is 5 (EU 5AMLD Article 40).
+ *
+ * The max bounds are generous (10 years / 3650 days) — the platform
+ * would have bigger problems than retention config if a super-admin
+ * legitimately needed a larger window, but capping prevents a typo
+ * like `sessions_days: 999999999` from silently keeping sessions
+ * forever (which is the opposite of what retention is for).
+ */
+export function validateRetentionConfig(
+  config: Partial<RetentionConfig>,
+): string[] {
+  const errors: string[] = [];
+
+  const numericFields: Array<{
+    key: keyof RetentionConfig;
+    min: number;
+    max: number;
+    label: string;
+  }> = [
+    { key: "sessions_days", min: 1, max: 3650, label: "sessions_days" },
+    { key: "login_history_days", min: 1, max: 3650, label: "login_history_days" },
+    { key: "password_resets_hours", min: 1, max: 24 * 30, label: "password_resets_hours" },
+    { key: "rate_limits_hours", min: 1, max: 24 * 30, label: "rate_limits_hours" },
+    { key: "mail_queue_days", min: 1, max: 3650, label: "mail_queue_days" },
+    { key: "notifications_days", min: 1, max: 3650, label: "notifications_days" },
+    // Regulatory minima — a super-admin cannot configure a shorter
+    // window because that would put the platform in breach of SOX /
+    // 5AMLD. The max is generous (a stricter regime can opt into
+    // 10-year retention without a code change).
+    { key: "audit_logs_years", min: 7, max: 10, label: "audit_logs_years" },
+    { key: "kyc_submissions_years", min: 5, max: 10, label: "kyc_submissions_years" },
+  ];
+
+  for (const { key, min, max, label } of numericFields) {
+    const val = config[key];
+    if (val === undefined) continue; // partial update — allowed
+    if (typeof val !== "number" || isNaN(val) || !Number.isFinite(val)) {
+      errors.push(`${label} must be a number.`);
+      continue;
+    }
+    if (val < min) {
+      errors.push(
+        `${label} must be >= ${min}${
+          key === "audit_logs_years" || key === "kyc_submissions_years"
+            ? " (regulatory minimum)"
+            : ""
+        }.`,
+      );
+    }
+    if (val > max) {
+      errors.push(`${label} must be <= ${max}.`);
+    }
+  }
+  return errors;
+}
+
+/**
+ * Build the ENFORCEABLE retention rules list (the rules the cron will
+ * actually DELETE by) using the given config's windows instead of the
+ * hardcoded defaults. The cron calls this with the loaded config.
+ *
+ * The returned rules keep the same `kind` / `column` / `statusColumn`
+ * / `statusValue` semantics as the hardcoded `RETENTION_POLICY` —
+ * only the `days` field is overridden.
+ *
+ * `audit_logs` and `kyc_submissions` are NOT in the returned list
+ * (their kind is `regulatory` — the cron never deletes from them,
+ * regardless of the config value).
+ */
+export function getEnforceableRetentionRules(
+  config: RetentionConfig,
+): RetentionRule[] {
+  // Helper: convert hours → days (the rule schema is in days, so an
+  // hours-based rule is converted by dividing by 24 and rounding up
+  // to ensure we don't accidentally delete rows that are slightly
+  // younger than the configured hours window).
+  const hoursToDays = (h: number) => Math.max(1, Math.ceil(h / 24));
+
+  const overrides: Record<string, Partial<RetentionRule>> = {
+    sessions: { days: config.sessions_days },
+    login_history: { days: config.login_history_days },
+    password_resets: { days: hoursToDays(config.password_resets_hours) },
+    rate_limits: { days: hoursToDays(config.rate_limits_hours) },
+    mail_queue: { days: config.mail_queue_days },
+    notifications: { days: config.notifications_days },
+    // `audit_logs` and `kyc_submissions` are regulatory — NOT in the
+    // enforceable list (their `kind` stays `regulatory`).
+  };
+
+  return RETENTION_POLICY.filter(
+    (r) => r.kind === "delete_after" || r.kind === "delete_after_status",
+  ).map((r) => ({
+    ...r,
+    ...(overrides[r.table] ?? {}),
+  }));
+}

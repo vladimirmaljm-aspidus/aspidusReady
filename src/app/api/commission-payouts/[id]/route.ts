@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, audit } from "@/lib/api/helpers";
+import { assertNoSoDViolation } from "@/lib/permissions/sod-matrix";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const body = await req.json();
+
+    // ── P1-1 / Feature 2: Separation-of-Duties check ─────────────────
+    // Transitioning a payout to "completed" is the approval step
+    // (it triggers the cascade that marks linked commissions as
+    // "paid" — that's the binding financial commitment). The creator
+    // (`existing.created_by`) cannot approve their own payout unless
+    // they are a super_admin. `assertNoSoDViolation` short-circuits
+    // for super_admin before consulting the SoD rules.
+    if (body.status === "completed" && existing.status !== "completed") {
+      const sod = await assertNoSoDViolation(auth, (existing as any).created_by, {
+        create_perm: "commissions.payout",
+        approve_perm: "commissions.update",
+      });
+      if (sod) return sod;
+    }
 
     // ── Audit F-6/P1-7: validate commissions are approved before marking
     //    a payout as completed ───────────────────────────────────────────

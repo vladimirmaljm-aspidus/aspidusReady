@@ -3,7 +3,12 @@ import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { authorizeCron } from "@/lib/api/cron-auth";
 import { audit } from "@/lib/api/helpers";
 import { getStore } from "@/lib/data/store";
-import { ENFORCEABLE_RETENTION_RULES, type RetentionRule } from "@/lib/compliance/retention";
+import {
+  getRetentionConfig,
+  getEnforceableRetentionRules,
+  type RetentionRule,
+  type RetentionConfig,
+} from "@/lib/compliance/retention";
 
 export const runtime = "nodejs";
 
@@ -11,15 +16,23 @@ export const runtime = "nodejs";
  * Cron endpoint — enforces the PII data retention policy
  * (`src/lib/compliance/retention.ts`). Runs daily at 03:00 UTC via pg_cron.
  *
- * For each `delete_after` / `delete_after_status` rule in the policy, this
- * route issues a `DELETE FROM <table> WHERE <column> < now() - interval '<days> days'`
+ * P1-1 / Feature 3: the retention windows are now CONFIGURABLE per-table
+ * via the `/api/settings/retention-config` super-admin route. The cron
+ * loads the current config via `getRetentionConfig()` and builds the
+ * enforceable rule list via `getEnforceableRetentionRules(config)` —
+ * the rule list mirrors the hardcoded `ENFORCEABLE_RETENTION_RULES`
+ * shape, but with `days` fields overridden by the config's values.
+ *
+ * For each `delete_after` / `delete_after_status` rule in the policy,
+ * this route issues a `DELETE FROM <table> WHERE <column> < now() - interval '<days> days'`
  * (filtered by status for `delete_after_status` rules). The route is
- * idempotent — running it twice in the same day is safe; the second run
- * just deletes 0 rows.
+ * idempotent — running it twice in the same day is safe; the second
+ * run just deletes 0 rows.
  *
  * Authentication: caller must supply `Authorization: Bearer <CRON_TOKEN>`
  * header (preferred), `?token=…` URL query (legacy), OR a valid super_admin
- * session cookie (for manual runs from the browser). See `authorizeCron`.
+ * session cookie (for manual runs from the browser — super_admin is NEVER
+ * blocked, can trigger the cleanup at will). See `authorizeCron`.
  *
  * Audit finding B-1 / P3-1: previously, PII tables (sessions,
  * login_history, password_resets, rate_limits, mail_queue, notifications)
@@ -37,7 +50,7 @@ export const runtime = "nodejs";
  *   • The route NEVER deletes from `regulatory` or `indefinite` retention
  *     tables (audit_logs, kyc_submissions, users, partners, portal_access).
  *     Those rules exist for transparency and are filtered out at module
- *     load time via `ENFORCEABLE_RETENTION_RULES`.
+ *     load time via `getEnforceableRetentionRules(config)`.
  *   • The route does NOT log individual deleted row ids to audit_logs —
  *     logging the deletion would itself create new PII rows in audit_logs,
  *     defeating the purpose (see migration 030 comment).
@@ -62,6 +75,16 @@ export async function GET(req: NextRequest) {
 
     const sb = getSupabase();
     const nowIso = new Date().toISOString();
+
+    // ── P1-1 / Feature 3: load the configurable retention config ──
+    // The config is loaded fresh on every cron run (the in-memory cache
+    // has a 5-minute TTL but we don't want to rely on it for a daily
+    // cron — `getRetentionConfig()` returns the cache if fresh, else
+    // hits the DB). Falls back to DEFAULT_RETENTION_CONFIG if the
+    // settings row is missing or Supabase is unreachable.
+    const config = await getRetentionConfig();
+    const enforceableRules = getEnforceableRetentionRules(config);
+
     const results: Array<{
       table: string;
       status: "deleted" | "skipped" | "error";
@@ -69,7 +92,7 @@ export async function GET(req: NextRequest) {
       error?: string;
     }> = [];
 
-    for (const rule of ENFORCEABLE_RETENTION_RULES) {
+    for (const rule of enforceableRules) {
       try {
         const deleted = await enforceRule(sb, rule);
         results.push({ table: rule.table, status: "deleted", deleted_count: deleted });
@@ -111,6 +134,7 @@ export async function GET(req: NextRequest) {
         tables_ok: results.filter((r) => r.status === "deleted").length,
         tables_failed: failedTables.length,
         results,
+        config_used: config,
       },
     );
 
@@ -118,6 +142,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       ran_at: nowIso,
       total_deleted: totalDeleted,
+      config_used: config,
       results,
     });
   } catch (e: any) {
@@ -145,7 +170,7 @@ async function enforceRule(
   rule: RetentionRule,
 ): Promise<number> {
   if (rule.kind !== "delete_after" && rule.kind !== "delete_after_status") {
-    // Defensive — should be filtered out by ENFORCEABLE_RETENTION_RULES,
+    // Defensive — should be filtered out by getEnforceableRetentionRules,
     // but never delete from a table whose rule we don't understand.
     return 0;
   }

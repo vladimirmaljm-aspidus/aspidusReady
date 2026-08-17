@@ -72,6 +72,18 @@ async function _post(req: NextRequest) {
 
     const body = await req.json();
     body.tenant_id = tid!;
+    // P1-1 / Feature 2 (SoD): record the invoice's creator so the
+    // PUT route's separation-of-duties check can compare creator vs.
+    // approver. Always overwrite whatever the client sent — a malicious
+    // body could try to spoof `created_by` to bypass SoD. For API-key
+    // callers we leave it NULL (API keys don't have a user id; the
+    // SoD check fails open in that case, which is acceptable because
+    // API-key callers are admin-controlled).
+    if ("user" in auth) {
+      body.created_by = auth.user.id;
+    } else {
+      body.created_by = null;
+    }
     if (!body.id) {
       const isSA = !("apiKeyId" in auth) && auth.isSuperAdmin;
       const { enforceQuota } = await import("@/lib/api/plan-limits");

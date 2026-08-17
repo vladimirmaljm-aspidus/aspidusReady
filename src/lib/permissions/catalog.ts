@@ -234,6 +234,18 @@ export const AUDIT = {
   READ: "audit.read",
 } as const;
 
+// ─── Per-tenant role overrides (P1-1 / Feature 1) ───────────────────────────
+// Super-admins can edit any tenant's overrides; tenant admins can edit
+// their OWN tenant's overrides via the admin API. Both require these
+// permissions (admin role gets them implicitly via the implicit-grant
+// path in `can()` — only `super_admin` and tenant `admin` reach the
+// override admin route at all).
+export const TENANT_ROLES = {
+  READ: "tenant-roles.read",
+  UPDATE: "tenant-roles.update",
+  DELETE: "tenant-roles.delete",
+} as const;
+
 export const SECURITY = {
   READ: "security.read",
   UPDATE: "security.update",
@@ -363,6 +375,7 @@ export const ALL_PERMISSIONS = [
   ...Object.values(USERS),
   ...Object.values(SETTINGS),
   ...Object.values(AUDIT),
+  ...Object.values(TENANT_ROLES),
   ...Object.values(SECURITY),
   ...Object.values(VAULT),
   ...Object.values(API_KEYS),
