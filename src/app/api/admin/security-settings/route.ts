@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin, audit, sanitizeError } from "@/lib/api/helpers";
 import { getSupabase } from "@/lib/supabase/client";
-import { DEFAULT_POLICY } from "@/lib/auth/password-policy";
+import { DEFAULT_POLICY, invalidatePlatformPasswordPolicyCache } from "@/lib/auth/password-policy";
+import { invalidateSessionConfigCache } from "@/lib/auth/session-config";
 
 export const runtime = "nodejs";
 
@@ -77,6 +78,47 @@ export async function PUT(req: NextRequest) {
 
   try {
     const sb = getSupabase();
+
+    // D-AUDIT-3: persist the session block ALSO to the canonical
+    // `session_config` setting key (ms units) so session-config.ts
+    // picks up runtime TTL changes from this UI. Previously the UI
+    // saved only to `security_config` with minute units — a key &
+    // unit mismatch that made every session setting non-functional.
+    const sessionConfigMs = {
+      superAdminTtlMs: config.session.superAdminTtlMinutes * 60 * 1000,
+      adminTtlMs: config.session.adminTtlMinutes * 60 * 1000,
+      userTtlMs: config.session.userTtlMinutes * 60 * 1000,
+      idleTimeoutMs: config.session.idleTimeoutMinutes * 60 * 1000,
+    };
+    const { data: existingSession } = await sb
+      .from("settings")
+      .select("id")
+      .eq("key", "session_config")
+      .is("tenant_id", "null")
+      .maybeSingle();
+    if (existingSession) {
+      await sb
+        .from("settings")
+        .update({ value: sessionConfigMs, updated_at: new Date().toISOString() })
+        .eq("id", (existingSession as any).id);
+    } else {
+      await sb
+        .from("settings")
+        .insert({
+          key: "session_config",
+          value: sessionConfigMs,
+          tenant_id: null,
+          updated_at: new Date().toISOString(),
+        });
+    }
+    // Bust the in-process cache so the new TTLs apply on the very next
+    // login rather than up to 5 minutes later.
+    invalidateSessionConfigCache();
+    // Same for the password-policy cache — the next /portal/setup-password
+    // /portal/reset-password /portal/change-password call must pick up the
+    // new minLength / char-class toggles.
+    invalidatePlatformPasswordPolicyCache();
+
     const { data: existing } = await sb
       .from("settings")
       .select("id")

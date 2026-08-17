@@ -22,6 +22,7 @@ import { Plus, Trash2, Loader2, ShieldCheck, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useApiUrl } from "@/lib/hooks/use-api-url";
 import { useQueryClient } from "@tanstack/react-query";
+import { useT } from "@/lib/i18n/store";
 import {
   SettingsCardHeader, SectionLabel, LoadingCard, ErrorCard,
 } from "./_shared";
@@ -65,6 +66,7 @@ export function RoleManagement() {
 function RoleOverridesCard() {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const t = useT();
 
   const [overrides, setOverrides] = React.useState<RoleOverride[] | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -104,8 +106,8 @@ function RoleOverridesCard() {
     }
   }
 
-  if (loading) return <LoadingCard title="Role & Permission Overrides" />;
-  if (error || !overrides) return <ErrorCard title="Role & Permission Overrides" message={error || "No data"} />;
+  if (loading) return <LoadingCard title={t("pf-sa-ac-roles-title")} />;
+  if (error || !overrides) return <ErrorCard title={t("pf-sa-ac-roles-title")} message={error || "No data"} />;
 
   const filtered = overrides.filter((o) => {
     const q = search.trim().toLowerCase();
@@ -120,8 +122,8 @@ function RoleOverridesCard() {
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <SettingsCardHeader
-        title="Per-Tenant Role Overrides"
-        description="Grant or deny permissions for a specific role, scoped to a single tenant or platform-wide. Deny wins over grant — use sparingly; prefer explicit user permissions."
+        title={t("pf-sa-ac-roles-title")}
+        description={t("pf-sa-ac-roles-desc")}
         dirty={false}
         saving={false}
       />
@@ -338,6 +340,7 @@ function CreateOverrideDialog({
 function SodMatrixCard() {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const t = useT();
 
   const [rules, setRules] = React.useState<SodRule[] | null>(null);
   const [defaults, setDefaults] = React.useState<SodRule[] | null>(null);
@@ -405,14 +408,14 @@ function SodMatrixCard() {
     }
   }
 
-  if (loading) return <LoadingCard title="Separation of Duties Matrix" />;
-  if (error || !rules) return <ErrorCard title="Separation of Duties Matrix" message={error || "No data"} />;
+  if (loading) return <LoadingCard title={t("pf-sa-ac-sod-title")} />;
+  if (error || !rules) return <ErrorCard title={t("pf-sa-ac-sod-title")} message={error || "No data"} />;
 
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <SettingsCardHeader
-        title="Separation of Duties Matrix"
-        description="Prevent a single user from holding two permissions that together enable a fraud path. 'block' rejects the grant at user-edit time; 'warn' logs the violation."
+        title={t("pf-sa-ac-sod-title")}
+        description={t("pf-sa-ac-sod-desc")}
         dirty={!!dirty}
         saving={saving}
         onSave={save}
@@ -492,6 +495,7 @@ function SodMatrixCard() {
 
 function PermissionCatalogCard() {
   const [search, setSearch] = React.useState("");
+  const t = useT();
 
   const allPerms = React.useMemo(() => {
     return ALL_PERMISSIONS.map((p) => ({
@@ -517,8 +521,8 @@ function PermissionCatalogCard() {
   return (
     <Card className="border-border/60 shadow-soft rounded-xl">
       <SettingsCardHeader
-        title="Permission Catalog"
-        description={`The canonical list of every permission recognized by the RBAC evaluator. ${allPerms.length} permissions across ${PLATFORM_PERMISSIONS.length} platform, ${TENANT_PERMISSIONS.length} tenant-scoped, and ${PORTAL_CLIENT_PERMISSIONS.length} portal-client scopes.`}
+        title={t("pf-sa-ac-catalog-title")}
+        description={`${t("pf-sa-ac-catalog-desc")} ${allPerms.length} permissions across ${PLATFORM_PERMISSIONS.length} platform, ${TENANT_PERMISSIONS.length} tenant-scoped, and ${PORTAL_CLIENT_PERMISSIONS.length} portal-client scopes.`}
         dirty={false}
         saving={false}
       />

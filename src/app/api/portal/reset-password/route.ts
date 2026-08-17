@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/data/store";
 import { hashPassword } from "@/lib/auth/password";
-import { validatePassword } from "@/lib/auth/password-policy";
+import { validatePasswordWithPlatformPolicy } from "@/lib/auth/password-policy";
 import { consumePasswordReset } from "@/lib/auth/password-reset";
 import { getIp } from "@/lib/api/helpers";
 
@@ -13,6 +13,9 @@ export const runtime = "nodejs";
  *
  * Consumes a single-use hashed token from `password_resets`, sets the new password,
  * and bumps token_version to invalidate any existing sessions.
+ *
+ * D-AUDIT-3: now validates against the platform-wide password policy
+ * (super-admin Security tab) rather than the hard-coded DEFAULT_POLICY.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -20,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (!reset_token || !password) {
       return NextResponse.json({ error: "Reset token and password are required." }, { status: 400 });
     }
-    const validation = validatePassword(password);
+    const validation = await validatePasswordWithPlatformPolicy(password);
     if (!validation.ok) {
       return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
     }

@@ -11,6 +11,7 @@ import { Server, Database, Activity, Clock, Gauge, RefreshCw, AlertTriangle, Che
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/store/app-store";
 import { useApiUrl } from "@/lib/hooks/use-api-url";
+import { useT } from "@/lib/i18n/store";
 import { fmtRelative, fmtDateTime } from "@/lib/utils/format";
 import {
   SettingsCardHeader, SectionLabel, LoadingCard, ErrorCard,
@@ -66,6 +67,7 @@ export function SystemHealth() {
   const api = useApiUrl();
   const user = useAppStore((s) => s.user);
   const setView = useAppStore((s) => s.setView);
+  const t = useT();
 
   const [data, setData] = React.useState<SystemHealthData | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -91,8 +93,8 @@ export function SystemHealth() {
     return () => clearInterval(id);
   }, [load]);
 
-  if (loading && !data) return <LoadingCard title="System Health" />;
-  if (error || !data) return <ErrorCard title="System Health" message={error || "No data"} />;
+  if (loading && !data) return <LoadingCard title={t("pf-sa-sys-title")} />;
+  if (error || !data) return <ErrorCard title={t("pf-sa-sys-title")} message={error || "No data"} />;
 
   const memPct = data.process.memory.heapTotalMb > 0
     ? Math.round((data.process.memory.heapUsedMb / data.process.memory.heapTotalMb) * 100)
@@ -108,11 +110,11 @@ export function SystemHealth() {
         <CardContent className="py-3 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Activity className={`size-4 ${data.apm.alerts.length > 0 ? "text-amber-500" : "text-emerald-500"}`} />
-            <span className="text-sm font-medium">System Health</span>
+            <span className="text-sm font-medium">{t("pf-sa-sys-title")}</span>
             <span className="text-xs text-muted-foreground">last updated {fmtRelative(data.timestamp)}</span>
           </div>
           <Button size="sm" variant="outline" onClick={() => { void load(); }}>
-            <RefreshCw className={`size-3.5 mr-1 ${loading ? "animate-spin" : ""}`} /> Refresh
+            <RefreshCw className={`size-3.5 mr-1 ${loading ? "animate-spin" : ""}`} /> {t("pf-sa-sys-refresh")}
           </Button>
         </CardContent>
       </Card>
@@ -175,8 +177,8 @@ export function SystemHealth() {
       {/* Memory & process */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Process & Memory"
-          description={`In-memory snapshot for the current instance. Heap usage: ${data.process.memory.heapUsedMb}MB / ${data.process.memory.heapTotalMb}MB (${memPct}%). RSS: ${data.process.memory.rssMb}MB · External: ${data.process.memory.externalMb}MB.`}
+          title={t("pf-sa-sys-mem-title")}
+          description={`${t("pf-sa-sys-mem-desc")} Heap usage: ${data.process.memory.heapUsedMb}MB / ${data.process.memory.heapTotalMb}MB (${memPct}%). RSS: ${data.process.memory.rssMb}MB · External: ${data.process.memory.externalMb}MB.`}
           dirty={false}
           saving={false}
         />
@@ -191,8 +193,8 @@ export function SystemHealth() {
       {/* DB table counts */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Database Metrics"
-          description={`Liveness: ${data.db.status}. Table counts (HEAD request, capped at 1000 — counts above 1000 show as "1000+").`}
+          title={t("pf-sa-sys-db-title")}
+          description={`${t("pf-sa-sys-db-desc")} Liveness: ${data.db.status}. Table counts (HEAD request, capped at 1000 — counts above 1000 show as "1000+").`}
           dirty={false}
           saving={false}
         />
@@ -228,8 +230,8 @@ export function SystemHealth() {
       {/* Sentry */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Sentry / Render Service Status"
-          description="Sentry DSN configuration is read from env vars. Render service status is available in the Render dashboard — link below."
+          title={t("pf-sa-mon-sentry-title")}
+          description={`${t("pf-sa-mon-sentry-desc")} Render service status is available in the Render dashboard — link below.`}
           dirty={false}
           saving={false}
         />
@@ -262,8 +264,8 @@ export function SystemHealth() {
       {/* Cron status */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Cron Job Status"
-          description="Static schedule (the platform doesn't read pg_cron directly — these are the canonical schedule hints). Last-run timestamps are best-effort from audit_logs."
+          title={t("pf-sa-sys-cron-title")}
+          description={t("pf-sa-sys-cron-desc")}
           dirty={false}
           saving={false}
         />
@@ -293,37 +295,11 @@ export function SystemHealth() {
         </CardContent>
       </Card>
 
-      {/* Retention policy mirror */}
-      <Card className="border-border/60 shadow-soft rounded-xl">
-        <SettingsCardHeader
-          title="Retention Policy (mirror)"
-          description="The platform-wide retention policy is enforced by /api/cron/data-retention. This table is the same one shown under Data Protection — repeated here for ops context."
-          dirty={false}
-          saving={false}
-        />
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Table</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>Window</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.retention.map((r) => (
-                <TableRow key={r.table}>
-                  <TableCell><code className="text-[11px] font-mono">{r.table}</code></TableCell>
-                  <TableCell><Badge variant="outline" className="text-[10px] uppercase tracking-wider">{r.kind}</Badge></TableCell>
-                  <TableCell className="text-xs tabular">
-                    {r.days ? `${r.days} days` : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Retention policy mirror — REMOVED (D-AUDIT-3).
+          This was a duplicate of the retention table shown under
+          Data Protection. Per the consolidation task, retention lives
+          only on the Data Protection tab to avoid two sources of truth
+          for the same read-only data. */}
 
       <p className="text-[10px] text-muted-foreground text-center">
         Auto-refreshing every 30s · Snapshot taken {fmtDateTime(data.timestamp)} · Process uptime {uptimeStr}

@@ -118,3 +118,105 @@ export async function generateSecurePassword(length: number = 12): Promise<strin
     .sort(() => randomBytes(1)[0] - 128)
     .join("");
 }
+
+/* ───────────────────────────────────────────────────────────────────────
+   D-AUDIT-3: platform-wide password policy loader.
+
+   The super-admin Security tab saves its passwordPolicy block under
+   `settings.key = "security_config"` (tenant_id = NULL). Previously
+   nothing read it back — `validatePassword()` was called with the
+   `DEFAULT_POLICY` constant or the `PORTAL_POLICY` constant, so the
+   super-admin's configured minimum length / char-class toggles had
+   no effect at runtime.
+
+   `getPlatformPasswordPolicy()` loads the platform row (with a 5-min
+   in-process cache, same pattern as rate-limit-config.ts and
+   session-config.ts). It always falls back to DEFAULT_POLICY when
+   the DB is unreachable, the row is missing, or any field is invalid.
+   ─────────────────────────────────────────────────────────────────────── */
+
+let cachedPolicy: PasswordPolicy | null = null;
+let policyCacheExpiry = 0;
+const POLICY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function coercePolicy(raw: unknown): PasswordPolicy {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_POLICY };
+  const r = raw as Record<string, unknown>;
+  const n = typeof r.minLength === "number"
+    ? r.minLength
+    : typeof r.minLength === "string"
+    ? Number(r.minLength)
+    : DEFAULT_POLICY.minLength;
+  return {
+    minLength: Number.isFinite(n) && n >= 4 && n <= 256 ? n : DEFAULT_POLICY.minLength,
+    requireUppercase: typeof r.requireUppercase === "boolean"
+      ? r.requireUppercase
+      : r.requireUppercase === "true"
+      ? true
+      : DEFAULT_POLICY.requireUppercase,
+    requireLowercase: typeof r.requireLowercase === "boolean"
+      ? r.requireLowercase
+      : r.requireLowercase === "true"
+      ? true
+      : DEFAULT_POLICY.requireLowercase,
+    requireNumbers: typeof r.requireNumbers === "boolean"
+      ? r.requireNumbers
+      : r.requireNumbers === "true"
+      ? true
+      : DEFAULT_POLICY.requireNumbers,
+    requireSymbols: typeof r.requireSymbols === "boolean"
+      ? r.requireSymbols
+      : r.requireSymbols === "true"
+      ? true
+      : DEFAULT_POLICY.requireSymbols,
+  };
+}
+
+/**
+ * Load the platform-wide password policy from DB. Caches for 5min.
+ * Falls back to DEFAULT_POLICY on any error so a DB outage never
+ * breaks login.
+ */
+export async function getPlatformPasswordPolicy(): Promise<PasswordPolicy> {
+  if (cachedPolicy && Date.now() < policyCacheExpiry) {
+    return cachedPolicy;
+  }
+  try {
+    const { getSupabase, isSupabaseConfigured } = await import("@/lib/supabase/client");
+    if (!isSupabaseConfigured()) {
+      return DEFAULT_POLICY;
+    }
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "security_config")
+      .is("tenant_id", "null")
+      .maybeSingle();
+    const stored = (data?.value as Record<string, unknown> | null) ?? null;
+    const pp = stored && typeof stored === "object"
+      ? (stored as { passwordPolicy?: unknown }).passwordPolicy
+      : undefined;
+    cachedPolicy = pp ? coercePolicy(pp) : { ...DEFAULT_POLICY };
+    policyCacheExpiry = Date.now() + POLICY_CACHE_TTL_MS;
+    return cachedPolicy;
+  } catch {
+    return DEFAULT_POLICY;
+  }
+}
+
+export function invalidatePlatformPasswordPolicyCache(): void {
+  cachedPolicy = null;
+  policyCacheExpiry = 0;
+}
+
+/**
+ * Validate a password against the platform-wide policy (loaded from DB
+ * via getPlatformPasswordPolicy). Falls back to DEFAULT_POLICY on error.
+ */
+export async function validatePasswordWithPlatformPolicy(
+  password: string,
+): Promise<PasswordValidationResult> {
+  const policy = await getPlatformPasswordPolicy().catch(() => DEFAULT_POLICY);
+  return validatePassword(password, policy);
+}

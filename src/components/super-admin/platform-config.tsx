@@ -20,6 +20,7 @@ import { Search, Building2, ToggleRight, TrendingUp, Loader2 } from "lucide-reac
 import { toast } from "sonner";
 import { useApiUrl } from "@/lib/hooks/use-api-url";
 import { useQueryClient } from "@tanstack/react-query";
+import { useT } from "@/lib/i18n/store";
 import {
   SettingsCardHeader, SectionLabel, LoadingCard, ErrorCard,
 } from "./_shared";
@@ -64,6 +65,7 @@ const STATUS_BADGE: Record<string, string> = {
 export function PlatformConfig() {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const t = useT();
 
   const [data, setData] = React.useState<PlatformData | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -127,28 +129,28 @@ export function PlatformConfig() {
     }
   }
 
-  if (loading) return <LoadingCard title="Platform Configuration" />;
-  if (error || !data) return <ErrorCard title="Platform Configuration" message={error || "No data"} />;
+  if (loading) return <LoadingCard title={t("pf-sa-sys-tenants-title")} />;
+  if (error || !data) return <ErrorCard title={t("pf-sa-sys-tenants-title")} message={error || "No data"} />;
 
-  const filtered = data.tenants.filter((t) => {
+  const filtered = data.tenants.filter((tenant) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
-      t.name.toLowerCase().includes(q) ||
-      t.id.toLowerCase().includes(q) ||
-      (t.legal_name || "").toLowerCase().includes(q)
+      tenant.name.toLowerCase().includes(q) ||
+      tenant.id.toLowerCase().includes(q) ||
+      (tenant.legal_name || "").toLowerCase().includes(q)
     );
   });
 
-  const manageTenant = data.tenants.find((t) => t.id === manageId) || null;
+  const manageTenant = data.tenants.find((tenant) => tenant.id === manageId) || null;
 
   return (
     <div className="space-y-6">
       {/* Feature flags matrix */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Feature Flags per Tenant"
-          description={`Toggle modules and beta features per tenant. ${data.tenants.length} tenants × ${data.feature_flag_keys.length} flags.`}
+          title={t("pf-sa-ac-flags-title")}
+          description={`${t("pf-sa-ac-flags-desc")} ${data.tenants.length} tenants × ${data.feature_flag_keys.length} flags.`}
           dirty={false}
           saving={false}
         />
@@ -215,8 +217,8 @@ export function PlatformConfig() {
       {/* Tenant management */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Tenant Management"
-          description="Suspend / cancel / activate tenants, change their plan. Suspends trigger a session-kill cascade (atomicTenantStatusTransition in store.ts)."
+          title={t("pf-sa-sys-tenants-title")}
+          description={t("pf-sa-sys-tenants-desc")}
           dirty={false}
           saving={false}
         />

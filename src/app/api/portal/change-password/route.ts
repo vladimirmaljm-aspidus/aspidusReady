@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSessionAccess } from "@/lib/auth/portal-session";
 import { getStore } from "@/lib/data/store";
 import { verifyPassword, hashPassword } from "@/lib/auth/password";
-import { validatePassword } from "@/lib/auth/password-policy";
+import { validatePasswordWithPlatformPolicy } from "@/lib/auth/password-policy";
 import { getIp } from "@/lib/api/helpers";
 
 export const runtime = "nodejs";
@@ -15,6 +15,9 @@ export const runtime = "nodejs";
  * - Verifies the current password
  * - Validates the new password against the password policy
  * - Hashes and updates the new password
+ *
+ * D-AUDIT-3: now validates against the platform-wide password policy
+ * (super-admin Security tab) rather than the hard-coded DEFAULT_POLICY.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -61,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate new password against policy
-    const validation = validatePassword(new_password);
+    const validation = await validatePasswordWithPlatformPolicy(new_password);
     if (!validation.ok) {
       return NextResponse.json(
         { error: "New password does not meet policy requirements.", details: validation.errors },

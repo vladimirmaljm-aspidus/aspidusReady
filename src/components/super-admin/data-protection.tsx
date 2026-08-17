@@ -18,8 +18,9 @@ import { RotateCw, Key, Database, Shield, FileCheck, Loader2, Lock } from "lucid
 import { toast } from "sonner";
 import { useApiUrl } from "@/lib/hooks/use-api-url";
 import { useQueryClient } from "@tanstack/react-query";
+import { useT } from "@/lib/i18n/store";
 import {
-  SettingsCardHeader, SectionLabel, FieldRow, LoadingCard, ErrorCard,
+  SettingsCardHeader, SectionLabel, SettingRow, LoadingCard, ErrorCard,
 } from "./_shared";
 
 interface DataProtectionData {
@@ -72,6 +73,7 @@ const KIND_BADGE: Record<string, string> = {
 export function DataProtection() {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const t = useT();
 
   const [data, setData] = React.useState<DataProtectionData | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -143,16 +145,16 @@ export function DataProtection() {
     }
   }
 
-  if (loading) return <LoadingCard title="Data Protection" />;
-  if (error || !data) return <ErrorCard title="Data Protection" message={error || "No data"} />;
+  if (loading) return <LoadingCard title={t("pf-sa-dp-title")} />;
+  if (error || !data) return <ErrorCard title={t("pf-sa-dp-title")} message={error || "No data"} />;
 
   return (
     <div className="space-y-6">
       {/* Vault key management */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Vault Key Management"
-          description={`Current key version is ${data.vault.current_version}. Rotation re-encrypts every vault_secrets row with the current key version — set VAULT_KEY_VERSION in env first, deploy, then click Rotate.`}
+          title={t("pf-sa-dp-vault-title")}
+          description={`${t("pf-sa-dp-vault-desc")} Current key version: ${data.vault.current_version}. Set VAULT_KEY_VERSION in env first, deploy, then click Rotate.`}
           dirty={false}
           saving={rotating}
         />
@@ -171,6 +173,7 @@ export function DataProtection() {
               tone={data.vault.needs_rotation ? "warn" : "ok"}
             />
           </div>
+          <p className="text-[11px] text-muted-foreground">{t("pf-sa-dp-vault-desc")}</p>
 
           {Object.keys(data.vault.by_version).length > 0 && (
             <div>
@@ -196,8 +199,8 @@ export function DataProtection() {
       {/* Encrypted fields */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Field Encryption Catalog"
-          description="These fields are encrypted at rest by vault-crypto.ts. The wire format detects the key version on decrypt (legacy NULL = wire-format fallback)."
+          title={t("pf-sa-dp-encrypted-title")}
+          description={t("pf-sa-dp-encrypted-desc")}
           dirty={false}
           saving={false}
         />
@@ -230,8 +233,8 @@ export function DataProtection() {
       {/* Retention policy */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Data Retention Policy"
-          description="The single source of truth for PII retention periods (lib/compliance/retention.ts). Enforced by /api/cron/data-retention. Changing a rule requires a code deploy — the table here is read-only for audit / visibility."
+          title={t("pf-sa-dp-retention-title")}
+          description={t("pf-sa-dp-retention-desc")}
           dirty={false}
           saving={false}
         />
@@ -272,29 +275,49 @@ export function DataProtection() {
       {/* GDPR */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="GDPR Settings"
-          description="Toggles for the right-to-erasure cascade (migration 030), user-initiated data export, and breach-notification tracking. DPO contact email is surfaced in the privacy policy."
+          title={t("pf-sa-dp-gdpr-title")}
+          description={t("pf-sa-dp-gdpr-desc")}
           dirty={!!dirtyGdpr}
           saving={saving}
           onSave={saveGdpr}
           onReset={() => data.defaults && setData((d) => d ? { ...d, gdpr: { ...d.defaults.gdpr } } : d)}
         />
         <CardContent className="space-y-3">
-          <FieldRow label="Right to Erasure (Art. 17)" hint="Anonymises PII in audit_logs and cascades deletes when a user is removed.">
+          <SettingRow
+            label={t("pf-sa-dp-gdpr-erasure-label")}
+            description={t("pf-sa-dp-gdpr-erasure-desc")}
+            tooltip={t("pf-sa-dp-gdpr-erasure-desc")}
+          >
             <Switch checked={data.gdpr.rightToErasure} onCheckedChange={(v) => patchGdpr("rightToErasure", v)} />
-          </FieldRow>
-          <FieldRow label="Data Export (Art. 20)" hint="Lets users request a CSV export of their own data via /api/export. Disable for abuse mitigation.">
+          </SettingRow>
+          <SettingRow
+            label={t("pf-sa-dp-gdpr-export-label")}
+            description={t("pf-sa-dp-gdpr-export-desc")}
+            tooltip={t("pf-sa-dp-gdpr-export-desc")}
+          >
             <Switch checked={data.gdpr.dataExportEnabled} onCheckedChange={(v) => patchGdpr("dataExportEnabled", v)} />
-          </FieldRow>
-          <FieldRow label="Breach Notification Tracking (Art. 33)" hint="Auto-computes the 72-hour deadline when an incident of type 'breach' is created.">
+          </SettingRow>
+          <SettingRow
+            label={t("pf-sa-dp-gdpr-breach-label")}
+            description={t("pf-sa-dp-gdpr-breach-desc")}
+            tooltip={t("pf-sa-dp-gdpr-breach-desc")}
+          >
             <Switch checked={data.gdpr.breachNotificationTracking} onCheckedChange={(v) => patchGdpr("breachNotificationTracking", v)} />
-          </FieldRow>
-          <FieldRow label="DPO Email" hint="Shown in privacy policy + breach-notification workflow.">
+          </SettingRow>
+          <SettingRow
+            label={t("pf-sa-dp-gdpr-dpo-label")}
+            description={t("pf-sa-dp-gdpr-dpo-desc")}
+            tooltip={t("pf-sa-dp-gdpr-dpo-desc")}
+          >
             <Input value={data.gdpr.dpoEmail} onChange={(e) => patchGdpr("dpoEmail", e.target.value)} className="w-64" />
-          </FieldRow>
-          <FieldRow label="Data Residency" hint="Shown in privacy policy — where PII is stored.">
+          </SettingRow>
+          <SettingRow
+            label={t("pf-sa-dp-gdpr-residency-label")}
+            description={t("pf-sa-dp-gdpr-residency-desc")}
+            tooltip={t("pf-sa-dp-gdpr-residency-desc")}
+          >
             <Input value={data.gdpr.dataResidency} onChange={(e) => patchGdpr("dataResidency", e.target.value)} className="w-32" />
-          </FieldRow>
+          </SettingRow>
         </CardContent>
       </Card>
 

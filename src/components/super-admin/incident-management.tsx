@@ -20,6 +20,7 @@ import { Plus, Loader2, ShieldAlert, Clock, CheckCircle2, AlertTriangle, FileTex
 import { toast } from "sonner";
 import { useApiUrl } from "@/lib/hooks/use-api-url";
 import { useQueryClient } from "@tanstack/react-query";
+import { useT } from "@/lib/i18n/store";
 import {
   SettingsCardHeader, SectionLabel, LoadingCard, ErrorCard,
 } from "./_shared";
@@ -129,6 +130,7 @@ const RUNBOOKS: Record<IncidentType, Array<{ step: string; description: string }
 export function IncidentManagement() {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const t = useT();
 
   const [incidents, setIncidents] = React.useState<Incident[] | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -176,8 +178,8 @@ export function IncidentManagement() {
     }
   }
 
-  if (loading) return <LoadingCard title="Security Incidents" />;
-  if (error || !incidents) return <ErrorCard title="Security Incidents" message={error || "No data"} />;
+  if (loading) return <LoadingCard title={t("pf-sa-inc-title")} />;
+  if (error || !incidents) return <ErrorCard title={t("pf-sa-inc-title")} message={error || "No data"} />;
 
   const openCount = incidents.filter((i) => i.status === "open" || i.status === "investigating").length;
   const breachCount = incidents.filter((i) => i.type === "breach").length;
@@ -186,16 +188,16 @@ export function IncidentManagement() {
     <div className="space-y-6">
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Tile label="Total Incidents" value={String(incidents.length)} tone="info" />
-        <Tile label="Open / Investigating" value={String(openCount)} tone={openCount > 0 ? "warn" : "ok"} />
-        <Tile label="Breaches" value={String(breachCount)} tone={breachCount > 0 ? "critical" : "ok"} />
-        <Tile label="Resolved / Closed" value={String(incidents.filter((i) => i.status === "resolved" || i.status === "closed").length)} tone="ok" />
+        <Tile label={t("pf-sa-inc-kpi-total")} value={String(incidents.length)} tone="info" />
+        <Tile label={t("pf-sa-inc-kpi-open")} value={String(openCount)} tone={openCount > 0 ? "warn" : "ok"} />
+        <Tile label={t("pf-sa-inc-kpi-breach")} value={String(breachCount)} tone={breachCount > 0 ? "critical" : "ok"} />
+        <Tile label={t("pf-sa-inc-kpi-resolved")} value={String(incidents.filter((i) => i.status === "resolved" || i.status === "closed").length)} tone="ok" />
       </div>
 
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Security Incidents"
-          description="Tracked security events — breaches, SoD violations, unauthorized access, audit findings. Breach incidents auto-compute the GDPR Art. 33 72-hour notification deadline."
+          title={t("pf-sa-inc-list-title")}
+          description={t("pf-sa-inc-list-desc")}
           dirty={false}
           saving={false}
         />
@@ -215,7 +217,7 @@ export function IncidentManagement() {
               </SelectContent>
             </Select>
             <Button size="sm" onClick={() => setCreateOpen(true)} className="ml-auto bg-gradient-emerald text-white">
-              <Plus className="size-3.5 mr-1" /> New Incident
+              <Plus className="size-3.5 mr-1" /> {t("pf-sa-inc-new")}
             </Button>
           </div>
 
@@ -402,6 +404,7 @@ function IncidentDetailDialog({
   onOpenChange: (v: boolean) => void;
   onUpdate: (patch: any, note?: string) => Promise<void>;
 }) {
+  const t = useT();
   const [note, setNote] = React.useState("");
   const [status, setStatus] = React.useState<IncidentStatus>(incident.status);
   const [savingNote, setSavingNote] = React.useState(false);
@@ -496,7 +499,7 @@ function IncidentDetailDialog({
 
           {/* Runbook */}
           <div>
-            <SectionLabel hint={`runbook · ${TYPE_LABEL[incident.type]}`}>Response Runbook</SectionLabel>
+          <SectionLabel hint={`runbook · ${TYPE_LABEL[incident.type]}`}>{t("pf-sa-inc-runbook-title")}</SectionLabel>
             <ol className="space-y-2 text-sm">
               {RUNBOOKS[incident.type].map((s, i) => (
                 <li key={i} className="flex gap-2">
@@ -512,7 +515,7 @@ function IncidentDetailDialog({
 
           {/* Timeline */}
           <div>
-            <SectionLabel hint={`${incident.timeline.length} events`}>Timeline</SectionLabel>
+            <SectionLabel hint={`${incident.timeline.length} events`}>{t("pf-sa-inc-timeline-title")}</SectionLabel>
             <div className="space-y-2 text-xs">
               {incident.timeline.slice().reverse().map((ev) => (
                 <div key={ev.id} className="flex gap-2">

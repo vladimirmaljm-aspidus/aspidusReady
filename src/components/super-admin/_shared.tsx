@@ -4,18 +4,24 @@ import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, RotateCcw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Loader2, Save, RotateCcw, HelpCircle, Info } from "lucide-react";
+import { useT } from "@/lib/i18n/store";
 
 /* ───────────────────────────────────────────────────────────────────────
    Shared helpers for the super-admin settings tabs.
 
-   Each tab is a self-contained Card with a header (title + description
-   + "Save" / "Reset" actions) and a body. The save action becomes
-   highlighted (copper accent) when the form is dirty.
+   D-AUDIT-3 redesign: every setting now exposes:
+     • a plain-language title (not "TTL", not "maxAttempts")
+     • a description of what it does
+     • an "impact" line explaining what happens if you change it
+     • a help-tooltip with more detail
+     • a default-value badge where relevant
+     • a unit suffix in human-readable form (minutes / hours / attempts)
 
-   These helpers keep the per-tab files short — each tab only declares
-   its own fields + a save handler; the dirty-tracking, loading spinners,
-   and disabled-while-saving logic are centralized here.
+   The new primitives below (`HelpTooltip`, `SettingRow`, `PresetButtons`,
+   `InfoNote`, `SuperAdminExemptNote`, `ReadOnlyField`) enforce these
+   invariants in a single place — the per-tab files just supply keys.
    ─────────────────────────────────────────────────────────────────────── */
 
 export function SettingsCardHeader({
@@ -25,8 +31,8 @@ export function SettingsCardHeader({
   saving,
   onSave,
   onReset,
-  resetLabel = "Reset to Defaults",
-  saveLabel = "Save Changes",
+  resetLabel,
+  saveLabel,
 }: {
   title: string;
   description: string;
@@ -37,6 +43,9 @@ export function SettingsCardHeader({
   resetLabel?: string;
   saveLabel?: string;
 }) {
+  const t = useT();
+  const reset = resetLabel ?? t("pf-sa-reset");
+  const save = saveLabel ?? t("pf-sa-save");
   return (
     <CardHeader className="pb-3">
       <div className="flex items-start justify-between flex-wrap gap-3">
@@ -48,7 +57,7 @@ export function SettingsCardHeader({
                 variant="outline"
                 className="text-[10px] uppercase tracking-wider bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
               >
-                unsaved
+                {t("pf-sa-unsaved")}
               </Badge>
             )}
           </CardTitle>
@@ -58,7 +67,7 @@ export function SettingsCardHeader({
           <div className="flex items-center gap-2 shrink-0">
             {onReset && (
               <Button variant="outline" size="sm" onClick={onReset} disabled={saving || !dirty}>
-                <RotateCcw className="size-3.5 mr-1" /> {resetLabel}
+                <RotateCcw className="size-3.5 mr-1" /> {reset}
               </Button>
             )}
             {onSave && (
@@ -69,7 +78,7 @@ export function SettingsCardHeader({
                 className={dirty ? "bg-gradient-emerald text-white" : ""}
               >
                 {saving ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <Save className="size-3.5 mr-1" />}
-                {saveLabel}
+                {save}
               </Button>
             )}
           </div>
@@ -89,6 +98,196 @@ export function SectionLabel({ children, hint }: { children: React.ReactNode; hi
   );
 }
 
+/**
+ * HelpTooltip — small "?" icon button that surfaces a tooltip with
+ * additional context for a setting. Used everywhere the description
+ * doesn't tell the whole story.
+ */
+export function HelpTooltip({ content }: { content: string }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="More information"
+            className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <HelpCircle className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">
+          <p className="text-xs leading-relaxed">{content}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/**
+ * SettingRow — the canonical layout for one configurable setting.
+ *
+ * Layout:
+ *   ┌──────────────────────────────┬───────────────┐
+ *   │ Label  (?)  [Default badge]  │  [Input]      │
+ *   │ What it does (description)   │  unit         │
+ *   │ What changes if you tweak it │               │
+ *   └──────────────────────────────┴───────────────┘
+ */
+export function SettingRow({
+  label,
+  description,
+  impact,
+  tooltip,
+  defaultBadge,
+  recommended,
+  unit,
+  children,
+}: {
+  label: string;
+  description?: string;
+  impact?: string;
+  tooltip?: string;
+  defaultBadge?: string;
+  recommended?: boolean;
+  unit?: string;
+  children: React.ReactNode;
+}) {
+  const t = useT();
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] items-start gap-3 py-2 border-b border-border/40 last:border-0">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-sm font-medium">{label}</label>
+          {tooltip && <HelpTooltip content={tooltip} />}
+          {defaultBadge && (
+            <Badge variant="outline" className="text-[9px] uppercase tracking-wider bg-muted/40 text-muted-foreground border-border">
+              {t("pf-sa-default")}: {defaultBadge}
+            </Badge>
+          )}
+          {recommended && (
+            <Badge variant="outline" className="text-[9px] uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+              {t("pf-sa-recommended")}
+            </Badge>
+          )}
+        </div>
+        {description && <p className="text-[11px] text-muted-foreground leading-snug">{description}</p>}
+        {impact && (
+          <p className="text-[11px] text-muted-foreground/80 leading-snug">
+            <span className="font-medium text-foreground/70">{t("pf-sa-impact-label")} </span>
+            {impact}
+          </p>
+        )}
+      </div>
+      <div className="md:w-44 flex items-center gap-2 justify-self-end">
+        {children}
+        {unit && <span className="text-[11px] text-muted-foreground whitespace-nowrap">{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * PresetButtons — a row of preset buttons (Strict / Balanced / Relaxed / Custom).
+ * Active preset is highlighted. Clicking applies a set of values via the
+ * `onApply` callback and lets the parent know which preset is currently
+ * active via the `active` prop.
+ */
+export function PresetButtons<T extends string>({
+  presets,
+  active,
+  onApply,
+}: {
+  presets: Array<{ value: T; label: string; recommended?: boolean }>;
+  active: T | "custom";
+  onApply: (preset: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-3">
+      {presets.map((p) => {
+        const isActive = active === p.value;
+        return (
+          <Button
+            key={p.value}
+            type="button"
+            size="sm"
+            variant={isActive ? "default" : "outline"}
+            onClick={() => onApply(p.value)}
+            className={isActive ? "bg-gradient-emerald text-white" : ""}
+          >
+            {p.label}
+            {p.recommended && !isActive && (
+              <span className="ml-1.5 text-[9px] uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded px-1">
+                rec
+              </span>
+            )}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * InfoNote — a non-editable card section that explains a setting the
+ * super-admin can't actually change (e.g., CSRF defense is always on,
+ * Sentry sample-rate is env-only). Replaces what used to be a
+ * non-functional toggle.
+ */
+export function InfoNote({
+  title,
+  description,
+  children,
+}: {
+  title?: string;
+  description?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-1">
+      <div className="flex items-start gap-2">
+        <Info className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          {title && <p className="text-sm font-medium">{title}</p>}
+          {description && <p className="text-[11px] text-muted-foreground leading-snug">{description}</p>}
+          {children && <div className="text-[11px] text-muted-foreground leading-snug">{children}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * SuperAdminExemptNote — the standard "ℹ️ These settings don't apply
+ * to Super Admin" footnote shown under every security-related card.
+ */
+export function SuperAdminExemptNote() {
+  const t = useT();
+  return <InfoNote description={t("pf-sa-superadmin-exempt")} />;
+}
+
+/**
+ * ReadOnlyField — shows a value as a read-only badge, used for
+ * settings whose actual value comes from the environment / is hardcoded.
+ */
+export function ReadOnlyField({ value, tone = "info" }: { value: string; tone?: "info" | "ok" | "warn" | "critical" }) {
+  const cls = {
+    ok: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+    warn: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
+    info: "bg-primary/10 text-primary border-primary/30",
+    critical: "bg-destructive/10 text-destructive border-destructive/30",
+  }[tone];
+  return (
+    <Badge variant="outline" className={`text-xs ${cls}`}>
+      {value}
+    </Badge>
+  );
+}
+
+/**
+ * FieldRow — the legacy grid layout (kept for tabs not yet migrated
+ * to the new SettingRow primitive).
+ */
 export function FieldRow({
   label,
   hint,
@@ -135,4 +334,8 @@ export function ErrorCard({ title, message }: { title: string; message: string }
       </CardContent>
     </Card>
   );
+}
+
+export function dirtyEq(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }

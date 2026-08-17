@@ -18,8 +18,9 @@ import { Plus, Trash2, Loader2, AlertTriangle, Activity, Webhook, Bell } from "l
 import { toast } from "sonner";
 import { useApiUrl } from "@/lib/hooks/use-api-url";
 import { useQueryClient } from "@tanstack/react-query";
+import { useT } from "@/lib/i18n/store";
 import {
-  SettingsCardHeader, SectionLabel, FieldRow, LoadingCard, ErrorCard,
+  SettingsCardHeader, SectionLabel, SettingRow, ReadOnlyField, FieldRow, LoadingCard, ErrorCard,
 } from "./_shared";
 
 interface MonitoringConfig {
@@ -56,6 +57,7 @@ function dirtyEq(a: unknown, b: unknown): boolean {
 export function MonitoringSettings() {
   const api = useApiUrl();
   const qc = useQueryClient();
+  const t = useT();
 
   const [config, setConfig] = React.useState<MonitoringConfig | null>(null);
   const [defaults, setDefaults] = React.useState<MonitoringConfig | null>(null);
@@ -135,8 +137,8 @@ export function MonitoringSettings() {
     setConfig((c) => c ? { ...c, alertRouting: c.alertRouting.filter((_, idx) => idx !== i) } : c);
   }
 
-  if (loading) return <LoadingCard title="Monitoring & Alerts" />;
-  if (error || !config) return <ErrorCard title="Monitoring & Alerts" message={error || "No data"} />;
+  if (loading) return <LoadingCard title={t("pf-sa-mon-title")} />;
+  if (error || !config) return <ErrorCard title={t("pf-sa-mon-title")} message={error || "No data"} />;
 
   const sentryStatus = config.sentry.dsn_configured && config.sentry.client_dsn_configured
     ? "enabled"
@@ -151,13 +153,13 @@ export function MonitoringSettings() {
       {/* Sentry */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Sentry Error Monitoring"
-          description="Sentry DSN configuration is read from environment variables (SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN). The toggles here can't change env vars — they show the current state for ops visibility."
+          title={t("pf-sa-mon-sentry-title")}
+          description={t("pf-sa-mon-sentry-desc")}
           dirty={false}
           saving={saving}
         />
         <CardContent className="space-y-3">
-          <FieldRow label="Status" hint="Server + client DSNs need to be set for full coverage.">
+          <FieldRow label={t("pf-sa-mon-sentry-status-label")} hint={t("pf-sa-mon-sentry-desc")}>
             <Badge variant="outline" className={`uppercase text-[10px] tracking-wider ${
               sentryStatus === "enabled" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" :
               sentryStatus === "disabled" ? "bg-destructive/10 text-destructive border-destructive/30" :
@@ -166,19 +168,11 @@ export function MonitoringSettings() {
               {sentryStatus}
             </Badge>
           </FieldRow>
-          <FieldRow label="Environment" hint="Node env (development / production).">
+          <FieldRow label={t("pf-sa-mon-sentry-env-label")} hint={t("pf-sa-mon-sentry-desc")}>
             <Badge variant="outline" className="text-xs">{config.sentry.environment}</Badge>
           </FieldRow>
-          <FieldRow label="Sample Rate" hint="Fraction of transactions sampled (0–1). Defaults to 1.0 in dev, lower in prod.">
-            <Input
-              type="number"
-              min={0}
-              max={1}
-              step={0.05}
-              className="w-28 tabular"
-              value={String(config.sentry.sampleRate)}
-              onChange={(e) => patchNested("sentry", "sampleRate", Number(e.target.value))}
-            />
+          <FieldRow label={t("pf-sa-mon-sentry-rate-label")} hint={t("pf-sa-mon-sentry-rate-desc")}>
+            <ReadOnlyField value={String(config.sentry.sampleRate)} tone="info" />
           </FieldRow>
         </CardContent>
       </Card>
@@ -186,18 +180,18 @@ export function MonitoringSettings() {
       {/* Security event webhook */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Security Event Webhook"
-          description="A platform-level webhook sink that receives POST notifications on significant security events (login lockouts, SoD violations, vault rotations, role changes). Distinct from per-tenant webhooks."
+          title={t("pf-sa-mon-webhook-title")}
+          description={t("pf-sa-mon-webhook-desc")}
           dirty={!dirtyEq(config.securityWebhook, defaults?.securityWebhook)}
           saving={saving}
           onSave={save}
           onReset={() => defaults && patch("securityWebhook", defaults.securityWebhook)}
         />
         <CardContent className="space-y-3">
-          <FieldRow label="Enabled" hint="When off, no notifications are sent. Toggle on after the URL is set.">
+          <FieldRow label={t("pf-sa-mon-webhook-enabled-label")} hint={t("pf-sa-mon-webhook-enabled-desc")}>
             <Switch checked={config.securityWebhook.enabled} onCheckedChange={(v) => patchNested("securityWebhook", "enabled", v)} />
           </FieldRow>
-          <FieldRow label="URL" hint="HTTPS endpoint that accepts POST application/json.">
+          <FieldRow label={t("pf-sa-mon-webhook-url-label")} hint={t("pf-sa-mon-webhook-url-desc")}>
             <Input
               value={config.securityWebhook.url}
               onChange={(e) => patchNested("securityWebhook", "url", e.target.value)}
@@ -205,7 +199,7 @@ export function MonitoringSettings() {
               className="w-full max-w-md"
             />
           </FieldRow>
-          <FieldRow label="Include Raw Payload" hint="Off = send a digest (event type + IDs only); On = send the full audit row.">
+          <FieldRow label={t("pf-sa-mon-webhook-payload-label")} hint={t("pf-sa-mon-webhook-payload-desc")}>
             <Switch checked={config.securityWebhook.includePayload} onCheckedChange={(v) => patchNested("securityWebhook", "includePayload", v)} />
           </FieldRow>
           <div className="space-y-2 mt-2">
@@ -238,15 +232,15 @@ export function MonitoringSettings() {
       {/* Anomaly detection */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Anomaly Detection Thresholds"
-          description="When the APM buffer or the login-history log exceeds any of these thresholds, an alert is surfaced on the Performance dashboard (and on the System Health tab in this view)."
+          title={t("pf-sa-mon-anomaly-title")}
+          description={t("pf-sa-mon-anomaly-desc")}
           dirty={!dirtyEq(config.anomaly, defaults?.anomaly)}
           saving={saving}
           onSave={save}
           onReset={() => defaults && patch("anomaly", defaults.anomaly)}
         />
         <CardContent className="space-y-3">
-          <FieldRow label="Avg Response Time (ms)" hint="Sustained avg above this triggers an alert. Default 2000ms = 2s.">
+          <FieldRow label={t("pf-sa-mon-anomaly-resp-label")} hint={t("pf-sa-mon-anomaly-resp-desc")}>
             <Input
               type="number"
               min={100}
@@ -256,7 +250,7 @@ export function MonitoringSettings() {
               onChange={(e) => patchNested("anomaly", "avgResponseTimeMs", Number(e.target.value))}
             />
           </FieldRow>
-          <FieldRow label="Error Rate (%)" hint="5xx response share above this triggers an alert. Default 5%.">
+          <FieldRow label={t("pf-sa-mon-anomaly-errrate-label")} hint={t("pf-sa-mon-anomaly-errrate-desc")}>
             <Input
               type="number"
               min={0}
@@ -267,7 +261,7 @@ export function MonitoringSettings() {
               onChange={(e) => patchNested("anomaly", "errorRatePct", Number(e.target.value))}
             />
           </FieldRow>
-          <FieldRow label="Slow Request Count" hint="Number of >2s requests in the buffer that triggers an alert.">
+          <FieldRow label={t("pf-sa-mon-anomaly-slow-label")} hint={t("pf-sa-mon-anomaly-slow-desc")}>
             <Input
               type="number"
               min={1}
@@ -276,7 +270,7 @@ export function MonitoringSettings() {
               onChange={(e) => patchNested("anomaly", "slowRequests", Number(e.target.value))}
             />
           </FieldRow>
-          <FieldRow label="Login Fails / Hour" hint="Per-IP failed login attempts per hour that triggers a security alert.">
+          <FieldRow label={t("pf-sa-mon-anomaly-login-label")} hint={t("pf-sa-mon-anomaly-login-desc")}>
             <Input
               type="number"
               min={1}
@@ -291,8 +285,8 @@ export function MonitoringSettings() {
       {/* Alert routing */}
       <Card className="border-border/60 shadow-soft rounded-xl">
         <SettingsCardHeader
-          title="Alert Routing"
-          description="Map alert types to recipient emails. Recipients are notified (via the security webhook + email) when the matching alert fires. Use 'severity' to control paging."
+          title={t("pf-sa-mon-routing-title")}
+          description={t("pf-sa-mon-routing-desc")}
           dirty={!dirtyEq(config.alertRouting, defaults?.alertRouting)}
           saving={saving}
           onSave={save}
