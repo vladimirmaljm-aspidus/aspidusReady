@@ -5,6 +5,7 @@ import { generatePdf } from "@/lib/pdf/generator";
 import { notify } from "@/lib/notif/helper";
 import { validateStatusTransition } from "@/lib/api/status-validator";
 import { assertNoSoDViolation } from "@/lib/permissions/sod-matrix";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -24,20 +25,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     body = await req.json();
   } catch {
-    // Body is optional — empty body means "send to portal only, no email"
+    // Body is optional — empty body means "use the partner's email"
   }
-  const toEmail: string | undefined = body?.email;
+  // Fetch the offer early so we can resolve the partner email — this
+  // makes the email + PDF attach step default-on rather than opt-in.
+  const offer = await auth.store.getOffer(id);
+  if (!offer) {
+    return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+  }
+  // Tenant ownership check
+  if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
+    return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+  }
+
+  // Fetch partner for email info / portal notification
+  const partner = offer.partner_id ? await auth.store.getPartner(offer.partner_id) : null;
+  // CRITICAL FIX (FLOW-FIX): the UI calls this endpoint with an EMPTY body,
+  // so the old `if (toEmail)` guard silently skipped PDF generation and
+  // email send. Now we default `toEmail` to the partner's email so the
+  // document is emailed + portal-notified on every send — the manual
+  // override (explicit `body.email`) is still respected for the rare
+  // case where the admin wants to send to a different address.
+  const toEmail: string | undefined = body?.email || partner?.email || undefined;
 
   try {
-    // Fetch the offer
-    const offer = await auth.store.getOffer(id);
-    if (!offer) {
-      return NextResponse.json({ error: "Offer not found." }, { status: 404 });
-    }
-    // Tenant ownership check
-    if (!auth.isSuperAdmin && offer.tenant_id !== auth.tenantId) {
-      return NextResponse.json({ error: "Offer not found." }, { status: 404 });
-    }
 
     // ── P1-1 / Feature 2: Separation-of-Duties check ─────────────────
     // The "send" action IS the approval step for an offer (once sent,
@@ -53,19 +64,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (sod) return sod;
     }
 
-    // Fetch partner for email info / portal notification
-    const partner = offer.partner_id ? await auth.store.getPartner(offer.partner_id) : null;
-
     // Resolve tenant (required for PDF generation and notification)
     const tenantId = resolveTenantId(auth, req);
     if (!tenantId) {
       return NextResponse.json({ error: "tenant_id query parameter is required for super-admin actions." }, { status: 400 });
     }
 
-    // ─── Email send (optional) ───
-    // If `email` is provided in the body, generate a PDF and email it to the
-    // recipient. If `email` is missing, we skip the email step and only mark
-    // the offer as sent + push a portal notification.
+    // ─── Email send (default-on) ───
+    // CRITICAL FIX (FLOW-FIX): previously the UI sent an EMPTY body, so
+    // `toEmail` was undefined and the entire PDF + email leg was
+    // silently skipped. We now default `toEmail` to the partner's email
+    // (resolved above) — so every "Send" click generates the PDF and
+    // emails the partner. The `email` field in the body still overrides
+    // for ad-hoc recipients. The leg is skipped only when the partner
+    // has no email AND none was supplied.
     let emailResult: { success: boolean; skipped?: boolean; error?: string } = { success: true, skipped: true };
     if (toEmail) {
       const result = await generatePdf({ docType: "offer", docId: id, tenantId });
@@ -137,6 +149,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         console.error("[offer.send] portal notification failed:", e);
         // Don't fail the send if notification fails
       }
+    }
+
+    // ── FLOW-FIX: outbound webhook `offer.sent` ─────────────────────
+    // Fire-and-forget — webhook delivery failures must NEVER block the
+    // send. Receivers get the offer snapshot + recipient + timestamp.
+    if (emailResult.success) {
+      void triggerWebhooks(
+        auth.store,
+        tenantId,
+        "offer.sent",
+        "offer",
+        id,
+        {
+          id: offer.id,
+          number: offer.number,
+          partner_id: offer.partner_id,
+          partner_name: partner?.name || null,
+          total: offer.total,
+          currency: offer.currency,
+          sent_to: toEmail || null,
+          sent_at: new Date().toISOString(),
+        },
+      ).catch((e) => console.error("[offer.send] webhook trigger failed:", e));
     }
 
     await audit(auth.store, auth.user, req, "offer.send_email", "offer", id, { to: toEmail || "(portal only)" });

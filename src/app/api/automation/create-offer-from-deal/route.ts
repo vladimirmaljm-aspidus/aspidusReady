@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireAuthOrApiKey, requireAuthOrApiKeyPermission, audit, resolveTenantId } from "@/lib/api/helpers";
 import { nextDocNumber, formatDocNumber } from "@/lib/api/doc-number";
+import { notify } from "@/lib/notif/helper";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 import type { OfferLineItem } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -162,6 +164,52 @@ export async function POST(req: NextRequest) {
     // 9. Create the offer
     const created = await store.upsertOffer(offerData);
 
+    // 9b. CRITICAL FIX (FLOW-FIX): write back linked_offer_id to the
+    //     originating portal_rfq so the RFQ → demand → offer chain is
+    //     closed. The Deal type has no `linked_rfq_id` field, so we
+    //     look up the portal_rfq by `linked_demand_id = deal.id`. If
+    //     found, stamp `linked_offer_id` + `status="quoted"`. This
+    //     used to be a manual text input on portal-rfqs-view — now
+    //     automatic. Fire-and-forget within try/catch so an absent
+    //     RFQ link (e.g. offer created from a deal that didn't come
+    //     from a portal RFQ) doesn't break the flow.
+    let linkedRfq: Awaited<ReturnType<typeof store.getPortalRfqByDemandId>> = null;
+    try {
+      linkedRfq = await store.getPortalRfqByDemandId(deal.id);
+      if (linkedRfq) {
+        await store.upsertPortalRfq({
+          id: linkedRfq.id,
+          tenant_id: linkedRfq.tenant_id,
+          linked_offer_id: created.id,
+          status: "quoted",
+        });
+      }
+    } catch (e) {
+      console.warn("[create-offer-from-deal] failed to write back portal_rfq.linked_offer_id:", e);
+    }
+
+    // 9c. FLOW-FIX: notify the portal client that their RFQ has been
+    //     converted to an offer (only when the deal came from an RFQ).
+    //     The client will then watch for the "offer_sent" notification
+    //     that fires once the admin clicks Send on the new draft offer.
+    if (linkedRfq?.partner_id) {
+      try {
+        await notify({
+          tenantId: linkedRfq.tenant_id,
+          userId: null,
+          partnerId: linkedRfq.partner_id,
+          type: "rfq_quoted",
+          title: `Your RFQ has been converted to an offer`,
+          message: `An offer (${created.number}) has been prepared from your request (${linkedRfq.number || linkedRfq.product_name}). You'll receive it once it's sent.`,
+          entityType: "portal_rfq",
+          entityId: linkedRfq.id,
+          actionLabel: "View",
+        });
+      } catch (e) {
+        console.error("[create-offer-from-deal] client notification failed:", e);
+      }
+    }
+
     // 10. Audit log
     const auditUser = "user" in auth ? auth.user : { id: auth.apiKeyId, username: auth.apiKeyName, tenant_id: auth.tenantId };
     await audit(
@@ -179,6 +227,29 @@ export async function POST(req: NextRequest) {
         partner_name: partner?.name || "Unknown",
       }
     );
+
+    // 11. FLOW-FIX: outbound webhook `offer.created` — fire-and-forget.
+    //     Complements `offer.sent` (fired by /offers/[id]/send). The
+    //     receiver can mirror the new draft offer in their own system
+    //     before it's been published to the partner.
+    void triggerWebhooks(
+      store,
+      tid,
+      "offer.created",
+      "offer",
+      created.id,
+      {
+        id: created.id,
+        number: created.number,
+        deal_id: deal.id,
+        partner_id: deal.partner_id,
+        partner_name: partner?.name || null,
+        total: created.total,
+        currency: created.currency,
+        status: created.status,
+        linked_rfq_id: linkedRfq?.id || null,
+      },
+    ).catch((e) => console.error("[create-offer-from-deal] webhook trigger failed:", e));
 
     return NextResponse.json(created);
   } catch (e: any) {

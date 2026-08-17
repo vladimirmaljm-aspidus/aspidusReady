@@ -679,7 +679,7 @@ function RfqDetailSheet({
                           const res = await fetch(api(`/api/automation/create-demand-from-portal-rfq`), {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ portalRfqId: rfq?.id }),
+                            body: JSON.stringify({ rfq_id: rfq?.id }),
                           });
                           if (!res.ok) throw new Error("Failed to create demand");
                           const data = await res.json();
@@ -695,12 +695,14 @@ function RfqDetailSheet({
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={!rfq?.linked_demand_id}
                       onClick={async () => {
+                        if (!rfq?.linked_demand_id) return;
                         try {
                           const res = await fetch(api(`/api/automation/create-offer-from-deal`), {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ dealId: rfq?.linked_demand_id ?? rfq?.id }),
+                            body: JSON.stringify({ deal_id: rfq.linked_demand_id }),
                           });
                           if (!res.ok) throw new Error("Failed to create offer");
                           const data = await res.json();

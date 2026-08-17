@@ -7,6 +7,7 @@ import { audit } from "@/lib/api/helpers";
 import { notify } from "@/lib/notif/helper";
 import { createCommissionOnOfferAccepted } from "@/lib/api/commission-cascade";
 import { validateStatusTransition } from "@/lib/api/status-validator";
+import { triggerWebhooks } from "@/lib/webhooks/deliver";
 
 export const runtime = "nodejs";
 
@@ -156,9 +157,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Notify tenant admins (broadcast = user_id null).
+    const partner = offer.partner_id ? await store.getPartner(offer.partner_id) : null;
+    const partnerName = partner?.name || "Portal client";
     try {
-      const partner = offer.partner_id ? await store.getPartner(offer.partner_id) : null;
-      const partnerName = partner?.name || "Portal client";
       await notify({
         tenantId: access.tenant_id,
         userId: null,
@@ -195,6 +196,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } catch (e) {
       console.error("[audit]", e);
     }
+
+    // ── FLOW-FIX: outbound webhook `offer.accepted` / `offer.rejected` ──
+    // Fire-and-forget — webhook delivery failures must NEVER block the
+    // response. Receivers get the offer snapshot + partner + decision.
+    void triggerWebhooks(
+      store,
+      access.tenant_id,
+      decision === "accept" ? "offer.accepted" : "offer.rejected",
+      "offer",
+      id,
+      {
+        id: offer.id,
+        number: offer.number,
+        partner_id: offer.partner_id,
+        partner_name: partner?.name || null,
+        total: offer.total,
+        currency: offer.currency,
+        decision,
+        note: note || null,
+        responded_at: nowIso,
+      },
+    ).catch((e) => console.error("[portal.respond] webhook trigger failed:", e));
 
     return NextResponse.json({ ok: true, status: newStatus });
   } catch (e: any) {
