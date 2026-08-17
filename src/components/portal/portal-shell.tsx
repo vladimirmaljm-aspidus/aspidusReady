@@ -54,7 +54,11 @@ const PortalDocuments = dynamic(
   { ssr: false }
 );
 const PortalCatalog = dynamic(
-  () => import("@/components/portal/portal-catalog").then((m) => m.PortalCatalog),
+  // P-CATALOG: redesigned grid + drawer + RFQ flow. The previous
+  // `portal-catalog.tsx` (piled-up text cards) is superseded by
+  // `portal-catalog-redesign.tsx`. Old file is kept for reference but no
+  // longer rendered anywhere in the portal.
+  () => import("@/components/portal/portal-catalog-redesign").then((m) => m.PortalCatalogRedesign),
   { ssr: false }
 );
 const PortalProfile = dynamic(
